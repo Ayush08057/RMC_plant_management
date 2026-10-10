@@ -1,0 +1,10 @@
+{
+  "name": "rmc-plant-management-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix \"./RMC Plant Management\" run dev --",
+    "build": "npm --prefix \"./RMC Plant Management\" run build --",
+    "preview": "npm --prefix \"./RMC Plant Management\" run preview --"
+  }
+}

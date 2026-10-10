@@ -1,0 +1,524 @@
+import React, { useState } from 'react';
+import AppLayout from '../../components/dashboard/AppLayout';
+import KPICard from '../../components/dashboard/KPICard';
+import ChartCard from '../../components/dashboard/ChartCard';
+import DataTable from '../../components/dashboard/DataTable';
+import StatusBadge from '../../components/dashboard/StatusBadge';
+import QuickAction from '../../components/dashboard/QuickAction';
+import AlertCard from '../../components/dashboard/AlertCard';
+import Modal from '../../components/dashboard/Modal';
+import Toast from '../../components/dashboard/Toast';
+import { 
+  ReceiptText, 
+  IndianRupee, 
+  CreditCard, 
+  FileCheck2, 
+  TrendingUp, 
+  Layers, 
+  Plus, 
+  FileText,
+  AlertCircle,
+  Download
+} from 'lucide-react';
+import { MOCK_ACCOUNTANT_DATA } from '../../data/mockDashboardData';
+import { useWorkforce } from '../../context/WorkforceContext';
+
+// Phase 1 Workforce Views
+import PayrollPreparationView from '../../components/workforce/PayrollPreparationView';
+import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
+import LoanManagementView from '../../components/workforce/LoanManagementView';
+import HrReportsView from '../../components/workforce/HrReportsView';
+import BillingManagementView from '../../components/billing/BillingManagementView';
+
+export default function AccountantDashboardPage() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [toastMessage, setToastMessage] = useState(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [ledgers, setLedgers] = useState(MOCK_ACCOUNTANT_DATA.customerLedgers);
+
+  const { 
+    payrollRecords, 
+    advances, 
+    loans, 
+    employees 
+  } = useWorkforce();
+
+  // Phase 1 Payroll & Advances stats
+  const pendingPayrollCount = payrollRecords.filter((p) => p.status === 'Calculated' || p.status === 'Draft').length;
+  const approvedPayrollCount = payrollRecords.filter((p) => p.status === 'Approved' || p.status === 'Locked').length;
+  const advanceOutstanding = advances.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+  const loanOutstanding = loans.reduce((sum, l) => sum + (Number(l.outstandingBalance) || 0), 0);
+  const totalGrossSalaries = payrollRecords.reduce((sum, p) => sum + (Number(p.grossSalary) || 0), 0);
+
+  const { kpis, invoiceBreakdown, revenueTrend, expenseSummary } = MOCK_ACCOUNTANT_DATA;
+
+  // New Invoice Form
+  const [invForm, setInvForm] = useState({
+    client: '',
+    amount: '',
+    grade: '',
+    volume: '',
+    dueDate: '',
+  });
+
+  const handleCreateInvoice = (e) => {
+    e.preventDefault();
+    const newInv = {
+      client: invForm.client,
+      invoice: `INV-2026-${Math.floor(8810 + Math.random() * 90)}`,
+      amount: invForm.amount,
+      dueDate: invForm.dueDate,
+      status: 'Pending',
+      grade: invForm.grade,
+      volume: invForm.volume,
+    };
+    setLedgers([newInv, ...ledgers]);
+    setShowInvoiceModal(false);
+    setToastMessage(`Tax Invoice ${newInv.invoice} created successfully!`);
+  };
+
+  const columns = [
+    { header: 'Invoice #', accessor: 'invoice', render: (row) => <span className="font-mono text-emerald-400 font-bold">{row.invoice}</span> },
+    { header: 'Client Account', accessor: 'client', render: (row) => <span className="font-semibold text-white">{row.client}</span> },
+    { header: 'Mix Grade', accessor: 'grade', render: (row) => <span className="px-2 py-0.5 rounded bg-amber-100/80 text-amber-900 border border-amber-300/80 font-mono text-[10px]">{row.grade}</span> },
+    { header: 'Billed Volume', accessor: 'volume', className: 'font-mono text-slate-300' },
+    { header: 'Amount (INR)', accessor: 'amount', render: (row) => <span className="font-bold text-white font-mono">{row.amount}</span> },
+    { header: 'Due Date', accessor: 'dueDate', className: 'font-mono text-slate-400' },
+    { header: 'Payment Status', accessor: 'status', type: 'status' },
+    {
+      header: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <button
+          type="button"
+          onClick={() => setToastMessage(`Challan & GST e-Invoice ${row.invoice} downloaded`)}
+          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs transition-colors"
+        >
+          View PDF
+        </button>
+      ),
+    },
+  ];
+
+  return (
+    <AppLayout
+      title="Finance, Invoicing & Ledger Command"
+      subtitle="GST delivery challan reconciliation, client credit limits, cashflow collections, and material procurement costing."
+      badge="ACCOUNTS & TAX DESK"
+      activeTab={activeTab}
+      onSelectTab={setActiveTab}
+      actions={
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('billing')}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
+          >
+            <ReceiptText className="w-4 h-4" />
+            <span>Cash Memo / Billing</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPaymentModal(true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Record Payment</span>
+          </button>
+        </div>
+      }
+    >
+      {activeTab === 'billing' && <BillingManagementView defaultSection="cash_memos" />}
+      {activeTab === 'purchases' && <BillingManagementView defaultSection="purchases" />}
+      {activeTab === 'otp_audit' && <BillingManagementView defaultSection="otp_audit" />}
+      {activeTab === 'payroll' && <PayrollPreparationView />}
+      {activeTab === 'advances' && <AdvanceManagementView />}
+      {activeTab === 'loans' && <LoanManagementView />}
+      {activeTab === 'reports' && <HrReportsView />}
+
+      {activeTab === 'dashboard' && (
+        <>
+          {/* Phase 1 Payroll & Advances Financial Telemetry Strip */}
+          <section className="p-4.5 rounded-3xl bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/90 border border-emerald-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+              <div>
+                <span className="text-[10px] font-mono uppercase text-emerald-800 font-bold block tracking-wider">
+                  WORKFORCE PAYROLL & RECOVERY TELEMETRY
+                </span>
+                <span className="text-xs font-bold text-slate-900">
+                  {employees.length} Staff Enrolled • Monthly Gross Wages: <span className="font-mono font-black text-emerald-700">₹ {totalGrossSalaries.toLocaleString('en-IN')}</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
+                Pending Payroll: <strong className="text-amber-700 font-bold">{pendingPayrollCount}</strong>
+              </span>
+              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
+                Advance Book: <strong className="text-rose-700 font-bold">₹ {advanceOutstanding.toLocaleString('en-IN')}</strong>
+              </span>
+              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
+                Loan Book: <strong className="text-cyan-700 font-bold">₹ {loanOutstanding.toLocaleString('en-IN')}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab('payroll')}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold font-sans cursor-pointer shadow-xs transition-all active:scale-[0.98]"
+              >
+                Open Payroll Prep →
+              </button>
+            </div>
+          </section>
+
+          {/* 4 Primary KPI Cards */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPICard
+              title="Today's Revenue"
+              value={kpis.todayRevenue}
+              subtext="38 Delivery Challans billed"
+              trend="+8.2% vs Yesterday"
+              trendType="up"
+              color="emerald"
+              icon={IndianRupee}
+            />
+            <KPICard
+              title="Monthly Gross Sales"
+              value={kpis.totalMonthSales}
+              subtext="FY 2026-27 Q3 Operating Gross"
+              trend="On Target"
+              trendType="up"
+              color="blue"
+              icon={TrendingUp}
+            />
+            <KPICard
+              title="Outstanding Receivables"
+              value={kpis.outstandingReceivables}
+              subtext="Within 30-day corporate credit"
+              trend="2 Overdue"
+              trendType="down"
+              color="amber"
+              icon={ReceiptText}
+            />
+            <KPICard
+              title="Monthly Material Expenses"
+              value={kpis.monthlyExpenses}
+              subtext="Cement, aggregates, fuel & power"
+              trend="Controlled"
+              trendType="neutral"
+              color="rose"
+              icon={Layers}
+            />
+          </section>
+
+      {/* Invoice Status Distribution & Revenue Trend Chart */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Invoice Status Snapshot Card */}
+        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <ReceiptText className="w-4 h-4 text-emerald-600" />
+                <span>Invoice Pipeline</span>
+              </h3>
+              <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">38 TOTAL</span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-emerald-900 block">Paid & Reconciled</span>
+                  <span className="text-[11px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
+                </div>
+                <span className="text-xl font-black text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-amber-900 block">Pending Clearance</span>
+                  <span className="text-[11px] text-slate-500">Awaiting credit period maturity</span>
+                </div>
+                <span className="text-xl font-black text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-rose-900 block">Overdue (&gt; 30 Days)</span>
+                  <span className="text-[11px] text-slate-500">Follow-up reminders issued</span>
+                </div>
+                <span className="text-xl font-black text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+            <span>GST E-Way Bills: 100% Synced</span>
+            <span className="text-emerald-700 font-bold">• Zero Non-Compliance</span>
+          </div>
+        </div>
+
+        {/* 7-Day Revenue & Collection Chart */}
+        <div className="lg:col-span-2">
+          <ChartCard
+            title="Daily Revenue vs Cash Collections (Lakhs INR)"
+            subtitle="Real-time cashflow balance from electronic invoice reconciliations"
+            icon={TrendingUp}
+            data={revenueTrend}
+            dataKey="revenue"
+            labelKey="day"
+            unit="Lakhs"
+            color="emerald"
+            secondaryKey="collections"
+            secondaryUnit="Lakhs"
+          />
+        </div>
+      </section>
+
+      {/* Quick Actions & Cost Breakdown */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Finance Operations Quick Commands
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <QuickAction
+              icon={ReceiptText}
+              title="Create Invoice"
+              desc="Draft GST delivery challan"
+              color="emerald"
+              onClick={() => setShowInvoiceModal(true)}
+            />
+            <QuickAction
+              icon={CreditCard}
+              title="Record Payment"
+              desc="Log RTGS / NEFT transfer"
+              color="blue"
+              onClick={() => setShowPaymentModal(true)}
+            />
+            <QuickAction
+              icon={IndianRupee}
+              title="Receivables"
+              desc="Inspect client aged ledgers"
+              color="amber"
+              onClick={() => setToastMessage('Filtered to ₹68.4L pending receivables.')}
+            />
+            <QuickAction
+              icon={FileText}
+              title="GST Audit"
+              desc="Export GSTR-1 & B2B report"
+              color="purple"
+              onClick={() => setToastMessage('GSTR-1 report compiled for FY26-Q3.')}
+            />
+          </div>
+
+          <AlertCard
+            title="Overdue Balance Notice Issued"
+            desc="Tata Housing Corp invoice INV-2026-8798 (₹ 3,90,000) exceeded 30 days. Auto-reminder sent to accounts department."
+            time="2 hours ago"
+            type="warning"
+            actionLabel="View Statement"
+            onAction={() => setToastMessage('Opened Tata Housing Statement')}
+          />
+        </div>
+
+        {/* Expense Summary Breakdown Card */}
+        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs">
+          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-rose-600" />
+            <span>Monthly Raw Material Costings</span>
+          </h3>
+
+          <div className="space-y-3">
+            {expenseSummary.map((exp, idx) => (
+              <div key={idx} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-700 font-medium truncate max-w-[65%]">{exp.category}</span>
+                  <span className="font-bold text-slate-900 font-mono">{exp.amount}</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
+                    style={{ width: `${exp.percent}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Customer Payment & Ledger Table */}
+      <section>
+        <DataTable
+          title="Customer Invoices & Ledger Table"
+          subtitle="Tax invoices generated from electronic batch delivery tickets"
+          icon={ReceiptText}
+          columns={columns}
+          data={ledgers}
+          searchPlaceholder="Search client, invoice number, mix grade..."
+          renderMobileCard={(inv) => (
+            <div className="w-full max-w-full overflow-hidden min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-xs font-bold text-emerald-400 truncate">{inv.invoice}</div>
+                  <div className="text-sm font-bold text-white mt-0.5 truncate">{inv.client}</div>
+                  <div className="text-xs text-slate-400 truncate">Mix: {inv.grade} • {inv.volume}</div>
+                </div>
+                <div className="shrink-0">
+                  <StatusBadge status={inv.status} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-800 text-[11px]">
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block">Amount:</span>
+                  <span className="font-bold text-white font-mono text-sm">{inv.amount}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block">Due Date:</span>
+                  <span className="font-mono text-slate-300">{inv.dueDate}</span>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setToastMessage(`Downloading Invoice ${inv.invoice}`)}
+                  className="px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200 rounded"
+                >
+                  Download Challan PDF
+                </button>
+              </div>
+            </div>
+          )}
+        />
+      </section>
+        </>
+      )}
+
+      {/* Modals */}
+      <Modal
+        isOpen={showInvoiceModal}
+        onClose={() => setShowInvoiceModal(false)}
+        title="Create Tax Invoice / Delivery Challan"
+        subtitle="Generate B2B tax invoice against verified batching tickets."
+        icon={ReceiptText}
+      >
+        <form onSubmit={handleCreateInvoice} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              Client Account *
+            </label>
+            <input
+              type="text"
+              required
+              value={invForm.client}
+              onChange={(e) => setInvForm({ ...invForm, client: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-cyan-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Concrete Mix
+              </label>
+              <input
+                type="text"
+                value={invForm.grade}
+                onChange={(e) => setInvForm({ ...invForm, grade: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Billed Volume
+              </label>
+              <input
+                type="text"
+                value={invForm.volume}
+                onChange={(e) => setInvForm({ ...invForm, volume: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Total Amount (INR) *
+              </label>
+              <input
+                type="text"
+                required
+                value={invForm.amount}
+                onChange={(e) => setInvForm({ ...invForm, amount: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:bg-white focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Due Date
+              </label>
+              <input
+                type="text"
+                value={invForm.dueDate}
+                onChange={(e) => setInvForm({ ...invForm, dueDate: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:bg-white focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowInvoiceModal(false)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950"
+            >
+              Generate Invoice
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        title="Record Client Payment Receipt"
+        subtitle="Match NEFT / RTGS / UTR number with outstanding tax invoices."
+        icon={CreditCard}
+      >
+        <div className="space-y-3 text-xs text-slate-300">
+          <p className="text-slate-400">
+            Payment gateway hook is enabled. Invoices marked as 'Paid' will automatically update client ledger limits in real time.
+          </p>
+          <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/90 font-mono text-emerald-800">
+            Auto-reconciliation active via virtual bank account numbers.
+          </div>
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPaymentModal(false);
+                setToastMessage('Payment recorded and synced with tally ledger.');
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950"
+            >
+              Record Payment
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+    </AppLayout>
+  );
+}

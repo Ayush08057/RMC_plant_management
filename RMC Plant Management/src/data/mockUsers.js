@@ -1,0 +1,187 @@
+/**
+ * Enterprise Roles and Route Definitions for SM CONCRETECH
+ * Clean structure with zero dummy data records.
+ */
+
+export const ROLES = {
+  ADMIN: 'Admin',
+  PLANT_MANAGER: 'Plant Manager',
+  PLANT_INCHARGE: 'Plant Incharge',
+  ACCOUNTANT: 'Accountant',
+  OPERATOR: 'Operator',
+  DISPATCHER: 'Dispatcher',
+  QC_ENGINEER: 'QC Engineer',
+  SITE_SUPERVISOR: 'Site Supervisor',
+  DRIVER: 'Driver',
+  OWNER_DIRECTOR: 'Owner / Director',
+};
+
+export const ROLE_ROUTES = {
+  [ROLES.ADMIN]: '/admin',
+  [ROLES.PLANT_MANAGER]: '/plant-manager',
+  [ROLES.PLANT_INCHARGE]: '/plant-manager',
+  [ROLES.ACCOUNTANT]: '/accountant',
+  [ROLES.OPERATOR]: '/admin',
+  [ROLES.DISPATCHER]: '/dispatcher',
+  [ROLES.QC_ENGINEER]: '/qc',
+  [ROLES.SITE_SUPERVISOR]: '/site-supervisor',
+  [ROLES.DRIVER]: '/driver',
+  [ROLES.OWNER_DIRECTOR]: '/owner',
+};
+
+const buildOfficialAccount = ({
+  id,
+  name,
+  email,
+  employeeId,
+  password,
+  role,
+  badge,
+  avatar,
+  department,
+  portalRoute,
+  phone,
+}) => ({
+  id,
+  name,
+  email,
+  secondaryEmail: email,
+  employeeId,
+  password,
+  role,
+  department,
+  plantLocation: 'Main Plant HQ',
+  badge,
+  portalRoute,
+  portalName: `${name} Portal`,
+  avatar,
+  phone,
+  status: 'Active',
+  mustChangePassword: false,
+});
+
+// System Root Administrator for authenticating the management console
+export const SYSTEM_ADMIN = buildOfficialAccount({
+  id: 'USR-ADMIN-001',
+  name: 'System Administrator',
+  email: 'smconcretech@gmail.com',
+  employeeId: 'ADM-001',
+  password: 'sm1234',
+  role: ROLES.ADMIN,
+  department: 'Executive Administration',
+  badge: 'ROOT',
+  avatar: 'SA',
+  portalRoute: '/admin',
+  phone: '+91 9820000001',
+});
+
+// Official Role Accounts Directory - Complete with Username, Employee ID, Password, and Portal Access
+export const OFFICIAL_ROLE_ACCOUNTS = [
+  SYSTEM_ADMIN,
+  buildOfficialAccount({
+    id: 'USR-PM-001',
+    name: 'Plant Manager',
+    email: 'manager@smconcretech.com',
+    employeeId: 'PM-001',
+    password: 'Plant@123',
+    role: ROLES.PLANT_MANAGER,
+    department: 'Operations Management',
+    badge: 'OPS',
+    avatar: 'PM',
+    portalRoute: '/plant-manager',
+    phone: '+91 9820000002',
+  }),
+  buildOfficialAccount({
+    id: 'USR-ACC-001',
+    name: 'Accountant',
+    email: 'accountant@smconcretech.com',
+    employeeId: 'ACC-001',
+    password: 'Finance@123',
+    role: ROLES.ACCOUNTANT,
+    department: 'Finance',
+    badge: 'FIN',
+    avatar: 'ACC',
+    portalRoute: '/accountant',
+    phone: '+91 9820000003',
+  }),
+  buildOfficialAccount({
+    id: 'USR-DIS-001',
+    name: 'Dispatcher',
+    email: 'dispatcher@smconcretech.com',
+    employeeId: 'DIS-001',
+    password: 'Dispatch@123',
+    role: ROLES.DISPATCHER,
+    department: 'Logistics',
+    badge: 'LOG',
+    avatar: 'DIS',
+    portalRoute: '/dispatcher',
+    phone: '+91 9820000004',
+  }),
+  buildOfficialAccount({
+    id: 'USR-QC-001',
+    name: 'QC Engineer',
+    email: 'qc@smconcretech.com',
+    employeeId: 'QC-001',
+    password: 'Quality@123',
+    role: ROLES.QC_ENGINEER,
+    department: 'Quality Control',
+    badge: 'LAB',
+    avatar: 'QC',
+    portalRoute: '/qc',
+    phone: '+91 9820000005',
+  }),
+  buildOfficialAccount({
+    id: 'USR-SS-001',
+    name: 'Site Supervisor',
+    email: 'supervisor@smconcretech.com',
+    employeeId: 'SS-001',
+    password: 'Site@123',
+    role: ROLES.SITE_SUPERVISOR,
+    department: 'Site Operations',
+    badge: 'SITE',
+    avatar: 'SS',
+    portalRoute: '/site-supervisor',
+    phone: '+91 9820000006',
+  }),
+  buildOfficialAccount({
+    id: 'USR-DV-001',
+    name: 'Driver',
+    email: 'driver@smconcretech.com',
+    employeeId: 'DRV-001',
+    password: 'Driver@123',
+    role: ROLES.DRIVER,
+    department: 'Fleet Operations',
+    badge: 'FLEET',
+    avatar: 'DRV',
+    portalRoute: '/driver',
+    phone: '+91 9820000007',
+  }),
+  buildOfficialAccount({
+    id: 'USR-OD-001',
+    name: 'Owner / Director',
+    email: 'owner@smconcretech.com',
+    employeeId: 'OWN-001',
+    password: 'Director@123',
+    role: ROLES.OWNER_DIRECTOR,
+    department: 'Executive Leadership',
+    badge: 'EXEC',
+    avatar: 'OD',
+    portalRoute: '/owner',
+    phone: '+91 9820000008',
+  }),
+];
+
+// Generic Role Profiles for Role Testing
+export const SYSTEM_ROLE_PROFILES = OFFICIAL_ROLE_ACCOUNTS.map((acc) => ({
+  role: acc.role,
+  title: acc.name,
+  route: acc.portalRoute,
+  avatar: acc.avatar,
+  badge: acc.badge,
+  email: acc.email,
+  employeeId: acc.employeeId,
+  password: acc.password,
+}));
+
+// Initial users seeded with official role accounts
+export const INITIAL_MOCK_USERS = OFFICIAL_ROLE_ACCOUNTS;

@@ -1,0 +1,220 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    overflow-x: hidden;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Keep secondary copy readable against the app's light surfaces. */
+#root .app-shell .text-slate-400 {
+  color: #475569;
+}
+
+#root .app-shell .text-slate-500 {
+  color: #334155;
+}
+
+.app-sidebar .sidebar-label {
+  color: #020617 !important;
+}
+
+/* Executive Custom Light Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.9);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(14, 116, 144, 0.8);
+}
+
+/* No Scrollbar Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Industrial Grid & Dot Matrix Textures on White Base */
+.concrete-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.concrete-dots-bg {
+  background-image: radial-gradient(rgba(245, 158, 11, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Modern Light Card & Elevation Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-card-hover:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 12px 24px -4px rgba(6, 182, 212, 0.12);
+  transform: translateY(-2px);
+}
+
+.royal-blue-live-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(125deg, #172554, #1e40af 48%, #1d4ed8 75%, #1e3a8a);
+  background-size: 220% 220%;
+  animation: royalBlueShift 12s ease-in-out infinite;
+  box-shadow: inset 0 1px 0 rgba(191, 219, 254, 0.18), 0 14px 32px -20px rgba(30, 64, 175, 0.85);
+}
+
+.royal-blue-live-panel::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: radial-gradient(ellipse at 90% 0%, rgba(96, 165, 250, 0.28), transparent 48%);
+  content: "";
+  pointer-events: none;
+}
+
+@keyframes royalBlueShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .royal-blue-live-panel {
+    animation: none;
+  }
+}
+
+/* Modern Animations */
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.03); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(249, 115, 22, 0.3); }
+}
+
+.animate-pulse-subtle {
+  animation: pulseSubtle 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: floatSlow 7s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 4s ease-in-out infinite;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-pop-in {
+  animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes logoShimmer {
+  0% { filter: drop-shadow(0 4px 6px rgba(6, 182, 212, 0.15)); }
+  50% { filter: drop-shadow(0 6px 12px rgba(6, 182, 212, 0.35)); }
+  100% { filter: drop-shadow(0 4px 6px rgba(6, 182, 212, 0.15)); }
+}
+
+.logo-shimmer {
+  animation: logoShimmer 4s ease-in-out infinite;
+}
+
+/* ========================================================
+   PRINT STYLESHEET FOR CASH MEMO & BILLING
+   ======================================================== */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .cash-memo-printable {
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
