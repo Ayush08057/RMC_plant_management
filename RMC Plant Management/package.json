@@ -17,7 +17,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@dataconnect/generated": "file:src/dataconnect-generated",
     "clsx": "^2.1.1",
     "firebase": "^11.10.0",
     "lucide-react": "^1.52.0",
