@@ -43,16 +43,17 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import KPICard from '../dashboard/KPICard';
 import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
 import MobilePunchWidget from './MobilePunchWidget';
-import LiveEmployeeLocationRadar from './LiveEmployeeLocationRadar';
 
 export default function AttendanceManagementView({ 
   defaultPlant = 'All Plants', 
+  employeeFilter = null,
   triggerMarkAttendance = false,
   triggerMobileAttendance = false,
   onMarkAttendanceReset = () => {},
@@ -75,10 +76,14 @@ export default function AttendanceManagementView({
     addAuditLog 
   } = useWorkforce();
 
+  const isAdmin = user?.role === 'Admin' || user?.role === 'Plant Manager' || user?.role === 'Owner / Director';
+  const effectiveFilter = employeeFilter || (!isAdmin ? (user?.employeeId || user?.id) : null);
+
   // Master list of real workforce employees
   const allEmployeesList = useMemo(() => {
-    return employees || [];
-  }, [employees]);
+    if (!effectiveFilter) return employees || [];
+    return (employees || []).filter((e) => e.id === effectiveFilter || e.employeeId === effectiveFilter);
+  }, [employees, effectiveFilter]);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -113,8 +118,7 @@ export default function AttendanceManagementView({
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addModalTab, setAddModalTab] = useState('manual'); // 'mobile' | 'manual' | 'log' | 'radar'
-  const [activeSubView, setActiveSubView] = useState('overview'); // 'overview' | 'radar'
+  const [addModalTab, setAddModalTab] = useState('manual'); // 'mobile' | 'manual' | 'log'
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [activeKpiModal, setActiveKpiModal] = useState(null); // 'present' | 'late' | 'leaves' | 'overtime' | 'shifts' | null
@@ -172,9 +176,9 @@ export default function AttendanceManagementView({
   // Helper: Calculate duty hours & OT
   const calculateDutyHours = (inTime, outTime) => {
     if (!inTime || !outTime) return { workingHours: 8, overtimeHours: 0 };
-    const [inH, inM] = inTime.split(':').map(Number);
-    const [outH, outM] = outTime.split(':').map(Number);
-    let totalMins = (outH * 60 + outM) - (inH * 60 + inM);
+    const totalInMins = parseTimeToMinutes(inTime);
+    const totalOutMins = parseTimeToMinutes(outTime);
+    let totalMins = totalOutMins - totalInMins;
     if (totalMins < 0) totalMins += 24 * 60; // night shift
     const workingHours = Number((totalMins / 60).toFixed(1));
     const overtimeHours = workingHours > 9.0 ? Number((workingHours - 9.0).toFixed(1)) : 0;
@@ -199,7 +203,7 @@ export default function AttendanceManagementView({
             timestamp: new Date().toISOString(),
           },
         });
-        setToastMessage(`✓ Clocked IN: ${emp.name} at ${rec.punchIn} (🛰️ Live GPS: ${lat}, ${lng})`);
+        setToastMessage(`✓ Clocked IN: ${emp.name} at ${formatToIndian12Hr(rec.punchIn)} (🛰️ Live GPS: ${lat}, ${lng})`);
       } catch (err) {
         setToastMessage(err.message || 'Check-in failed');
       }
@@ -243,7 +247,7 @@ export default function AttendanceManagementView({
       const rec = checkOut(targetId, {
         remarks: `Shift completed for ${emp.name}. Daily Report filed.`,
       });
-      setToastMessage(`✓ Clocked OUT: ${emp.name} at ${rec.punchOut} (Duty: ${rec.workingHours}h)`);
+      setToastMessage(`✓ Clocked OUT: ${emp.name} at ${formatToIndian12Hr(rec.punchOut)} (Duty: ${rec.workingHours}h)`);
     } catch (err) {
       setToastMessage(err.message || 'Check-out failed');
     }
@@ -313,6 +317,31 @@ export default function AttendanceManagementView({
     backupCompleted: true,
     remarks: 'Scale zero-point verification passed. Sand moisture compensated at 4.2%. SCADA backup synced.',
   });
+  const [modalGeneralReport, setModalGeneralReport] = useState({
+    workDescription: '',
+    remarks: 'Standard shift operational duties completed',
+  });
+  const [isEditingExistingReport, setIsEditingExistingReport] = useState(false);
+
+  // Open department report modal with staff context
+  const handleOpenReportModal = (staff, andAutoPunchOut = false) => {
+    if (!staff) return;
+    setReportTargetStaff(staff);
+    setReportModalAutoPunchOut(andAutoPunchOut);
+    setIsEditingExistingReport(!staff.isReportDone);
+    if (staff.todayReport?.workDescription) {
+      setModalGeneralReport({
+        workDescription: staff.todayReport.workDescription,
+        remarks: staff.todayReport.remarks || '',
+      });
+    } else {
+      setModalGeneralReport({
+        workDescription: staff.todayWorkSummary || 'Daily operations completed',
+        remarks: 'Work completed as scheduled',
+      });
+    }
+    setShowReportModal(true);
+  };
 
   const handleModalSubmitReport = (e, andClockOut = false) => {
     if (e) e.preventDefault();
@@ -340,7 +369,8 @@ export default function AttendanceManagementView({
       workDescription = `Batches: ${modalOperatorReport.batchesCount} | Scale Zero Check: ${modalOperatorReport.scaleCheckPass ? 'Pass' : 'Fail'} | Admixture: ${modalOperatorReport.admixtureVerified ? 'Yes' : 'No'} | SCADA Backup: ${modalOperatorReport.backupCompleted ? 'Yes' : 'No'} | Remarks: ${modalOperatorReport.remarks}`;
       workType = 'Batching Automation & Calibration Log';
     } else {
-      workDescription = `Daily operational duties performed for ${reportTargetStaff.name}.`;
+      workDescription = modalGeneralReport.workDescription || `Daily operational duties performed for ${reportTargetStaff.name}.`;
+      workType = `${roleCat} Operations Log`;
     }
 
     submitDailyWork({
@@ -354,22 +384,33 @@ export default function AttendanceManagementView({
       status: 'Submitted',
     });
 
+    // Update selectedDetailStaff if currently open so UI immediately updates
+    if (selectedDetailStaff && (selectedDetailStaff.employeeId === targetId || selectedDetailStaff.id === targetId)) {
+      setSelectedDetailStaff((prev) => prev ? {
+        ...prev,
+        isReportDone: true,
+        todayWorkSummary: workDescription,
+        todayReport: { workDescription, remarks: `Submitted for ${reportTargetStaff.name}`, workType, date: selectedDate, status: 'Submitted' },
+      } : null);
+    }
+
     if (andClockOut) {
       try {
         const rec = checkOut(targetId, {
           remarks: `Shift completed for ${reportTargetStaff.name}. Daily Report submitted.`,
         });
-        setToastMessage(`✓ Daily Report filed & ${reportTargetStaff.name} clocked OUT at ${rec.punchOut} (Duty: ${rec.workingHours}h)!`);
+        setToastMessage(`✓ Daily Report filed & ${reportTargetStaff.name} clocked OUT at ${formatToIndian12Hr(rec.punchOut)} (Duty: ${rec.workingHours}h)!`);
       } catch (err) {
         setToastMessage(`✓ Daily Report filed! (${err.message})`);
       }
     } else {
-      setToastMessage(`✓ ${roleCat} Daily Report for ${reportTargetStaff.name} filed successfully! Clock Out is now unlocked.`);
+      setToastMessage(`✓ Daily Report for ${reportTargetStaff.name} saved successfully! (काम अहवाल यशस्वीरित्या नोंदवला)`);
     }
 
     setShowReportModal(false);
     setReportTargetStaff(null);
     setReportModalAutoPunchOut(false);
+    setIsEditingExistingReport(false);
   };
 
   // Date and Plant Records matching selection
@@ -460,18 +501,17 @@ export default function AttendanceManagementView({
       let punctualityBadge = 'slate';
       let punctualityDetail = 'Shift: 09:00 AM';
       if (record?.punchIn) {
-        const [pH, pM] = record.punchIn.split(':').map(Number);
-        const punchMins = pH * 60 + pM;
+        const punchMins = parseTimeToMinutes(record.punchIn);
         const shiftStartMins = 9 * 60; // 09:00 AM
         if (punchMins <= shiftStartMins + 15) {
           punctualityLabel = 'On Time';
           punctualityBadge = 'emerald';
-          punctualityDetail = `In @ ${record.punchIn} (On Schedule)`;
+          punctualityDetail = `In @ ${formatToIndian12Hr(record.punchIn)} (On Schedule)`;
         } else {
           const lateMins = punchMins - shiftStartMins;
           punctualityLabel = `Late by ${lateMins}m`;
           punctualityBadge = 'amber';
-          punctualityDetail = `In @ ${record.punchIn} (Shift 09:00)`;
+          punctualityDetail = `In @ ${formatToIndian12Hr(record.punchIn)} (Shift 09:00 AM)`;
         }
       }
 
@@ -744,7 +784,7 @@ export default function AttendanceManagementView({
       minWidth: '80px',
       render: (row) => (
         <span className="font-mono font-bold text-rose-600 text-xs block whitespace-nowrap">
-          {row.punchOut || '--:--'}
+          {formatToIndian12Hr(row.punchOut) || '--:--'}
         </span>
       ),
     },
@@ -837,21 +877,18 @@ export default function AttendanceManagementView({
   const getModalTitle = () => {
     if (addModalTab === 'mobile') return 'Mobile Attendance Terminal';
     if (addModalTab === 'log') return `Workforce Duty Log (${selectedDate})`;
-    if (addModalTab === 'radar') return 'Employee Live Location & GPS Radar';
     return 'Mark Workforce Attendance';
   };
 
   const getModalSubtitle = () => {
     if (addModalTab === 'mobile') return 'Smart Mobile Clock In/Out with Live GPS & Selfie Verification.';
     if (addModalTab === 'log') return 'Live attendance records logged in SCADA database for selected date.';
-    if (addModalTab === 'radar') return 'Real-time satellite GPS tracking of plant personnel & transit fleet.';
     return 'Manual punch entry by plant manager or executive admin.';
   };
 
   const getModalIcon = () => {
     if (addModalTab === 'mobile') return Smartphone;
     if (addModalTab === 'log') return Clock;
-    if (addModalTab === 'radar') return Radio;
     return Plus;
   };
 
@@ -859,10 +896,7 @@ export default function AttendanceManagementView({
     <div className="space-y-4">
 
 
-      {activeSubView === 'radar' ? (
-        <LiveEmployeeLocationRadar defaultPlant={selectedPlant} />
-      ) : (
-        <>
+
 
 
           {/* ========================================================
@@ -913,23 +947,25 @@ export default function AttendanceManagementView({
 
           {/* STAFF ATTENDANCE REGISTER: PERFECT FLUSH ENTERPRISE TABLE */}
           {attendanceViewMode === 'table' ? (
-            <div className="overflow-x-auto w-full border-t border-slate-200/90">
-              <table className="w-full text-left text-xs border-collapse divide-y divide-slate-200/80 min-w-[900px]">
-                <thead className="bg-slate-100/90 text-slate-700 font-mono font-bold border-b border-slate-200 select-none uppercase tracking-wider text-[10px]">
+            <div className="w-full max-w-full overflow-hidden border-t border-slate-200/90">
+              {/* Desktop Table View */}
+              <div className="hidden md:block w-full max-w-full overflow-x-auto">
+                <table className="w-full min-w-[750px] text-left text-xs border-collapse divide-y divide-slate-200/80 table-fixed">
+                  <thead className="bg-slate-100/90 text-slate-700 font-mono font-bold border-b border-slate-200 select-none uppercase tracking-wider text-[10px]">
                   <tr>
-                    <th className="py-3 px-4 sm:px-6 font-black text-slate-700">
+                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[28%]">
                       EMPLOYEE
                     </th>
-                    <th className="py-3 px-4 sm:px-6 font-black text-slate-700">
+                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[22%]">
                       PUNCH IN / STATUS
                     </th>
-                    <th className="py-3 px-4 sm:px-6 font-black text-slate-700">
+                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[18%]">
                       DUTY HOURS (9H)
                     </th>
-                    <th className="py-3 px-4 sm:px-6 font-black text-slate-700">
+                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[20%]">
                       TODAY'S WORK REPORT
                     </th>
-                    <th className="py-3 px-4 sm:px-6 text-center font-black text-slate-700">
+                    <th className="py-2.5 px-3 sm:px-4 text-center font-black text-slate-700 w-[12%]">
                       ACTION
                     </th>
                   </tr>
@@ -946,8 +982,8 @@ export default function AttendanceManagementView({
                         className="hover:bg-cyan-50/40 transition-colors even:bg-slate-50/50"
                       >
                           {/* 1. EMPLOYEE & ROLE BOX */}
-                          <td className="py-3.5 px-4 sm:px-6 align-middle">
-                            <div className="flex items-center gap-3">
+                          <td className="py-2.5 px-3 sm:px-4 align-middle">
+                            <div className="flex items-center gap-2.5 min-w-0">
                               <div 
                                 className="relative shrink-0 cursor-pointer group"
                                 onClick={() => {
@@ -960,23 +996,23 @@ export default function AttendanceManagementView({
                                   <img 
                                     src={photoUrl} 
                                     alt={staff.name}
-                                    className={`w-11 h-11 rounded-xl object-cover ring-2 shadow-2xs transition-transform group-hover:scale-105 ${
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover ring-2 shadow-2xs transition-transform group-hover:scale-105 ${
                                       hasFacePunch ? 'ring-emerald-500' : 'ring-slate-300'
                                     }`}
                                   />
                                 ) : (
-                                  <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-bold text-slate-700 text-sm">
+                                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-bold text-slate-700 text-xs sm:text-sm">
                                     {staff.name.charAt(0)}
                                   </div>
                                 )}
-                                <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
                                   staff.isOnline ? 'bg-emerald-500 animate-pulse' :
                                   staff.isCompleted ? 'bg-blue-500' : 'bg-slate-300'
                                 }`} />
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div 
-                                  className="font-bold text-slate-900 text-xs sm:text-sm leading-snug hover:text-blue-600 cursor-pointer transition-colors"
+                                  className="font-bold text-slate-900 text-xs sm:text-sm leading-snug hover:text-blue-600 cursor-pointer transition-colors truncate"
                                   onClick={() => {
                                     setSelectedDetailStaff(staff);
                                     setShowDetailModal(true);
@@ -984,31 +1020,25 @@ export default function AttendanceManagementView({
                                 >
                                   {staff.name}
                                 </div>
-                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 truncate">
                                     {roleCat}
                                   </span>
-                                  <span className="font-mono text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                                  <span className="font-mono text-[9px] sm:text-[10px] font-bold text-slate-500 truncate">
                                     {staff.employeeId || staff.id}
                                   </span>
-                                  {hasFacePunch && (
-                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 whitespace-nowrap flex items-center gap-0.5">
-                                      <Camera className="w-2.5 h-2.5 text-emerald-600" />
-                                      <span>Android Face</span>
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             </div>
                           </td>
 
                           {/* 2. PUNCH IN & STATUS BOX */}
-                          <td className="py-3.5 px-4 sm:px-6 align-middle">
-                            <div className="space-y-1">
-                              <div className="font-mono text-sm font-black text-slate-900">
-                                {staff.punchIn || '--:--'}
+                          <td className="py-2.5 px-3 sm:px-4 align-middle">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="font-mono text-xs sm:text-sm font-black text-slate-900 truncate">
+                                {formatToIndian12Hr(staff.punchIn) || '--:--'}
                               </div>
-                              <div className="text-xs font-semibold">
+                              <div className="text-[11px] font-semibold truncate">
                                 {staff.punctualityBadge === 'emerald' ? (
                                   <span className="text-emerald-700 font-bold">● On Time</span>
                                 ) : staff.punctualityBadge === 'amber' ? (
@@ -1020,16 +1050,16 @@ export default function AttendanceManagementView({
                                 )}
                               </div>
                               {staff.punchIn && (
-                                <div>
+                                <div className="truncate">
                                   {hasFacePunch ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 whitespace-nowrap">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                      <span>Android Face Punch (99.8%)</span>
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 truncate">
+                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                      <span className="truncate">Android Face (99.8%)</span>
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 whitespace-nowrap">
-                                      <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-                                      <span>No Selfie Photo</span>
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 truncate">
+                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                                      <span className="truncate">No Selfie Photo</span>
                                     </span>
                                   )}
                                 </div>
@@ -1038,25 +1068,25 @@ export default function AttendanceManagementView({
                           </td>
 
                           {/* 3. DUTY HOURS (9H) BOX */}
-                          <td className="py-3.5 px-4 sm:px-6 align-middle">
-                            <div className="space-y-1">
+                          <td className="py-2.5 px-3 sm:px-4 align-middle">
+                            <div className="space-y-0.5 min-w-0">
                               <div className="flex items-baseline gap-1 font-mono">
-                                <span className="text-sm font-black text-slate-900">
+                                <span className="text-xs sm:text-sm font-black text-slate-900">
                                   {staff.workingHours ? `${staff.workingHours}h` : '--'}
                                 </span>
-                                <span className="text-xs text-slate-500 font-sans font-medium">/ 9h shift</span>
+                                <span className="text-[10px] text-slate-500 font-sans font-medium">/ 9h shift</span>
                               </div>
                               <div>
                                 {staff.dutyComplianceBadge === 'emerald' ? (
-                                  <span className="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap">
+                                  <span className="inline-block text-[9px] sm:text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 truncate">
                                     Completed (9h)
                                   </span>
                                 ) : staff.dutyComplianceBadge === 'cyan' ? (
-                                  <span className="inline-block text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 whitespace-nowrap">
+                                  <span className="inline-block text-[9px] sm:text-[10px] font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate">
                                     In Progress
                                   </span>
                                 ) : (
-                                  <span className="inline-block text-[10px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap">
+                                  <span className="inline-block text-[9px] sm:text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 truncate">
                                     Partial Shift
                                   </span>
                                 )}
@@ -1064,35 +1094,35 @@ export default function AttendanceManagementView({
                             </div>
                           </td>
 
-                          {/* 4. TODAY'S WORK REPORT BOX (NO LIVE LOCATION) */}
-                          <td className="py-3.5 px-4 sm:px-6 align-middle">
-                            <div>
+                          {/* 4. TODAY'S WORK REPORT BOX */}
+                          <td className="py-2.5 px-3 sm:px-4 align-middle">
+                            <div className="min-w-0">
                               {staff.isReportDone ? (
                                 <button
                                   type="button"
                                   onClick={() => handleOpenReportModal(staff, false)}
-                                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs whitespace-nowrap"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl transition-all cursor-pointer shadow-2xs truncate"
                                   title="View / Edit report"
                                 >
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <span>Report Filed</span>
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span className="truncate">Report Filed</span>
                                 </button>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => handleOpenReportModal(staff, false)}
-                                  className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs whitespace-nowrap"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-xl transition-all cursor-pointer shadow-2xs truncate"
                                   title="File required daily report"
                                 >
-                                  <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                  <span>Report Required</span>
+                                  <FileText className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span className="truncate">Report Required</span>
                                 </button>
                               )}
                             </div>
                           </td>
 
                           {/* 5. ACTION BOX */}
-                          <td className="py-3.5 px-4 sm:px-6 align-middle text-center">
+                          <td className="py-2.5 px-3 sm:px-4 align-middle text-center">
                             <div className="flex justify-center">
                               <button
                                 type="button"
@@ -1113,9 +1143,151 @@ export default function AttendanceManagementView({
                     })}
                   </tbody>
                 </table>
+              </div>
 
-                {/* Clean, non-scrollable summary footer */}
-                <div className="px-4 py-3 bg-slate-100/70 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-2 font-medium">
+              {/* Clean Mobile Cards for Small Screens (< 768px) */}
+              <div className="block md:hidden p-3 space-y-3 bg-slate-50/40 border-t border-slate-200/90">
+                {fiveRolesAttendanceDirectory.map((staff) => {
+                  const roleCat = getRoleCategory(staff.role);
+                  const photoUrl = getStaffPhoto(staff);
+                  const hasFacePunch = Boolean(staff.record?.selfieUrl || staff.selfieUrl);
+
+                  return (
+                    <div 
+                      key={staff.id || staff.employeeId}
+                      className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div 
+                            className="relative shrink-0 cursor-pointer"
+                            onClick={() => {
+                              setSelectedDetailStaff(staff);
+                              setShowDetailModal(true);
+                            }}
+                          >
+                            {photoUrl ? (
+                              <img 
+                                src={photoUrl} 
+                                alt={staff.name}
+                                className={`w-10 h-10 rounded-xl object-cover ring-2 shadow-2xs ${
+                                  hasFacePunch ? 'ring-emerald-500' : 'ring-slate-300'
+                                }`}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-bold text-slate-700 text-sm">
+                                {staff.name.charAt(0)}
+                              </div>
+                            )}
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                              staff.isOnline ? 'bg-emerald-500 animate-pulse' :
+                              staff.isCompleted ? 'bg-blue-500' : 'bg-slate-300'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div 
+                              className="font-bold text-slate-900 text-sm truncate cursor-pointer hover:text-blue-600"
+                              onClick={() => {
+                                setSelectedDetailStaff(staff);
+                                setShowDetailModal(true);
+                              }}
+                            >
+                              {staff.name}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                {roleCat}
+                              </span>
+                              <span className="font-mono text-[10px] font-bold text-slate-500">
+                                {staff.employeeId || staff.id}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          {staff.punctualityBadge === 'emerald' ? (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-block">
+                              On Time
+                            </span>
+                          ) : staff.punctualityBadge === 'amber' ? (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full inline-block">
+                              Late
+                            </span>
+                          ) : staff.isCompleted ? (
+                            <span className="text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full inline-block">
+                              Shift Done
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full inline-block">
+                              Not Clocked
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Duty Times & Hours Grid */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                        <div className="bg-slate-50/80 p-2 rounded-xl border border-slate-100">
+                          <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Punch In / Out:</span>
+                          <span className="font-mono font-bold text-slate-800 block mt-0.5 truncate">
+                            {staff.punchIn ? formatToIndian12Hr(staff.punchIn) : '--:--'}
+                            {staff.punchOut ? ` → ${formatToIndian12Hr(staff.punchOut)}` : ''}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50/80 p-2 rounded-xl border border-slate-100">
+                          <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Duty Hours:</span>
+                          <span className="font-mono font-bold text-slate-800 block mt-0.5">
+                            {staff.workingHours ? `${staff.workingHours}h` : '0h'}{' '}
+                            <span className="text-slate-400 font-normal">/ 9h shift</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Report & Details Action Bar */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] text-slate-500 font-medium">Daily Report:</span>
+                          {staff.isReportDone ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReportModal(staff, false)}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-lg cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span>Filed</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReportModal(staff, false)}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-lg cursor-pointer"
+                            >
+                              <FileText className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>Required</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDetailStaff(staff);
+                            setShowDetailModal(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-blue-100" />
+                          <span>Photo & Details</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Clean, non-scrollable summary footer */}
+              <div className="px-4 py-3 bg-slate-100/70 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-2 font-medium">
                   <div className="flex flex-wrap items-center gap-2">
                     <span>
                       Showing <strong className="text-slate-900 font-bold">{fiveRolesAttendanceDirectory.length} Staff Records</strong>
@@ -1253,13 +1425,13 @@ export default function AttendanceManagementView({
                           <div>
                             <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Punch In</span>
                             <span className={`font-mono text-xs font-black block mt-0.5 ${staff.punchIn ? 'text-emerald-700' : 'text-slate-400'}`}>
-                              {staff.punchIn || '--:--'}
+                              {formatToIndian12Hr(staff.punchIn) || '--:--'}
                             </span>
                           </div>
                           <div>
                             <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Punch Out</span>
                             <span className={`font-mono text-xs font-black block mt-0.5 ${staff.punchOut ? 'text-rose-600' : 'text-slate-400'}`}>
-                              {staff.punchOut || '--:--'}
+                              {formatToIndian12Hr(staff.punchOut) || '--:--'}
                             </span>
                           </div>
                           <div>
@@ -1465,8 +1637,7 @@ export default function AttendanceManagementView({
           </section>
 
 
-        </>
-      )}
+
 
       {/* POPUP MODAL: WORKFORCE ATTENDANCE TERMINAL (3-IN-1 COMMAND CENTER) */}
       <Modal
@@ -1517,18 +1688,6 @@ export default function AttendanceManagementView({
             >
               <Clock className="w-4 h-4" />
               <span className="truncate">Duty Log Table ({filteredAttendance.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddModalTab('radar')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                addModalTab === 'radar'
-                  ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 shadow-md font-black'
-                  : 'text-slate-600 hover:text-slate-900 font-medium'
-              }`}
-            >
-              <Radio className="w-4 h-4 text-amber-600 animate-pulse" />
-              <span className="truncate">Live GPS Radar</span>
             </button>
           </div>
 
@@ -1706,12 +1865,7 @@ export default function AttendanceManagementView({
             </div>
           )}
 
-          {/* Tab 4: Live Location Radar Inside Modal */}
-          {addModalTab === 'radar' && (
-            <div className="py-1">
-              <LiveEmployeeLocationRadar defaultPlant={selectedPlant} />
-            </div>
-          )}
+
         </div>
       </Modal>
 
@@ -1918,7 +2072,7 @@ export default function AttendanceManagementView({
                     <div className="text-[11px] text-slate-500 font-mono">{rec.employeeId} • {rec.role} • {rec.plant}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono font-bold text-emerald-700">In: {rec.punchIn || '--:--'}</div>
+                    <div className="font-mono font-bold text-emerald-700">In: {formatToIndian12Hr(rec.punchIn) || '--:--'}</div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800">
                       {rec.geofenceStatus || 'Verified'}
                     </span>
@@ -1964,7 +2118,7 @@ export default function AttendanceManagementView({
                     <div className="text-[11px] text-slate-500 font-mono">{rec.employeeId} • {rec.role} • {rec.plant}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono font-bold text-amber-700">Punch: {rec.punchIn}</div>
+                    <div className="font-mono font-bold text-amber-700">Punch: {formatToIndian12Hr(rec.punchIn)}</div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800">
                       Delayed
                     </span>
@@ -2092,7 +2246,7 @@ export default function AttendanceManagementView({
                     <span className="font-bold text-slate-900 text-xs">{s.name}</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">{s.code}</span>
                   </div>
-                  <div className="font-mono text-slate-700 font-bold text-xs">{s.startTime} - {s.endTime}</div>
+                  <div className="font-mono text-slate-700 font-bold text-xs">{formatShiftRange(s.startTime, s.endTime)}</div>
                   <div className="text-[10px] text-slate-500">Grace: {s.gracePeriod || 15}m • Hours: {s.duration || 8}h</div>
                 </div>
               ))
@@ -2112,16 +2266,17 @@ export default function AttendanceManagementView({
         </div>
       </Modal>
 
-      {/* 6. Department Daily Work Report Modal (Mandatory Before Clock Out) */}
+      {/* 6. Department Daily Work Report Modal (दैनिक काम अहवाल) */}
       <Modal
         isOpen={showReportModal && Boolean(reportTargetStaff)}
         onClose={() => {
           setShowReportModal(false);
           setReportTargetStaff(null);
           setReportModalAutoPunchOut(false);
+          setIsEditingExistingReport(false);
         }}
-        title={`Department Daily Shift Report: ${reportTargetStaff?.name || ''}`}
-        subtitle={`${reportTargetStaff?.role || 'Staff'} • ${reportTargetStaff?.department || 'Operations'} (${selectedDate})`}
+        title={`Daily Work Report (दैनिक काम अहवाल) — ${reportTargetStaff?.name || ''}`}
+        subtitle={`${reportTargetStaff?.role || 'Staff'} • ${reportTargetStaff?.plant || 'Main Plant'} (${selectedDate})`}
         icon={FileText}
         maxWidth="max-w-2xl"
       >
@@ -2133,95 +2288,132 @@ export default function AttendanceManagementView({
           return (
             <div className="space-y-4 text-xs">
               {/* Header Banner */}
-              <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+              <div className={`p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
                 isDone 
                   ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
                   : 'bg-amber-50 border-amber-300 text-amber-950'
               }`}>
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shrink-0 ${
-                    isDone ? 'bg-emerald-600' : 'bg-amber-500'
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white shrink-0 ${
+                    isDone ? 'bg-emerald-600 shadow-sm' : 'bg-amber-500 shadow-sm'
                   }`}>
-                    {isDone ? <Check className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                    {isDone ? <Check className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                   </div>
                   <div>
-                    <h4 className="font-black text-xs uppercase tracking-wide">
-                      {isDone ? 'Daily Report Successfully Filed' : 'Mandatory Department Report Pending'}
+                    <h4 className="font-black text-xs uppercase tracking-tight">
+                      {isDone ? 'Today\'s Work Report Filed ✓ (काम नोंदवले आहे)' : 'Work Report Needed (कामाचा अहवाल भरा)'}
                     </h4>
-                    <p className="text-[11px] opacity-80">
+                    <p className="text-[11px] opacity-90 mt-0.5">
                       {isDone 
-                        ? 'Staff has completed their department shift report. Clock out is permitted.' 
-                        : 'Staff attendance policy requires this report before Clock Out can be recorded.'}
+                        ? 'Report recorded for today\'s shift. You can review or edit below.' 
+                        : 'Please write what work you did today before clocking out.'}
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 shrink-0">
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-300 text-slate-800 shrink-0">
                   {roleCat}
                 </span>
               </div>
 
-              {/* If already submitted: show details */}
-              {isDone && report ? (
+              {/* View Mode: If already submitted and not currently editing */}
+              {isDone && report && !isEditingExistingReport ? (
                 <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">{report.workType}</span>
-                    <span className="font-mono text-[10px] text-slate-500">REF: #{report.id}</span>
+                    <span className="font-bold text-slate-900">{report.workType || 'Daily Work Log'}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Verified ✓
+                    </span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 text-slate-700 leading-relaxed font-sans">
-                    {report.workDescription}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 text-slate-800 text-xs leading-relaxed font-sans font-medium whitespace-pre-wrap">
+                    {report.workDescription || reportTargetStaff.todayWorkSummary}
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                    <span>Filed for Date: {report.date}</span>
-                    <span className="text-emerald-700 font-bold">Status: {report.status || 'Verified'}</span>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1 border-t border-slate-200/60">
+                    <span>Date: {report.date || selectedDate}</span>
+                    <span>Staff: {reportTargetStaff.name} ({reportTargetStaff.employeeId || reportTargetStaff.id})</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingExistingReport(true)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Edit This Report (अहवालात बदल करा)</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowReportModal(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 cursor-pointer transition-colors"
+                      >
+                        Close (बंद करा)
+                      </button>
+
+                      {reportTargetStaff.isOnline && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowReportModal(false);
+                            handleQuickPunchOut(reportTargetStaff);
+                          }}
+                          className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <span>Clock Out (ड्युटी संपवा)</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
-                /* Dynamic department form based on role */
-                <form onSubmit={(e) => handleModalSubmitReport(e, reportModalAutoPunchOut)} className="space-y-3">
+                /* Edit / Fill Form */
+                <form onSubmit={(e) => handleModalSubmitReport(e, reportModalAutoPunchOut)} className="space-y-3.5">
                   {roleCat === 'Driver' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Mixer No.</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Mixer No. (गाडी नंबर) *</label>
                         <input
                           type="text"
                           value={modalDriverReport.vehicleNo}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, vehicleNo: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Trips Completed</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Trips Completed (एकूण फेऱ्या) *</label>
                         <input
                           type="number"
                           value={modalDriverReport.tripsCount}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, tripsCount: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivered Volume (m³)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivered Concrete (पाठवलेले काँक्रीट m³) *</label>
                         <input
                           type="number"
                           step="0.5"
                           value={modalDriverReport.deliveredM3}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, deliveredM3: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Km Driven / Odometry</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Kilometers (एकूण किमी) *</label>
                         <input
                           type="number"
                           value={modalDriverReport.odometerKm}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, odometerKm: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
-                      <div className="sm:col-span-2 flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="sm:col-span-2 flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <input
                           type="checkbox"
                           id="modalDrumWash"
@@ -2230,16 +2422,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalDrumWash" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          Drum & Chute Wash Completed at Wash Rack
+                          ✓ Drum & Chute Wash Completed at Wash Rack (ड्रम आणि शूट धुतले)
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Remarks</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Remarks / इतर शेरा</label>
                         <input
                           type="text"
                           value={modalDriverReport.remarks}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, remarks: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
+                          placeholder="रस्त्याची स्थिती किंवा इतर माहिती"
                         />
                       </div>
                     </div>
@@ -2248,62 +2441,63 @@ export default function AttendanceManagementView({
                   {roleCat === 'Site Supervisor' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site / Project Location</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site / Project Location (साईटचे नाव) *</label>
                         <input
                           type="text"
                           value={modalSupervisorReport.siteName}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, siteName: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Concrete Grade Poured</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Concrete Grade (काँक्रीट ग्रेड) *</label>
                         <input
                           type="text"
                           value={modalSupervisorReport.gradePoured}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, gradePoured: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Volume Poured (m³)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Volume Poured (ओतलेले प्रमाण m³) *</label>
                         <input
                           type="number"
                           value={modalSupervisorReport.volumePoured}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, volumePoured: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Slump Measured (mm)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Slump Measured (स्लम्प mm) *</label>
                         <input
                           type="number"
                           value={modalSupervisorReport.slumpMm}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, slumpMm: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Cube Moulds Cast</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Cube Moulds Cast (क्यूब मोल्ड्स संख्या) *</label>
                         <input
                           type="number"
                           value={modalSupervisorReport.cubesCast}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, cubesCast: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site Pour Remarks</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site Pour Remarks (साईट शेरा)</label>
                         <input
                           type="text"
                           value={modalSupervisorReport.remarks}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, remarks: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
+                          placeholder="पंप किंवा स्लॅब ओतकाम शेरा"
                         />
                       </div>
                     </div>
@@ -2312,46 +2506,46 @@ export default function AttendanceManagementView({
                   {roleCat === 'Accountant' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivery Invoices Processed</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivery Invoices Processed (बिल संख्या) *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.invoicesCount}
                           onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, invoicesCount: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Billed Amount (₹)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Billed Amount (एकूण रक्कम ₹) *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.billedAmount}
                           onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, billedAmount: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Collections Received (₹)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Collections Received (जमा रक्कम ₹) *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.collectionsAmount}
                           onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, collectionsAmount: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Vendor Inward Challans</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Vendor Inward Challans (चालन संख्या) *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.vendorChallansCount}
                           onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, vendorChallansCount: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
-                      <div className="sm:col-span-2 flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="sm:col-span-2 flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <input
                           type="checkbox"
                           id="modalBooksTallied"
@@ -2360,16 +2554,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-cyan-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalBooksTallied" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          Day-End Cash Book & Bank Balance Tallied (Reconciled)
+                          ✓ Day-End Cash Book & Bank Balance Tallied (दैनिक हिशोब जुळला)
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Financial Remarks</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Financial Remarks / शेरा</label>
                         <input
                           type="text"
                           value={modalAccountantReport.remarks}
                           onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, remarks: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
+                          placeholder="पेमेंट किंवा बँक तपशील"
                         />
                       </div>
                     </div>
@@ -2378,37 +2573,37 @@ export default function AttendanceManagementView({
                   {roleCat === 'Plant Incharge' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Production (m³)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Production (उत्पादन प्रमाण m³) *</label>
                         <input
                           type="number"
                           value={modalInchargeReport.productionM3}
                           onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, productionM3: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Uptime Hours</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Plant Uptime (प्लांट चालू तास) *</label>
                         <input
                           type="number"
                           step="0.5"
                           value={modalInchargeReport.uptimeHours}
                           onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, uptimeHours: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Raw Material Silo Stock Status</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Silo Stock Status (सिमेंट / सायलो साठा) *</label>
                         <input
                           type="text"
                           value={modalInchargeReport.siloStatus}
                           onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, siloStatus: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
-                      <div className="sm:col-span-2 flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="sm:col-span-2 flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <input
                           type="checkbox"
                           id="modalSafetyAudit"
@@ -2417,16 +2612,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-teal-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalSafetyAudit" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          Plant Safety, Housekeeping & Environmental Checklist Done
+                          ✓ Plant Safety & Environmental Checklist Done (सुरक्षा तपासणी पूर्ण)
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Operations Remarks</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Operations Remarks / शेरा</label>
                         <input
                           type="text"
                           value={modalInchargeReport.remarks}
                           onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, remarks: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
+                          placeholder="प्लांट कामकाज शेरा"
                         />
                       </div>
                     </div>
@@ -2435,16 +2631,16 @@ export default function AttendanceManagementView({
                   {roleCat === 'Operator' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batches Mixed (Count)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batches Mixed (बॅच संख्या) *</label>
                         <input
                           type="number"
                           value={modalOperatorReport.batchesCount}
                           onChange={(e) => setModalOperatorReport({ ...modalOperatorReport, batchesCount: Number(e.target.value) })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
                       </div>
-                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <input
                           type="checkbox"
                           id="modalScaleCheck"
@@ -2453,10 +2649,10 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalScaleCheck" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          Scale Zero Calibration Check (Pass)
+                          ✓ Scale Zero Check OK (काटा तपासणी OK)
                         </label>
                       </div>
-                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <input
                           type="checkbox"
                           id="modalAdmixCheck"
@@ -2465,10 +2661,10 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalAdmixCheck" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          Admixture Dispenser Verified
+                          ✓ Admixture Dispenser OK (अॅडमिक्सचर तपासणी)
                         </label>
                       </div>
-                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <input
                           type="checkbox"
                           id="modalBackupCheck"
@@ -2477,16 +2673,47 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalBackupCheck" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          SCADA Cloud Backup Synced
+                          ✓ SCADA Backup Done (डेटा सेव्ह झाला)
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batching & Moisture Notes</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batching Notes / शेरा</label>
                         <input
                           type="text"
                           value={modalOperatorReport.remarks}
                           onChange={(e) => setModalOperatorReport({ ...modalOperatorReport, remarks: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
+                          placeholder="बॅचिंग किंवा ओलावा शेरा"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {!['Driver', 'Site Supervisor', 'Accountant', 'Plant Incharge', 'Operator'].includes(roleCat) && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Today's Work Summary (आज काय काम केले?) *
+                        </label>
+                        <textarea
+                          required
+                          rows={3}
+                          value={modalGeneralReport.workDescription || ''}
+                          onChange={(e) => setModalGeneralReport({ ...modalGeneralReport, workDescription: e.target.value })}
+                          placeholder="उदा. लॅब टेस्टिंग / मशीन मेंटेनन्स / प्लांट सुपरव्हिजन केले"
+                          className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Remarks / Notes (इतर नोंदी / शेरा)
+                        </label>
+                        <input
+                          type="text"
+                          value={modalGeneralReport.remarks || ''}
+                          onChange={(e) => setModalGeneralReport({ ...modalGeneralReport, remarks: e.target.value })}
+                          placeholder="काम सुरळीत पूर्ण झाले"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:bg-white focus:border-blue-500"
                         />
                       </div>
                     </div>
@@ -2496,60 +2723,36 @@ export default function AttendanceManagementView({
                   <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-3 border-t border-slate-200">
                     <button
                       type="button"
-                      onClick={() => setShowReportModal(false)}
-                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer inline-flex items-center justify-center gap-1.5 border border-slate-200"
+                      onClick={() => {
+                        setShowReportModal(false);
+                        setIsEditingExistingReport(false);
+                      }}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer inline-flex items-center justify-center gap-1.5 border border-slate-200 transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4 text-slate-600" />
-                      <span>Back</span>
+                      <span>Back (मागे जा)</span>
                     </button>
 
                     <button
                       type="submit"
-                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <FileCheck2 className="w-4 h-4" />
-                      <span>Save Report Only</span>
+                      <span>Save Report (अहवाल नोंदवा)</span>
                     </button>
 
                     {(reportTargetStaff.isOnline || reportModalAutoPunchOut) && (
                       <button
                         type="button"
                         onClick={(e) => handleModalSubmitReport(e, true)}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <Square className="w-4 h-4 fill-current" />
-                        <span>Submit Report & Clock Out Now</span>
+                        <span>Save & Clock Out (अहवाल भरून ड्युटी संपवा)</span>
                       </button>
                     )}
                   </div>
                 </form>
-              )}
-
-              {/* If report already submitted, footer to clock out or close */}
-              {isDone && (
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowReportModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer inline-flex items-center gap-1.5 border border-slate-200"
-                  >
-                    <ArrowLeft className="w-4 h-4 text-slate-600" />
-                    <span>Back</span>
-                  </button>
-                  {reportTargetStaff.isOnline && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowReportModal(false);
-                        handleQuickPunchOut(reportTargetStaff);
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    >
-                      <Square className="w-3.5 h-3.5 fill-current" />
-                      <span>Clock Out ({reportTargetStaff.name.split(' ')[0]})</span>
-                    </button>
-                  )}
-                </div>
               )}
             </div>
           );
@@ -2568,9 +2771,9 @@ export default function AttendanceManagementView({
           setShowDetailModal(false);
           setSelectedDetailStaff(null);
         }}
-        title={`Employee Biometric Dossier — ${selectedDetailStaff?.name || 'Staff'}`}
+        title={`Employee Profile & Daily Record (कर्मचारी माहिती व हजेरी) — ${selectedDetailStaff?.name || 'Staff'}`}
         subtitle={`${selectedDetailStaff?.role || ''} • ID: ${selectedDetailStaff?.employeeId || selectedDetailStaff?.id || ''} • ${selectedDetailStaff?.department || 'Operations'} • ${selectedDetailStaff?.plant || 'Main Plant Unit #01'}`}
-        icon={ShieldCheck}
+        icon={Users}
         maxWidth="max-w-5xl"
       >
         {selectedDetailStaff && (() => {
@@ -2582,25 +2785,25 @@ export default function AttendanceManagementView({
           return (
             <div className="space-y-3 text-slate-900 select-none">
               
-              {/* 1. PREMIUM TAILWIND UI EMPLOYEE STATUS & SHIFT HEADER STRIP */}
-              <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-cyan-950 text-white border border-slate-700/80 flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-slate-900/10">
+              {/* 1. EASY-TO-UNDERSTAND EMPLOYEE STATUS & SHIFT HEADER STRIP */}
+              <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border border-slate-700/80 flex flex-wrap items-center justify-between gap-3 shadow-md">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/20">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-base flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/20">
                     {staff.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-base font-black text-white tracking-tight truncate">{staff.name}</h4>
-                      <span className="px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-2xs shrink-0">
-                        {staff.employeeId || staff.id}
+                      <span className="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30 shrink-0">
+                        ID: {staff.employeeId || staff.id}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-300 font-medium truncate mt-0.5 flex items-center gap-1.5">
-                      <span>{staff.role}</span>
+                    <p className="text-xs text-slate-300 font-medium truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-white font-semibold">{staff.role}</span>
                       <span className="text-slate-500">•</span>
                       <span>{staff.department || 'Operations'}</span>
                       <span className="text-slate-500">•</span>
-                      <span className="text-cyan-400">{staff.plant || 'Main Plant'}</span>
+                      <span className="text-cyan-300 font-semibold">{staff.plant || 'Main Plant Unit #01'}</span>
                     </p>
                   </div>
                 </div>
@@ -2608,310 +2811,278 @@ export default function AttendanceManagementView({
                 <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
                   {staff.isOnline ? (
                     <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-2 shadow-sm">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-emerald-400/50" />
-                      Live Shift Active
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                      ड्युटी सुरू आहे (Live Shift Active)
                     </span>
                   ) : staff.isCompleted ? (
                     <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1.5 shadow-sm">
                       <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                      Shift Concluded
+                      ड्युटी संपली (Shift Ended)
                     </span>
                   ) : (
-                    <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 border border-slate-700 flex items-center gap-1.5">
+                    <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-slate-400" />
-                      Not Clocked In
+                      हजेरी बाकी (Not Clocked In)
                     </span>
                   )}
-                  <span className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-800/90 border border-slate-700 text-cyan-300 shadow-2xs">
-                    {staff.shiftTime || '09:00 - 18:00'}
+                  <span className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-800 border border-slate-700 text-amber-300">
+                    ⏰ {formatToIndian12Hr(staff.shiftTime)}
                   </span>
                 </div>
               </div>
 
-              {/* 2. THREE-COLUMN SINGLE-WINDOW DASHBOARD GRID */}
+              {/* 2. THREE-COLUMN CLEAR & SIMPLE DASHBOARD GRID */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
                 
-                {/* COLUMN 1: FUTURISTIC AI BIOMETRIC PHOTO & CONTACT (4 cols) */}
+                {/* COLUMN 1: CLEAR EMPLOYEE PHOTO & CONTACT (4 cols) */}
                 <div className="md:col-span-4 flex flex-col gap-3">
-                  <div className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-sm flex flex-col">
-                    {/* Top verified HUD strip */}
-                    <div className={`text-xs font-mono font-bold px-3 py-1.5 border-b flex items-center justify-between ${
-                      hasFacePunch ? 'bg-slate-950 text-white border-slate-800' : 'bg-slate-900 text-slate-200 border-slate-800'
-                    }`}>
-                      <span className={`flex items-center gap-1.5 ${hasFacePunch ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        <ShieldCheck className={`w-3.5 h-3.5 ${hasFacePunch ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
-                        <span>{hasFacePunch ? 'ANDROID FACE RECOGNITION PHOTO' : 'REGISTERED STAFF PROFILE AVATAR'}</span>
+                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
+                    {/* Top verified strip */}
+                    <div className="text-xs font-bold px-3 py-2 border-b flex items-center justify-between bg-slate-50 border-slate-200 text-slate-700">
+                      <span className="flex items-center gap-1.5 font-bold">
+                        <Camera className="w-4 h-4 text-blue-600" />
+                        <span>कर्मचाऱ्याचा फोटो (Staff Photo)</span>
                       </span>
-                      <span className={`px-2 py-0.5 rounded font-mono text-[10px] border font-bold ${
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
                         hasFacePunch 
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
                       }`}>
-                        {hasFacePunch ? '99.8% CONF' : 'PROFILE PIC'}
+                        {hasFacePunch ? '✓ फोटो पडताळणी पूर्ण' : 'प्रोफाइल फोटो'}
                       </span>
                     </div>
 
-                    {/* High-Res Photo with Biometric AI Scanning HUD */}
-                    <div className="relative h-56 w-full bg-slate-950 overflow-hidden group">
+                    {/* Clean photo without intimidating HUD lines */}
+                    <div className="relative h-56 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
                       {photoUrl ? (
                         <img 
                           src={photoUrl} 
                           alt={staff.name}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 filter brightness-105 contrast-105"
+                          className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-400 gap-2">
-                          <Camera className="w-10 h-10 text-slate-600" />
-                          <span className="text-xs font-semibold">No Biometric Photo</span>
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-500 gap-2">
+                          <Camera className="w-12 h-12 text-slate-400" />
+                          <span className="text-xs font-semibold">फोटो उपलब्ध नाही (No Photo)</span>
                         </div>
                       )}
-                      
-                      {/* AI Face Recognition Reticle / HUD Overlay Box */}
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className={`relative w-28 h-28 border rounded-2xl flex items-center justify-center backdrop-blur-3xs shadow-lg ${
-                          hasFacePunch 
-                            ? 'border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.3)]' 
-                            : 'border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
-                        }`}>
-                          {/* Corner Brackets */}
-                          <span className={`absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 rounded-tl-md ${hasFacePunch ? 'border-emerald-400' : 'border-cyan-400'}`} />
-                          <span className={`absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 rounded-tr-md ${hasFacePunch ? 'border-emerald-400' : 'border-cyan-400'}`} />
-                          <span className={`absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 rounded-bl-md ${hasFacePunch ? 'border-emerald-400' : 'border-cyan-400'}`} />
-                          <span className={`absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 rounded-br-md ${hasFacePunch ? 'border-emerald-400' : 'border-cyan-400'}`} />
 
-                          {/* Center Target Dot */}
-                          <span className={`w-1.5 h-1.5 rounded-full animate-ping ${hasFacePunch ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
-
-                          {/* HUD Label */}
-                          <span className={`absolute -bottom-5 bg-slate-950/95 font-mono text-[8px] font-bold px-1.5 py-0.2 rounded border tracking-widest uppercase ${
-                            hasFacePunch ? 'text-emerald-300 border-emerald-500/40' : 'text-cyan-300 border-cyan-500/40'
-                          }`}>
-                            {hasFacePunch ? 'AI FACE ID: MATCHED ✓' : 'STANDBY ID'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Photo Bottom Watermark Overlay */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/95 via-slate-950/75 to-transparent p-3 text-white">
+                      {/* Photo Bottom Strip */}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent p-2.5 text-white">
                         <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="flex items-center gap-1.5 text-slate-100">
-                            <Camera className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                            <span>{hasFacePunch ? 'Android Mobile Face Punch Photo' : 'Registered Profile Photo'}</span>
+                          <span className="flex items-center gap-1 text-slate-100">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>{hasFacePunch ? 'हजेरीचा थेट फोटो' : 'नोंदणीकृत फोटो'}</span>
                           </span>
-                          <span className="font-mono text-emerald-400 text-xs">
-                            {staff.punchIn ? `@ ${staff.punchIn}` : 'Registered'}
+                          <span className="font-mono text-emerald-300 text-xs">
+                            {staff.punchIn ? `@ ${formatToIndian12Hr(staff.punchIn)}` : 'नोंदणीकृत'}
                           </span>
                         </div>
-                        <div className="text-[10px] font-mono text-slate-300 truncate mt-1 flex items-center gap-1">
-                          <MapPin className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                        <div className="text-[10px] text-slate-300 truncate mt-0.5 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
                           <span className="truncate">
-                            {staff.isTracked && staff.locationCoords 
-                              ? `${staff.locationCoords.lat}°N, ${staff.locationCoords.lng}°E`
-                              : 'Biometric Mobile Station'}
+                            {staff.locationSummary || 'Main Plant Unit #01, Pune'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Metadata & Contact in sleek Tailwind UI box */}
-                    <div className="p-3 bg-gradient-to-b from-slate-50 to-white border-t border-slate-200 text-xs space-y-2">
+                    {/* Contact Details */}
+                    <div className="p-3 bg-white border-t border-slate-200 text-xs space-y-2">
                       <div className="flex items-center justify-between text-slate-700">
-                        <span className="flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <strong className="text-slate-900 font-mono">{staff.phone}</strong>
+                        <a 
+                          href={`tel:${staff.phone}`}
+                          className="flex items-center gap-1.5 text-slate-800 hover:text-blue-600 font-bold transition-colors"
+                        >
+                          <Phone className="w-4 h-4 text-blue-600 shrink-0" />
+                          <span className="font-mono">{staff.phone || 'फोन उपलब्ध नाही'}</span>
+                        </a>
+                        <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-[10px]">
+                          ✓ संपर्क सक्रिय
                         </span>
-                        {hasFacePunch ? (
-                          <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-lg text-[10px] font-mono shadow-2xs">
-                            Android 3D Match Verified ✓
-                          </span>
-                        ) : (
-                          <span className="text-slate-600 font-medium bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px] font-mono">
-                            Biometric Sync Ready
-                          </span>
-                        )}
                       </div>
                       <div className="flex items-center gap-1.5 text-slate-600 truncate">
-                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate font-medium">{staff.email}</span>
+                        <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="truncate font-medium">{staff.email || 'ईमेल उपलब्ध नाही'}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* COLUMN 2: TIMINGS, HOURS & EMPLOYMENT PARTICULARS (4 cols) */}
+                {/* COLUMN 2: TIMINGS, HOURS & EMPLOYMENT DETAILS (4 cols) */}
                 <div className="md:col-span-4 flex flex-col gap-2">
-                  {/* 4 Timing & Hours Tiles */}
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[9px] font-mono uppercase font-bold text-slate-400 block">Punch In</span>
-                      <span className="text-xs font-black font-mono text-slate-900">{staff.punchIn || '--:--'}</span>
-                      <span className="text-[9px] text-emerald-700 font-bold block">
-                        {staff.punchIn ? staff.punctualityLabel : 'Pending'}
+                  {/* 4 Timing & Hours Tiles with Clear Marathi + English */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-500 block">कामावर आले (Punch In)</span>
+                      <span className="text-sm font-black font-mono text-slate-900 block my-0.5">
+                        {formatToIndian12Hr(staff.punchIn) || '--:--'}
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-bold block">
+                        {staff.punchIn ? staff.punctualityLabel : 'हजेरी बाकी (Pending)'}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[9px] font-mono uppercase font-bold text-slate-400 block">Punch Out</span>
-                      <span className="text-xs font-black font-mono text-slate-900">{staff.punchOut || '--:--'}</span>
-                      <span className="text-[9px] text-slate-500 font-medium block">
-                        {staff.punchOut ? 'Shift Ended' : (staff.isOnline ? 'Active' : 'Awaiting')}
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-500 block">काम संपले (Punch Out)</span>
+                      <span className="text-sm font-black font-mono text-slate-900 block my-0.5">
+                        {formatToIndian12Hr(staff.punchOut) || '--:--'}
+                      </span>
+                      <span className="text-[10px] text-slate-600 font-medium block">
+                        {staff.punchOut ? 'ड्युटी संपली (Ended)' : (staff.isOnline ? 'काम सुरू आहे (Active)' : 'बाकी (Pending)')}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[9px] font-mono uppercase font-bold text-slate-400 block">Duty Hours</span>
-                      <span className="text-xs font-black font-mono text-slate-900">
-                        {staff.workingHours ? `${staff.workingHours}h` : '--'}
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-500 block">कामाचे तास (Duty Hours)</span>
+                      <span className="text-sm font-black font-mono text-slate-900 block my-0.5">
+                        {staff.workingHours ? `${staff.workingHours} तास` : '--'}
                       </span>
-                      <span className="text-[9px] text-slate-500 block">Target: 9.0h</span>
+                      <span className="text-[10px] text-slate-500 block">नियम: ९.० तास</span>
                     </div>
 
-                    <div className={`p-2 rounded-xl border ${
+                    <div className={`p-2.5 rounded-xl border ${
                       Number(staff.overtimeHours) > 0 
-                        ? 'bg-blue-50/80 border-blue-200' 
+                        ? 'bg-blue-50 border-blue-200' 
                         : 'bg-slate-50 border-slate-200'
                     }`}>
-                      <span className={`text-[9px] font-mono uppercase font-bold block ${
-                        Number(staff.overtimeHours) > 0 ? 'text-blue-700' : 'text-slate-400'
-                      }`}>Overtime</span>
-                      <span className={`text-xs font-black font-mono ${
+                      <span className={`text-[10px] font-bold block ${
+                        Number(staff.overtimeHours) > 0 ? 'text-blue-700' : 'text-slate-500'
+                      }`}>ओव्हरटाईम (Overtime)</span>
+                      <span className={`text-sm font-black font-mono block my-0.5 ${
                         Number(staff.overtimeHours) > 0 ? 'text-blue-900' : 'text-slate-900'
                       }`}>
-                        {Number(staff.overtimeHours) > 0 ? `+${staff.overtimeHours}h` : '0h'}
+                        {Number(staff.overtimeHours) > 0 ? `+${staff.overtimeHours} तास` : '० तास'}
                       </span>
-                      <span className={`text-[9px] block ${
+                      <span className={`text-[10px] block ${
                         Number(staff.overtimeHours) > 0 ? 'text-blue-700 font-bold' : 'text-slate-500 font-medium'
                       }`}>
-                        {Number(staff.overtimeHours) > 0 ? 'Approved' : 'Standard'}
+                        {Number(staff.overtimeHours) > 0 ? 'मंजूर (Approved)' : 'सामान्य (Normal)'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Employment Particulars List */}
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex-1 flex flex-col justify-between">
-                    <span className="font-bold text-slate-800 text-[11px] block border-b border-slate-100 pb-1 mb-1.5 flex items-center gap-1">
-                      <Users className="w-3 h-3 text-blue-600" />
-                      Employee Particulars
+                  {/* Employment Details */}
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 flex-1 flex flex-col justify-between">
+                    <span className="font-bold text-slate-800 text-xs block border-b border-slate-100 pb-1.5 mb-2 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                      कर्मचारी तपशील (Staff Details)
                     </span>
-                    <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-[10px]">
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
                       <div>
-                        <span className="text-slate-400 block">Designation</span>
+                        <span className="text-slate-400 text-[10px] block">पद (Designation)</span>
                         <strong className="text-slate-800">{staff.role}</strong>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">Role Group</span>
-                        <strong className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/80">{roleCat}</strong>
+                        <span className="text-slate-400 text-[10px] block">भूमिका गट (Role Group)</span>
+                        <strong className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200/80 inline-block text-[11px]">{roleCat}</strong>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">Department</span>
+                        <span className="text-slate-400 text-[10px] block">विभाग (Department)</span>
                         <span className="text-slate-700 font-medium truncate block">{staff.department || 'Operations'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">Assigned Plant</span>
-                        <span className="text-slate-700 font-medium truncate block">{staff.plant || 'Main Plant'}</span>
+                        <span className="text-slate-400 text-[10px] block">प्लांट (Plant)</span>
+                        <span className="text-slate-700 font-medium truncate block">{staff.plant || 'Main Plant Unit #01'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">Shift Timing</span>
-                        <span className="font-mono text-slate-800 font-semibold">{staff.shiftTime || '09:00 - 18:00'}</span>
+                        <span className="text-slate-400 text-[10px] block">शिफ्ट वेळ (Shift Time)</span>
+                        <span className="font-mono text-slate-800 font-semibold">{formatToIndian12Hr(staff.shiftTime)}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">Employment</span>
-                        <span className="text-slate-700 font-medium">Permanent Full-Time</span>
+                        <span className="text-slate-400 text-[10px] block">कामाचा प्रकार (Job Type)</span>
+                        <span className="text-slate-700 font-medium">कायमस्वरूपी (Full-Time)</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* COLUMN 3: TODAY'S WORK REPORT & LIVE TELEMETRY (4 cols) */}
+                {/* COLUMN 3: TODAY'S WORK REPORT & LOCATION MAP (4 cols) */}
                 <div className="md:col-span-4 flex flex-col gap-2">
                   {/* Today's Work Report Card */}
-                  <div className={`p-2.5 rounded-xl border flex-1 flex flex-col justify-between ${
+                  <div className={`p-3 rounded-xl border flex-1 flex flex-col justify-between ${
                     staff.isReportDone
-                      ? 'bg-emerald-50/70 border-emerald-200'
+                      ? 'bg-emerald-50/70 border-emerald-300'
                       : 'bg-amber-50/80 border-amber-300'
                   }`}>
                     <div>
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="font-bold text-slate-900 text-[11px] flex items-center gap-1">
-                          {staff.isReportDone ? <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" /> : <FileText className="w-3.5 h-3.5 text-amber-600" />}
-                          Today's Work Report
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                          {staff.isReportDone ? <FileCheck2 className="w-4 h-4 text-emerald-600" /> : <FileText className="w-4 h-4 text-amber-600" />}
+                          <span>आजचे काम (Today's Work Report)</span>
                         </span>
-                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           staff.isReportDone ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
                         }`}>
-                          {staff.isReportDone ? 'Filed ✓' : 'Pending'}
+                          {staff.isReportDone ? '✓ भरला आहे' : 'बाकी आहे (Pending)'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-800 leading-snug line-clamp-3">
-                        {staff.todayWorkSummary}
-                      </p>
+                      <div className="p-2 rounded-lg bg-white/80 border border-slate-200/70">
+                        <p className="text-xs text-slate-800 leading-snug line-clamp-3">
+                          {staff.todayWorkSummary || 'अद्याप आजच्या कामाचा तपशील नोंदवलेला नाही.'}
+                        </p>
+                      </div>
                     </div>
 
+                    {/* View / Edit Report Action Button */}
                     <button
                       type="button"
                       onClick={() => {
                         setShowDetailModal(false);
                         handleOpenReportModal(staff, false);
                       }}
-                      className="mt-2 w-full py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-2xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                      className="mt-2.5 w-full py-2 px-3 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95"
                     >
-                      <FileText className={`w-3 h-3 ${staff.isReportDone ? 'text-emerald-600' : 'text-amber-600'}`} />
-                      <span>{staff.isReportDone ? 'View / Edit Full Report' : 'File Department Report Now'}</span>
+                      <FileText className="w-4 h-4" />
+                      <span>{staff.isReportDone ? 'अहवाल पहा / बदला (View / Edit Report)' : 'अहवाल भरा (Fill Daily Report Now)'}</span>
                     </button>
                   </div>
 
-                  {/* Geolocation & Live Radar Map Card */}
-                  <div className="rounded-xl border border-slate-800 bg-slate-950 text-white overflow-hidden shadow-md flex flex-col">
+                  {/* Geolocation & Plant Map Card */}
+                  <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm flex flex-col">
                     {/* Header Bar */}
-                    <div className="bg-slate-900 px-2.5 py-1.5 border-b border-slate-800 flex items-center justify-between gap-1">
+                    <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <Radio className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" />
-                        <span className="font-bold text-[11px] text-emerald-400 truncate">Live Location Map</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[9px] border border-emerald-500/30 shrink-0">
-                          GPS ACTIVE
+                        <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="font-bold text-xs text-slate-800 truncate">सध्याचे ठिकाण (Plant Location)</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                          ✓ GPS चालू
                         </span>
                       </div>
                       <a
-                        href={`https://maps.google.com/?q=${staff.locationCoords?.lat || 19.0558},${staff.locationCoords?.lng || 73.0163}`}
+                        href={`https://maps.google.com/?q=${staff.locationCoords?.lat || 18.5204},${staff.locationCoords?.lng || 73.8567}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-2 py-0.5 rounded bg-cyan-600/40 hover:bg-cyan-600 text-cyan-200 border border-cyan-500/50 font-bold text-[9px] flex items-center gap-1 shrink-0 transition-all"
-                        title="Open full map in Google Maps"
+                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[10px] flex items-center gap-1 shrink-0 transition-colors"
+                        title="Google Maps वर पहा"
                       >
-                        <span>Map</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
+                        <span>नकाशा (Map)</span>
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
 
-                    {/* Interactive / Visual Map Display Box */}
-                    <div className="relative w-full h-32 bg-slate-900 overflow-hidden">
+                    {/* Clean Map View */}
+                    <div className="relative w-full h-32 bg-slate-100 overflow-hidden">
                       <iframe
-                        title="Live GPS Location Map"
+                        title="Plant Location Map"
                         width="100%"
                         height="100%"
                         frameBorder="0"
                         scrolling="no"
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${(staff.locationCoords?.lng || 73.0163) - 0.006}%2C${(staff.locationCoords?.lat || 19.0558) - 0.006}%2C${(staff.locationCoords?.lng || 73.0163) + 0.006}%2C${(staff.locationCoords?.lat || 19.0558) + 0.006}&layer=mapnik&marker=${staff.locationCoords?.lat || 19.0558}%2C${staff.locationCoords?.lng || 73.0163}`}
-                        className="w-full h-full opacity-90 contrast-110 brightness-95"
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${(staff.locationCoords?.lng || 73.8567) - 0.006}%2C${(staff.locationCoords?.lat || 18.5204) - 0.006}%2C${(staff.locationCoords?.lng || 73.8567) + 0.006}%2C${(staff.locationCoords?.lat || 18.5204) + 0.006}&layer=mapnik&marker=${staff.locationCoords?.lat || 18.5204}%2C${staff.locationCoords?.lng || 73.8567}`}
+                        className="w-full h-full opacity-90 contrast-105"
                       />
 
-                      {/* Top Overlay: Coordinates badge */}
-                      <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-slate-950/85 backdrop-blur-xs border border-slate-700/80 text-[9px] font-mono text-cyan-300 shadow-sm flex items-center gap-1 pointer-events-none">
-                        <MapPin className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                        <span>
-                          {staff.locationCoords
-                            ? `${staff.locationCoords.lat.toFixed(4)}°N, ${staff.locationCoords.lng.toFixed(4)}°E`
-                            : '19.0558°N, 73.0163°E'}
-                        </span>
+                      {/* Top Overlay */}
+                      <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-white/90 backdrop-blur-xs border border-slate-200 text-[10px] font-bold text-slate-800 shadow-xs flex items-center gap-1 pointer-events-none">
+                        <MapPin className="w-3 h-3 text-red-500 shrink-0" />
+                        <span>Main Plant Unit #01, Pune</span>
                       </div>
 
-                      {/* Bottom Overlay: Location summary & Geofence Status */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/95 via-slate-950/80 to-transparent p-2 text-white pointer-events-none">
-                        <div className="font-bold text-[10px] text-white truncate">
-                          {staff.locationSummary || 'Main Plant Control Office'}
-                        </div>
-                        <div className="text-[9px] text-slate-400 font-mono truncate mt-0.5">
-                          {staff.isTracked ? 'Buffer: 10m Geofence • Mobile GPS Active' : 'Fixed Desk Console'}
+                      {/* Bottom Overlay */}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/90 via-slate-900/60 to-transparent p-2 text-white pointer-events-none">
+                        <div className="font-bold text-[11px] text-white truncate">
+                          ✅ प्लांट परिसरात उपस्थित (Inside Plant Premises)
                         </div>
                       </div>
                     </div>
@@ -2920,23 +3091,23 @@ export default function AttendanceManagementView({
 
               </div>
 
-              {/* 3. COMPACT FOOTER ACTION BAR */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
-                <div className="text-[10px] text-slate-500 font-mono truncate">
-                  Biometric Terminal #02 • Synced with Central Plant Database
+              {/* 3. EASY FOOTER ACTION BAR */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-200">
+                <div className="text-xs text-slate-500 font-medium">
+                  नोंदणीकृत कर्मचारी हजेरी प्रणाली • सुरक्षित डेटा
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     onClick={() => {
                       setShowDetailModal(false);
                       setSelectedDetailStaff(null);
                     }}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-slate-900 cursor-pointer inline-flex items-center gap-1.5 border border-slate-200 transition-all"
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer inline-flex items-center gap-1.5 border border-slate-200 transition-colors"
                   >
-                    <ArrowLeft className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Back</span>
+                    <ArrowLeft className="w-4 h-4 text-slate-600" />
+                    <span>मागे जा (Back)</span>
                   </button>
 
                   {!staff.isOnline && !staff.isCompleted && (
@@ -2946,10 +3117,10 @@ export default function AttendanceManagementView({
                         handleQuickPunchIn(staff);
                         setShowDetailModal(false);
                       }}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer flex items-center gap-1"
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
                     >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>Clock In</span>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>हजेरी लावा (Clock In)</span>
                     </button>
                   )}
 
@@ -2958,12 +3129,12 @@ export default function AttendanceManagementView({
                       type="button"
                       onClick={() => {
                         setShowDetailModal(false);
-                        handleInitiatePunchOut(staff);
+                        handleQuickPunchOut(staff);
                       }}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer flex items-center gap-1"
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
                     >
-                      <Square className="w-3 h-3 fill-current" />
-                      <span>Clock Out</span>
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>ड्युटी संपवा (Clock Out)</span>
                     </button>
                   )}
                 </div>

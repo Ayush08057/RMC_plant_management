@@ -61,8 +61,8 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
           {/* Left: Brand & Plant Identity */}
           <div className="flex items-center gap-3">
             <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 group">
-              <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 to-amber-200 shadow-sm flex items-center justify-center shrink-0">
-                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain rounded-full drop-shadow-xs" />
+              <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain drop-shadow-sm" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -103,50 +103,52 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
               </div>
             </div>
 
-            {/* Quick Switch Role Tester Dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowSwitchMenu(!showSwitchMenu)}
-                className="px-3 py-2 rounded-xl text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Switch role view to test other role dashboards"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                <span>Test Other Role</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
+            {/* Quick Switch Role Tester Dropdown — Exclusively available to Admin Authority */}
+            {(user?.role === 'Admin' || user?.isMasterAdmin || user?.originalAdminUser) && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowSwitchMenu(!showSwitchMenu)}
+                  className="px-3 py-2 rounded-xl text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Admin Authority: Switch role view to test other role dashboards"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Admin: Access Role</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </button>
 
-              {showSwitchMenu && (
-                <div className="absolute right-0 mt-2 w-72 rounded-xl bg-white border border-slate-200 shadow-2xl py-2 z-50">
-                  <div className="px-3 py-1.5 border-b border-slate-100 text-[11px] font-semibold text-slate-500">
-                    Switch Active Session to Role:
-                  </div>
-                  <div className="max-h-64 overflow-y-auto py-1">
-                    {SYSTEM_ROLE_PROFILES.map((profile) => (
-                      <button
-                        key={profile.role}
-                        onClick={() => handleQuickSwitchRole(profile.role)}
-                        className={`w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between transition-colors ${
-                          profile.role === user?.role ? 'bg-amber-50/60 font-semibold' : ''
-                        }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <div className="text-xs font-semibold text-slate-800 truncate">
-                            {profile.title}
+                {showSwitchMenu && (
+                  <div className="absolute right-0 mt-2 w-72 rounded-xl bg-white border border-slate-200 shadow-2xl py-2 z-50">
+                    <div className="px-3 py-1.5 border-b border-slate-100 text-[11px] font-semibold text-slate-500">
+                      Switch Active Session to Role:
+                    </div>
+                    <div className="max-h-64 overflow-y-auto py-1">
+                      {SYSTEM_ROLE_PROFILES.map((profile) => (
+                        <button
+                          key={profile.role}
+                          onClick={() => handleQuickSwitchRole(profile.role)}
+                          className={`w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between transition-colors ${
+                            profile.role === user?.role ? 'bg-amber-50/60 font-semibold' : ''
+                          }`}
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="text-xs font-semibold text-slate-800 truncate">
+                              {profile.title}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              {profile.route}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            {profile.route}
-                          </div>
-                        </div>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${getRoleBadgeColor(profile.role)}`}>
-                          {profile.role}
-                        </span>
-                      </button>
-                    ))}
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${getRoleBadgeColor(profile.role)}`}>
+                            {profile.role}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Sign Out Button */}
             <button

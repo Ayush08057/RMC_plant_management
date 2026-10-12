@@ -15,13 +15,19 @@ import {
   Calendar
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { useAuth } from '../../context/AuthContext';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
+import { formatToIndian12Hr, formatShiftRange, formatShiftOption } from '../../utils/shiftUtils';
 
-export default function ShiftManagementView() {
+export default function ShiftManagementView({ employeeFilter = null, isEmployeeView = false }) {
+  const { user } = useAuth();
   const { shifts = [], employees = [], createShift, updateShift, deleteShift, assignShift } = useWorkforce();
+  const isAdmin = user?.role === 'Admin';
+  const effectiveEmployeeId = employeeFilter || (!isAdmin ? (user?.employeeId || user?.id) : null);
+  const isPersonalView = isEmployeeView || Boolean(effectiveEmployeeId) || !isAdmin;
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -209,13 +215,14 @@ export default function ShiftManagementView() {
               {sft ? sft.name : (row.shiftId || 'General Morning Shift')}
             </span>
             <span className="text-[10px] font-mono font-bold text-slate-500 block truncate">
-              {sft ? `${sft.startTime} - ${sft.endTime}` : '09:00 - 18:00'}
+              {sft ? formatShiftRange(sft.startTime, sft.endTime) : '09:00 AM - 06:00 PM'}
             </span>
           </div>
         );
       },
     },
-    {
+    // Only show administrative Change Shift action for Admin in company-wide roster view
+    ...(!isPersonalView ? [{
       header: 'Actions',
       align: 'right',
       width: '14%',
@@ -234,46 +241,109 @@ export default function ShiftManagementView() {
           </button>
         </div>
       ),
-    },
+    }] : []),
   ];
+
+  // Filter employees for personal vs management view
+  const displayEmployees = isPersonalView
+    ? employees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId).length > 0
+      ? employees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId)
+      : [{
+          id: effectiveEmployeeId || 'EMP-505',
+          employeeId: effectiveEmployeeId || 'EMP-505',
+          name: user?.name || 'Driver',
+          role: user?.role || 'Driver',
+          department: user?.department || 'Transit Mixer Fleet',
+          plant: user?.plantLocation || 'Main Plant Unit #01',
+          shiftId: 'SFT-MORN',
+        }]
+    : employees;
+
+  const myShift = shifts.find((s) => s.id === displayEmployees[0]?.shiftId) || shifts[0] || {
+    name: 'General Morning Shift',
+    startTime: '09:00',
+    endTime: '18:00',
+    gracePeriodMins: 15,
+    otThresholdHours: 8.5,
+    otRatePerHour: 220,
+  };
 
   return (
     <div className="space-y-6">
-      {/* Shift Roster Table with Action Buttons */}
+      {/* Personal Shift Hero Card when viewing my own shift */}
+      {isPersonalView && (
+        <div className="p-5 sm:p-6 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center font-bold text-lg shrink-0">
+              <Clock className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-800 px-2 py-0.5 rounded bg-cyan-50 border border-cyan-200">
+                ACTIVE DUTY ROSTER
+              </span>
+              <h2 className="text-lg font-black text-slate-900 mt-1">
+                {myShift.name} ({formatShiftRange(myShift.startTime, myShift.endTime)})
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Assigned to: <strong className="text-slate-800">{displayEmployees[0]?.name}</strong> ({displayEmployees[0]?.employeeId || displayEmployees[0]?.id}) • Base: {displayEmployees[0]?.plant}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 w-full sm:w-auto shrink-0">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block truncate">Duty Hours</span>
+              <span className="text-xs sm:text-sm font-mono font-black text-slate-800 mt-0.5 block truncate">9.0 Hours</span>
+            </div>
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block truncate">Grace</span>
+              <span className="text-xs sm:text-sm font-mono font-black text-amber-700 mt-0.5 block truncate">{myShift.gracePeriodMins || 15}m</span>
+            </div>
+            <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase block truncate">Overtime</span>
+              <span className="text-xs sm:text-sm font-mono font-black text-emerald-800 mt-0.5 block truncate">&gt; {myShift.otThresholdHours || 8.5}h</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shift Roster Table */}
       <DataTable
-        title="Plant Personnel Shift Roster"
-        subtitle="Current shift assignment across batching, transport, lab, and administrative personnel"
-        icon={Users}
+        title={isPersonalView ? "My Assigned Shift Timing" : "Plant Personnel Shift Roster"}
+        subtitle={isPersonalView ? "Your verified working hours and assigned shift schedule" : "Current shift assignment across batching, transport, lab, and administrative personnel"}
+        icon={isPersonalView ? Clock : Users}
         columns={rosterColumns}
-        data={employees}
-        emptyMessage="No employees registered yet."
+        data={displayEmployees}
+        emptyMessage="No shift assignment record found."
         actions={
-          <div className="flex items-center gap-2">
-            {employees.length > 0 && (
+          !isPersonalView ? (
+            <div className="flex items-center gap-2">
+              {employees.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignForm({
+                      employeeId: employees[0]?.id || '',
+                      shiftId: shifts[0]?.id || '',
+                    });
+                    setShowAssignModal(true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-cyan-50 text-slate-800 hover:text-cyan-800 border border-slate-200/90 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                >
+                  <UserCheck className="w-4 h-4 text-cyan-700" />
+                  <span>Assign Staff</span>
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  setAssignForm({
-                    employeeId: employees[0]?.id || '',
-                    shiftId: shifts[0]?.id || '',
-                  });
-                  setShowAssignModal(true);
-                }}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-cyan-50 text-slate-800 hover:text-cyan-800 border border-slate-200/90 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                onClick={handleOpenCreate}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-indigo-500/20 active:scale-95 whitespace-nowrap"
               >
-                <UserCheck className="w-4 h-4 text-cyan-700" />
-                <span>Assign Staff</span>
+                <Plus className="w-4 h-4" />
+                <span>Create Shift</span>
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleOpenCreate}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-indigo-500/20 active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Shift</span>
-            </button>
-          </div>
+            </div>
+          ) : null
         }
       />
 
@@ -300,7 +370,12 @@ export default function ShiftManagementView() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-700 font-bold block mb-1.5">Start Time (24h) *</label>
+              <label className="text-slate-700 font-bold block mb-1.5 flex items-center justify-between">
+                <span>Start Time (24h) *</span>
+                <span className="text-[10px] text-cyan-700 font-mono font-bold">
+                  {formatToIndian12Hr(shiftForm.startTime)}
+                </span>
+              </label>
               <input
                 type="time"
                 required
@@ -310,7 +385,12 @@ export default function ShiftManagementView() {
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1.5">End Time (24h) *</label>
+              <label className="text-slate-700 font-bold block mb-1.5 flex items-center justify-between">
+                <span>End Time (24h) *</span>
+                <span className="text-[10px] text-cyan-700 font-mono font-bold">
+                  {formatToIndian12Hr(shiftForm.endTime)}
+                </span>
+              </label>
               <input
                 type="time"
                 required
@@ -403,7 +483,12 @@ export default function ShiftManagementView() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-700 font-bold block mb-1.5">Start Time (24h) *</label>
+              <label className="text-slate-700 font-bold block mb-1.5 flex items-center justify-between">
+                <span>Start Time (24h) *</span>
+                <span className="text-[10px] text-cyan-700 font-mono font-bold">
+                  {formatToIndian12Hr(shiftForm.startTime)}
+                </span>
+              </label>
               <input
                 type="time"
                 required
@@ -413,7 +498,12 @@ export default function ShiftManagementView() {
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1.5">End Time (24h) *</label>
+              <label className="text-slate-700 font-bold block mb-1.5 flex items-center justify-between">
+                <span>End Time (24h) *</span>
+                <span className="text-[10px] text-cyan-700 font-mono font-bold">
+                  {formatToIndian12Hr(shiftForm.endTime)}
+                </span>
+              </label>
               <input
                 type="time"
                 required
@@ -525,7 +615,7 @@ export default function ShiftManagementView() {
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
             >
               {shifts.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.startTime} - {s.endTime})</option>
+                <option key={s.id} value={s.id}>{formatShiftOption(s)}</option>
               ))}
             </select>
           </div>

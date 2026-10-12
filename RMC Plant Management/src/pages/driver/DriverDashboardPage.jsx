@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { MOCK_DRIVER_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { formatToIndian12Hr } from '../../utils/shiftUtils';
 import { useAuth } from '../../context/AuthContext';
 
 // Workforce Views
@@ -33,7 +34,6 @@ import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
 import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
 import EmployeeDocumentsView from '../../components/workforce/EmployeeDocumentsView';
-import FieldWorkerLiveLocationCard from '../../components/workforce/FieldWorkerLiveLocationCard';
 
 export default function DriverDashboardPage() {
   const { user } = useAuth();
@@ -45,12 +45,17 @@ export default function DriverDashboardPage() {
   const [showProblemModal, setShowProblemModal] = useState(false);
   const [problemReason, setProblemReason] = useState('');
 
-  const { getDriverTrips, updateTripMilestone, notifications } = useWorkforce();
+  const { getDriverTrips, updateTripMilestone, notifications, attendance } = useWorkforce();
 
   // Task-level filtered trips for authenticated driver
   const myAssignedTrips = getDriverTrips ? getDriverTrips(currentDriverId) : [];
   const activeTrip = myAssignedTrips.find((t) => t.status !== 'Delivered') || MOCK_DRIVER_DATA.currentTrip;
   const completedTrips = myAssignedTrips.filter((t) => t.status === 'Delivered');
+
+  // Personal attendance history records strictly for logged in driver
+  const myAttendanceRecords = (attendance || []).filter(
+    (a) => a.employeeId === currentDriverId || a.employeeId === user?.id || a.employeeId === user?.employeeId
+  );
 
   // Milestone Steps
   const steps = [
@@ -109,8 +114,84 @@ export default function DriverDashboardPage() {
         </div>
       }
     >
-      {activeTab === 'attendance' && <AttendanceManagementView employeeFilter={currentDriverId} />}
-      {activeTab === 'shifts' && <ShiftManagementView />}
+      {activeTab === 'attendance' && (
+        <div className="space-y-6">
+          <MobilePunchWidget 
+            lockedEmployeeId={currentDriverId} 
+            roleLocked={true} 
+            onPunched={() => setToastMessage('Driver attendance verified and synced!')} 
+          />
+
+          {/* Personal Punch Log History */}
+          <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center font-bold">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                    My Attendance & Punch-In History
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Showing verified duty logs strictly for {currentDriverName} ({currentDriverId})
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                AUTHENTICATED DRIVER ONLY
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[550px] text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-mono uppercase text-[10px] border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Punch In</th>
+                    <th className="py-2.5 px-3">Punch Out</th>
+                    <th className="py-2.5 px-3">Total Hours</th>
+                    <th className="py-2.5 px-3">Face Recognition Photo</th>
+                    <th className="py-2.5 px-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {myAttendanceRecords.length > 0 ? (
+                    myAttendanceRecords.map((rec) => (
+                      <tr key={rec.id} className="hover:bg-slate-50/80">
+                        <td className="py-3 px-3 font-mono text-slate-900 font-bold">{rec.date}</td>
+                        <td className="py-3 px-3 font-mono text-emerald-700 font-bold">{formatToIndian12Hr(rec.punchIn) || '--:--'}</td>
+                        <td className="py-3 px-3 font-mono text-rose-700 font-bold">{formatToIndian12Hr(rec.punchOut) || '--:--'}</td>
+                        <td className="py-3 px-3 font-mono text-slate-700">{rec.workingHours ? `${rec.workingHours}h` : '--'}</td>
+                        <td className="py-3 px-3">
+                          {rec.selfieUrl ? (
+                            <div className="flex items-center gap-2">
+                              <img src={rec.selfieUrl} alt="Face" className="w-7 h-7 rounded-lg object-cover border border-emerald-300" />
+                              <span className="text-[11px] font-semibold text-emerald-700">Verified</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 font-mono">--</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3">
+                          <StatusBadge status={rec.status} />
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-slate-400 font-medium">
+                        No previous attendance records logged yet for {currentDriverName}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+      {activeTab === 'shifts' && <ShiftManagementView employeeFilter={currentDriverId} isEmployeeView={true} />}
       {activeTab === 'daily-work' && <DailyWorkView employeeFilter={currentDriverId} />}
       {activeTab === 'leaves' && <LeaveManagementView employeeFilter={currentDriverId} />}
       {activeTab === 'advances' && <AdvanceManagementView employeeFilter={currentDriverId} />}
@@ -138,7 +219,7 @@ export default function DriverDashboardPage() {
             </div>
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
               <span className="text-slate-400 block text-[10px]">Assigned Mixer Unit</span>
-              <span className="font-mono font-bold text-amber-700">{activeTrip?.vehicleNo || 'MH-04-AZ-9921'}</span>
+              <span className="font-mono font-bold text-amber-700">{activeTrip?.vehicleNo || 'Not Assigned'}</span>
             </div>
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
               <span className="text-slate-400 block text-[10px]">Plant Base</span>
@@ -154,20 +235,12 @@ export default function DriverDashboardPage() {
 
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
-          {/* Quick Mobile Touch Attendance Punch Terminal */}
+          {/* Quick Mobile Attendance Punch Terminal */}
           <section>
-            <MobilePunchWidget onPunched={() => setToastMessage('Attendance verified and synced!')} />
-          </section>
-
-          {/* Driver Live GPS Location & Radar (Broadcasting to Admin) */}
-          <section>
-            <FieldWorkerLiveLocationCard
-              workerId={currentDriverId}
-              workerName={currentDriverName}
-              workerRole="Transit Mixer Driver"
-              assignedVehicle={activeTrip?.vehicleNo || 'MH-04-AZ-9921'}
-              currentSiteName={activeTrip?.site || 'Metro Line 4 - Pier 24'}
-              onAlertSent={(coords) => setToastMessage(`Live GPS coordinates pinged to Admin: ${coords.lat}, ${coords.lng}`)}
+            <MobilePunchWidget 
+              lockedEmployeeId={currentDriverId} 
+              roleLocked={true} 
+              onPunched={() => setToastMessage('Attendance verified and synced!')} 
             />
           </section>
 
@@ -341,19 +414,27 @@ export default function DriverDashboardPage() {
                 <RotateCw className="w-4 h-4 text-cyan-600" />
                 <span>Transit Mixer Drum Status</span>
               </h3>
-              <span className="text-[10px] font-mono text-emerald-600 font-bold">AGITATION SAFE</span>
+              <span className="text-[10px] font-mono text-emerald-600 font-bold">
+                {activeTrip ? 'AGITATION SAFE' : 'STANDBY'}
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 block text-[10px]">Drum Speed Sensor:</span>
-                <span className="text-base font-bold text-slate-800 font-mono mt-0.5 block">3.5 RPM (Agitation Mode)</span>
+                <span className="text-base font-bold text-slate-800 font-mono mt-0.5 block">
+                  {activeTrip ? '3.5 RPM (Agitation Mode)' : '0.0 RPM (Stationary)'}
+                </span>
                 <span className="text-[10px] text-emerald-600">Prevents concrete flash setting</span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 block text-[10px]">Batch Freshness Timer:</span>
-                <span className="text-base font-bold text-amber-700 font-mono mt-0.5 block">35 Mins Elapsed</span>
-                <span className="text-[10px] text-slate-500">90-minute maximum limit</span>
+                <span className="text-base font-bold text-amber-700 font-mono mt-0.5 block">
+                  {activeTrip ? 'Active Pour Window' : 'No Active Batch'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {activeTrip ? '90-minute maximum limit' : 'Ready for batch allocation'}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 block text-[10px]">On-Site Water Added:</span>

@@ -21,13 +21,28 @@ export const ROLE_ROUTES = {
   [ROLES.PLANT_MANAGER]: '/plant-manager',
   [ROLES.PLANT_INCHARGE]: '/plant-manager',
   [ROLES.ACCOUNTANT]: '/accountant',
-  [ROLES.OPERATOR]: '/admin',
+  [ROLES.OPERATOR]: '/plant-manager',
   [ROLES.DISPATCHER]: '/dispatcher',
   [ROLES.QC_ENGINEER]: '/qc',
   [ROLES.SITE_SUPERVISOR]: '/site-supervisor',
   [ROLES.DRIVER]: '/driver',
   [ROLES.OWNER_DIRECTOR]: '/owner',
 };
+
+export function getRoleRoute(role) {
+  if (!role) return '/login';
+  if (ROLE_ROUTES[role]) return ROLE_ROUTES[role];
+  const rLower = String(role).trim().toLowerCase();
+  if (rLower.includes('admin')) return '/admin';
+  if (rLower.includes('manager') || rLower.includes('incharge') || rLower.includes('operator')) return '/plant-manager';
+  if (rLower.includes('account') || rLower.includes('finance')) return '/accountant';
+  if (rLower.includes('dispatch') || rLower.includes('logistics')) return '/dispatcher';
+  if (rLower.includes('qc') || rLower.includes('quality') || rLower.includes('lab')) return '/qc';
+  if (rLower.includes('supervisor') || rLower.includes('site')) return '/site-supervisor';
+  if (rLower.includes('driver') || rLower.includes('mixer')) return '/driver';
+  if (rLower.includes('owner') || rLower.includes('director')) return '/owner';
+  return '/plant-manager';
+}
 
 const buildOfficialAccount = ({
   id,

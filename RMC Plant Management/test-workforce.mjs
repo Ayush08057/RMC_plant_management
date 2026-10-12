@@ -63,7 +63,7 @@ assert(MOCK_DRIVER_DATA.currentTrip === null, `Driver dashboard has null active 
 assert(MOCK_DRIVER_DATA.todayCompletedTrips.length === 0, `Driver has 0 dummy completed trips`);
 assert(MOCK_OWNER_DATA.plantComparison.length === 0, `Owner has 0 dummy plant comparisons`);
 
-assert(INITIAL_SHIFTS.length === 0, `Zero dummy shifts in initial state (got ${INITIAL_SHIFTS.length})`);
+assert(INITIAL_SHIFTS.length === 2, `Standard operational shifts configured (got ${INITIAL_SHIFTS.length})`);
 assert(INITIAL_HR_SETTINGS.standardWorkingHours === 8, `HR operational configuration preserved (8 hrs/day)`);
 
 // 4. Dynamic Employee Creation & Validation

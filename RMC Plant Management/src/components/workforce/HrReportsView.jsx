@@ -17,6 +17,7 @@ import { MOCK_PLANTS } from '../../data/mockDashboardData';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Toast from '../dashboard/Toast';
+import { formatToIndian12Hr } from '../../utils/shiftUtils';
 
 export default function HrReportsView() {
   const { 
@@ -68,8 +69,8 @@ export default function HrReportsView() {
           { header: 'Date', accessor: 'date', className: 'font-mono text-xs text-white' },
           { header: 'Employee', accessor: 'employeeName', className: 'font-bold text-white' },
           { header: 'Plant', accessor: 'plant' },
-          { header: 'Punch In', accessor: 'punchIn', className: 'font-mono text-emerald-400 font-bold' },
-          { header: 'Punch Out', accessor: 'punchOut', className: 'font-mono text-rose-300' },
+          { header: 'Punch In', accessor: 'punchIn', className: 'font-mono text-emerald-400 font-bold', render: (row) => formatToIndian12Hr(row.punchIn) || '--:--' },
+          { header: 'Punch Out', accessor: 'punchOut', className: 'font-mono text-rose-300', render: (row) => formatToIndian12Hr(row.punchOut) || '--:--' },
           { header: 'Hours', accessor: 'workingHours', className: 'font-mono text-white' },
           { header: 'OT', accessor: 'overtimeHours', className: 'font-mono text-purple-300 font-bold' },
           { header: 'Status', accessor: 'status', type: 'status' },
@@ -215,8 +216,8 @@ export default function HrReportsView() {
         EmployeeID: a.employeeId,
         Name: a.employeeName,
         Plant: a.plant,
-        PunchIn: a.punchIn,
-        PunchOut: a.punchOut,
+        PunchIn: formatToIndian12Hr(a.punchIn) || '--:--',
+        PunchOut: formatToIndian12Hr(a.punchOut) || '--:--',
         WorkingHours: a.workingHours,
         OvertimeHours: a.overtimeHours,
         Status: a.status,

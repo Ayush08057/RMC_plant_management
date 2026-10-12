@@ -102,20 +102,20 @@ export default function Modal({
       <div
         className={`w-full bg-white border border-slate-200 text-slate-900 shadow-2xl relative z-10 flex flex-col ring-1 ring-black/5 transition-all duration-300 ${
           isFullscreen
-            ? 'h-[100dvh] w-screen max-w-none max-h-none rounded-none p-3 sm:p-6 lg:p-8 overflow-hidden'
-            : `${maxWidth} rounded-2xl md:rounded-3xl p-4 sm:p-7 max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] overflow-hidden my-auto`
+            ? 'h-[100dvh] w-screen max-w-none max-h-none rounded-none p-3 sm:p-5 lg:p-6 overflow-hidden'
+            : `${maxWidth} rounded-2xl md:rounded-3xl p-3 sm:p-4.5 md:p-5 max-h-[calc(100dvh-1.5rem)] sm:max-h-[94vh] overflow-hidden my-auto`
         }`}
       >
         {/* Top Accent Gradient Bar */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 rounded-t-2xl md:rounded-t-3xl shrink-0" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-t-2xl md:rounded-t-3xl shrink-0" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between gap-3 mb-4 border-b border-slate-200/80 pb-3 pt-1 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between gap-2.5 mb-2.5 sm:mb-3 border-b border-slate-200/80 pb-2 pt-0.5 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-slate-900 border border-slate-200 transition-all cursor-pointer shadow-xs shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-slate-900 border border-slate-200 transition-all cursor-pointer shadow-xs shrink-0"
               title="Back (Esc)"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
@@ -125,20 +125,20 @@ export default function Modal({
             <div className="h-4 w-px bg-slate-200 shrink-0 hidden sm:block" />
 
             {Icon && (
-              <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-600 text-white shrink-0 shadow-md shadow-blue-500/20">
-                <Icon className="w-5 h-5" />
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+                <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               </div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-xl font-black text-slate-900 tracking-tight truncate">{title}</h3>
+                <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight truncate">{title}</h3>
                 {isFullscreen && (
-                  <span className="hidden sm:inline-flex items-center text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-300 shrink-0 font-mono">
+                  <span className="hidden sm:inline-flex items-center text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 shrink-0 font-mono">
                     Full Screen Mode
                   </span>
                 )}
               </div>
-              {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate font-medium">{subtitle}</p>}
+              {subtitle && <p className="text-[11px] text-slate-500 truncate font-medium">{subtitle}</p>}
             </div>
           </div>
 
@@ -180,7 +180,7 @@ export default function Modal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto pr-1">{children}</div>
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto no-scrollbar pr-1">{children}</div>
       </div>
     </div>
   );

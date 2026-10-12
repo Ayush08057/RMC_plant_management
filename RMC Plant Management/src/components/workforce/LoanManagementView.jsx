@@ -262,32 +262,32 @@ export default function LoanManagementView({ employeeFilter = null }) {
           <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2">
             <div className="flex items-start justify-between gap-2 min-w-0">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white truncate">{row.employeeName}</div>
-                <div className="text-xs font-mono text-slate-400">{row.id} • {row.loanDate}</div>
+                <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
+                <div className="text-xs font-mono text-cyan-700 font-bold">{row.id} • {row.loanDate}</div>
               </div>
               <StatusBadge status={row.status} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-slate-200">
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Sanctioned:</span>
-                <span className="text-white font-bold">₹ {row.loanAmount.toLocaleString('en-IN')}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Sanctioned:</span>
+                <span className="text-slate-900 font-bold">₹ {row.loanAmount.toLocaleString('en-IN')}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Monthly EMI:</span>
-                <span className="text-emerald-400 font-bold">₹ {row.emiAmount.toLocaleString('en-IN')}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Monthly EMI:</span>
+                <span className="text-emerald-700 font-bold">₹ {row.emiAmount.toLocaleString('en-IN')}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">EMIs Paid:</span>
-                <span className="text-slate-300">{row.paidEmis} of {row.totalEmis}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">EMIs Paid:</span>
+                <span className="text-slate-700 font-semibold">{row.paidEmis} of {row.totalEmis}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Balance:</span>
-                <span className="text-amber-400 font-bold">₹ {row.outstandingBalance.toLocaleString('en-IN')}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Balance:</span>
+                <span className="text-amber-700 font-bold">₹ {row.outstandingBalance.toLocaleString('en-IN')}</span>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t border-slate-200 flex justify-end">
               <button
                 type="button"
                 onClick={() => {

@@ -2,8 +2,174 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper authorization functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return request.auth.token.role != null ? request.auth.token.role : '';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        getUserRole() == 'Admin' ||
+        request.auth.token.email == 'smconcretech@gmail.com'
+      );
+    }
+    
+    function isManager() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Owner / Director']
+      );
+    }
+
+    // Users collection: Authenticated users can read directory; Admin can manage all; Users can update own profile
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
+      allow delete: if isAdmin();
+    }
+
+    // Employees collection: Read by authenticated users; Created/managed by Plant Managers and Admins
+    match /employees/{empId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isManager();
+      allow delete: if isAdmin();
+    }
+
+    // Master Plant Network & Companies: Auth read, strictly Admin write
+    match /plants/{plantId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Operational Workforce Collections
+    match /attendance/{attId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    match /shifts/{shiftId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    
+    match /dailyWork/{workId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isManager();
+    }
+    
+    match /leaves/{leaveId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager();
+    }
+    
+    match /advances/{advId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager() || getUserRole() == 'Accountant';
+    }
+    
+    match /loans/{loanId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager() || getUserRole() == 'Accountant';
+    }
+    
+    match /payrollRecords/{payId} {
+      allow read: if isAuthenticated() && (isAdmin() || getUserRole() in ['Accountant', 'Owner / Director']);
+      allow write: if isAdmin() || getUserRole() in ['Accountant', 'Owner / Director'];
+    }
+    
+    match /documents/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    match /auditLogs/{logId} {
+      allow read: if isManager();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Append-only immutable log
+    }
+    
+    match /hrSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Company-Scoped Collections (CMP-SM-001)
+    match /employees_CMP-SM-001/{empId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isManager();
+      allow delete: if isAdmin();
+    }
+    match /plants_CMP-SM-001/{plantId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /attendance_CMP-SM-001/{attId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    match /shifts_CMP-SM-001/{shiftId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    match /dailyWork_CMP-SM-001/{workId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isManager();
+    }
+    match /leaves_CMP-SM-001/{leaveId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager();
+    }
+    match /advances_CMP-SM-001/{advId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager() || getUserRole() == 'Accountant';
+    }
+    match /loans_CMP-SM-001/{loanId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager() || getUserRole() == 'Accountant';
+    }
+    match /payrollRecords_CMP-SM-001/{payId} {
+      allow read: if isAuthenticated() && (isAdmin() || getUserRole() in ['Accountant', 'Owner / Director']);
+      allow write: if isAdmin() || getUserRole() in ['Accountant', 'Owner / Director'];
+    }
+    match /documents_CMP-SM-001/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    match /auditLogs_CMP-SM-001/{logId} {
+      allow read: if isManager();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+    match /hrSettings_CMP-SM-001/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // General fallback: requires authentication at minimum
     match /{document=**} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }

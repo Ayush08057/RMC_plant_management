@@ -18,7 +18,13 @@ import {
   FileText,
   UserCheck,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Key,
+  Lock,
+  Copy,
+  Check,
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -28,6 +34,7 @@ import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
+import { formatShiftOption } from '../../utils/shiftUtils';
 
 export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
@@ -55,6 +62,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
   const [showEditModal, setShowEditModal] = useState(false);
   const [activeEmployee, setActiveEmployee] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(null);
 
   // Helper: Get verified employee photo
   const getEmployeePhoto = (emp) => {
@@ -64,10 +73,22 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     return null;
   };
 
+  const handleCopyCredentials = (emp) => {
+    const username = emp.username || emp.id?.toLowerCase();
+    const password = emp.password || 'Pass@123';
+    const text = `RMC Plant Employee Login Details:\n• Username / ID: ${username}\n• Password: ${password}\n• Login URL: ${window.location.origin}/login`;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(emp.id);
+    setToastMessage(`Credentials for ${emp.name} copied to clipboard!`);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
   // Form State
   const [formData, setFormData] = useState({
     id: '',
     name: '',
+    username: '',
+    password: '',
     mobile: '',
     email: '',
     role: ROLES.PLANT_MANAGER,
@@ -77,7 +98,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     dob: '1992-05-15',
     salary: 45000,
     employmentType: 'Full Time Permanent',
-    status: 'Pending Registration',
+    status: 'Active',
     address: '',
     emergencyName: '',
     emergencyRelation: 'Spouse',
@@ -95,6 +116,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     const matchesSearch =
       emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.mobile?.includes(searchTerm);
 
@@ -107,9 +129,16 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
   });
 
   const handleOpenAdd = () => {
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    const newId = `EMP-${randomNum}`;
+    const defaultUsername = `emp${randomNum}`;
+    const defaultPassword = `Pass@${Math.floor(100 + Math.random() * 900)}`;
+
     setFormData({
-      id: `EMP-${Math.floor(100 + Math.random() * 900)}`,
+      id: newId,
       name: '',
+      username: defaultUsername,
+      password: defaultPassword,
       mobile: '+91 ',
       email: '',
       role: ROLES.DRIVER,
@@ -119,7 +148,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       dob: '1995-01-01',
       salary: 32000,
       employmentType: 'Full Time Permanent',
-      status: 'Pending Registration',
+      status: 'Active',
       address: '',
       emergencyName: '',
       emergencyRelation: 'Family',
@@ -129,6 +158,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       ifsc: '',
       shiftId: 'SFT-MORN',
     });
+    setShowPassword(false);
     setFormError(null);
     setShowAddModal(true);
   };
@@ -146,18 +176,30 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       setFormError('Please provide a unique Employee ID.');
       return;
     }
-    if (formData.mobile.trim().length < 10) {
-      setFormError('Please enter a valid mobile number with at least 10 digits.');
+    if (!formData.username?.trim()) {
+      setFormError('Please assign a login username for the employee.');
+      return;
+    }
+    if (!formData.password || formData.password.length < 6) {
+      setFormError('Please assign a password with at least 6 characters.');
+      return;
+    }
+    const cleanMobile = (formData.mobile || '').replace(/\D/g, '').slice(0, 10);
+    if (cleanMobile.length !== 10) {
+      setFormError('Please enter a valid 10-digit mobile number.');
       return;
     }
 
     try {
       const generatedEmail = formData.email?.trim() || `${formData.name.toLowerCase().replace(/\s+/g, '.')}@smconcretech.com`;
+      const cleanUsername = formData.username.trim().toLowerCase().replace(/\s+/g, '');
 
       addEmployee({
         id: formData.id,
         name: formData.name,
-        mobile: formData.mobile,
+        username: cleanUsername,
+        password: formData.password,
+        mobile: `+91 ${cleanMobile}`,
         email: generatedEmail,
         role: formData.role,
         department: formData.department,
@@ -166,7 +208,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         dob: formData.dob,
         salary: Number(formData.salary) || 30000,
         employmentType: formData.employmentType,
-        status: formData.status,
+        status: formData.status || 'Active',
         address: formData.address || 'Navi Mumbai Plant Industrial Zone',
         emergencyContact: {
           name: formData.emergencyName || 'Relative',
@@ -182,10 +224,25 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       });
 
       setShowAddModal(false);
-      setToastMessage(`Employee ${formData.name} (${formData.id}) registered successfully.`);
+      try {
+        localStorage.setItem('rmc_last_registered_employee_credentials', JSON.stringify({
+          id: formData.id,
+          name: formData.name,
+          username: cleanUsername,
+          password: formData.password,
+          role: formData.role,
+          plant: formData.plant,
+          createdAt: new Date().toISOString(),
+        }));
+      } catch {
+        // ignore
+      }
+      setToastMessage(`Employee ${formData.name} (${newEmp.id}) added successfully! Username: @${cleanUsername}`);
       setFormData({
         id: '',
         name: '',
+        username: '',
+        password: '',
         mobile: '',
         email: '',
         role: ROLES.DRIVER,
@@ -217,15 +274,20 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
 
   const handleOpenEdit = (emp) => {
     setActiveEmployee(emp);
+    const cleanMobile = (emp.mobile || '').replace(/\D/g, '').slice(-10);
     setFormData({
       ...emp,
+      mobile: cleanMobile,
+      username: emp.username || emp.id?.toLowerCase() || '',
+      password: emp.password || 'Pass@123',
       emergencyName: emp.emergencyContact?.name || '',
       emergencyRelation: emp.emergencyContact?.relation || '',
-      emergencyPhone: emp.emergencyContact?.phone || '',
+      emergencyPhone: (emp.emergencyContact?.phone || '').replace(/\D/g, '').slice(-10),
       bankName: emp.bankDetails?.bankName || '',
       accountNo: emp.bankDetails?.accountNo || '',
       ifsc: emp.bankDetails?.ifsc || '',
     });
+    setShowPassword(false);
     setShowEditModal(true);
   };
 
@@ -233,9 +295,20 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     e.preventDefault();
     if (!activeEmployee) return;
 
+    const cleanMobile = (formData.mobile || '').replace(/\D/g, '').slice(0, 10);
+    if (cleanMobile.length !== 10) {
+      setToastMessage('⚠️ Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    const cleanUsername = (formData.username || activeEmployee.username || activeEmployee.id).trim().toLowerCase().replace(/\s+/g, '');
+    const assignedPassword = formData.password || activeEmployee.password || 'Pass@123';
+
     updateEmployee(activeEmployee.id, {
       name: formData.name,
-      mobile: formData.mobile,
+      username: cleanUsername,
+      password: assignedPassword,
+      mobile: `+91 ${cleanMobile}`,
       email: formData.email,
       role: formData.role,
       department: formData.department,
@@ -258,7 +331,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     });
 
     setShowEditModal(false);
-    setToastMessage(`Employee profile ${activeEmployee.id} updated.`);
+    setToastMessage(`Employee profile ${activeEmployee.id} updated with username @${cleanUsername}.`);
   };
 
   // Table Columns
@@ -287,7 +360,14 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-bold text-slate-900 text-xs truncate leading-snug">{row.name}</div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-bold text-slate-900 text-xs truncate leading-snug">{row.name}</span>
+                {row.username && (
+                  <span className="text-[10px] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono font-semibold border border-amber-200 shrink-0">
+                    @{row.username}
+                  </span>
+                )}
+              </div>
               <div className="text-[10px] text-slate-400 font-mono truncate leading-none mt-0.5">{row.email}</div>
             </div>
           </div>
@@ -411,25 +491,25 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
   const onLeaveCount = employees.filter((e) => e.status === 'On Leave' || e.status === 'Leave').length;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full flex-1 flex flex-col space-y-2 pb-4">
       {/* Filter and Action Control Card */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3.5">
-        <div className="flex flex-wrap items-center gap-2.5 flex-1">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+      <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 flex-1">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name, ID, phone, email..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-2xl text-xs bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-600/20 focus:bg-white font-medium transition-all"
+              className="w-full pl-8.5 pr-3 py-1.5 rounded-xl text-xs bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600/20 focus:bg-white font-medium transition-all"
             />
           </div>
 
           <select
             value={selectedPlant}
             onChange={(e) => setSelectedPlant(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl text-xs bg-slate-50 border border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs transition-all"
+            className="px-2.5 py-1.5 rounded-xl text-xs bg-slate-50 border border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs transition-all"
           >
             <option value="All Plants">All Plant Units</option>
             {MOCK_PLANTS.map((p) => (
@@ -440,7 +520,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
           <select
             value={selectedRole}
             onChange={(e) => setSelectedRole(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl text-xs bg-slate-50 border border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs transition-all"
+            className="px-2.5 py-1.5 rounded-xl text-xs bg-slate-50 border border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs transition-all"
           >
             <option value="All">All Roles</option>
             {Object.values(ROLES).map((r) => (
@@ -451,7 +531,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl text-xs bg-slate-50 border border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs transition-all"
+            className="px-2.5 py-1.5 rounded-xl text-xs bg-slate-50 border border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs transition-all"
           >
             <option value="All">All Statuses</option>
             <option value="Pending Registration">Pending Registration</option>
@@ -467,9 +547,9 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         <button
           type="button"
           onClick={handleOpenAdd}
-          className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 shadow-lg shadow-blue-500/25 active:scale-[0.98]"
+          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm shadow-blue-500/20 active:scale-[0.98]"
         >
-          <UserPlus className="w-4 h-4" />
+          <UserPlus className="w-3.5 h-3.5" />
           <span>Add Employee</span>
         </button>
       </div>
@@ -482,6 +562,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         columns={columns}
         data={filteredEmployees}
         allowFullscreen={true}
+        itemsPerPage={6}
         actions={
           <button
             type="button"
@@ -497,39 +578,39 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
           <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2.5">
             <div className="flex items-start justify-between gap-2 min-w-0">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white truncate">{row.name}</div>
-                <div className="text-xs font-mono text-amber-400">{row.id} • {row.role}</div>
+                <div className="text-sm font-bold text-slate-900 truncate">{row.name}</div>
+                <div className="text-xs font-mono text-cyan-700 font-bold">{row.id} • {row.role}</div>
               </div>
               <StatusBadge status={row.status} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-200">
               <div className="min-w-0">
-                <span className="text-[10px] text-slate-500 uppercase block">Plant</span>
-                <span className="text-slate-300 truncate block">{row.plant}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Plant</span>
+                <span className="text-slate-800 font-semibold truncate block">{row.plant}</span>
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] text-slate-500 uppercase block">Mobile</span>
-                <span className="text-slate-300 font-mono truncate block">{row.mobile}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Mobile</span>
+                <span className="text-slate-800 font-mono font-semibold truncate block">{row.mobile}</span>
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] text-slate-500 uppercase block">Department</span>
-                <span className="text-slate-300 truncate block">{row.department}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Department</span>
+                <span className="text-slate-800 truncate block">{row.department}</span>
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] text-slate-500 uppercase block">Shift</span>
-                <span className="text-purple-300 font-mono truncate block">{row.shiftId}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Shift</span>
+                <span className="text-indigo-700 font-mono font-bold truncate block">{row.shiftId}</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => {
                   setActiveEmployee(row);
                   setShowProfileModal(true);
                 }}
-                className="flex-1 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-800 flex items-center justify-center gap-1 cursor-pointer"
+                className="flex-1 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 border border-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
               >
                 <Eye className="w-3.5 h-3.5" />
                 <span>Profile</span>
@@ -537,7 +618,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               <button
                 type="button"
                 onClick={() => handleOpenEdit(row)}
-                className="flex-1 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-xs font-semibold text-amber-300 border border-amber-500/30 flex items-center justify-center gap-1 cursor-pointer"
+                className="flex-1 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-xs font-bold text-amber-800 border border-amber-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit</span>
@@ -545,7 +626,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               <button
                 type="button"
                 onClick={() => handleDelete(row.id, row.name)}
-                className="py-1.5 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-xs font-semibold text-red-400 border border-red-800/40 flex items-center justify-center gap-1 cursor-pointer"
+                className="py-1.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-xs font-bold text-rose-700 border border-rose-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
                 title="Delete Employee"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -556,71 +637,83 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         )}
       />
 
-      {/* Add Employee Modal */}
+      {/* Add Employee Modal — Compact High-Density Grid Fitting Page Perfectly */}
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         title="Register New Employee"
-        subtitle="Create verified workforce record with plant assignment, role, and salary parameters."
+        subtitle="Create verified workforce record with plant assignment, role, and credentials."
         icon={UserPlus}
+        maxWidth="max-w-4xl"
       >
-        <form onSubmit={handleSaveAdd} className="space-y-4">
+        <form onSubmit={handleSaveAdd} className="space-y-2 sm:space-y-2.5">
           {formError && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-semibold flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            <div className="p-2 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
               <span>{formError}</span>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Employee ID *</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Employee ID *</label>
               <input
                 type="text"
                 required
                 value={formData.id}
                 onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">Full Name *</label>
+            <div className="md:col-span-2">
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Full Name *</label>
               <input
                 type="text"
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g. Rahul Sharma"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Mobile Number *</label>
-              <input
-                type="text"
-                required
-                value={formData.mobile}
-                onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                placeholder="+91 98200 XXXXX"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Mobile Number (10 Digits) *</label>
+              <div className="relative flex items-center">
+                <span className="absolute left-2.5 text-xs font-mono font-bold text-slate-500 select-none">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="9820044001"
+                  value={formData.mobile}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setFormData({ ...formData, mobile: digits });
+                  }}
+                  className="w-full pl-11 pr-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">Work Email</label>
+
+            <div className="md:col-span-2">
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Work Email</label>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="name@smconcretech.com"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Role *</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Role *</label>
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {Object.values(ROLES).map((r) => (
                   <option key={r} value={r}>{r}</option>
@@ -628,54 +721,55 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               </select>
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Assigned Plant *</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Assigned Plant *</label>
               <select
                 value={formData.plant}
                 onChange={(e) => setFormData({ ...formData, plant: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {MOCK_PLANTS.map((p) => (
                   <option key={p.id} value={p.name}>{p.name}</option>
                 ))}
               </select>
             </div>
+
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Department</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Department</label>
               <input
                 type="text"
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Assigned Shift</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Assigned Shift</label>
               <select
                 value={formData.shiftId}
                 onChange={(e) => setFormData({ ...formData, shiftId: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.startTime} - {s.endTime})</option>
+                  <option key={s.id} value={s.id}>{formatShiftOption(s)}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Monthly Basic Salary (₹) *</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Monthly Salary (₹) *</label>
               <input
                 type="number"
                 required
                 value={formData.salary}
                 onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Employment Type</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Employment Type</label>
               <select
                 value={formData.employmentType}
                 onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 <option value="Full Time Permanent">Full Time Permanent</option>
                 <option value="Contract Basis">Contract Basis</option>
@@ -684,17 +778,90 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200">
+          {/* Daily Login Credentials Section — Sleek Compact Panel */}
+          <div className="p-2 sm:p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="p-1 rounded-md bg-blue-500/20 text-blue-800">
+                  <Key className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-900 block leading-tight">Daily Login Credentials</span>
+                  <span className="text-[10px] text-slate-500 hidden sm:inline">Employee will use these credentials for daily login & attendance</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const base = (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]/g, '') : formData.id.toLowerCase().replace(/[^a-z0-9]/g, '')).slice(0, 10);
+                  const randomNum = Math.floor(100 + Math.random() * 900);
+                  setFormData((prev) => ({
+                    ...prev,
+                    username: base ? `${base}${randomNum}` : `emp${randomNum}`,
+                    password: `Pass@${Math.floor(100 + Math.random() * 900)}`,
+                  }));
+                }}
+                className="text-[10px] text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Auto Generate</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div>
+                <label className="text-slate-800 font-bold block mb-0.5 text-[11px] flex items-center justify-between">
+                  <span>Assigned Username *</span>
+                  <span className="text-[10px] text-blue-700 font-mono">Unique Login ID</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                  placeholder="e.g. rahul_driver"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-blue-300 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-500/20 shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-800 font-bold block mb-0.5 text-[11px] flex items-center justify-between">
+                  <span>Assigned Password *</span>
+                  <span className="text-[10px] text-blue-700 font-mono">Min 6 characters</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="••••••••••••"
+                    className="w-full pl-2.5 pr-8 py-1.5 rounded-lg bg-white border border-blue-300 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-500/20 shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowAddModal(false)}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 cursor-pointer"
+              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 cursor-pointer transition-all"
             >
               Confirm Registration
             </button>
@@ -703,41 +870,54 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       </Modal>
 
       {/* Edit Employee Modal */}
+      {/* Edit Employee Modal — Compact High-Density Grid Fitting Page Perfectly */}
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title={`Edit Employee (${activeEmployee?.id})`}
         subtitle="Modify operational parameters, assigned shift, and employment status."
         icon={Edit3}
+        maxWidth="max-w-4xl"
       >
-        <form onSubmit={handleSaveEdit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <form onSubmit={handleSaveEdit} className="space-y-2 sm:space-y-2.5">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Full Name</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Full Name *</label>
               <input
                 type="text"
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Mobile</label>
-              <input
-                type="text"
-                required
-                value={formData.mobile}
-                onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Mobile (10 Digits) *</label>
+              <div className="relative flex items-center">
+                <span className="absolute left-2.5 text-xs font-mono font-bold text-slate-500 select-none">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="9820044001"
+                  value={formData.mobile}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setFormData({ ...formData, mobile: digits });
+                  }}
+                  className="w-full pl-11 pr-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Plant Location</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Plant Location</label>
               <select
                 value={formData.plant}
                 onChange={(e) => setFormData({ ...formData, plant: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {MOCK_PLANTS.map((p) => (
                   <option key={p.id} value={p.name}>{p.name}</option>
@@ -745,11 +925,11 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               </select>
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Status</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Status</label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -758,39 +938,82 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               </select>
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Shift</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Shift</label>
               <select
                 value={formData.shiftId}
                 onChange={(e) => setFormData({ ...formData, shiftId: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>{formatShiftOption(s)}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-slate-700 font-bold block mb-1">Basic Salary (₹)</label>
+              <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Basic Salary (₹)</label>
               <input
                 type="number"
                 value={formData.salary}
                 onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200">
+          {/* Edit Login Credentials — Sleek Compact Strip */}
+          <div className="p-2 sm:p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <Key className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-xs font-bold text-slate-900">Login Credentials & Access</span>
+              <span className="text-[10px] text-slate-500 hidden sm:inline">• Used for portal authentication</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div>
+                <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Username</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-blue-300 text-slate-900 font-mono font-bold text-xs focus:border-blue-600 focus:ring-1 focus:ring-blue-500/20 shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-0.5 text-[11px]">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full pl-2.5 pr-8 py-1.5 rounded-lg bg-white border border-blue-300 text-slate-900 font-mono font-bold text-xs focus:border-blue-600 focus:ring-1 focus:ring-blue-500/20 shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowEditModal(false)}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20"
+              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 cursor-pointer transition-all"
             >
               Save Changes
             </button>
@@ -825,6 +1048,55 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 </div>
               </div>
               <StatusBadge status={activeEmployee.status} />
+            </div>
+
+            {/* Daily Portal Login Credentials Card */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50 to-amber-100/60 border border-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
+                  <Key className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Daily Portal Login Credentials</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Username:</span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-amber-300 inline-block shadow-2xs">
+                      @{activeEmployee.username || activeEmployee.id?.toLowerCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Password:</span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-amber-300 inline-block shadow-2xs">
+                      {showPassword ? (activeEmployee.password || 'Pass@123') : '••••••••••••'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer mt-3"
+                  >
+                    {showPassword ? 'Hide' : 'Reveal'}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleCopyCredentials(activeEmployee)}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
+              >
+                {copiedKey === activeEmployee.id ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-slate-950" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-950" />
+                    <span>Copy Credentials</span>
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200">

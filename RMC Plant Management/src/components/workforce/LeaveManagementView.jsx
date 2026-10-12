@@ -245,30 +245,30 @@ export default function LeaveManagementView({ employeeFilter = null }) {
           <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2">
             <div className="flex items-start justify-between gap-2 min-w-0">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white truncate">{row.employeeName}</div>
-                <div className="text-xs font-mono text-purple-300">{row.leaveType} ({row.days} Days)</div>
+                <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
+                <div className="text-xs font-mono text-purple-700 font-bold">{row.leaveType} ({row.days} Days)</div>
               </div>
               <StatusBadge status={row.status} />
             </div>
 
-            <div className="text-xs font-mono text-slate-300 pt-1">
-              Dates: {row.fromDate} to {row.toDate}
+            <div className="text-xs font-mono text-slate-700 pt-1">
+              Dates: <strong className="text-slate-900">{row.fromDate}</strong> to <strong className="text-slate-900">{row.toDate}</strong>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed">
               Reason: {row.reason}
             </p>
 
-            <div className="text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-800">
+            <div className="text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-200">
               {row.reviewedBy ? `Reviewed: ${row.reviewedBy}` : 'Awaiting Review'}
             </div>
 
             {canApprove && row.status === 'Pending' && (
-              <div className="pt-2 border-t border-slate-800 flex justify-end">
+              <div className="pt-2 border-t border-slate-200 flex justify-end">
                 <button
                   type="button"
                   onClick={() => handleOpenReview(row)}
-                  className="w-full py-1.5 rounded-lg bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-semibold"
+                  className="w-full py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold transition-colors cursor-pointer"
                 >
                   Review Application
                 </button>
@@ -290,15 +290,21 @@ export default function LeaveManagementView({ employeeFilter = null }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-slate-400 font-semibold block mb-1">Employee</label>
-              <select
-                value={form.employeeId}
-                onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-purple-500"
-              >
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                ))}
-              </select>
+              {employeeFilter || user?.role !== 'Admin' ? (
+                <div className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs">
+                  {user?.name || 'Staff'} ({employeeFilter || user?.employeeId || user?.id})
+                </div>
+              ) : (
+                <select
+                  value={form.employeeId}
+                  onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:border-purple-500"
+                >
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="text-slate-400 font-semibold block mb-1">Leave Category</label>

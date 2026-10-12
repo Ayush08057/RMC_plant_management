@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
@@ -37,7 +38,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [adminPingMsg, setAdminPingMsg] = useState(null);
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'cards' | 'radar'
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-GB'));
+  const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
   const [radarDegree, setRadarDegree] = useState(0);
 
   // Real Device Geolocation State
@@ -98,7 +99,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     }
 
     const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString('en-GB'));
+      setCurrentTime(getNowIndian12Hr(true));
       setRadarDegree((prev) => (prev + 3) % 360);
     }, 100);
 
@@ -199,10 +200,9 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       // Calculate elapsed active working duration
       let elapsedMins = 0;
       if (isPunchedIn && record?.punchIn) {
-        const [inH, inM] = record.punchIn.split(':').map(Number);
         const now = new Date();
         const totalNowMins = now.getHours() * 60 + now.getMinutes();
-        const totalInMins = inH * 60 + inM;
+        const totalInMins = parseTimeToMinutes(record.punchIn);
         elapsedMins = Math.max(0, totalNowMins - totalInMins);
       } else if (isPunchedOut && record?.workingHours) {
         elapsedMins = Math.round(record.workingHours * 60);
@@ -738,13 +738,13 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       <div>
                         <span className="text-[9px] uppercase font-bold text-slate-400 block">PUNCH IN</span>
                         <span className={`font-mono text-[11px] font-bold ${emp.punchIn ? 'text-emerald-700' : 'text-slate-400'}`}>
-                          {emp.punchIn || '--:--'}
+                          {formatToIndian12Hr(emp.punchIn) || '--:--'}
                         </span>
                       </div>
                       <div>
                         <span className="text-[9px] uppercase font-bold text-slate-400 block">PUNCH OUT</span>
                         <span className={`font-mono text-[11px] font-bold ${emp.punchOut ? 'text-rose-700' : 'text-slate-400'}`}>
-                          {emp.punchOut || '--:--'}
+                          {formatToIndian12Hr(emp.punchOut) || '--:--'}
                         </span>
                       </div>
                       <div>
@@ -840,11 +840,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-500 font-medium">Punch In Time:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.punchIn || 'Not yet punched in'}</span>
+                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.punchIn ? formatToIndian12Hr(selectedEmployee.punchIn) : 'Not yet punched in'}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-500 font-medium">Punch Out Time:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.punchOut || (selectedEmployee.status === 'Punched In' ? 'Active On Duty' : '--')}</span>
+                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.punchOut ? formatToIndian12Hr(selectedEmployee.punchOut) : (selectedEmployee.status === 'Punched In' ? 'Active On Duty' : '--')}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-500 font-medium">Total Duty Duration:</span>

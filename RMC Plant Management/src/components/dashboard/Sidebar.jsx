@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -40,8 +40,9 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES, ROLE_ROUTES } from '../../data/mockUsers';
 
 export default function Sidebar({ isOpen, onClose, activeTab, onSelectTab }) {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [expandedGroups, setExpandedGroups] = useState({ employees_group: true });
 
@@ -70,6 +71,8 @@ export default function Sidebar({ isOpen, onClose, activeTab, onSelectTab }) {
         ];
 
       case ROLES.PLANT_MANAGER:
+      case ROLES.PLANT_INCHARGE:
+      case ROLES.OPERATOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { 
@@ -202,154 +205,216 @@ export default function Sidebar({ isOpen, onClose, activeTab, onSelectTab }) {
 
       {/* Sidebar Container - Light Executive Theme */}
       <aside
-        className={`app-sidebar fixed top-0 bottom-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-md border-r border-slate-200/90 shadow-xl flex flex-col justify-between transition-transform duration-300 ease-in-out ${
+        className={`app-sidebar fixed top-0 bottom-0 left-0 z-50 w-64 h-screen max-h-screen bg-white/95 backdrop-blur-md border-r border-slate-200/90 shadow-xl flex flex-col transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Top: Logo & System Identity */}
-        <div>
-          <div className="h-16 px-5 border-b border-slate-200/90 flex items-center justify-between bg-white">
-            <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 to-amber-200 shadow-sm flex items-center justify-center shrink-0">
-                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain rounded-full drop-shadow-xs" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="sidebar-label text-xs font-black tracking-wider font-mono">SM CONCRETECH</span>
-                  <span className="text-[9px] font-mono px-1 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 font-bold">RMC</span>
-                </div>
-                <div className="sidebar-label text-[11px] font-bold truncate max-w-[130px]">
-                  {user?.role || 'Portal'}
-                </div>
-              </div>
-            </Link>
-          </div>
-
-          {/* Navigation Items */}
-          <div className="p-3 space-y-1.5 max-h-[calc(100vh-180px)] overflow-y-auto custom-scroll">
-            <div className="sidebar-label px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-widest">
-              Navigation Module
+        <div className="h-14 px-4 border-b border-slate-200/90 flex items-center justify-between bg-white shrink-0">
+          <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-2.5">
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <img 
+                src="/logo.png" 
+                alt="SM ConcreTech" 
+                className="w-full h-full object-contain drop-shadow-sm transition-transform hover:scale-105" 
+              />
             </div>
-
-            {navItems.map((item) => {
-              // Group / Dropdown logic
-              if (item.children && item.children.length > 0) {
-                const isExpanded = Boolean(expandedGroups[item.id]);
-                const isChildActive = item.children.some((child) => child.id === activeTab);
-                const Icon = item.icon;
-
-                return (
-                  <div key={item.id} className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(item.id)}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer group ${
-                        isChildActive
-                          ? 'bg-cyan-50/80 text-slate-900 border border-cyan-200/80 shadow-2xs'
-                          : 'text-slate-900 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Icon className={`w-4.5 h-4.5 shrink-0 transition-colors ${
-                          isChildActive ? 'text-cyan-800' : 'text-slate-700 group-hover:text-cyan-800'
-                        }`} />
-                        <span className="sidebar-label truncate">{item.label}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-100/70 text-cyan-800 border border-cyan-200 font-bold">
-                          {item.children.length}
-                        </span>
-                        {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-slate-700 group-hover:text-slate-950 transition-transform" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-slate-700 group-hover:text-slate-950 transition-transform" />
-                        )}
-                      </div>
-                    </button>
-
-                    {/* Collapsible Children List */}
-                    {isExpanded && (
-                      <div className="pl-3.5 space-y-1 border-l-2 border-slate-200 ml-4 py-1 animate-fadeIn">
-                        {item.children.map((child) => {
-                          const ChildIcon = child.icon;
-                          const isChildSelected = activeTab === child.id;
-
-                          return (
-                            <button
-                              key={child.id}
-                              type="button"
-                              onClick={() => selectTab(child.id)}
-                              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
-                                isChildSelected
-                                  ? 'bg-cyan-50 text-slate-950 shadow-xs font-bold border border-cyan-200'
-                                  : 'text-slate-900 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
-                              }`}
-                            >
-                              <ChildIcon className={`w-4 h-4 shrink-0 ${
-                                isChildSelected ? 'text-cyan-900' : 'text-slate-700 group-hover:text-cyan-800'
-                              }`} />
-                              <span className="sidebar-label truncate">{child.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              // Standard Navigation Item
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => selectTab(item.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer group ${
-                    isActive
-                      ? 'bg-cyan-50 text-slate-950 shadow-xs border border-cyan-200'
-                      : 'text-slate-900 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon className={`w-4.5 h-4.5 shrink-0 transition-colors ${
-                      isActive ? 'text-cyan-900' : 'text-slate-700 group-hover:text-cyan-800'
-                    }`} />
-                    <span className="sidebar-label truncate">{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                      isActive ? 'bg-cyan-100 text-cyan-950 border border-cyan-200 font-bold' : 'bg-slate-100 text-slate-700 border border-slate-200'
-                    }`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="sidebar-label text-xs font-black tracking-wider font-mono">SM CONCRETECH</span>
+                <span className="text-[9px] font-mono px-1 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">RMC</span>
+              </div>
+              <div className="sidebar-label text-[10px] font-bold truncate max-w-[130px] text-slate-500">
+                {user?.role || 'Portal'}
+              </div>
+            </div>
+          </Link>
         </div>
 
-        {/* Bottom Profile & Logout Footer */}
-        <div className="p-3 border-t border-slate-200/90 bg-slate-50/60">
-          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 mb-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-blue-600 text-white text-xs font-black flex items-center justify-center shrink-0 shadow-xs">
+        {/* Navigation Items - Flexible middle taking available space */}
+        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2 space-y-0.5">
+          <div className="sidebar-label px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">
+            Navigation Module
+          </div>
+
+          {navItems.map((item) => {
+            // Group / Dropdown logic
+            if (item.children && item.children.length > 0) {
+              const isExpanded = Boolean(expandedGroups[item.id]);
+              const isChildActive = item.children.some((child) => child.id === activeTab);
+              const Icon = item.icon;
+
+              return (
+                <div key={item.id} className="space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(item.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer group ${
+                      isChildActive
+                        ? 'bg-blue-50/80 text-blue-950 border border-blue-200/80 shadow-2xs'
+                        : 'text-slate-900 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 transition-colors ${
+                        isChildActive ? 'text-blue-700' : 'text-slate-700 group-hover:text-blue-700'
+                      }`} />
+                      <span className="sidebar-label truncate text-[11px]">{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-100/70 text-blue-800 border border-blue-200 font-bold">
+                        {item.children.length}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-950 transition-transform" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-950 transition-transform" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Collapsible Children List */}
+                  {isExpanded && (
+                    <div className="pl-3 space-y-0.5 border-l-2 border-slate-200 ml-3.5 py-0.5 animate-fadeIn">
+                      {item.children.map((child) => {
+                        const ChildIcon = child.icon;
+                        const isChildSelected = activeTab === child.id;
+
+                        return (
+                          <button
+                            key={child.id}
+                            type="button"
+                            onClick={() => selectTab(child.id)}
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
+                              isChildSelected
+                                ? 'bg-blue-50 text-blue-950 shadow-xs font-bold border border-blue-200'
+                                : 'text-slate-900 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
+                            }`}
+                          >
+                            <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${
+                              isChildSelected ? 'text-blue-700' : 'text-slate-700 group-hover:text-blue-700'
+                            }`} />
+                            <span className="sidebar-label truncate text-[11px]">{child.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Standard Navigation Item
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectTab(item.id)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer group ${
+                  isActive
+                    ? 'bg-blue-50 text-blue-950 shadow-xs border border-blue-200'
+                    : 'text-slate-900 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${
+                    isActive ? 'text-blue-700' : 'text-slate-700 group-hover:text-blue-700'
+                  }`} />
+                  <span className="sidebar-label truncate text-[11px]">{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded-md ${
+                    isActive ? 'bg-blue-100 text-blue-950 border border-blue-200 font-bold' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          {/* Master Admin Cross-Role Operational Portals Hub */}
+          {Boolean(user?.isMasterAdmin || user?.role === ROLES.ADMIN || user?.originalAdminUser) && (
+            <div className="pt-2.5 mt-2.5 border-t border-slate-200/90 space-y-1">
+              <div className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-widest text-blue-700 flex items-center justify-between">
+                <span>Master Admin Portals</span>
+                <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[8px] font-bold">ALL ACCESS</span>
+              </div>
+              <div className="space-y-0.5">
+                {[
+                  { role: ROLES.ADMIN, label: 'System Admin Console', path: '/admin', icon: ShieldCheck },
+                  { role: ROLES.PLANT_MANAGER, label: 'Plant Manager Portal', path: '/plant-manager', icon: LayoutDashboard },
+                  { role: ROLES.ACCOUNTANT, label: 'Accounts & Billing', path: '/accountant', icon: Receipt },
+                  { role: ROLES.DISPATCHER, label: 'Logistics & Dispatch', path: '/dispatcher', icon: Navigation },
+                  { role: ROLES.QC_ENGINEER, label: 'Concrete QC Lab', path: '/qc', icon: FlaskConical },
+                  { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervision', path: '/site-supervisor', icon: Gauge },
+                  { role: ROLES.DRIVER, label: 'Driver Personal Portal', path: '/driver', icon: Truck },
+                  { role: ROLES.OWNER_DIRECTOR, label: 'Executive Cockpit', path: '/owner', icon: Building2 },
+                ].map((portal) => {
+                  const isCurrentRole = user?.role === portal.role || location.pathname === portal.path;
+                  const PortalIcon = portal.icon;
+                  return (
+                    <button
+                      key={portal.path}
+                      type="button"
+                      onClick={() => {
+                        const nextPath = switchRole(portal.role);
+                        if (nextPath) navigate(nextPath);
+                        if (onClose) onClose();
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isCurrentRole
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-700 hover:text-blue-900 hover:bg-blue-50/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <PortalIcon className={`w-3.5 h-3.5 shrink-0 ${isCurrentRole ? 'text-white' : 'text-slate-500'}`} />
+                        <span className="truncate text-[11px]">{portal.label}</span>
+                      </div>
+                      {isCurrentRole && (
+                        <span className="text-[8px] font-mono px-1 py-0.2 rounded bg-white/20 text-white font-bold">Active</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Profile & Logout Footer - Complete Logged In Information Display */}
+        <div className="p-2.5 border-t border-slate-200/90 bg-slate-50/80 shrink-0 space-y-1.5">
+          <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white text-[11px] font-black flex items-center justify-center shrink-0 shadow-xs">
               {user?.avatar || 'US'}
             </div>
             <div className="min-w-0 flex-1 text-left">
-              <div className="sidebar-label text-xs font-bold truncate">{user?.name || 'User'}</div>
-              <div className="text-[10px] text-cyan-700 font-mono font-bold truncate">{user?.employeeId || 'EMP-01'}</div>
+              <div className="sidebar-label text-xs font-bold truncate leading-tight text-slate-900 flex items-center justify-between gap-1">
+                <span className="truncate">{user?.name || 'User'}</span>
+                {user?.role && (
+                  <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px] font-mono font-bold shrink-0">
+                    {user.role}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-mono truncate mt-0.5">
+                <span className="text-blue-700 font-bold truncate">{user?.employeeId || 'EMP-01'}</span>
+                <span>•</span>
+                <span className="truncate text-slate-600">{user?.plant || user?.plantLocation || 'Main Plant'}</span>
+              </div>
             </div>
           </div>
 
           <button
             type="button"
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out Session</span>
           </button>
         </div>

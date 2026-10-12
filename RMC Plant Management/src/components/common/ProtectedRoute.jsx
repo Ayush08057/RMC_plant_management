@@ -28,15 +28,43 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to="/first-time-setup" replace />;
   }
 
-  // Check role authorization
-  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    return (
-      <UnauthorizedPage 
-        attemptedPath={location.pathname} 
-        requiredRoles={allowedRoles} 
-        userRole={user.role} 
-      />
-    );
+  // Admin authority has unrestricted master clearance to access all roles and routes
+  const hasAdminMasterClearance = Boolean(
+    user.role === 'Admin' ||
+    user.isMasterAdmin ||
+    user.originalAdminUser?.role === 'Admin'
+  );
+
+  if (hasAdminMasterClearance) {
+    return children;
+  }
+
+  // Other roles (Plant Manager, Plant Incharge, Driver, Accountant, Dispatcher, QC, etc.)
+  // strictly cannot access other roles' routes
+  if (allowedRoles.length > 0) {
+    const userRoleNorm = (user.role || '').trim().toLowerCase();
+    const isAllowed = allowedRoles.some((allowed) => {
+      const allowedNorm = (allowed || '').trim().toLowerCase();
+      if (allowedNorm === userRoleNorm) return true;
+      // Plant Incharge, Plant Manager, and Operator share plant operations route access
+      if (
+        (userRoleNorm.includes('incharge') || userRoleNorm.includes('manager') || userRoleNorm.includes('operator')) &&
+        (allowedNorm.includes('manager') || allowedNorm.includes('incharge') || allowedNorm.includes('operator'))
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!isAllowed) {
+      return (
+        <UnauthorizedPage 
+          attemptedPath={location.pathname} 
+          requiredRoles={allowedRoles} 
+          userRole={user.role} 
+        />
+      );
+    }
   }
 
   return children;

@@ -25,15 +25,20 @@ import {
 const AuthContext = createContext(null);
 
 const STORAGE_USERS_KEY = 'rmc_users_db_v2';
-const STORAGE_SESSION_KEY = 'rmc_current_user_v2';
-const STORAGE_REMEMBER_KEY = 'rmc_remember_choice_v2';
+const STORAGE_SESSION_KEY = 'rmc_current_user_v3';
+const STORAGE_REMEMBER_KEY = 'rmc_remember_choice_v3';
 
 export const AuthProvider = ({ children }) => {
-  // Clear any legacy dummy users from old storage key
+  // Clear any legacy persistent login sessions so opening the website always asks for login first
   useEffect(() => {
     try {
       localStorage.removeItem('rmc_users_db_v1');
       sessionStorage.removeItem('rmc_current_user_v1');
+      localStorage.removeItem('rmc_current_user_v2');
+      sessionStorage.removeItem('rmc_current_user_v2');
+      localStorage.removeItem('rmc_remember_choice_v2');
+      localStorage.removeItem(STORAGE_SESSION_KEY);
+      localStorage.removeItem(STORAGE_REMEMBER_KEY);
     } catch {
       // ignore
     }
@@ -50,15 +55,25 @@ export const AuthProvider = ({ children }) => {
 
   const [user, setUser] = useState(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_SESSION_KEY) || sessionStorage.getItem(STORAGE_SESSION_KEY);
+      // Strictly require login on opening the site.
+      // Active sessions are only preserved within current tab/window (sessionStorage) across page refreshes.
+      const stored = sessionStorage.getItem(STORAGE_SESSION_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.id && parsed.role) {
+          // Check for expired session
+          if (parsed.sessionExpiresAt && Date.now() > parsed.sessionExpiresAt) {
+            sessionStorage.removeItem(STORAGE_SESSION_KEY);
+            return null;
+          }
+          return parsed;
+        }
       }
     } catch {
       // ignore
     }
-    // Default active session to System Administrator to keep portal active
-    return SYSTEM_ADMIN;
+    // Strictly require login on opening the site
+    return null;
   });
 
   const [pendingFirstLoginUser, setPendingFirstLoginUser] = useState(null);
@@ -129,9 +144,12 @@ export const AuthProvider = ({ children }) => {
     try {
       if (user) {
         sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(user));
+        localStorage.removeItem(STORAGE_SESSION_KEY);
+        localStorage.removeItem(STORAGE_REMEMBER_KEY);
       } else {
         sessionStorage.removeItem(STORAGE_SESSION_KEY);
         localStorage.removeItem(STORAGE_SESSION_KEY);
+        localStorage.removeItem(STORAGE_REMEMBER_KEY);
       }
     } catch (err) {
       console.error('Failed to save user session:', err);
@@ -140,11 +158,29 @@ export const AuthProvider = ({ children }) => {
 
   const getWorkforceEmployees = () => {
     try {
-      const stored = localStorage.getItem('rmc_workforce_state_v5');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return parsed.employees || [];
+      const activeCompanyId = localStorage.getItem('rmc_active_company_v1') || 'CMP-SM-001';
+      const companySaved = localStorage.getItem(`rmc_workforce_state_v9_${activeCompanyId}`);
+      if (companySaved) {
+        const parsed = JSON.parse(companySaved);
+        if (parsed.employees && parsed.employees.length > 0) return parsed.employees;
       }
+
+      // Fallback: check any saved workforce states
+      const allFound = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('rmc_workforce_state_')) {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key));
+            if (Array.isArray(parsed.employees)) {
+              allFound.push(...parsed.employees);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      if (allFound.length > 0) return allFound;
     } catch {
       // ignore
     }
@@ -152,14 +188,25 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Login action supporting Email, Employee ID, or Mobile via verified employee record
+   * Login action supporting Username, Email, Employee ID, or Mobile via verified employee record
    */
   const login = async (identifier, password, rememberMe = false) => {
     setAuthError(null);
     setLoading(true);
 
+    let activeUsersList = users;
+    try {
+      const storedUsersRaw = localStorage.getItem(STORAGE_USERS_KEY);
+      if (storedUsersRaw) {
+        activeUsersList = JSON.parse(storedUsersRaw);
+        setUsers(activeUsersList);
+      }
+    } catch {
+      // ignore
+    }
+
     const workforceEmployees = getWorkforceEmployees();
-    const result = validateLoginAttempt(identifier, password, workforceEmployees, users);
+    const result = validateLoginAttempt(identifier, password, workforceEmployees, activeUsersList);
 
     if (!result.allowed) {
       setLoading(false);
@@ -167,10 +214,40 @@ export const AuthProvider = ({ children }) => {
       return { success: false, error: result.error };
     }
 
+    const isMaster = result.user.role === ROLES.ADMIN || result.user.email === SYSTEM_ADMIN.email || result.user.id === SYSTEM_ADMIN.id;
+    const SESSION_DURATION_MS = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
     const sessionData = {
       ...result.user,
+      isMasterAdmin: isMaster,
+      originalAdminUser: isMaster ? result.user : null,
       lastLoginAt: new Date().toISOString(),
+      sessionExpiresAt: Date.now() + SESSION_DURATION_MS,
     };
+
+    try {
+      sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionData));
+      localStorage.removeItem(STORAGE_SESSION_KEY);
+      localStorage.removeItem(STORAGE_REMEMBER_KEY);
+    } catch (err) {
+      console.error('Failed to save session:', err);
+    }
+
+    try {
+      localStorage.setItem('rmc_last_logged_in_user_v1', JSON.stringify({
+        id: sessionData.id,
+        name: sessionData.name,
+        role: sessionData.role,
+        employeeId: sessionData.employeeId,
+        identifier: identifier,
+        email: sessionData.email || '',
+        avatar: sessionData.avatar || 'US',
+        plant: sessionData.plant || sessionData.plantLocation || 'Main Plant HQ',
+        department: sessionData.department || '',
+        lastLoginAt: sessionData.lastLoginAt,
+      }));
+    } catch {
+      // ignore
+    }
 
     setUser(sessionData);
     setLoading(false);
@@ -246,11 +323,43 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Switch Role using verified official role accounts
+   * Preserves Master Admin Authority and original Admin session so the admin can switch anytime.
+   * Non-admin users are strictly blocked from switching roles.
    */
   const switchRole = (targetRole) => {
+    const hasAdminAuthority = Boolean(
+      user?.isMasterAdmin ||
+      user?.role === ROLES.ADMIN ||
+      user?.originalAdminUser ||
+      user?.email === SYSTEM_ADMIN.email
+    );
+
+    if (!hasAdminAuthority && targetRole !== user?.role) {
+      console.warn('Unauthorized role switch attempt blocked for non-admin session.');
+      return null;
+    }
+
+    const adminRef = user?.originalAdminUser || (user?.role === ROLES.ADMIN ? user : SYSTEM_ADMIN);
+
+    if (targetRole === ROLES.ADMIN) {
+      const restoredAdmin = {
+        ...adminRef,
+        role: ROLES.ADMIN,
+        isMasterAdmin: true,
+        originalAdminUser: adminRef,
+      };
+      setUser(restoredAdmin);
+      return '/admin';
+    }
+
     const roleAccount = OFFICIAL_ROLE_ACCOUNTS.find((acc) => acc.role === targetRole);
     if (roleAccount) {
-      setUser(roleAccount);
+      const updatedSession = {
+        ...roleAccount,
+        isMasterAdmin: true,
+        originalAdminUser: adminRef,
+      };
+      setUser(updatedSession);
       return roleAccount.portalRoute || ROLE_ROUTES[targetRole] || '/';
     }
 
@@ -271,10 +380,16 @@ export const AuthProvider = ({ children }) => {
       plantLocation: 'Plant Unit #01',
       avatar: roleProfile.avatar,
       mustChangePassword: false,
+      isMasterAdmin: true,
+      originalAdminUser: adminRef,
     };
 
     setUser(newSession);
     return ROLE_ROUTES[targetRole] || '/';
+  };
+
+  const returnToAdmin = () => {
+    return switchRole(ROLES.ADMIN);
   };
 
   /**
@@ -400,7 +515,11 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
     try {
       localStorage.removeItem(STORAGE_SESSION_KEY);
+      localStorage.removeItem(STORAGE_REMEMBER_KEY);
       sessionStorage.removeItem(STORAGE_SESSION_KEY);
+      localStorage.removeItem('rmc_current_user_v2');
+      sessionStorage.removeItem('rmc_current_user_v2');
+      localStorage.removeItem('rmc_remember_choice_v2');
     } catch (err) {
       console.error('Logout storage error:', err);
     }
@@ -422,6 +541,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     switchRole,
+    returnToAdmin,
+    isMasterAdmin: Boolean(user?.isMasterAdmin || user?.role === ROLES.ADMIN || user?.originalAdminUser),
     addUser,
     deleteUser,
     completeFirstTimeSetup,

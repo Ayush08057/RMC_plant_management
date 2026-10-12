@@ -64,6 +64,7 @@ export default function AppRoutes() {
       <Route path="/first-time-setup" element={<FirstTimeSetupPage />} />
 
       {/* Role-Protected Dashboards */}
+      {/* Role-Protected Dashboards — Admin has master clearance; other roles are strictly isolated */}
       <Route
         path="/admin"
         element={
@@ -76,7 +77,7 @@ export default function AppRoutes() {
       <Route
         path="/plant-manager"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.PLANT_MANAGER, ROLES.ADMIN, ROLES.OWNER_DIRECTOR]}>
+          <ProtectedRoute allowedRoles={[ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR]}>
             <PlantManagerDashboardPage />
           </ProtectedRoute>
         }
@@ -85,7 +86,7 @@ export default function AppRoutes() {
       <Route
         path="/accountant"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.ACCOUNTANT, ROLES.ADMIN, ROLES.OWNER_DIRECTOR]}>
+          <ProtectedRoute allowedRoles={[ROLES.ACCOUNTANT]}>
             <AccountantDashboardPage />
           </ProtectedRoute>
         }
@@ -94,7 +95,7 @@ export default function AppRoutes() {
       <Route
         path="/dispatcher"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.DISPATCHER, ROLES.ADMIN, ROLES.PLANT_MANAGER]}>
+          <ProtectedRoute allowedRoles={[ROLES.DISPATCHER]}>
             <DispatcherDashboardPage />
           </ProtectedRoute>
         }
@@ -103,7 +104,7 @@ export default function AppRoutes() {
       <Route
         path="/qc"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.QC_ENGINEER, ROLES.ADMIN, ROLES.PLANT_MANAGER]}>
+          <ProtectedRoute allowedRoles={[ROLES.QC_ENGINEER]}>
             <QcDashboardPage />
           </ProtectedRoute>
         }
@@ -112,7 +113,7 @@ export default function AppRoutes() {
       <Route
         path="/site-supervisor"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.SITE_SUPERVISOR, ROLES.ADMIN, ROLES.PLANT_MANAGER, ROLES.DISPATCHER]}>
+          <ProtectedRoute allowedRoles={[ROLES.SITE_SUPERVISOR]}>
             <SiteSupervisorDashboardPage />
           </ProtectedRoute>
         }
@@ -121,7 +122,7 @@ export default function AppRoutes() {
       <Route
         path="/driver"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.DRIVER, ROLES.ADMIN, ROLES.DISPATCHER]}>
+          <ProtectedRoute allowedRoles={[ROLES.DRIVER]}>
             <DriverDashboardPage />
           </ProtectedRoute>
         }
@@ -130,7 +131,7 @@ export default function AppRoutes() {
       <Route
         path="/owner"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.OWNER_DIRECTOR, ROLES.ADMIN]}>
+          <ProtectedRoute allowedRoles={[ROLES.OWNER_DIRECTOR]}>
             <OwnerDashboardPage />
           </ProtectedRoute>
         }

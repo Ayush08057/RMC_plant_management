@@ -11,7 +11,7 @@ export default function DataTable({
   searchable = true,
   searchPlaceholder = 'Search records...',
   searchKeys = [],
-  itemsPerPage = 10,
+  itemsPerPage = 6,
   renderMobileCard = null,
   emptyMessage = 'No records located',
   actions = null,
@@ -101,43 +101,43 @@ export default function DataTable({
       ref={containerRef}
       className={
         isFullscreen
-          ? 'fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md p-2 sm:p-4 md:p-6 flex flex-col h-screen w-screen overflow-hidden animate-in fade-in duration-200'
-          : 'w-full max-w-full min-w-0 relative'
+          ? 'fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md p-2 sm:p-4 flex flex-col h-screen w-screen overflow-hidden animate-in fade-in duration-200'
+          : 'w-full max-w-full min-w-0 relative flex flex-col'
       }
     >
       <div
-        className={`w-full max-w-full bg-white border border-slate-200/90 rounded-2xl md:rounded-3xl overflow-hidden shadow-md transition-all duration-300 min-w-0 relative flex flex-col ${
-          isFullscreen ? 'h-full flex-1 max-h-full shadow-2xl ring-1 ring-black/10' : 'hover:shadow-lg'
+        className={`w-full max-w-full bg-white border border-slate-200/90 rounded-xl md:rounded-2xl overflow-hidden shadow-xs transition-all duration-300 min-w-0 relative flex flex-col ${
+          isFullscreen ? 'h-full max-h-full shadow-2xl ring-1 ring-black/10 flex-1 min-h-0' : ''
         }`}
       >
         {/* Top Gradient Accent Bar */}
-        <div className="h-1.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 shrink-0" />
+        <div className="h-1 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 shrink-0" />
 
         {/* Table Header & Search Controls */}
-        <div className="p-3.5 sm:p-5 border-b border-slate-200/90 flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 w-full min-w-0 bg-gradient-to-r from-slate-50/90 via-white to-cyan-50/30 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="p-2 sm:p-2.5 border-b border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full min-w-0 bg-gradient-to-r from-slate-50/90 via-white to-cyan-50/30 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
             {Icon && (
-              <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-600 text-white shrink-0 shadow-md shadow-blue-500/20">
-                <Icon className="w-5 h-5" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-600 text-white shrink-0 shadow-xs shadow-blue-500/20">
+                <Icon className="w-4 h-4" />
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5 flex-wrap">
                 <span className="whitespace-nowrap">{title}</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-50 text-cyan-800 border border-cyan-200/90 font-mono font-bold shrink-0 shadow-2xs">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-800 border border-cyan-200/90 font-mono font-bold shrink-0 shadow-2xs">
                   {filteredData.length} records
                 </span>
                 {isFullscreen && (
-                  <span className="hidden md:inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 font-mono">
+                  <span className="hidden md:inline-flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 font-mono">
                     Full Screen Mode
                   </span>
                 )}
               </h3>
-              {subtitle && <p className="text-xs text-slate-500 mt-0.5 font-medium line-clamp-1">{subtitle}</p>}
+              {subtitle && <p className="text-[11px] text-slate-500 font-medium line-clamp-1">{subtitle}</p>}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-start xl:justify-end min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-start sm:justify-end min-w-0">
             {searchable && (
               <div className="relative w-full sm:w-56 lg:w-64 max-w-full">
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -154,55 +154,34 @@ export default function DataTable({
               </div>
             )}
             {actions}
-
-            {allowFullscreen && (
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                className="px-2.5 py-1.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/90 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs active:scale-95 text-xs font-bold"
-                title={isFullscreen ? 'Exit Full Screen (Esc)' : 'Expand Table to Full Screen'}
-              >
-                {isFullscreen ? (
-                  <>
-                    <Minimize2 className="w-4 h-4 text-cyan-700" />
-                    <span className="hidden sm:inline">Exit Full Screen</span>
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="w-4 h-4 text-slate-600" />
-                    <span className="hidden sm:inline">Full Screen</span>
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
 
-        {/* DESKTOP TABLE VIEW - 100% FULL FIT WITH SMOOTH HORIZONTAL SCROLL IF NEEDED */}
-        <div className={`hidden md:block w-full overflow-x-auto custom-scrollbar ${isFullscreen ? 'flex-1 overflow-y-auto' : ''}`}>
-          <table className="w-full min-w-[1050px] text-left text-xs text-slate-700 border-collapse">
-            <thead
-              className={`bg-slate-900 text-slate-100 font-mono font-bold uppercase text-[11px] tracking-wider border-b-2 border-slate-800 ${
-                isFullscreen ? 'sticky top-0 z-10 backdrop-blur-xs shadow-md' : ''
-              }`}
-            >
+        {/* DESKTOP TABLE VIEW - STRICT 100% CONTAINER FIT WITH PROPER ALIGNMENT */}
+        <div className="hidden md:block w-full max-w-full overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left text-xs text-slate-700 border-collapse table-fixed">
+            <thead className="bg-slate-900 text-slate-100 font-mono font-bold uppercase text-[10px] tracking-wider border-b-2 border-slate-800 select-none">
               <tr>
                 {columns.map((col, idx) => {
                   const colStyle = {
                     ...(col.width ? { width: col.width } : {}),
                     ...(col.maxWidth ? { maxWidth: col.maxWidth } : {}),
                   };
+                  const isFirst = idx === 0;
+                  const isLast = idx === columns.length - 1;
+                  const alignClass = col.align === 'right' || isLast ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left';
+
                   return (
                     <th
                       key={idx}
                       style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                      className={`py-3 px-3 text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-100 bg-slate-900 border-b-2 border-slate-800 ${
-                        idx === 0 ? 'pl-4 sm:pl-5' : ''
+                      className={`py-2 px-3 text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-100 bg-slate-900 border-b border-slate-800 ${
+                        isFirst ? 'pl-3.5 sm:pl-4' : ''
                       } ${
-                        idx === columns.length - 1 ? 'pr-4 sm:pr-5 text-right' : col.align === 'right' ? 'text-right' : ''
-                      } ${col.headerClassName || ''}`}
+                        isLast ? 'pr-3.5 sm:pr-4' : ''
+                      } ${alignClass} ${col.headerClassName || ''}`}
                     >
-                      <span className="whitespace-nowrap font-mono font-black text-slate-100 block truncate" title={typeof col.header === 'string' ? col.header : undefined}>
+                      <span className="font-mono font-black text-slate-100 block truncate" title={typeof col.header === 'string' ? col.header : undefined}>
                         {col.header}
                       </span>
                     </th>
@@ -216,30 +195,34 @@ export default function DataTable({
                   <tr 
                     key={row.id || rIdx} 
                     onClick={() => onRowClick && onRowClick(row)}
-                    className={`group transition-all duration-200 even:bg-slate-50/50 odd:bg-white hover:bg-cyan-50/50 hover:shadow-xs ${onRowClick ? 'cursor-pointer' : ''}`}
+                    className={`group transition-all duration-150 even:bg-slate-50/50 odd:bg-white hover:bg-cyan-50/50 hover:shadow-xs ${onRowClick ? 'cursor-pointer' : ''}`}
                   >
                     {columns.map((col, cIdx) => {
                       const colStyle = {
                         ...(col.width ? { width: col.width } : {}),
                         ...(col.maxWidth ? { maxWidth: col.maxWidth } : {}),
                       };
+                      const isFirst = cIdx === 0;
+                      const isLast = cIdx === columns.length - 1;
+                      const alignClass = col.align === 'right' || isLast ? 'text-right justify-end' : col.align === 'center' ? 'text-center justify-center' : 'text-left justify-start';
+
                       return (
                         <td
                           key={cIdx}
                           style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                          className={`py-3 px-3 align-middle min-w-0 ${
-                            cIdx === 0 ? 'pl-4 sm:pl-5' : ''
+                          className={`py-1.5 px-3 align-middle min-w-0 ${
+                            isFirst ? 'pl-3.5 sm:pl-4' : ''
                           } ${
-                            cIdx === columns.length - 1 ? 'pr-4 sm:pr-5 text-right' : col.align === 'right' ? 'text-right' : ''
+                            isLast ? 'pr-3.5 sm:pr-4' : ''
                           } ${col.className || ''}`}
                         >
-                          <div className={`min-w-0 overflow-hidden ${col.align === 'right' ? 'flex justify-end' : ''}`}>
+                          <div className={`min-w-0 flex items-center ${alignClass}`}>
                             {col.render ? (
                               col.render(row)
                             ) : col.type === 'status' ? (
                               <StatusBadge status={row[col.accessor]} />
                             ) : (
-                              <span className="font-semibold text-slate-800 block truncate">
+                              <span className="font-semibold text-slate-800 block truncate" title={String(row[col.accessor] ?? '')}>
                                 {row[col.accessor]}
                               </span>
                             )}
@@ -267,7 +250,7 @@ export default function DataTable({
         </div>
 
         {/* MOBILE CARD VIEW */}
-        <div className={`block md:hidden p-3.5 space-y-3 w-full max-w-full bg-slate-50/30 ${isFullscreen ? 'flex-1 overflow-y-auto' : 'overflow-hidden'}`}>
+        <div className={`block md:hidden p-3 space-y-3 w-full max-w-full bg-slate-50/30 ${isFullscreen ? 'flex-1 overflow-y-auto' : ''}`}>
           {paginatedData.length > 0 ? (
             paginatedData.map((row, rIdx) => (
               <div 
@@ -278,38 +261,64 @@ export default function DataTable({
                 {renderMobileCard ? (
                   renderMobileCard(row)
                 ) : (
-                  <div className="w-full max-w-full overflow-hidden">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-slate-900 font-mono truncate">
-                          {row[columns[0]?.accessor] || 'Record'}
+                  (() => {
+                    const statusCol = columns.find((c) => c.type === 'status' || c.accessor === 'status');
+                    const actionCol = columns.find(
+                      (c) => c.accessor === 'actions' || c.header?.toLowerCase()?.includes('action')
+                    );
+                    const titleCol = columns[0];
+                    const subtitleCol = columns[1];
+                    const detailCols = columns.filter(
+                      (c) => c !== titleCol && c !== subtitleCol && c !== statusCol && c !== actionCol
+                    );
+
+                    return (
+                      <div className="w-full max-w-full overflow-hidden">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-500 font-mono truncate">
+                              {titleCol?.render ? titleCol.render(row) : (row[titleCol?.accessor] || 'Record')}
+                            </div>
+                            {subtitleCol && (
+                              <div className="text-sm font-black text-slate-900 mt-0.5 truncate">
+                                {subtitleCol.render ? subtitleCol.render(row) : row[subtitleCol.accessor]}
+                              </div>
+                            )}
+                          </div>
+                          {statusCol && (
+                            <div className="shrink-0">
+                              {statusCol.render ? (
+                                statusCol.render(row)
+                              ) : (
+                                <StatusBadge status={row[statusCol.accessor]} />
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {columns[1] && (
-                          <div className="text-sm font-black text-slate-900 mt-0.5 truncate">
-                            {row[columns[1]?.accessor]}
+
+                        {detailCols.length > 0 && (
+                          <div className="grid grid-cols-2 gap-2.5 pt-3 mt-3 border-t border-slate-200/80 text-[11px] text-slate-600">
+                            {detailCols.map((col, cIdx) => (
+                              <div key={cIdx} className="min-w-0">
+                                <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block truncate">
+                                  {col.header}:
+                                </span>
+                                <div className="font-bold text-slate-900 truncate mt-0.5">
+                                  {col.render ? col.render(row) : row[col.accessor]}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {actionCol && (
+                          <div className="pt-2.5 mt-2.5 border-t border-slate-200/80 flex items-center justify-end gap-2 flex-wrap">
+                            {actionCol.render ? actionCol.render(row) : row[actionCol.accessor]}
                           </div>
                         )}
                       </div>
-                      {columns.find(c => c.type === 'status') && (
-                        <div className="shrink-0">
-                          <StatusBadge status={row[columns.find(c => c.type === 'status').accessor]} />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-200/80 text-[11px] text-slate-600">
-                      {columns.slice(2, 6).map((col, cIdx) => (
-                        col.type !== 'status' && (
-                          <div key={cIdx} className="min-w-0">
-                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block truncate">{col.header}:</span>
-                            <span className="font-bold text-slate-900 truncate block">
-                              {col.render ? col.render(row) : row[col.accessor]}
-                            </span>
-                          </div>
-                        )
-                      ))}
-                    </div>
-                  </div>
+                    );
+                  })()
                 )}
               </div>
             ))
@@ -322,7 +331,7 @@ export default function DataTable({
         </div>
 
         {/* Pagination Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-200/90 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 w-full overflow-hidden bg-slate-50/80 shrink-0">
+        <div className="p-2 sm:p-2.5 border-t border-slate-200/90 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600 w-full overflow-hidden bg-slate-50/80 shrink-0">
           <div className="flex items-center gap-4 text-xs font-semibold">
             <div>
               Showing <span className="font-mono font-black text-slate-900">{filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{' '}
@@ -339,12 +348,12 @@ export default function DataTable({
                   setPageSize(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs"
+                className="bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-cyan-600 cursor-pointer shadow-2xs"
               >
+                <option value={6}>6</option>
                 <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
-                <option value={100}>100</option>
               </select>
             </div>
           </div>

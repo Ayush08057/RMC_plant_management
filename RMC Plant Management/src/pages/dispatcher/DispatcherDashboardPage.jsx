@@ -209,18 +209,18 @@ export default function DispatcherDashboardPage() {
         <KPICard
           title="Today's Total Dispatches"
           value={kpis.todayDispatches}
-          subtext="384 m³ Volume shipped"
-          trend="+18% vs Yesterday"
-          trendType="up"
+          subtext={kpis.todayDispatches > 0 ? "Volume shipped today" : "No dispatches recorded today"}
+          trend="Today"
+          trendType="neutral"
           color="amber"
           icon={Clock}
         />
         <KPICard
           title="Delayed Turnarounds"
           value={kpis.delayed}
-          subtext="Traffic congestion on Thane Link"
-          trend="Action Required"
-          trendType="down"
+          subtext={kpis.delayed > 0 ? "Transit delays detected" : "Zero transit delays"}
+          trend={kpis.delayed > 0 ? "Action Required" : "Normal"}
+          trendType={kpis.delayed > 0 ? "down" : "up"}
           color="rose"
           icon={AlertTriangle}
         />
@@ -364,22 +364,28 @@ export default function DispatcherDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {fleetList.map((tm) => (
-            <div key={tm.id} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col justify-between hover:border-cyan-300 transition-all">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs font-mono">{tm.id} • {tm.vehicleNo}</span>
-                  <StatusBadge status={tm.status} />
+          {fleetList.length > 0 ? (
+            fleetList.map((tm) => (
+              <div key={tm.id} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col justify-between hover:border-cyan-300 transition-all">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 text-xs font-mono">{tm.id} • {tm.vehicleNo}</span>
+                    <StatusBadge status={tm.status} />
+                  </div>
+                  <div className="text-xs text-slate-700 mt-1 font-medium">{tm.driver}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 truncate">{tm.location}</div>
                 </div>
-                <div className="text-xs text-slate-700 mt-1 font-medium">{tm.driver}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 truncate">{tm.location}</div>
+                <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-mono">
+                  <span>Capacity: {tm.capacity}</span>
+                  <span className="text-amber-700 font-bold">Drum Sensor OK</span>
+                </div>
               </div>
-              <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-mono">
-                <span>Capacity: {tm.capacity}</span>
-                <span className="text-amber-700 font-bold">Drum Sensor OK</span>
-              </div>
+            ))
+          ) : (
+            <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium">
+              No transit mixers currently logged in the staging yard roster.
             </div>
-          ))}
+          )}
         </div>
       </section>
       </>

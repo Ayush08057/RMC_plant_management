@@ -178,9 +178,9 @@ export default function AccountantDashboardPage() {
             <KPICard
               title="Today's Revenue"
               value={kpis.todayRevenue}
-              subtext="38 Delivery Challans billed"
-              trend="+8.2% vs Yesterday"
-              trendType="up"
+              subtext={kpis.todayRevenue !== '₹ 0' ? `${kpis.todayInvoices} Delivery Challans billed` : "No billing transactions recorded today"}
+              trend="Today"
+              trendType="neutral"
               color="emerald"
               icon={IndianRupee}
             />
@@ -188,8 +188,8 @@ export default function AccountantDashboardPage() {
               title="Monthly Gross Sales"
               value={kpis.totalMonthSales}
               subtext="FY 2026-27 Q3 Operating Gross"
-              trend="On Target"
-              trendType="up"
+              trend="Current"
+              trendType="neutral"
               color="blue"
               icon={TrendingUp}
             />
@@ -197,8 +197,8 @@ export default function AccountantDashboardPage() {
               title="Outstanding Receivables"
               value={kpis.outstandingReceivables}
               subtext="Within 30-day corporate credit"
-              trend="2 Overdue"
-              trendType="down"
+              trend={invoiceBreakdown.overdue > 0 ? `${invoiceBreakdown.overdue} Overdue` : "Clear"}
+              trendType={invoiceBreakdown.overdue > 0 ? "down" : "neutral"}
               color="amber"
               icon={ReceiptText}
             />
@@ -223,7 +223,9 @@ export default function AccountantDashboardPage() {
                 <ReceiptText className="w-4 h-4 text-emerald-600" />
                 <span>Invoice Pipeline</span>
               </h3>
-              <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">38 TOTAL</span>
+              <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                {invoiceBreakdown.paid + invoiceBreakdown.pending + invoiceBreakdown.overdue} TOTAL
+              </span>
             </div>
 
             <div className="space-y-3">
@@ -313,14 +315,16 @@ export default function AccountantDashboardPage() {
             />
           </div>
 
-          <AlertCard
-            title="Overdue Balance Notice Issued"
-            desc="Tata Housing Corp invoice INV-2026-8798 (₹ 3,90,000) exceeded 30 days. Auto-reminder sent to accounts department."
-            time="2 hours ago"
-            type="warning"
-            actionLabel="View Statement"
-            onAction={() => setToastMessage('Opened Tata Housing Statement')}
-          />
+          {invoiceBreakdown.overdue > 0 && (
+            <AlertCard
+              title="Overdue Balance Notice Issued"
+              desc="Outstanding client invoices exceeded 30 days. Auto-reminder sent to accounts department."
+              time="Today"
+              type="warning"
+              actionLabel="View Statement"
+              onAction={() => setToastMessage('Opened Overdue Account Statements')}
+            />
+          )}
         </div>
 
         {/* Expense Summary Breakdown Card */}
@@ -331,20 +335,26 @@ export default function AccountantDashboardPage() {
           </h3>
 
           <div className="space-y-3">
-            {expenseSummary.map((exp, idx) => (
-              <div key={idx} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-700 font-medium truncate max-w-[65%]">{exp.category}</span>
-                  <span className="font-bold text-slate-900 font-mono">{exp.amount}</span>
+            {expenseSummary.length > 0 ? (
+              expenseSummary.map((exp, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-700 font-medium truncate max-w-[65%]">{exp.category}</span>
+                    <span className="font-bold text-slate-900 font-mono">{exp.amount}</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
+                      style={{ width: `${exp.percent}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
-                    style={{ width: `${exp.percent}%` }}
-                  />
-                </div>
+              ))
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                No expense breakdown records logged for the current period.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </section>
@@ -362,31 +372,31 @@ export default function AccountantDashboardPage() {
             <div className="w-full max-w-full overflow-hidden min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-xs font-bold text-emerald-400 truncate">{inv.invoice}</div>
-                  <div className="text-sm font-bold text-white mt-0.5 truncate">{inv.client}</div>
-                  <div className="text-xs text-slate-400 truncate">Mix: {inv.grade} • {inv.volume}</div>
+                  <div className="font-mono text-xs font-bold text-emerald-700 truncate">{inv.invoice}</div>
+                  <div className="text-sm font-bold text-slate-900 mt-0.5 truncate">{inv.client}</div>
+                  <div className="text-xs text-slate-500 truncate">Mix: {inv.grade} • {inv.volume}</div>
                 </div>
                 <div className="shrink-0">
                   <StatusBadge status={inv.status} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-800 text-[11px]">
+              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase block">Amount:</span>
-                  <span className="font-bold text-white font-mono text-sm">{inv.amount}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Amount:</span>
+                  <span className="font-bold text-slate-900 font-mono text-sm">{inv.amount}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase block">Due Date:</span>
-                  <span className="font-mono text-slate-300">{inv.dueDate}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Due Date:</span>
+                  <span className="font-mono text-slate-700">{inv.dueDate}</span>
                 </div>
               </div>
 
-              <div className="mt-3 pt-2 border-t border-slate-800 flex justify-end">
+              <div className="mt-3 pt-2 border-t border-slate-200 flex justify-end">
                 <button
                   type="button"
                   onClick={() => setToastMessage(`Downloading Invoice ${inv.invoice}`)}
-                  className="px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200 rounded"
+                  className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl cursor-pointer transition-colors"
                 >
                   Download Challan PDF
                 </button>

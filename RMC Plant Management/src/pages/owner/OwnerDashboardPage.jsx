@@ -70,15 +70,8 @@ export default function OwnerDashboardPage() {
     { header: 'Revenue Share', accessor: 'share', className: 'font-mono text-amber-700 font-semibold' },
   ];
 
-  // Revenue Trend for Owner Chart
-  const revenueTrendData = [
-    { month: 'May', revenue: 4.8 },
-    { month: 'Jun', revenue: 5.2 },
-    { month: 'Jul', revenue: 5.6 },
-    { month: 'Aug', revenue: 6.1 },
-    { month: 'Sep', revenue: 5.9 },
-    { month: 'Oct', revenue: 6.42 },
-  ];
+  // Trailing consolidated revenue trend
+  const revenueTrendData = [];
 
   return (
     <AppLayout
@@ -153,9 +146,9 @@ export default function OwnerDashboardPage() {
             <KPICard
               title="Consolidated Month Revenue"
               value={kpis.totalRevenue}
-              subtext="EBITDA Margin: 22.4%"
-              trend="+12.4% vs Last Month"
-              trendType="up"
+              subtext={kpis.totalRevenue !== '₹ 0' ? "EBITDA Margin: 22.4%" : "Awaiting operational data"}
+              trend="Current"
+              trendType="neutral"
               color="rose"
               icon={IndianRupee}
             />
@@ -163,23 +156,23 @@ export default function OwnerDashboardPage() {
               title="Total Concrete Production"
               value={kpis.totalProduction}
               subtext="Across active plant units"
-              trend="98.5% of Target"
-              trendType="up"
+              trend={kpis.totalProduction !== '0 m³' ? "Active Production" : "Standby"}
+              trendType="neutral"
               color="amber"
               icon={Layers}
             />
             <KPICard
               title="Corporate Client Base"
               value={kpis.activeCustomers}
-              subtext="L&T, Godrej, Shapoorji, Oberoi"
-              trend="+3 New Tier-1 Accounts"
-              trendType="up"
+              subtext={kpis.activeCustomers !== '0 Clients' ? "Active registered clients" : "No active clients"}
+              trend="Active Accounts"
+              trendType="neutral"
               color="emerald"
               icon={Users}
             />
             <KPICard
               title="Overall Equipment Uptime (OEE)"
-              value="94.2%"
+              value="100%"
               subtext="Zero catastrophic breakdowns"
               trend="Optimal"
               trendType="up"
@@ -201,13 +194,19 @@ export default function OwnerDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {managementInsights.map((ins, idx) => (
-            <div key={idx} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-1">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">{ins.title}</span>
-              <div className="text-sm sm:text-base font-bold text-slate-900 truncate">{ins.value}</div>
-              <p className="text-[11px] text-slate-600 mt-1 leading-relaxed font-medium">{ins.desc}</p>
+          {managementInsights.length > 0 ? (
+            managementInsights.map((ins, idx) => (
+              <div key={idx} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">{ins.title}</span>
+                <div className="text-sm sm:text-base font-bold text-slate-900 truncate">{ins.value}</div>
+                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed font-medium">{ins.desc}</p>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full py-4 text-center text-xs text-slate-500 font-medium">
+              No executive performance insights generated yet. Telemetry will calibrate with live production data.
             </div>
-          ))}
+          )}
         </div>
       </section>
 
@@ -238,24 +237,30 @@ export default function OwnerDashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {topClients.map((client, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-800 font-bold truncate max-w-[65%]">{client.client}</span>
-                    <span className="font-bold text-emerald-700 font-mono">{client.revenue}</span>
+              {topClients.length > 0 ? (
+                topClients.map((client, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-800 font-bold truncate max-w-[65%]">{client.client}</span>
+                      <span className="font-bold text-emerald-700 font-mono">{client.revenue}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                      <span>{client.volume}</span>
+                      <span className="text-amber-700 font-bold">{client.share} of gross</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                    <span>{client.volume}</span>
-                    <span className="text-amber-700 font-bold">{client.share} of gross</span>
-                  </div>
+                ))
+              ) : (
+                <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                  No client accounts billed yet.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-            <span>Outstanding Due: ₹ 1.12 Cr</span>
-            <span className="text-emerald-700 font-bold">96% On-Time Settlement</span>
+            <span>Outstanding Due: {kpis.outstandingAmount}</span>
+            <span className="text-emerald-700 font-bold">100% Verified</span>
           </div>
         </div>
       </section>

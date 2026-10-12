@@ -27,6 +27,7 @@ import {
   validateEmployeeForRegistration 
 } from '../services/employeeAuthService.js';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
+import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../utils/shiftUtils.js';
 
 const WorkforceContext = createContext(null);
 
@@ -378,20 +379,77 @@ export const WorkforceProvider = ({ children }) => {
    * 1. EMPLOYEE MANAGEMENT & REGISTRATION VERIFICATION
    * ------------------------------------------------------------- */
   const addEmployee = (empData) => {
+    const cleanId = empData.id.trim().toUpperCase();
+    const cleanUsername = (empData.username || empData.id).trim().toLowerCase();
+
     // Unique ID check
-    const existing = data.employees.find((e) => e.id.toLowerCase() === empData.id.trim().toLowerCase());
+    const existing = data.employees.find((e) => e.id.toLowerCase() === cleanId.toLowerCase());
     if (existing) {
       throw new Error(`Employee ID "${empData.id}" already exists. Please provide a unique ID.`);
     }
 
+    // Unique Username check
+    if (empData.username && empData.username.trim()) {
+      const existingUser = data.employees.find(
+        (e) => (e.username || '').toLowerCase() === cleanUsername && e.id.toLowerCase() !== cleanId.toLowerCase()
+      );
+      if (existingUser) {
+        throw new Error(`Username "${cleanUsername}" is already assigned to ${existingUser.name}. Please select a different username.`);
+      }
+    }
+
+    const assignedPassword = empData.password || 'Pass@123';
+    const assignedStatus = empData.status || EMPLOYEE_STATUS.ACTIVE;
+
     const newEmp = {
       ...empData,
-      id: empData.id.trim().toUpperCase(),
-      status: empData.status || EMPLOYEE_STATUS.PENDING_REGISTRATION,
+      id: cleanId,
+      username: cleanUsername,
+      password: assignedPassword,
+      status: assignedStatus,
       salary: Number(empData.salary) || 30000,
       joiningDate: empData.joiningDate || new Date().toISOString().split('T')[0],
       shiftId: empData.shiftId || 'SFT-GEN',
     };
+
+    // If status is Active, automatically provision user account so employee can immediately login of their own
+    if (newEmp.status === EMPLOYEE_STATUS.ACTIVE) {
+      try {
+        const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
+        const currentUsers = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
+        const userIndex = currentUsers.findIndex(
+          (u) => (u.employeeId || '').toUpperCase() === cleanId || u.id === `USR-${cleanId}`
+        );
+
+        const userRecord = {
+          id: `USR-${cleanId}`,
+          employeeId: newEmp.id,
+          name: newEmp.name,
+          username: newEmp.username,
+          email: newEmp.email,
+          phone: newEmp.mobile,
+          role: newEmp.role,
+          department: newEmp.department || 'Operations',
+          plantLocation: newEmp.plant || 'Plant Unit #01',
+          password: newEmp.password,
+          status: EMPLOYEE_STATUS.ACTIVE,
+          mustChangePassword: false,
+          avatar: (newEmp.name || 'EM').substring(0, 2).toUpperCase(),
+          createdAt: newEmp.joiningDate || new Date().toISOString(),
+          lastLoginAt: null,
+        };
+
+        if (userIndex >= 0) {
+          currentUsers[userIndex] = { ...currentUsers[userIndex], ...userRecord };
+        } else {
+          currentUsers.unshift(userRecord);
+        }
+        localStorage.setItem('rmc_users_db_v2', JSON.stringify(currentUsers));
+        saveDocumentWithId(COLLECTIONS.USERS, userRecord.id, userRecord).catch(() => {});
+      } catch (err) {
+        console.warn('Failed to sync new employee to users store:', err);
+      }
+    }
 
     // Save to Cloud Firestore
     saveDocumentWithId(COLLECTIONS.EMPLOYEES, newEmp.id, newEmp).catch(() => {});
@@ -404,7 +462,7 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Created Employee Profile (${newEmp.id})`, 'Employee Management', `${newEmp.name} (${newEmp.role})`);
     addNotification({
       title: 'New Employee Added',
-      desc: `${newEmp.name} (${newEmp.id}) created with status ${newEmp.status}.`,
+      desc: `${newEmp.name} (${newEmp.id}) created with username "${newEmp.username}".`,
       type: 'success',
       category: 'employee',
     });
@@ -626,6 +684,37 @@ export const WorkforceProvider = ({ children }) => {
       employees: prev.employees.map((e) => (e.id === id ? { ...e, ...fields } : e)),
     }));
 
+    // Sync updated credentials and info to user account store
+    try {
+      const cleanId = (id || '').toUpperCase();
+      const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
+      if (storedUsersRaw) {
+        const currentUsers = JSON.parse(storedUsersRaw);
+        const userIndex = currentUsers.findIndex(
+          (u) => (u.employeeId || '').toUpperCase() === cleanId || u.id === `USR-${cleanId}`
+        );
+        if (userIndex >= 0) {
+          const u = currentUsers[userIndex];
+          currentUsers[userIndex] = {
+            ...u,
+            ...(fields.name && { name: fields.name }),
+            ...(fields.username && { username: fields.username.toLowerCase() }),
+            ...(fields.password && { password: fields.password }),
+            ...(fields.email && { email: fields.email }),
+            ...(fields.mobile && { phone: fields.mobile }),
+            ...(fields.role && { role: fields.role }),
+            ...(fields.status && { status: fields.status }),
+            ...(fields.department && { department: fields.department }),
+            ...(fields.plant && { plantLocation: fields.plant }),
+          };
+          localStorage.setItem('rmc_users_db_v2', JSON.stringify(currentUsers));
+          updateDocument(COLLECTIONS.USERS, `USR-${cleanId}`, currentUsers[userIndex]).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to sync updated employee to users store:', err);
+    }
+
     addAuditLog(`Updated Employee (${id})`, 'Employee Management', `Fields modified: ${Object.keys(fields).join(', ')}`);
   };
 
@@ -637,6 +726,24 @@ export const WorkforceProvider = ({ children }) => {
       ...prev,
       employees: prev.employees.map((e) => (e.id === id ? { ...e, status } : e)),
     }));
+
+    try {
+      const cleanId = (id || '').toUpperCase();
+      const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
+      if (storedUsersRaw) {
+        const currentUsers = JSON.parse(storedUsersRaw);
+        const userIndex = currentUsers.findIndex(
+          (u) => (u.employeeId || '').toUpperCase() === cleanId || u.id === `USR-${cleanId}`
+        );
+        if (userIndex >= 0) {
+          currentUsers[userIndex].status = status;
+          localStorage.setItem('rmc_users_db_v2', JSON.stringify(currentUsers));
+          updateDocument(COLLECTIONS.USERS, `USR-${cleanId}`, { status }).catch(() => {});
+        }
+      }
+    } catch {
+      // ignore
+    }
 
     addAuditLog(`Changed Employee Status (${id})`, 'Employee Management', `Status set to: ${status}`);
     addNotification({
@@ -664,6 +771,21 @@ export const WorkforceProvider = ({ children }) => {
       dailyWork: prev.dailyWork.filter((w) => w.employeeId !== id),
       documents: prev.documents.filter((d) => d.employeeId !== id),
     }));
+
+    try {
+      const cleanId = (id || '').toUpperCase();
+      const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
+      if (storedUsersRaw) {
+        const currentUsers = JSON.parse(storedUsersRaw);
+        const filtered = currentUsers.filter(
+          (u) => (u.employeeId || '').toUpperCase() !== cleanId && u.id !== `USR-${cleanId}`
+        );
+        localStorage.setItem('rmc_users_db_v2', JSON.stringify(filtered));
+      }
+      removeDocument(COLLECTIONS.USERS, `USR-${cleanId}`).catch(() => {});
+    } catch {
+      // ignore
+    }
 
     addAuditLog(`Deleted Employee (${id})`, 'Employee Management', `Permanently removed ${empName} from workforce records`);
     addNotification({
@@ -774,7 +896,7 @@ export const WorkforceProvider = ({ children }) => {
    * ------------------------------------------------------------- */
   const checkIn = (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
-    const nowTime = options.time || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
     const targetId = employeeId || user?.employeeId || user?.id || 'ADM-001';
     
     // 1. Search in data.employees
@@ -868,13 +990,12 @@ export const WorkforceProvider = ({ children }) => {
     let lateStatus = false;
     let lateMinutes = 0;
     if (shift && shift.startTime) {
-      const [shiftHour, shiftMin] = shift.startTime.split(':').map(Number);
-      const [nowHour, nowMin] = nowTime.split(':').map(Number);
-      const shiftTotalMins = shiftHour * 60 + shiftMin + (shift.gracePeriodMins || 15);
-      const nowTotalMins = nowHour * 60 + nowMin;
-      if (nowTotalMins > shiftTotalMins) {
+      const shiftMins = parseTimeToMinutes(shift.startTime);
+      const nowTotalMins = parseTimeToMinutes(nowTime);
+      const shiftAllowedMins = shiftMins + (shift.gracePeriodMins || 15);
+      if (nowTotalMins > shiftAllowedMins) {
         lateStatus = true;
-        lateMinutes = nowTotalMins - (shiftHour * 60 + shiftMin);
+        lateMinutes = nowTotalMins - shiftMins;
       }
     }
 
@@ -928,7 +1049,7 @@ export const WorkforceProvider = ({ children }) => {
 
   const checkOut = (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
-    const nowTime = options.time || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
     const targetId = employeeId || user?.employeeId || user?.id || 'ADM-001';
     
     let emp = data.employees.find(
@@ -963,9 +1084,9 @@ export const WorkforceProvider = ({ children }) => {
     }
 
     const currentRecord = data.attendance[recordIndex];
-    const [inHour, inMin] = currentRecord.punchIn.split(':').map(Number);
-    const [outHour, outMin] = nowTime.split(':').map(Number);
-    let totalMins = (outHour * 60 + outMin) - (inHour * 60 + inMin);
+    const inTotalMins = parseTimeToMinutes(currentRecord.punchIn);
+    const outTotalMins = parseTimeToMinutes(nowTime);
+    let totalMins = outTotalMins - inTotalMins;
     if (totalMins < 0) totalMins += 24 * 60; // night shift rollover
 
     const workingHours = Number((totalMins / 60).toFixed(1));
@@ -1017,8 +1138,8 @@ export const WorkforceProvider = ({ children }) => {
       employeeName: emp?.name || attData.employeeName || attData.employeeId,
       role: emp?.role || attData.role || 'Staff',
       plant: emp?.plant || attData.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
-      punchIn: attData.punchIn,
-      punchOut: attData.punchOut || null,
+      punchIn: attData.punchIn ? formatToIndian12Hr(attData.punchIn) : null,
+      punchOut: attData.punchOut ? formatToIndian12Hr(attData.punchOut) : null,
       workingHours: attData.workingHours || null,
       overtimeHours: attData.overtimeHours || 0,
       status: attData.status || 'Present',
@@ -1038,11 +1159,14 @@ export const WorkforceProvider = ({ children }) => {
   };
 
   const updateAttendanceRecord = (id, fields) => {
-    updateDocument(COLLECTIONS.ATTENDANCE, id, fields).catch(() => {});
+    const sanitizedFields = { ...fields };
+    if (sanitizedFields.punchIn) sanitizedFields.punchIn = formatToIndian12Hr(sanitizedFields.punchIn);
+    if (sanitizedFields.punchOut) sanitizedFields.punchOut = formatToIndian12Hr(sanitizedFields.punchOut);
+    updateDocument(COLLECTIONS.ATTENDANCE, id, sanitizedFields).catch(() => {});
 
     setData((prev) => ({
       ...prev,
-      attendance: prev.attendance.map((a) => (a.id === id ? { ...a, ...fields } : a)),
+      attendance: prev.attendance.map((a) => (a.id === id ? { ...a, ...sanitizedFields } : a)),
     }));
     addAuditLog(`Updated Attendance (${id})`, 'Attendance', `Record parameters updated`);
   };

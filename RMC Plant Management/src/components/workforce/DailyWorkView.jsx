@@ -264,15 +264,21 @@ export default function DailyWorkView({ employeeFilter = null }) {
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Employee *
               </label>
-              <select
-                value={form.employeeId}
-                onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
-              >
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                ))}
-              </select>
+              {employeeFilter || user?.role !== 'Admin' ? (
+                <div className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-900 font-bold font-mono">
+                  {user?.name || 'Staff'} ({employeeFilter || user?.employeeId || user?.id})
+                </div>
+              ) : (
+                <select
+                  value={form.employeeId}
+                  onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                >
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">

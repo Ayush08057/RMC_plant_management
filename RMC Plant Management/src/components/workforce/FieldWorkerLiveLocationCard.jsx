@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { getNowIndian12Hr } from '../../utils/shiftUtils';
 
 export default function FieldWorkerLiveLocationCard({
   workerId,
@@ -57,12 +58,10 @@ export default function FieldWorkerLiveLocationCard({
   });
 
   const [gpsStatus, setGpsStatus] = useState('LIVE_GNSS_LOCKED'); // 'SEARCHING' | 'LIVE_GNSS_LOCKED' | 'SIMULATED'
-  const [lastPingTime, setLastPingTime] = useState(new Date().toLocaleTimeString('en-GB'));
+  const [lastPingTime, setLastPingTime] = useState(getNowIndian12Hr(true));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
-  const [radarDegree, setRadarDegree] = useState(0);
   const [simulatedTick, setSimulatedTick] = useState(0);
-  const [mapLayer, setMapLayer] = useState('satellite'); // 'satellite' | 'street' | 'radar'
   const [alertSentMsg, setAlertSentMsg] = useState(null);
 
   // Check today's punch state for this worker
@@ -87,13 +86,13 @@ export default function FieldWorkerLiveLocationCard({
             heading: Math.round(pos.coords.heading || 45),
           });
           setGpsStatus('LIVE_GNSS_LOCKED');
-          setLastPingTime(new Date().toLocaleTimeString('en-GB'));
+          setLastPingTime(getNowIndian12Hr(true));
           setIsRefreshing(false);
         },
         () => {
           // Fallback to simulated transit telemetry
           setGpsStatus('SIMULATED');
-          setLastPingTime(new Date().toLocaleTimeString('en-GB'));
+          setLastPingTime(getNowIndian12Hr(true));
           setIsRefreshing(false);
         },
         { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
@@ -109,10 +108,9 @@ export default function FieldWorkerLiveLocationCard({
     refreshLocationFix();
   }, []);
 
-  // 2. Real-time radar sweep and simulated road transit telemetry increment
+  // 2. Periodic sync for live connection
   useEffect(() => {
     const timer = setInterval(() => {
-      setRadarDegree((prev) => (prev + 6) % 360);
       setSimulatedTick((prev) => prev + 1);
 
       // Minor realistic jitter to show live connection to Admin
@@ -127,7 +125,7 @@ export default function FieldWorkerLiveLocationCard({
             speed: isPunchedIn ? (effectiveRole.includes('Driver') ? Math.floor(28 + Math.sin(Date.now() / 3000) * 12) : 0) : 0,
           };
         });
-        setLastPingTime(new Date().toLocaleTimeString('en-GB'));
+        setLastPingTime(getNowIndian12Hr(true));
       }
     }, 1200);
 
@@ -181,10 +179,10 @@ export default function FieldWorkerLiveLocationCard({
           </span>
           <div className="flex items-center gap-2">
             <span className="text-[11px] sm:text-xs font-mono font-black tracking-wider uppercase text-emerald-100">
-              LIVE LOCATION BROADCASTING TO PLANT ADMIN
+              LIVE LOCATION CONNECTED TO DISPATCH & ADMIN
             </span>
             <span className="hidden sm:inline-block px-2 py-0.2 rounded-full text-[9px] font-mono font-bold bg-white/20 text-white border border-white/30">
-              SCADA PORT 8092 • ACTIVE
+              ACTIVE
             </span>
           </div>
         </div>
@@ -264,120 +262,50 @@ export default function FieldWorkerLiveLocationCard({
           </div>
         </div>
 
-        {/* ========================================================
-            VISUAL LIVE RADAR & INTERACTIVE GIS MAP CANVAS
-            ======================================================== */}
-        <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-100 border border-slate-200 shadow-inner">
-          
-          {/* Top Scope Overlay Strip */}
-          <div className="absolute top-2.5 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-            <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-mono text-emerald-400">
-              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-              <span className="font-bold">LIVE RADAR SCOPE • GEOFENCE 5.0 KM</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-mono text-slate-300">
-              <span>ACCURACY: <strong className="text-emerald-400">±{gpsCoords.accuracy}m</strong></span>
-              <span className="text-slate-500">|</span>
-              <span>BEARING: <strong className="text-amber-400">{gpsCoords.heading}° NE</strong></span>
-            </div>
-          </div>
-
-          {/* SVG GIS Map Grid Canvas */}
-          <div className="relative w-full h-56 sm:h-64 flex items-center justify-center overflow-hidden bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px]">
-            
-            {/* Concentric Radar Grid Waves */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-96 h-96 rounded-full border border-emerald-500/10" />
-              <div className="w-72 h-72 rounded-full border border-emerald-500/20" />
-              <div className="w-48 h-48 rounded-full border border-emerald-500/30" />
-              <div className="w-24 h-24 rounded-full border border-emerald-500/40 bg-emerald-500/5" />
-              
-              {/* Scope Axes */}
-              <div className="absolute inset-x-0 top-1/2 h-px bg-emerald-500/20" />
-              <div className="absolute inset-y-0 left-1/2 w-px bg-emerald-500/20" />
-
-              {/* Rotating Radar Sweep Blade */}
-              <div 
-                className="absolute w-80 h-80 rounded-full transition-transform pointer-events-none"
-                style={{
-                  background: `conic-gradient(from ${radarDegree}deg, rgba(16, 185, 129, 0.3) 0deg, rgba(16, 185, 129, 0) 55deg)`,
-                }}
-              />
-            </div>
-
-            {/* Simulated Road Highway Transit Path */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none">
-              <path
-                d="M 50 180 Q 180 120 300 130 T 550 90"
-                fill="none"
-                stroke="rgba(245, 158, 11, 0.4)"
-                strokeWidth="3"
-                strokeDasharray="6 4"
-              />
-            </svg>
-
-            {/* Plant Base Center Station */}
-            <div className="absolute left-[24%] top-[56%] -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center pointer-events-none">
-              <div className="w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/50">
-                <div className="w-2 h-2 rounded-full bg-amber-400" />
-              </div>
-              <div className="mt-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-mono font-bold text-amber-300 whitespace-nowrap shadow-md">
-                PLANT HUB (HQ)
-              </div>
-            </div>
-
-            {/* Worker's Pulsating Live GPS Pin (Target Blip) */}
-            <div className="absolute left-[62%] top-[42%] -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
-              
-              {/* Outer Pulsating Ripple */}
-              <div className="relative">
-                <span className="animate-ping absolute -inset-3 rounded-full bg-emerald-400 opacity-75" />
-                <span className="animate-pulse absolute -inset-1.5 rounded-full bg-teal-400 opacity-50" />
-                
-                {/* Center High-Vis Marker */}
-                <div className="relative w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 border-2 border-white flex items-center justify-center text-white shadow-xl shadow-emerald-500/60">
-                  {effectiveRole.includes('Driver') ? (
-                    <Truck className="w-4 h-4" />
-                  ) : (
-                    <HardHat className="w-4 h-4" />
-                  )}
-                </div>
-              </div>
-
-              {/* Worker Target Callout Box */}
-              <div className="mt-1.5 bg-emerald-50 border-2 border-emerald-300 px-2.5 py-1 rounded-xl text-center shadow-xl">
-                <div className="flex items-center justify-center gap-1 text-[10px] font-mono font-black text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span>YOU ARE HERE</span>
-                </div>
-                <div className="text-[9px] font-mono text-slate-300 font-semibold">
-                  {gpsCoords.lat.toFixed(4)}°N, {gpsCoords.lng.toFixed(4)}°E
-                </div>
-              </div>
-            </div>
-
-            {/* Delivery Pouring Site Marker */}
-            <div className="absolute right-[14%] top-[30%] -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center pointer-events-none">
-              <div className="w-6 h-6 rounded-full bg-cyan-500 border-2 border-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/50">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-              </div>
-              <div className="mt-1 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded text-[9px] font-mono font-bold text-cyan-300 whitespace-nowrap shadow-md">
-                POURING SITE
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Telemetry Ticker inside map */}
-          <div className="bg-white/95 border-t border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-300">
+        {/* Clean, Simple Field Location Summary */}
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Admin Visibility: <strong className="text-emerald-400">100% ONLINE (VISIBLE TO DISPATCH)</strong></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                Current Work Location
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Online
+              </span>
             </div>
+            <div className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{currentSiteName || 'Site Pouring Location'}</span>
+            </div>
+            <div className="text-xs text-slate-500 flex flex-wrap items-center gap-3">
+              <span>Plant Base: <strong className="text-slate-700">{plantName}</strong></span>
+              <span>•</span>
+              <span>Distance: <strong className="text-slate-700">{distanceKm} km</strong></span>
+            </div>
+          </div>
 
-            <div className="flex items-center gap-2 text-slate-400">
-              <span>Odometry: <strong className="text-white font-mono">{distanceKm} km from Plant Base</strong></span>
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-mono text-xs font-semibold flex items-center gap-2 shadow-2xs">
+              <span>GPS: {gpsCoords.lat.toFixed(4)}°N, {gpsCoords.lng.toFixed(4)}°E</span>
+              <button
+                type="button"
+                onClick={handleCopyCoords}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                title="Copy coordinates"
+              >
+                {copiedCoords ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
             </div>
+            <a
+              href={googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Google Maps</span>
+            </a>
           </div>
         </div>
 
@@ -394,7 +322,7 @@ export default function FieldWorkerLiveLocationCard({
               {gpsCoords.speed} <span className="text-xs font-semibold text-slate-500">km/h</span>
             </div>
             <span className="text-[9px] text-emerald-600 font-semibold block mt-0.5">
-              {gpsCoords.speed > 0 ? 'Highway Transit Doppler' : 'Stationary at Pour Point'}
+              {gpsCoords.speed > 0 ? 'Vehicle in Transit' : 'Stationary at Pour Point'}
             </span>
           </div>
 
@@ -407,20 +335,20 @@ export default function FieldWorkerLiveLocationCard({
               {distanceKm} <span className="text-xs font-semibold text-slate-500">km</span>
             </div>
             <span className="text-[9px] text-cyan-600 font-semibold block mt-0.5">
-              Radial distance from plant
+              Distance from plant
             </span>
           </div>
 
           <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider">Elevation / MSL</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">Elevation</span>
               <Compass className="w-3.5 h-3.5 text-teal-600" />
             </div>
             <div className="text-base sm:text-xl font-mono font-black text-teal-800">
               {gpsCoords.altitude} <span className="text-xs font-semibold text-slate-500">meters</span>
             </div>
             <span className="text-[9px] text-teal-600 font-semibold block mt-0.5">
-              Barometric sensor sync
+              Above sea level
             </span>
           </div>
 

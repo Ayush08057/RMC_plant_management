@@ -41,30 +41,40 @@ assert(SYSTEM_ADMIN.employeeId === 'ADM-001', 'Admin has Employee ID ADM-001');
 assert(SYSTEM_ADMIN.email === 'smconcretech@gmail.com', 'Admin has verified admin email (smconcretech@gmail.com)');
 assert(SYSTEM_ADMIN.password === 'sm1234', 'Admin has password sm1234');
 
-// 3. Test Role Route Protection Matrix
+// 3. Test Role Route Protection Matrix — Admin accesses all; others strictly isolated
 const matrix = [
   { role: ROLES.DRIVER, targetRoute: '/admin', allowed: false },
   { role: ROLES.QC_ENGINEER, targetRoute: '/accountant', allowed: false },
   { role: ROLES.SITE_SUPERVISOR, targetRoute: '/dispatcher', allowed: false },
+  { role: ROLES.PLANT_MANAGER, targetRoute: '/dispatcher', allowed: false },
+  { role: ROLES.PLANT_MANAGER, targetRoute: '/qc', allowed: false },
+  { role: ROLES.PLANT_MANAGER, targetRoute: '/driver', allowed: false },
   { role: ROLES.ADMIN, targetRoute: '/admin', allowed: true },
+  { role: ROLES.ADMIN, targetRoute: '/plant-manager', allowed: true },
+  { role: ROLES.ADMIN, targetRoute: '/driver', allowed: true },
   { role: ROLES.PLANT_MANAGER, targetRoute: '/plant-manager', allowed: true },
+  { role: ROLES.PLANT_INCHARGE, targetRoute: '/plant-manager', allowed: true },
+  { role: ROLES.PLANT_INCHARGE, targetRoute: '/admin', allowed: false },
+  { role: ROLES.OPERATOR, targetRoute: '/plant-manager', allowed: true },
+  { role: ROLES.OPERATOR, targetRoute: '/admin', allowed: false },
   { role: ROLES.QC_ENGINEER, targetRoute: '/qc', allowed: true },
 ];
 
 const routeAllowedRoles = {
   '/admin': [ROLES.ADMIN],
-  '/plant-manager': [ROLES.PLANT_MANAGER, ROLES.ADMIN, ROLES.OWNER_DIRECTOR],
-  '/accountant': [ROLES.ACCOUNTANT, ROLES.ADMIN, ROLES.OWNER_DIRECTOR],
-  '/dispatcher': [ROLES.DISPATCHER, ROLES.ADMIN, ROLES.PLANT_MANAGER],
-  '/qc': [ROLES.QC_ENGINEER, ROLES.ADMIN, ROLES.PLANT_MANAGER],
-  '/site-supervisor': [ROLES.SITE_SUPERVISOR, ROLES.ADMIN, ROLES.PLANT_MANAGER, ROLES.DISPATCHER],
-  '/driver': [ROLES.DRIVER, ROLES.ADMIN, ROLES.DISPATCHER],
-  '/owner': [ROLES.OWNER_DIRECTOR, ROLES.ADMIN],
+  '/plant-manager': [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR],
+  '/accountant': [ROLES.ACCOUNTANT],
+  '/dispatcher': [ROLES.DISPATCHER],
+  '/qc': [ROLES.QC_ENGINEER],
+  '/site-supervisor': [ROLES.SITE_SUPERVISOR],
+  '/driver': [ROLES.DRIVER],
+  '/owner': [ROLES.OWNER_DIRECTOR],
 };
 
 matrix.forEach((test) => {
   const allowedRoles = routeAllowedRoles[test.targetRoute] || [];
-  const isAllowed = allowedRoles.includes(test.role);
+  // Admin has master clearance to all routes; non-admins are strictly isolated to allowedRoles
+  const isAllowed = test.role === ROLES.ADMIN || allowedRoles.includes(test.role);
   assert(
     isAllowed === test.allowed,
     `Access check: ${test.role} accessing ${test.targetRoute} -> Expected allowed=${test.allowed}, got=${isAllowed}`

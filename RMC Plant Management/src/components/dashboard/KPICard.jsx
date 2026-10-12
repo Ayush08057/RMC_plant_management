@@ -17,71 +17,71 @@ export default function KPICard({
 
   const colorMap = {
     purple: {
-      accentBar: 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-500',
-      bgHover: 'hover:border-purple-300/90 hover:shadow-lg hover:shadow-purple-500/10',
-      iconBg: 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/25 ring-4 ring-purple-100/90',
-      badgeBg: 'bg-purple-50 text-purple-700 border-purple-200/80',
-      dotColor: 'bg-purple-500',
-      glow: 'from-purple-500/15 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-purple-50/30',
+      accentBar: 'bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-500',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-indigo-600 to-blue-700 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
+      dotColor: 'bg-blue-600',
+      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
     amber: {
-      accentBar: 'bg-gradient-to-r from-amber-500 via-orange-500 to-red-500',
-      bgHover: 'hover:border-amber-300/90 hover:shadow-lg hover:shadow-amber-500/10',
-      iconBg: 'bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/25 ring-4 ring-amber-100/90',
-      badgeBg: 'bg-amber-50 text-amber-800 border-amber-200/80',
-      dotColor: 'bg-amber-500',
-      glow: 'from-amber-500/15 via-orange-500/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-amber-50/30',
+      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
+      dotColor: 'bg-blue-500',
+      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
     emerald: {
-      accentBar: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500',
-      bgHover: 'hover:border-emerald-300/90 hover:shadow-lg hover:shadow-emerald-500/10',
-      iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25 ring-4 ring-emerald-100/90',
-      badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
+      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-blue-600 to-teal-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
       dotColor: 'bg-emerald-500',
-      glow: 'from-emerald-500/15 via-teal-500/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-emerald-50/30',
+      glow: 'from-blue-500/10 via-teal-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
     blue: {
-      accentBar: 'bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-400',
-      bgHover: 'hover:border-blue-300/90 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/25 ring-4 ring-blue-100/90',
-      badgeBg: 'bg-blue-50 text-blue-800 border-blue-200/80',
-      dotColor: 'bg-blue-500',
-      glow: 'from-blue-500/15 via-cyan-500/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-blue-50/30',
+      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
+      dotColor: 'bg-blue-600',
+      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
     cyan: {
-      accentBar: 'bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500',
-      bgHover: 'hover:border-cyan-300/90 hover:shadow-lg hover:shadow-cyan-500/10',
-      iconBg: 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/25 ring-4 ring-cyan-100/90',
-      badgeBg: 'bg-cyan-50 text-cyan-800 border-cyan-200/80',
-      dotColor: 'bg-cyan-500',
-      glow: 'from-cyan-500/15 via-blue-500/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-cyan-50/30',
+      accentBar: 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
+      dotColor: 'bg-blue-500',
+      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
     rose: {
-      accentBar: 'bg-gradient-to-r from-rose-500 via-pink-500 to-purple-500',
-      bgHover: 'hover:border-rose-300/90 hover:shadow-lg hover:shadow-rose-500/10',
-      iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-md shadow-rose-500/25 ring-4 ring-rose-100/90',
-      badgeBg: 'bg-rose-50 text-rose-800 border-rose-200/80',
+      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
       dotColor: 'bg-rose-500',
-      glow: 'from-rose-500/15 via-pink-500/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-rose-50/30',
+      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
     slate: {
-      accentBar: 'bg-gradient-to-r from-slate-600 via-slate-700 to-slate-900',
-      bgHover: 'hover:border-slate-400/90 hover:shadow-lg hover:shadow-slate-500/10',
-      iconBg: 'bg-gradient-to-br from-slate-700 to-slate-900 text-white shadow-md shadow-slate-500/25 ring-4 ring-slate-100',
-      badgeBg: 'bg-slate-100 text-slate-800 border-slate-200',
-      dotColor: 'bg-slate-500',
-      glow: 'from-slate-500/15 via-slate-700/5 to-transparent',
-      cardBg: 'bg-gradient-to-b from-white via-white to-slate-50/40',
+      accentBar: 'bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-600',
+      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
+      iconBg: 'bg-gradient-to-br from-slate-700 to-blue-900 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
+      dotColor: 'bg-blue-600',
+      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
+      cardBg: 'bg-white',
     },
   };
 
-  const activeColor = colorMap[color] || colorMap.amber;
+  const activeColor = colorMap[color] || colorMap.blue;
 
   const handleCardClick = (e) => {
     if (onClick) {
@@ -103,42 +103,39 @@ export default function KPICard({
             handleCardClick(e);
           }
         }}
-        className={`p-4 sm:p-4.5 rounded-2xl ${activeColor.cardBg} border border-slate-200/90 transition-all duration-300 shadow-2xs hover:shadow-xl flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer ${activeColor.bgHover} hover:-translate-y-1 active:scale-[0.99]`}
+        className={`p-3.5 sm:p-4 rounded-2xl ${activeColor.cardBg} border border-slate-200/90 transition-all duration-300 shadow-2xs hover:shadow-lg flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer ${activeColor.bgHover} hover:-translate-y-0.5 active:scale-[0.99]`}
       >
-        {/* Top Gradient Accent Line */}
-        <div className={`absolute top-0 left-0 right-0 h-1.5 ${activeColor.accentBar}`} />
-
-        {/* Top Right Subtle Ambient Glow on Hover */}
-        <div className={`absolute -top-8 -right-8 w-28 h-28 bg-gradient-to-br ${activeColor.glow} rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
-
-        <div className="pt-0.5 relative z-10">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`w-2 h-2 rounded-full ${activeColor.dotColor} shrink-0 animate-pulse`} />
-              <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider truncate">{title}</span>
+        <div className="relative z-10">
+          <div className="flex items-start justify-between gap-2 mb-1.5">
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight block">
+                {title}
+              </span>
             </div>
             {Icon && (
-              <div className={`w-9 h-9 rounded-xl ${activeColor.iconBg} flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 ease-out`}>
-                <Icon className="w-4.5 h-4.5" />
+              <div className="w-8 h-8 rounded-xl bg-white border border-black text-black flex items-center justify-center shrink-0 shadow-2xs transition-transform duration-200 group-hover:scale-105">
+                <Icon className="w-4 h-4 text-black" />
               </div>
             )}
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight break-words font-sans group-hover:text-slate-950 transition-colors">
+          <div className="text-2xl sm:text-[26px] font-black text-slate-900 tracking-tight font-sans my-1 group-hover:text-slate-950 transition-colors">
             {value}
           </div>
         </div>
 
         {(subtext || trend) && (
-          <div className="mt-3 pt-2.5 border-t border-slate-100/90 flex items-center justify-between text-[11px] text-slate-500 gap-1.5 font-medium min-w-0 relative z-10">
-            <span className="font-semibold text-slate-600 truncate text-[10px] sm:text-[11px]" title={subtext}>
-              {subtext}
-            </span>
+          <div className="mt-2.5 pt-2 border-t border-slate-100/90 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-1.5 font-medium min-w-0 relative z-10">
+            {subtext && (
+              <span className="font-semibold text-slate-600 text-[11px] leading-tight truncate flex-1 min-w-0" title={subtext}>
+                {subtext}
+              </span>
+            )}
             {trend && (
-              <span className={`inline-flex items-center gap-1.5 font-bold shrink-0 text-[10px] px-2 py-0.5 rounded-lg border shadow-2xs transition-transform group-hover:scale-105 ${
+              <span className={`inline-flex items-center gap-1 font-bold shrink-0 text-[10px] px-2 py-0.5 rounded-md border shadow-2xs ${
                 trendType === 'up' 
-                  ? 'text-emerald-800 bg-emerald-50/90 border-emerald-200/90' 
+                  ? 'text-emerald-800 bg-emerald-50 border-emerald-200' 
                   : trendType === 'down' 
-                    ? 'text-rose-800 bg-rose-50/90 border-rose-200/90' 
+                    ? 'text-rose-800 bg-rose-50 border-rose-200' 
                     : activeColor.badgeBg
               }`}>
                 {trendType === 'up' ? <TrendingUp className="w-3 h-3 text-emerald-600 shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-3 h-3 text-rose-600 shrink-0" /> : null}
@@ -175,7 +172,9 @@ export default function KPICard({
               </div>
               <div className="p-3 rounded-xl bg-white border border-slate-200">
                 <span className="text-[10px] text-slate-400 block font-bold">SCADA Sync Time</span>
-                <span className="font-bold text-slate-800 mt-0.5 block">{new Date().toLocaleTimeString()}</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">
+                  {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                </span>
               </div>
             </div>
 

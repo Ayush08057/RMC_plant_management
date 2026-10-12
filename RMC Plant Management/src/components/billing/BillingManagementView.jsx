@@ -651,21 +651,21 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         </div>
       )}
 
-      {/* Navigation Tabs & Action Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+      {/* Navigation Tabs & Action Toolbar - Responsive Grid on Mobile */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200 pb-3 mb-3">
         {/* Left: Navigation Tabs & Search Bar */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setActiveSection('cash_memos')}
-              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-none py-2 px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeSection === 'cash_memos'
                   ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <ReceiptText className="w-4 h-4 text-amber-600" />
+              <ReceiptText className="w-4 h-4 text-amber-600 shrink-0" />
               <span>Cash Memos (Sales Bills)</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-900 font-mono font-bold">
                 {bills.length}
@@ -673,25 +673,25 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             </button>
           </div>
 
-          {/* Search Bar (Left aligned, next to tabs) */}
-          <div className="relative w-full sm:w-56 lg:w-64">
+          {/* Search Bar (Full width on mobile, compact on tablet/desktop) */}
+          <div className="relative w-full sm:w-60 lg:w-72">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search bill no, vehicle, site..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-amber-500 shadow-2xs"
+              className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-amber-500 shadow-2xs font-medium"
             />
           </div>
         </div>
 
-        {/* Right: Action Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Right: Action Buttons - Evenly distributed on Mobile */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setIsTableFullScreen(!isTableFullScreen)}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 shadow-2xs transition-colors cursor-pointer"
+            className="p-2 sm:p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0"
             title={isTableFullScreen ? 'Exit Full Screen' : 'Full Screen Table'}
           >
             {isTableFullScreen ? <Minimize2 className="w-4 h-4 text-slate-700" /> : <Maximize2 className="w-4 h-4 text-amber-600" />}
@@ -700,9 +700,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           <button
             type="button"
             onClick={handleOpenCreateBill}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            className="flex-1 sm:flex-none justify-center px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>Generate Cash Memo</span>
           </button>
         </div>
@@ -714,6 +714,16 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {activeSection === 'cash_memos' && (
         <div className="w-full">
           {(() => {
+            const filteredBills = bills.filter((b) => {
+              const q = searchQuery.toLowerCase();
+              return (
+                b.billNo.toLowerCase().includes(q) ||
+                (b.customerName || '').toLowerCase().includes(q) ||
+                (b.site || '').toLowerCase().includes(q) ||
+                (b.vehicle || '').toLowerCase().includes(q)
+              );
+            });
+
             const tableElement = (
               <div className={`w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden ${isTableFullScreen ? 'fixed inset-0 z-[999999] w-screen h-screen bg-white rounded-none p-0 m-0 border-none overflow-auto flex flex-col' : ''}`}>
                 {isTableFullScreen && (
@@ -725,17 +735,19 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                     <button
                       type="button"
                       onClick={() => setIsTableFullScreen(false)}
-                      className="p-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-white cursor-pointer transition-colors"
+                      className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white cursor-pointer transition-colors"
                       title="Exit Full Screen"
                     >
                       <Minimize2 className="w-4 h-4" />
                     </button>
                   </div>
                 )}
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-700 border-collapse table-auto sm:table-fixed">
+
+                {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
+                <div className="hidden md:block w-full max-w-full overflow-x-auto">
+                  <table className="w-full min-w-[850px] text-left text-xs text-slate-700 border-collapse table-fixed">
                     <thead>
-                      <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90">
+                      <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
                         <th className="py-3 px-3.5 w-[15%]">Bill No & Date</th>
                         <th className="py-3 px-3.5 w-[24%]">Party / Customer & Site</th>
                         <th className="py-3 px-3.5 w-[14%]">Transit Vehicle</th>
@@ -746,56 +758,131 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/80">
-                    {bills
-                      .filter((b) => {
-                        const q = searchQuery.toLowerCase();
-                        return (
-                          b.billNo.toLowerCase().includes(q) ||
-                          (b.customerName || '').toLowerCase().includes(q) ||
-                          (b.site || '').toLowerCase().includes(q) ||
-                          (b.vehicle || '').toLowerCase().includes(q)
-                        );
-                      })
-                      .map((bill) => {
-                        const timing = getTimingStatus(bill.createdAt);
-                        return (
-                          <tr key={bill.id} className="hover:bg-amber-50/40 transition-colors group">
-                            <td className="py-3 px-3">
-                              <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
-                                <ReceiptText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                <span>#{bill.billNo}</span>
-                              </div>
-                              <div className="text-[10px] font-mono text-slate-500 mt-0.5">{bill.date}</div>
-                            </td>
+                      {filteredBills.length > 0 ? (
+                        filteredBills.map((bill) => {
+                          const timing = getTimingStatus(bill.createdAt);
+                          return (
+                            <tr key={bill.id} className="hover:bg-amber-50/40 transition-colors group">
+                              <td className="py-3 px-3">
+                                <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
+                                  <ReceiptText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>#{bill.billNo}</span>
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-500 mt-0.5">{bill.date}</div>
+                              </td>
 
-                            <td className="py-3 px-3">
-                              <div className="font-bold text-slate-900 text-xs leading-snug truncate">{bill.customerName}</div>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                                <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
-                                <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
-                              </div>
-                            </td>
+                              <td className="py-3 px-3">
+                                <div className="font-bold text-slate-900 text-xs leading-snug truncate">{bill.customerName}</div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                                  <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
+                                  <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
+                                </div>
+                              </td>
 
-                            <td className="py-3 px-3">
-                              <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg text-[11px] font-mono text-slate-800 font-semibold truncate">
-                                <Truck className="w-3 h-3 text-slate-500 shrink-0" />
-                                <span className="truncate">{bill.vehicle || 'Direct'}</span>
-                              </div>
-                            </td>
+                              <td className="py-3 px-3">
+                                <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg text-[11px] font-mono text-slate-800 font-semibold truncate">
+                                  <Truck className="w-3 h-3 text-slate-500 shrink-0" />
+                                  <span className="truncate">{bill.vehicle || 'Direct'}</span>
+                                </div>
+                              </td>
 
-                            <td className="py-3 px-3">
-                              <div className="font-medium text-slate-800 text-[11px] line-clamp-2 leading-tight">
-                                {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
-                              </div>
-                            </td>
+                              <td className="py-3 px-3">
+                                <div className="font-medium text-slate-800 text-[11px] line-clamp-2 leading-tight">
+                                  {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
+                                </div>
+                              </td>
 
-                            <td className="py-3 px-3 text-right">
-                              <div className="font-mono font-black text-emerald-700 text-xs sm:text-sm">
-                                ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </div>
-                            </td>
+                              <td className="py-3 px-3 text-right">
+                                <div className="font-mono font-black text-emerald-700 text-xs sm:text-sm">
+                                  ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </div>
+                              </td>
 
-                            <td className="py-3 px-3 text-center">
+                              <td className="py-3 px-3 text-center">
+                                {timing.isWithin10Mins ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
+                                    <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
+                                    <span>EDIT ({timing.formattedRemaining})</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-mono font-bold">
+                                    <Lock className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                    <span>LOCKED (OTP)</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPrintingBill(bill)}
+                                    className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer"
+                                    title="Print Cash Memo"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRequestEditBill(bill)}
+                                    className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs ${
+                                      timing.isWithin10Mins
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                    }`}
+                                    title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                                  >
+                                    {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteBill(bill.id, bill.billNo)}
+                                    className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer"
+                                    title="Delete Memo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                            No cash memos found matching search query.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* MOBILE RESPONSIVE CARDS (< md screens) */}
+                <div className="block md:hidden p-2.5 sm:p-3 space-y-2.5 bg-slate-50/50">
+                  {filteredBills.length > 0 ? (
+                    filteredBills.map((bill) => {
+                      const timing = getTimingStatus(bill.createdAt);
+                      return (
+                        <div
+                          key={bill.id}
+                          className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5 transition-all"
+                        >
+                          {/* Card Top: Bill No & Policy Status */}
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <ReceiptText className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span className="font-mono font-black text-slate-900 text-xs truncate">
+                                #{bill.billNo}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                • {bill.date}
+                              </span>
+                            </div>
+
+                            <div className="shrink-0">
                               {timing.isWithin10Mins ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
                                   <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
@@ -807,49 +894,83 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                   <span>LOCKED (OTP)</span>
                                 </span>
                               )}
-                            </td>
+                            </div>
+                          </div>
 
-                            <td className="py-3 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setPrintingBill(bill)}
-                                  className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer"
-                                  title="Print Cash Memo"
-                                >
-                                  <Printer className="w-3.5 h-3.5" />
-                                </button>
+                          {/* Customer Name & Site Location */}
+                          <div>
+                            <div className="font-black text-slate-900 text-xs leading-snug">
+                              {bill.customerName}
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
+                              <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
+                            </div>
+                          </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleRequestEditBill(bill)}
-                                  className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs ${
-                                    timing.isWithin10Mins
-                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
-                                  }`}
-                                  title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
-                                >
-                                  {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
-                                </button>
+                          {/* Transit Vehicle & Material Items Summary */}
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] pt-1 border-t border-slate-100">
+                            <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono text-slate-800 font-bold text-[10px]">
+                              <Truck className="w-3 h-3 text-slate-500 shrink-0" />
+                              <span>{bill.vehicle || 'Direct Mixer'}</span>
+                            </span>
+                            <div className="font-medium text-slate-700 text-[11px] truncate flex-1 min-w-[140px]">
+                              {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
+                            </div>
+                          </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteBill(bill.id, bill.billNo)}
-                                  className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer"
-                                  title="Delete Memo"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                          {/* Card Bottom: Final Amount & Clean Actions Bar */}
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Final Total:</span>
+                              <span className="font-mono font-black text-emerald-700 text-sm">
+                                ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setPrintingBill(bill)}
+                                className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer active:scale-95"
+                                title="Print Cash Memo"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRequestEditBill(bill)}
+                                className={`p-2 rounded-xl font-bold transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                  timing.isWithin10Mins
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                }`}
+                                title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                              >
+                                {timing.isWithin10Mins ? <Edit3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-rose-600" />}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBill(bill.id, bill.billNo)}
+                                className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
+                                title="Delete Memo"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+                      No cash memos match your search.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
             );
 
             return isTableFullScreen ? createPortal(tableElement, document.body) : tableElement;
@@ -862,97 +983,176 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           ======================================================== */}
       {activeSection === 'purchases' && (
         <div className="space-y-4">
-          <div className={`bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden ${isTableFullScreen ? 'fixed inset-0 z-[999999] w-screen h-screen bg-white rounded-none p-0 m-0 border-none overflow-auto flex flex-col' : ''}`}>
-              <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-cyan-600" />
-                  <h3 className="font-bold text-slate-900 text-sm">Plant Material Purchases Register (Table View)</h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-900 font-bold">
-                    {purchases.length} VOUCHERS
-                  </span>
+          {(() => {
+            const filteredPurchases = purchases.filter((p) => {
+              const q = searchQuery.toLowerCase();
+              return (
+                p.voucherNo.toLowerCase().includes(q) ||
+                p.supplierName.toLowerCase().includes(q) ||
+                p.material.toLowerCase().includes(q) ||
+                (p.vehicleNo || '').toLowerCase().includes(q)
+              );
+            });
+
+            const purchaseElement = (
+              <div className={`bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden ${isTableFullScreen ? 'fixed inset-0 z-[999999] w-screen h-screen bg-white rounded-none p-0 m-0 border-none overflow-auto flex flex-col' : ''}`}>
+                <div className="p-3.5 sm:p-4 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-cyan-600 shrink-0" />
+                    <h3 className="font-bold text-slate-900 text-sm">Plant Material Purchases Register</h3>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-900 font-bold">
+                      {purchases.length} VOUCHERS
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTableFullScreen(!isTableFullScreen)}
+                      className="p-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 shadow-2xs transition-colors cursor-pointer"
+                      title={isTableFullScreen ? 'Exit Full Screen' : 'Full Screen Table'}
+                    >
+                      {isTableFullScreen ? <Minimize2 className="w-4 h-4 text-slate-700" /> : <Maximize2 className="w-4 h-4 text-cyan-600" />}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsTableFullScreen(!isTableFullScreen)}
-                    className="p-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 shadow-2xs transition-colors cursor-pointer"
-                    title={isTableFullScreen ? 'Exit Full Screen' : 'Full Screen Table'}
-                  >
-                    {isTableFullScreen ? <Minimize2 className="w-4 h-4 text-slate-700" /> : <Maximize2 className="w-4 h-4 text-cyan-600" />}
-                  </button>
+                {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
+                <div className="hidden md:block w-full max-w-full overflow-x-auto">
+                  <table className="w-full min-w-[850px] text-left text-xs text-slate-700 border-collapse table-fixed">
+                    <thead>
+                      <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
+                        <th className="py-3 px-3 w-[15%]">Voucher No & Date</th>
+                        <th className="py-3 px-3 w-[24%]">Supplier & Plant Location</th>
+                        <th className="py-3 px-3 w-[20%]">Inward Material & Qty</th>
+                        <th className="py-3 px-3 w-[13%]">Truck & Slip No</th>
+                        <th className="py-3 px-3 w-[12%] text-right">Voucher Total</th>
+                        <th className="py-3 px-3 w-[10%] text-center">Policy Status</th>
+                        <th className="py-3 px-3 w-[6%] text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/70">
+                      {filteredPurchases.length > 0 ? (
+                        filteredPurchases.map((purchase) => {
+                          const timing = getTimingStatus(purchase.createdAt);
+                          return (
+                            <tr key={purchase.id} className="hover:bg-cyan-50/40 transition-colors group">
+                              <td className="py-3 px-3">
+                                <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
+                                  <Truck className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                                  <span>#{purchase.voucherNo}</span>
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-500 mt-0.5">{purchase.date || 'Today'}</div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="font-bold text-slate-900 text-xs leading-snug truncate">{purchase.supplierName}</div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                                  <Building2 className="w-3 h-3 text-cyan-600 shrink-0" />
+                                  <span className="truncate">{purchase.plantLocation || 'Main Plant Silo'}</span>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="font-bold text-cyan-900 text-xs truncate">{purchase.material}</div>
+                                <div className="text-[10px] text-slate-600 font-mono truncate">
+                                  {purchase.qty} {purchase.unit} @ ₹{purchase.rate}/{purchase.unit}
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="font-mono text-xs font-bold text-slate-800 truncate">
+                                  {purchase.vehicleNo || 'Inward Truck'}
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span>Slip #{purchase.weighbridgeSlipNo || 'WB-01'}</span>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 text-right">
+                                <div className="font-mono font-black text-cyan-900 text-xs sm:text-sm">
+                                  ₹ {Number(purchase.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </div>
+                                <div className="text-[9px] text-slate-500 font-mono font-semibold truncate">{purchase.paymentStatus}</div>
+                              </td>
+
+                              <td className="py-3 px-3 text-center">
+                                {timing.isWithin10Mins ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
+                                    <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
+                                    <span>EDIT ({timing.formattedRemaining})</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-mono font-bold">
+                                    <Lock className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                    <span>LOCKED (OTP)</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRequestEditPurchase(purchase)}
+                                    className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                      timing.isWithin10Mins
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                    }`}
+                                    title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                                  >
+                                    {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePurchase(purchase.id, purchase.voucherNo)}
+                                    className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
+                                    title="Delete Voucher"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                            No material purchase vouchers found matching search query.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
 
-              <div className="w-full">
-                <table className="w-full text-left text-xs text-slate-700 border-collapse table-auto sm:table-fixed">
-                  <thead>
-                    <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90">
-                      <th className="py-3 px-3 w-[15%]">Voucher No & Date</th>
-                      <th className="py-3 px-3 w-[24%]">Supplier & Plant Location</th>
-                      <th className="py-3 px-3 w-[20%]">Inward Material & Qty</th>
-                      <th className="py-3 px-3 w-[13%]">Truck & Slip No</th>
-                      <th className="py-3 px-3 w-[12%] text-right">Voucher Total</th>
-                      <th className="py-3 px-3 w-[10%] text-center">Policy Status</th>
-                      <th className="py-3 px-3 w-[6%] text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200/70">
-                    {purchases
-                      .filter((p) => {
-                        const q = searchQuery.toLowerCase();
-                        return (
-                          p.voucherNo.toLowerCase().includes(q) ||
-                          p.supplierName.toLowerCase().includes(q) ||
-                          p.material.toLowerCase().includes(q) ||
-                          (p.vehicleNo || '').toLowerCase().includes(q)
-                        );
-                      })
-                      .map((purchase) => {
-                        const timing = getTimingStatus(purchase.createdAt);
-                        return (
-                          <tr key={purchase.id} className="hover:bg-cyan-50/40 transition-colors group">
-                            <td className="py-3 px-3">
-                              <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
-                                <Truck className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
-                                <span>#{purchase.voucherNo}</span>
-                              </div>
-                              <div className="text-[10px] font-mono text-slate-500 mt-0.5">{purchase.date || 'Today'}</div>
-                            </td>
+                {/* MOBILE RESPONSIVE CARDS (< md screens) */}
+                <div className="block md:hidden p-2.5 sm:p-3 space-y-2.5 bg-slate-50/50">
+                  {filteredPurchases.length > 0 ? (
+                    filteredPurchases.map((purchase) => {
+                      const timing = getTimingStatus(purchase.createdAt);
+                      return (
+                        <div
+                          key={purchase.id}
+                          className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5 transition-all"
+                        >
+                          {/* Card Top: Voucher No & Policy Status */}
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <Truck className="w-4 h-4 text-cyan-600 shrink-0" />
+                              <span className="font-mono font-black text-slate-900 text-xs truncate">
+                                #{purchase.voucherNo}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                • {purchase.date || 'Today'}
+                              </span>
+                            </div>
 
-                            <td className="py-3 px-3">
-                              <div className="font-bold text-slate-900 text-xs leading-snug truncate">{purchase.supplierName}</div>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                                <Building2 className="w-3 h-3 text-cyan-600 shrink-0" />
-                                <span className="truncate">{purchase.plantLocation || 'Main Plant Silo'}</span>
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3">
-                              <div className="font-bold text-cyan-900 text-xs truncate">{purchase.material}</div>
-                              <div className="text-[10px] text-slate-600 font-mono truncate">
-                                {purchase.qty} {purchase.unit} @ ₹{purchase.rate}/{purchase.unit}
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3">
-                              <div className="font-mono text-xs font-bold text-slate-800 truncate">
-                                {purchase.vehicleNo || 'Inward Truck'}
-                              </div>
-                              <div className="text-[10px] font-mono text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                                <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span>Slip #{purchase.weighbridgeSlipNo || 'WB-01'}</span>
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3 text-right">
-                              <div className="font-mono font-black text-cyan-900 text-xs sm:text-sm">
-                                ₹ {Number(purchase.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </div>
-                              <div className="text-[9px] text-slate-500 font-mono font-semibold truncate">{purchase.paymentStatus}</div>
-                            </td>
-
-                            <td className="py-3 px-3 text-center">
+                            <div className="shrink-0">
                               {timing.isWithin10Mins ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
                                   <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
@@ -964,41 +1164,80 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                   <span>LOCKED (OTP)</span>
                                 </span>
                               )}
-                            </td>
+                            </div>
+                          </div>
 
-                            <td className="py-3 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRequestEditPurchase(purchase)}
-                                  className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs ${
-                                    timing.isWithin10Mins
-                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
-                                  }`}
-                                  title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
-                                >
-                                  {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
-                                </button>
+                          {/* Supplier & Plant Location */}
+                          <div>
+                            <div className="font-black text-slate-900 text-xs leading-snug">
+                              {purchase.supplierName}
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                              <Building2 className="w-3 h-3 text-cyan-600 shrink-0" />
+                              <span className="truncate">{purchase.plantLocation || 'Main Plant Silo'}</span>
+                            </div>
+                          </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeletePurchase(purchase.id, purchase.voucherNo)}
-                                  className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer"
-                                  title="Delete Voucher"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                          {/* Material Description & Vehicle */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] pt-1 border-t border-slate-100">
+                            <div>
+                              <span className="font-bold text-cyan-950 block">{purchase.material}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {purchase.qty} {purchase.unit} @ ₹{purchase.rate}/{purchase.unit}
+                              </span>
+                            </div>
+                            <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono text-slate-800 font-bold text-[10px]">
+                              <span>{purchase.vehicleNo || 'Inward Truck'}</span>
+                            </span>
+                          </div>
+
+                          {/* Card Bottom: Total & Actions */}
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Voucher Total:</span>
+                              <span className="font-mono font-black text-cyan-900 text-sm">
+                                ₹ {Number(purchase.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleRequestEditPurchase(purchase)}
+                                className={`p-2 rounded-xl font-bold transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                  timing.isWithin10Mins
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                }`}
+                                title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                              >
+                                {timing.isWithin10Mins ? <Edit3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-rose-600" />}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePurchase(purchase.id, purchase.voucherNo)}
+                                className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
+                                title="Delete Voucher"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+                      No material purchase vouchers match your search.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            );
 
+            return isTableFullScreen ? createPortal(purchaseElement, document.body) : purchaseElement;
+          })()}
         </div>
       )}
 
@@ -1022,7 +1261,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full min-w-[650px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50">
                   <th className="py-2.5 px-3">Timestamp</th>
@@ -1406,8 +1645,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   </button>
                 </div>
 
-                <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="border border-slate-200 rounded-2xl overflow-x-auto">
+                  <table className="w-full min-w-[550px] text-left text-xs border-collapse">
                     <thead className="bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
                       <tr>
                         <th className="p-2 w-10 text-center">SN.</th>

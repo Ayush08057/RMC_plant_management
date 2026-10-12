@@ -27,7 +27,7 @@ export default function App() {
                 background: "radial-gradient(ellipse at 15% 10%, rgba(14, 116, 144, 0.08) 0%, transparent 60%), radial-gradient(ellipse at 85% 90%, rgba(234, 88, 12, 0.08) 0%, transparent 60%)"
               }}
             />
-            <div className="relative z-10 min-h-screen">
+            <div className="relative z-10 h-screen max-h-screen w-screen max-w-full overflow-hidden flex flex-col">
               <AppRoutes />
             </div>
           </WorkforceProvider>

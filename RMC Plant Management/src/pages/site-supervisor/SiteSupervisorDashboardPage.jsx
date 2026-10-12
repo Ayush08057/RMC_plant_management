@@ -27,7 +27,6 @@ import { useAuth } from '../../context/AuthContext';
 import AttendanceManagementView from '../../components/workforce/AttendanceManagementView';
 import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
-import FieldWorkerLiveLocationCard from '../../components/workforce/FieldWorkerLiveLocationCard';
 
 export default function SiteSupervisorDashboardPage() {
   const { user } = useAuth();
@@ -120,7 +119,7 @@ export default function SiteSupervisorDashboardPage() {
     <AppLayout
       title="Site Pouring & Field Inspection Terminal"
       subtitle="Mobile-ready construction site concrete reception, slump verification, pump telemetry, and digital delivery signoffs."
-      badge="SITE TERMINAL • METRO LINE 4"
+      badge={currentSite ? `SITE TERMINAL • ${currentSite.name.toUpperCase()}` : "SITE TERMINAL • ACTIVE"}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
@@ -186,8 +185,8 @@ export default function SiteSupervisorDashboardPage() {
             <KPICard
               title="Deliveries Completed"
               value={`${kpis.completedDeliveries} Mixers`}
-              subtext="84.0 m³ Poured Continuously"
-              trend="On Track"
+              subtext={kpis.completedDeliveries > 0 ? "Continuous pour completed" : "No dispatches recorded today"}
+              trend={kpis.completedDeliveries > 0 ? "On Track" : "Standby"}
               trendType="up"
               color="amber"
               icon={HardHat}
@@ -195,40 +194,29 @@ export default function SiteSupervisorDashboardPage() {
             <KPICard
               title="Inbound En Route"
               value={`${kpis.pendingDeliveries} In Transit`}
-              subtext="Next mixer ETA: 12 mins"
-              trend="TM-18 Approaching"
+              subtext={deliveries.length > 0 ? `Next mixer: ${deliveries[0].vehicle}` : "No active inbound transit"}
+              trend={kpis.pendingDeliveries > 0 ? "In Transit" : "Clear"}
               trendType="up"
               color="blue"
               icon={Truck}
             />
             <KPICard
               title="Concrete Slump on Site"
-              value="135 mm"
-              subtext="IS 456 Spec: 120-150 mm"
-              trend="Pass"
-              trendType="up"
+              value={pouringStatus.slumpOnSite || "--"}
+              subtext="IS 456 Standard Slump"
+              trend={pouringStatus.slumpOnSite !== '--' ? "Within Spec" : "Standby"}
+              trendType="neutral"
               color="emerald"
               icon={Activity}
             />
             <KPICard
               title="Active Project Sites"
-              value="3 Locations"
-              subtext="Metro Pier 22-26, Godrej, Kalpataru"
-              trend="Optimal"
+              value={`${kpis.activeSites} ${kpis.activeSites === 1 ? 'Location' : 'Locations'}`}
+              subtext={currentSite ? currentSite.name : "No active site assigned"}
+              trend={kpis.activeSites > 0 ? "Allocated" : "Standby"}
               trendType="neutral"
               color="purple"
               icon={MapPin}
-            />
-          </section>
-
-          {/* Site Supervisor Field Location Radar (Broadcasting to Admin) */}
-          <section>
-            <FieldWorkerLiveLocationCard
-              workerId={user?.employeeId || user?.id || 'SSP-001'}
-              workerName={user?.name || 'Site Supervisor'}
-              workerRole="Site Pouring Supervisor"
-              currentSiteName={currentSite?.name || 'Metro Line 4 - Pier 22-26'}
-              onAlertSent={(coords) => setToastMessage(`Site GPS position transmitted to Dispatch & Admin: ${coords.lat}, ${coords.lng}`)}
             />
           </section>
 
@@ -429,7 +417,7 @@ export default function SiteSupervisorDashboardPage() {
             </div>
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
               <span className="text-[10px] text-slate-500 uppercase font-bold block">Pump Unit:</span>
-              <span className="text-xs font-bold text-slate-800">Schwing Stetter CP-60</span>
+              <span className="text-xs font-bold text-slate-800">{pouringStatus.pumpStatus !== 'Standby' ? 'Schwing Stetter CP-60' : 'Standby / Not In Use'}</span>
             </div>
           </div>
         </div>
@@ -441,21 +429,27 @@ export default function SiteSupervisorDashboardPage() {
               <AlertTriangle className="w-4 h-4 text-rose-600" />
               <span>Site Safety & Incident Log</span>
             </h3>
-            <span className="text-[10px] font-mono text-amber-700 font-bold px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200">1 RECORDED</span>
+            <span className="text-[10px] font-mono text-amber-700 font-bold px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200">{siteIssues.length} RECORDED</span>
           </div>
 
           <div className="space-y-2">
-            {siteIssues.map((iss) => (
-              <AlertCard
-                key={iss.id}
-                title={iss.title}
-                desc={iss.desc}
-                time={iss.time}
-                type="warning"
-                actionLabel="Details"
-                onAction={() => setToastMessage(`Inspecting ${iss.title}`)}
-              />
-            ))}
+            {siteIssues.length > 0 ? (
+              siteIssues.map((iss) => (
+                <AlertCard
+                  key={iss.id}
+                  title={iss.title}
+                  desc={iss.desc}
+                  time={iss.time}
+                  type="warning"
+                  actionLabel="Details"
+                  onAction={() => setToastMessage(`Inspecting ${iss.title}`)}
+                />
+              ))
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                No safety or field incidents recorded today.
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -471,24 +465,31 @@ export default function SiteSupervisorDashboardPage() {
         icon={CheckCircle2}
       >
         <div className="space-y-4 text-xs text-slate-300">
-          <p className="text-slate-400">
-            Verify that mixer drum agitation is intact, mix grade matches project requisition (M35), and slump cone test is within tolerance.
+          <p className="text-slate-600">
+            Verify that mixer drum agitation is intact, mix grade matches project requisition, and slump cone test is within tolerance.
           </p>
-          <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/90 font-mono text-emerald-800">
-            Pending Acceptance: Vehicle TM-18 (Driver Ramesh Yadav)
-          </div>
+          {deliveries.length > 0 ? (
+            <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/90 font-mono text-emerald-800">
+              Pending Acceptance: Vehicle {deliveries[0].vehicle} (Driver {deliveries[0].driver})
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-600">
+              No inbound concrete deliveries waiting for signoff.
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={() => setShowConfirmModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={() => handleConfirmDelivery('DSP-8821')}
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-orange-500 text-slate-950"
+              disabled={deliveries.length === 0}
+              onClick={() => deliveries[0] && handleConfirmDelivery(deliveries[0].dispatchId)}
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 cursor-pointer transition-colors"
             >
               Confirm & Sign Challan
             </button>

@@ -20,12 +20,14 @@ import {
   Download
 } from 'lucide-react';
 import { MOCK_QC_DATA } from '../../data/mockDashboardData';
+import { useAuth } from '../../context/AuthContext';
 import AttendanceManagementView from '../../components/workforce/AttendanceManagementView';
 import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
 import EmployeeDocumentsView from '../../components/workforce/EmployeeDocumentsView';
 
 export default function QcDashboardPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [toastMessage, setToastMessage] = useState(null);
   const [showTestModal, setShowTestModal] = useState(false);
@@ -54,7 +56,7 @@ export default function QcDashboardPage() {
       qty: testForm.qty,
       testType: testForm.testType,
       result: `${testForm.slumpResult} (Spec: 120-150 mm)`,
-      qcEngineer: 'Er. Sandeep Patil',
+      qcEngineer: user?.name || 'QC Engineer',
       status: testForm.status,
       timestamp: 'Just Now',
     };
@@ -165,8 +167,8 @@ export default function QcDashboardPage() {
         <KPICard
           title="Tests Completed Today"
           value={kpis.testsToday}
-          subtext="34 Passed • 1 Pending • 1 Failed"
-          trend="94.4% Pass Rate"
+          subtext={`${kpis.passedTests} Passed • ${kpis.pendingTests} Pending • ${kpis.failedTests} Failed`}
+          trend={kpis.testsToday > 0 ? `${Math.round((kpis.passedTests / kpis.testsToday) * 100)}% Pass Rate` : "Standby"}
           trendType="up"
           color="cyan"
           icon={FlaskConical}
@@ -175,7 +177,7 @@ export default function QcDashboardPage() {
           title="Active Batch Lots"
           value={kpis.activeBatches}
           subtext="Tested prior to gate release"
-          trend="100% Inspected"
+          trend={kpis.activeBatches > 0 ? "100% Inspected" : "Standby"}
           trendType="up"
           color="emerald"
           icon={CheckCircle2}
@@ -183,9 +185,9 @@ export default function QcDashboardPage() {
         <KPICard
           title="Rejected Batches"
           value={kpis.rejectedBatches}
-          subtext="Stopped at yard gate (High slump)"
-          trend="Action Documented"
-          trendType="down"
+          subtext={kpis.rejectedBatches > 0 ? "Stopped at yard gate" : "Zero rejected batches"}
+          trend={kpis.rejectedBatches > 0 ? "Action Documented" : "Normal"}
+          trendType={kpis.rejectedBatches > 0 ? "down" : "up"}
           color="rose"
           icon={AlertTriangle}
         />
@@ -250,9 +252,9 @@ export default function QcDashboardPage() {
             <div className="w-full max-w-full overflow-hidden min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <span className="font-mono text-xs font-bold text-cyan-400 truncate block">{t.batchId}</span>
-                  <div className="text-sm font-bold text-white mt-0.5 truncate">{t.mixGrade}</div>
-                  <div className="text-xs text-slate-400 truncate">{t.site}</div>
+                  <span className="font-mono text-xs font-bold text-cyan-700 truncate block">{t.batchId}</span>
+                  <div className="text-sm font-bold text-slate-900 mt-0.5 truncate">{t.mixGrade}</div>
+                  <div className="text-xs text-slate-500 truncate">{t.site}</div>
                 </div>
                 <div className="shrink-0">
                   <StatusBadge 
@@ -262,26 +264,26 @@ export default function QcDashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-800 text-[11px]">
+              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase block">Test Type:</span>
-                  <span className="font-medium text-slate-200">{t.testType}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Test Type:</span>
+                  <span className="font-semibold text-slate-800">{t.testType}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase block">Result:</span>
-                  <span className="font-mono font-bold text-amber-300">{t.result}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Result:</span>
+                  <span className="font-mono font-bold text-amber-700">{t.result}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase block">Volume:</span>
-                  <span className="font-mono text-white">{t.qty}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Volume:</span>
+                  <span className="font-mono font-bold text-slate-900">{t.qty}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase block">Timestamp:</span>
-                  <span className="font-mono text-slate-400">{t.timestamp}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Timestamp:</span>
+                  <span className="font-mono text-slate-600">{t.timestamp}</span>
                 </div>
               </div>
 
-              <div className="mt-3 pt-2 border-t border-slate-800 flex justify-end">
+              <div className="mt-3 pt-2 border-t border-slate-200 flex justify-end">
                 <button
                   type="button"
                   onClick={() => setToastMessage(`Certificate for ${t.batchId} downloaded`)}
@@ -310,20 +312,26 @@ export default function QcDashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {cubeSchedule.map((cube, idx) => (
-              <div key={idx} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-slate-900 font-mono">{cube.lot} • {cube.mix}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Cast: {cube.castingDate} ({cube.ageDays}-Day Target: {cube.targetMpa} MPa)
+            {cubeSchedule.length > 0 ? (
+              cubeSchedule.map((cube, idx) => (
+                <div key={idx} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between text-xs">
+                  <div>
+                    <div className="font-bold text-slate-900 font-mono">{cube.lot} • {cube.mix}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Cast: {cube.castingDate} ({cube.ageDays}-Day Target: {cube.targetMpa} MPa)
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-emerald-700 font-mono text-sm">{cube.achievedMpa} MPa</div>
+                    <span className="text-[10px] font-semibold text-emerald-700">{cube.status}</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-emerald-700 font-mono text-sm">{cube.achievedMpa} MPa</div>
-                  <span className="text-[10px] font-semibold text-emerald-700">{cube.status}</span>
-                </div>
+              ))
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                No compressive cube test schedules logged for today.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -340,20 +348,26 @@ export default function QcDashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {failedBatches.map((fb, idx) => (
-              <div key={idx} className="p-4 rounded-2xl bg-rose-50/80 border border-rose-200/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-rose-700 text-xs">{fb.batchId} • Grade: {fb.grade}</span>
-                  <span className="text-[10px] font-mono text-slate-500">{fb.timestamp}</span>
+            {failedBatches.length > 0 ? (
+              failedBatches.map((fb, idx) => (
+                <div key={idx} className="p-4 rounded-2xl bg-rose-50/80 border border-rose-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-rose-700 text-xs">{fb.batchId} • Grade: {fb.grade}</span>
+                    <span className="text-[10px] font-mono text-slate-500">{fb.timestamp}</span>
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                    <strong>Defect:</strong> {fb.reason}
+                  </p>
+                  <div className="p-2.5 rounded-xl bg-white border border-rose-200 text-[11px] text-emerald-800 font-medium shadow-2xs">
+                    <strong>Corrective Action:</strong> {fb.actionTaken}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                  <strong>Defect:</strong> {fb.reason}
-                </p>
-                <div className="p-2.5 rounded-xl bg-white border border-rose-200 text-[11px] text-emerald-800 font-medium shadow-2xs">
-                  <strong>Corrective Action:</strong> {fb.actionTaken}
-                </div>
+              ))
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                No failed or quarantined batches logged. All batches meet specifications.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </section>

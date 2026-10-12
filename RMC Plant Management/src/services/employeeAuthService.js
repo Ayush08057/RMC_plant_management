@@ -173,9 +173,11 @@ export function validateLoginAttempt(identifier, password, employees = [], users
   // 2. Find employee in workforce database
   const matchingEmp = employees.find((e) => {
     const eId = (e.id || '').toUpperCase();
+    const eUsername = (e.username || '').toLowerCase();
     const eEmail = (e.email || '').toLowerCase();
     const ePhone = normalizePhone(e.mobile);
     return (
+      (eUsername && eUsername === lowerId) ||
       eId === cleanId.toUpperCase() ||
       eEmail === lowerId ||
       (digitsOnly && ePhone && (digitsOnly === ePhone || ePhone.endsWith(digitsOnly)))
@@ -185,10 +187,15 @@ export function validateLoginAttempt(identifier, password, employees = [], users
   // 3. Find registered user record
   const matchingUser = users.find((u) => {
     const uEmpId = (u.employeeId || '').toUpperCase();
+    const uId = (u.id || '').toUpperCase();
+    const uUsername = (u.username || '').toLowerCase();
     const uEmail = (u.email || '').toLowerCase();
     const uPhone = normalizePhone(u.phone || u.mobile);
     return (
+      (uUsername && uUsername === lowerId) ||
       uEmpId === cleanId.toUpperCase() ||
+      uId === cleanId.toUpperCase() ||
+      uId === `USR-${cleanId.toUpperCase()}` ||
       uEmail === lowerId ||
       (digitsOnly && uPhone && (digitsOnly === uPhone || uPhone.endsWith(digitsOnly)))
     );
@@ -257,6 +264,7 @@ export function validateLoginAttempt(identifier, password, employees = [], users
   const sessionUser = {
     id: matchingUser?.id || `USR-${empRecord.id}`,
     employeeId: empRecord.id || empRecord.employeeId,
+    username: empRecord.username || matchingUser?.username || cleanId,
     name: empRecord.name,
     email: empRecord.email,
     mobile: empRecord.mobile || empRecord.phone,

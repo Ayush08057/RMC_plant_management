@@ -24,8 +24,8 @@ export const MOCK_ADMIN_DATA = {
 
 export const MOCK_PLANT_MANAGER_DATA = {
   kpis: {
-    todayProduction: '0.0 m³',
-    productionTarget: '0.0 m³',
+    todayProduction: '0 m³',
+    productionTarget: '0 m³',
     todayDispatches: '0 Loads',
     pendingOrders: '0 Orders',
     activeVehicles: '0 Mixers',

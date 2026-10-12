@@ -30,11 +30,14 @@ import {
   UserCheck,
   Clock,
   ArrowRight,
+  ChevronRight,
+  Factory,
   XCircle
 } from 'lucide-react';
 import { MOCK_ADMIN_DATA } from '../../data/mockDashboardData';
 import { ROLES } from '../../data/mockUsers';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { formatToIndian12Hr } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
 import EmployeeManagementView from '../../components/workforce/EmployeeManagementView';
@@ -96,7 +99,7 @@ export default function AdminDashboardPage() {
     plant: plants[0]?.name || 'Main Plant Unit #01',
     salary: 35000,
     email: '',
-    mobile: '+91 ',
+    mobile: '',
     status: 'Pending Registration',
   });
 
@@ -118,7 +121,7 @@ export default function AdminDashboardPage() {
       plant: plants[0]?.name || 'Main Plant Unit #01',
       salary: 35000,
       email: '',
-      mobile: '+91 ',
+      mobile: '',
       status: 'Active',
     });
     setShowAddEmpModal(true);
@@ -134,7 +137,7 @@ export default function AdminDashboardPage() {
       plant: emp.plant || (plants[0]?.name || 'Central Plant'),
       salary: emp.salary || 30000,
       email: emp.email || '',
-      mobile: emp.mobile || '',
+      mobile: (emp.mobile || '').replace(/\D/g, '').slice(-10),
       status: emp.status || 'Active',
     });
     setShowEditEmpModal(true);
@@ -143,6 +146,12 @@ export default function AdminDashboardPage() {
   const handleAddEmployee = (e) => {
     e.preventDefault();
     if (!empForm.name.trim()) return;
+
+    const cleanMobile = (empForm.mobile || '').replace(/\D/g, '').slice(-10);
+    if (cleanMobile.length !== 10) {
+      alert('Please enter a valid 10-digit mobile number.');
+      return;
+    }
 
     try {
       const newEmp = addEmployee({
@@ -153,7 +162,7 @@ export default function AdminDashboardPage() {
         plant: empForm.plant,
         status: empForm.status,
         salary: Number(empForm.salary) || 30000,
-        mobile: empForm.mobile.trim().length >= 10 ? empForm.mobile : `+91 ${Math.floor(9800000000 + Math.random() * 100000000)}`,
+        mobile: `+91 ${cleanMobile}`,
         email: empForm.email || `${empForm.name.toLowerCase().replace(/\s+/g, '.')}@smconcretech.com`,
       });
       setShowAddEmpModal(false);
@@ -167,6 +176,12 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!editingEmp) return;
 
+    const cleanMobile = (empForm.mobile || '').replace(/\D/g, '').slice(-10);
+    if (cleanMobile.length !== 10) {
+      alert('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
     updateEmployee(editingEmp.id, {
       name: empForm.name,
       role: empForm.role,
@@ -174,7 +189,7 @@ export default function AdminDashboardPage() {
       plant: empForm.plant,
       status: empForm.status,
       salary: Number(empForm.salary) || 30000,
-      mobile: empForm.mobile,
+      mobile: `+91 ${cleanMobile}`,
       email: empForm.email,
     });
     setShowEditEmpModal(false);
@@ -451,16 +466,16 @@ export default function AdminDashboardPage() {
       {activeTab === 'settings' && <HrSettingsView />}
 
       {activeTab === 'dashboard' && (
-        <>
-          {/* 4 Primary Phase 1 KPI Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="w-full flex-1 flex flex-col space-y-3 pb-4">
+          {/* 4 Primary Phase 1 KPI Cards — Unified Royal Executive Theme */}
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 shrink-0">
             <KPICard
               title="Total Workforce"
               value={employees.length}
               subtext={`${employees.filter((e) => e.status === 'Active').length} Active Duty`}
               trend={`${employees.length} Enrolled`}
               trendType="up"
-              color="purple"
+              color="blue"
               icon={Users}
               onClick={() => setActiveKpiModal('workforce')}
             />
@@ -480,7 +495,7 @@ export default function AdminDashboardPage() {
               subtext="Leaves, advances & work"
               trend="Action Needed"
               trendType={pendingApprovals.length > 0 ? 'down' : 'up'}
-              color="amber"
+              color="blue"
               icon={ShieldCheck}
               onClick={() => setActiveKpiModal('approvals')}
             />
@@ -490,114 +505,144 @@ export default function AdminDashboardPage() {
               subtext="October 2026 Ready"
               trend="Audited"
               trendType="up"
-              color="emerald"
+              color="blue"
               icon={KeyRound}
               onClick={() => setActiveKpiModal('payroll')}
             />
           </section>
 
-          <section className="overflow-hidden rounded-2xl border border-blue-200/80 bg-gradient-to-br from-white/95 via-blue-50/75 to-cyan-50/70 p-4 shadow-sm backdrop-blur-xl sm:p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-blue-100/90 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-200 bg-white/80 text-blue-700 shadow-sm">
-                  <Building2 className="h-5 w-5" />
+          {/* Plant Network Section — Clean Reference UI Style */}
+          <section className="flex flex-col space-y-2.5">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20">
+                  <Factory className="h-4.5 w-4.5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-900">Plant Network</h2>
-                  <p className="text-xs font-medium text-slate-700">
-                    {plants.length} registered {plants.length === 1 ? 'plant' : 'plants'}
+                  <h2 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">Plant Network</h2>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Active concrete batching facilities & nodes
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleOpenAddPlant}
-                className="inline-flex items-center gap-2 rounded-xl border border-blue-700 bg-gradient-to-r from-blue-700 to-cyan-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-900/15 transition hover:from-blue-800 hover:to-cyan-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add New Plant
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs">
+                  {plants.length} Active
+                </span>
+                <button
+                  type="button"
+                  onClick={handleOpenAddPlant}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-600 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:from-blue-700 hover:to-indigo-700 focus:outline-none cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Add Plant</span>
+                </button>
+              </div>
             </div>
 
             {plants.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 {plants.map((plant) => (
-                  <article key={plant.id} className="rounded-xl border border-blue-100 bg-white/75 p-3.5 shadow-sm backdrop-blur-md transition hover:border-blue-300 hover:shadow-md">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-bold text-slate-900">{plant.name}</h3>
-                        <p className="mt-0.5 font-mono text-[11px] font-bold text-blue-800">{plant.code}</p>
+                  <article 
+                    key={plant.id} 
+                    className="rounded-2xl md:rounded-3xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 flex items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                        <Factory className="w-5 h-5 text-white" />
                       </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-                        plant.status === 'Online'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                          : plant.status === 'Maintenance'
-                            ? 'border-amber-200 bg-amber-50 text-amber-800'
-                            : 'border-blue-200 bg-blue-50 text-blue-800'
-                      }`}>{plant.status || 'Online'}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="truncate text-sm sm:text-base font-bold text-slate-900">{plant.name}</h3>
+                          <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60 shrink-0">{plant.code}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/70 inline-flex items-center gap-1">
+                            <span>{plant.capacity}</span>
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            plant.status === 'Online'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                              : plant.status === 'Maintenance'
+                                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                : 'border-blue-200 bg-blue-50 text-blue-800'
+                          }`}>
+                            {plant.status || 'Online'}
+                          </span>
+                        </div>
+                        {plant.location && (
+                          <p className="truncate text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{plant.location}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-3 space-y-1 text-xs text-slate-700">
-                      <p><span className="font-semibold text-slate-900">Capacity:</span> {plant.capacity}</p>
-                      {plant.location && <p className="truncate"><span className="font-semibold text-slate-900">Location:</span> {plant.location}</p>}
-                    </div>
-                    <div className="mt-3 flex justify-end gap-1 border-t border-blue-100 pt-2">
+
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleOpenEditPlant(plant)}
-                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-blue-800 transition hover:bg-blue-50"
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                        title={`Edit ${plant.name}`}
                         aria-label={`Edit ${plant.name}`}
                       >
-                        Edit
+                        <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeletePlant(plant.id, plant.name)}
-                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-700 transition hover:bg-rose-50"
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title={`Delete ${plant.name}`}
                         aria-label={`Delete ${plant.name}`}
                       >
-                        Remove
+                        <Trash2 className="w-4 h-4" />
                       </button>
+                      <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
                     </div>
                   </article>
                 ))}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-blue-200 bg-white/55 px-4 py-6 text-center">
+              <div className="rounded-2xl border border-dashed border-blue-200 bg-white px-4 py-8 text-center shadow-xs">
                 <p className="text-sm font-semibold text-slate-800">No plants registered yet.</p>
-                <p className="mt-1 text-xs text-slate-600">Add a plant to manage its capacity, location, and operating status.</p>
+                <p className="mt-1 text-xs text-slate-500">Add a plant to manage its capacity, location, and operating status.</p>
               </div>
             )}
           </section>
-        </>
+        </div>
       )}
 
-      {/* Modal: Add Employee */}
+      {/* Modal: Add Employee — Compact High-Density Grid */}
       <Modal
         isOpen={showAddEmpModal}
         onClose={() => setShowAddEmpModal(false)}
         title="Register New Plant Employee"
         subtitle="Add a personnel profile with role-based access clearance."
         icon={UserPlus}
+        maxWidth="max-w-4xl"
       >
-        <form onSubmit={handleAddEmployee} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <form onSubmit={handleAddEmployee} className="space-y-2 sm:space-y-2.5 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Employee ID *
               </label>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <input
                   type="text"
                   required
                   value={empForm.id}
                   onChange={(e) => setEmpForm({ ...empForm, id: e.target.value })}
                   placeholder="e.g. EMP-DRI-001"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                 />
                 <button
                   type="button"
                   onClick={() => setEmpForm({ ...empForm, id: `EMP-${Math.floor(100 + Math.random() * 900)}` })}
-                  className="px-3 py-2 text-xs font-bold bg-cyan-50 hover:bg-cyan-100 text-cyan-700 rounded-xl border border-cyan-200/80 transition-colors cursor-pointer shrink-0"
+                  className="px-2 py-1 text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition-colors cursor-pointer shrink-0"
                   title="Generate ID"
                 >
                   Auto
@@ -605,8 +650,8 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+            <div className="md:col-span-2">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Full Employee Name *
               </label>
               <input
@@ -615,20 +660,18 @@ export default function AdminDashboardPage() {
                 value={empForm.name}
                 onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })}
                 placeholder="e.g. Ramesh Patil"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Designated Role *
               </label>
               <select
                 value={empForm.role}
                 onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {Object.values(ROLES).map((role) => (
                   <option key={role} value={role}>{role}</option>
@@ -637,13 +680,13 @@ export default function AdminDashboardPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Operational Plant *
               </label>
               <select
                 value={empForm.plant}
                 onChange={(e) => setEmpForm({ ...empForm, plant: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {plants.map((p) => (
                   <option key={p.id} value={p.name}>{p.name}</option>
@@ -652,7 +695,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Basic Monthly Wage (₹) *
               </label>
               <input
@@ -660,14 +703,12 @@ export default function AdminDashboardPage() {
                 value={empForm.salary}
                 onChange={(e) => setEmpForm({ ...empForm, salary: e.target.value })}
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Department
               </label>
               <input
@@ -675,17 +716,18 @@ export default function AdminDashboardPage() {
                 value={empForm.department}
                 onChange={(e) => setEmpForm({ ...empForm, department: e.target.value })}
                 placeholder="e.g. Batching, Quality, Fleet"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
+
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Account Status
               </label>
               <select
                 value={empForm.status}
                 onChange={(e) => setEmpForm({ ...empForm, status: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 <option value="Pending Registration">Pending Registration</option>
                 <option value="Pending Approval">Pending Approval</option>
@@ -695,24 +737,33 @@ export default function AdminDashboardPage() {
                 <option value="Suspended">Suspended</option>
               </select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Mobile Number *
+            <div className="md:col-span-2">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
+                Mobile Number (10 Digits) *
               </label>
-              <input
-                type="tel"
-                required
-                value={empForm.mobile}
-                onChange={(e) => setEmpForm({ ...empForm, mobile: e.target.value })}
-                placeholder="+91 98200 44001"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
+              <div className="relative flex items-center">
+                <span className="absolute left-2.5 text-xs font-mono font-bold text-slate-500 select-none">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="9820044001"
+                  value={empForm.mobile}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setEmpForm({ ...empForm, mobile: digits });
+                  }}
+                  className="w-full pl-11 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+
+            <div className="md:col-span-2">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Work Email Address
               </label>
               <input
@@ -720,22 +771,22 @@ export default function AdminDashboardPage() {
                 value={empForm.email}
                 onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })}
                 placeholder="e.g. ramesh@smconcretech.com"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
           </div>
 
-          <div className="pt-3 flex justify-end gap-2.5 border-t border-slate-200">
+          <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowAddEmpModal(false)}
-              className="px-4 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
+              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
             >
               Save Employee
             </button>
@@ -743,29 +794,31 @@ export default function AdminDashboardPage() {
         </form>
       </Modal>
 
-      {/* Modal: Edit Employee */}
+      {/* Modal: Edit Employee — Compact High-Density Grid */}
       <Modal
         isOpen={showEditEmpModal}
         onClose={() => setShowEditEmpModal(false)}
         title="Edit Employee Information"
         subtitle={`Update dossier parameters for ${editingEmp?.name} (${editingEmp?.id})`}
         icon={Edit3}
+        maxWidth="max-w-4xl"
       >
-        <form onSubmit={handleSaveEditEmp} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <form onSubmit={handleSaveEditEmp} className="space-y-2 sm:space-y-2.5 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Employee ID (Read Only)
               </label>
               <input
                 type="text"
                 disabled
                 value={empForm.id}
-                className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-cyan-700 font-mono font-bold cursor-not-allowed"
+                className="w-full px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-blue-700 font-mono font-bold text-xs cursor-not-allowed"
               />
             </div>
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+
+            <div className="md:col-span-2">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Full Employee Name *
               </label>
               <input
@@ -773,20 +826,18 @@ export default function AdminDashboardPage() {
                 required
                 value={empForm.name}
                 onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Designated Role *
               </label>
               <select
                 value={empForm.role}
                 onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {Object.values(ROLES).map((role) => (
                   <option key={role} value={role}>{role}</option>
@@ -795,13 +846,13 @@ export default function AdminDashboardPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Operational Plant *
               </label>
               <select
                 value={empForm.plant}
                 onChange={(e) => setEmpForm({ ...empForm, plant: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 {plants.map((p) => (
                   <option key={p.id} value={p.name}>{p.name}</option>
@@ -810,7 +861,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Basic Monthly Wage (₹) *
               </label>
               <input
@@ -818,31 +869,30 @@ export default function AdminDashboardPage() {
                 value={empForm.salary}
                 onChange={(e) => setEmpForm({ ...empForm, salary: e.target.value })}
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Department
               </label>
               <input
                 type="text"
                 value={empForm.department}
                 onChange={(e) => setEmpForm({ ...empForm, department: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
+
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Account Status
               </label>
               <select
                 value={empForm.status}
                 onChange={(e) => setEmpForm({ ...empForm, status: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
                 <option value="Active">Active Duty</option>
                 <option value="On Leave">On Leave</option>
@@ -850,47 +900,57 @@ export default function AdminDashboardPage() {
                 <option value="Resigned">Resigned</option>
               </select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Mobile Number *
+            <div className="md:col-span-2">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
+                Mobile Number (10 Digits) *
               </label>
-              <input
-                type="tel"
-                required
-                value={empForm.mobile}
-                onChange={(e) => setEmpForm({ ...empForm, mobile: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
+              <div className="relative flex items-center">
+                <span className="absolute left-2.5 text-xs font-mono font-bold text-slate-500 select-none">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="9820044001"
+                  value={empForm.mobile}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setEmpForm({ ...empForm, mobile: digits });
+                  }}
+                  className="w-full pl-11 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+
+            <div className="md:col-span-2">
+              <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
                 Work Email Address
               </label>
               <input
                 type="email"
                 value={empForm.email}
                 onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
           </div>
 
-          <div className="pt-3 flex justify-end gap-2.5 border-t border-slate-200">
+          <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowEditEmpModal(false)}
-              className="px-4 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
+              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
             >
-              Update Employee
+              Save Changes
             </button>
           </div>
         </form>
@@ -1260,8 +1320,8 @@ export default function AdminDashboardPage() {
                         <div className="font-bold text-slate-900 truncate">{rec.employeeName || rec.name}</div>
                         <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
                           <Clock className="w-3 h-3 text-slate-400" />
-                          <span>In: {rec.checkIn || rec.inTime || '08:00 AM'}</span>
-                          <span>• Out: {rec.checkOut || rec.outTime || 'On Duty'}</span>
+                          <span>In: {formatToIndian12Hr(rec.punchIn || rec.checkIn || rec.inTime) || '08:00 AM'}</span>
+                          <span>• Out: {formatToIndian12Hr(rec.punchOut || rec.checkOut || rec.outTime) || 'On Duty'}</span>
                           {rec.plant && <span>• {rec.plant}</span>}
                         </div>
                       </div>

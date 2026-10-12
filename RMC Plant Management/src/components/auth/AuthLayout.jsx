@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function AuthLayout({ children }) {
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-50/60 via-slate-50 to-orange-50/40 text-slate-800 selection:bg-amber-500 selection:text-black relative overflow-x-hidden font-sans p-4 sm:p-6 py-6 sm:py-8">
+    <div className="min-h-screen min-h-[100dvh] w-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-50/60 via-slate-50 to-orange-50/40 text-slate-800 selection:bg-amber-500 selection:text-black relative overflow-x-hidden overflow-y-auto font-sans p-4 sm:p-6 md:p-8">
       
       {/* ========================================================
           MATCHING INDUSTRIAL LIGHT BACKGROUND WITH TEXTURE & WARMTH
@@ -26,14 +26,14 @@ export default function AuthLayout({ children }) {
       <div className="fixed -bottom-32 -right-32 w-[550px] h-[550px] bg-orange-300/25 rounded-full blur-[130px] pointer-events-none z-0 animate-pulse-subtle" />
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-amber-100/40 rounded-full blur-[160px] pointer-events-none z-0" />
 
-      {/* Main Form Container - Centered with balanced breathing room */}
-      <div className="w-full max-w-md z-10 flex flex-col justify-center my-auto">
+      {/* Main Form Container - Centered when space allows, perfectly padded on all 4 sides */}
+      <div className="w-full max-w-md sm:max-w-lg z-10 flex flex-col my-auto py-2">
         {children}
 
         {/* Matching Fresh Industrial Footer */}
-        <div className="w-full mt-4 pt-3 border-t border-slate-300/70 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 font-medium gap-1.5">
+        <div className="w-full mt-4 pt-3 border-t border-slate-300/70 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 font-medium gap-1 shrink-0">
           <span>&copy; {new Date().getFullYear()} SM Concrete Tech Pvt. Ltd.</span>
-          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
             <span>Plant OS v2.4</span>
             <span>•</span>
             <span>Cloud SCADA Gateway</span>

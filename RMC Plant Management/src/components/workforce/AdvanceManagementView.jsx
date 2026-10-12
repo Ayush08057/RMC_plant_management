@@ -253,37 +253,37 @@ export default function AdvanceManagementView({ employeeFilter = null }) {
           <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2">
             <div className="flex items-start justify-between gap-2 min-w-0">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white truncate">{row.employeeName}</div>
-                <div className="text-xs font-mono text-slate-400">{row.id} • {row.requestDate}</div>
+                <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
+                <div className="text-xs font-mono text-cyan-700 font-bold">{row.id} • {row.requestDate}</div>
               </div>
               <StatusBadge status={row.status} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-slate-200">
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Requested:</span>
-                <span className="text-white font-bold">₹ {row.advanceAmount.toLocaleString('en-IN')}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Requested:</span>
+                <span className="text-slate-900 font-bold">₹ {row.advanceAmount.toLocaleString('en-IN')}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Approved:</span>
-                <span className="text-emerald-400 font-bold">₹ {row.approvedAmount?.toLocaleString('en-IN') || 0}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Approved:</span>
+                <span className="text-emerald-700 font-bold">₹ {row.approvedAmount?.toLocaleString('en-IN') || 0}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Recovered:</span>
-                <span className="text-cyan-400">₹ {row.recoveredAmount?.toLocaleString('en-IN') || 0}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Recovered:</span>
+                <span className="text-cyan-700 font-semibold">₹ {row.recoveredAmount?.toLocaleString('en-IN') || 0}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase block">Balance:</span>
-                <span className="text-amber-400 font-bold">₹ {row.balance?.toLocaleString('en-IN') || 0}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Balance:</span>
+                <span className="text-amber-700 font-bold">₹ {row.balance?.toLocaleString('en-IN') || 0}</span>
               </div>
             </div>
 
             {canApprove && row.status === 'Pending' && (
-              <div className="pt-2 border-t border-slate-800 flex justify-end">
+              <div className="pt-2 border-t border-slate-200 flex justify-end">
                 <button
                   type="button"
                   onClick={() => handleOpenReview(row)}
-                  className="w-full py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold"
+                  className="w-full py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
                 >
                   Approve / Decline
                 </button>
@@ -305,15 +305,21 @@ export default function AdvanceManagementView({ employeeFilter = null }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-slate-400 font-semibold block mb-1">Employee</label>
-              <select
-                value={form.employeeId}
-                onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-emerald-500"
-              >
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                ))}
-              </select>
+              {employeeFilter || user?.role !== 'Admin' ? (
+                <div className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs">
+                  {user?.name || 'Staff'} ({employeeFilter || user?.employeeId || user?.id})
+                </div>
+              ) : (
+                <select
+                  value={form.employeeId}
+                  onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:border-emerald-500"
+                >
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="text-slate-400 font-semibold block mb-1">Advance Amount (₹) *</label>
