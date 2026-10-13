@@ -142,7 +142,7 @@ export default function OwnerDashboardPage() {
           </section>
 
           {/* 4 Primary KPI Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
             <KPICard
               title="Consolidated Month Revenue"
               value={kpis.totalRevenue}
@@ -181,131 +181,131 @@ export default function OwnerDashboardPage() {
             />
           </section>
 
-      {/* Executive Management Insights */}
-      <section className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-rose-50/90 via-white to-purple-50/90 border border-rose-200/90 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-            <Award className="w-4 h-4 text-rose-600" />
-            <span>Executive Business Performance Insights</span>
-          </h2>
-          <span className="text-[10px] font-mono text-emerald-700 font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200">
-            BOARD AUDIT VERIFIED
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {managementInsights.length > 0 ? (
-            managementInsights.map((ins, idx) => (
-              <div key={idx} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">{ins.title}</span>
-                <div className="text-sm sm:text-base font-bold text-slate-900 truncate">{ins.value}</div>
-                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed font-medium">{ins.desc}</p>
-              </div>
-            ))
-          ) : (
-            <div className="col-span-full py-4 text-center text-xs text-slate-500 font-medium">
-              No executive performance insights generated yet. Telemetry will calibrate with live production data.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Revenue Trend Visualizer & Top Accounts Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ChartCard
-            title="Consolidated Monthly Gross Revenue (Crores INR)"
-            subtitle="Trailing 6-month commercial revenue performance across all batching plants"
-            icon={TrendingUp}
-            data={revenueTrendData}
-            dataKey="revenue"
-            labelKey="month"
-            unit="Cr"
-            color="rose"
-          />
-        </div>
-
-        {/* Top 5 Revenue Contributing Clients */}
-        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-600" />
-                <span>Top Revenue Accounts</span>
-              </h3>
-              <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">TOP 5</span>
-            </div>
-
-            <div className="space-y-3">
-              {topClients.length > 0 ? (
-                topClients.map((client, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-800 font-bold truncate max-w-[65%]">{client.client}</span>
-                      <span className="font-bold text-emerald-700 font-mono">{client.revenue}</span>
+          {/* Primary Operations Table: Multi-Plant Performance Comparison Table */}
+          <section>
+            <DataTable
+              title="Multi-Plant Comparative Operations Table"
+              subtitle="Real-time KPI comparison across central, coastal, and highway concrete nodes"
+              icon={Building2}
+              columns={plantColumns}
+              data={plantComparison}
+              searchPlaceholder="Search plant node..."
+              renderMobileCard={(p) => (
+                <div className="w-full max-w-full overflow-hidden min-w-0">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-slate-900 truncate">{p.plant}</div>
+                      <div className="text-xs text-slate-500">Dispatches: {p.dispatches} Loads</div>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                      <span>{client.volume}</span>
-                      <span className="text-amber-700 font-bold">{client.share} of gross</span>
+                    <StatusBadge status={p.status} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 uppercase block font-bold">Actual Production:</span>
+                      <span className="font-mono font-bold text-slate-900 truncate block">{p.production}</span>
                     </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 uppercase block font-bold">Gross Revenue:</span>
+                      <span className="font-mono font-bold text-emerald-700 truncate block">{p.revenue}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 uppercase block font-bold">Target Goal:</span>
+                      <span className="font-mono text-slate-600 truncate block">{p.target}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 uppercase block font-bold">Equipment OEE:</span>
+                      <span className="font-mono text-cyan-700 font-bold truncate block">{p.oee}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            />
+          </section>
+
+          {/* Executive Management Insights */}
+          <section className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-purple-50/90 border border-rose-200/90 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <Award className="w-4 h-4 text-rose-600" />
+                <span>Executive Business Performance Insights</span>
+              </h2>
+              <span className="text-[10px] font-mono text-emerald-700 font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200">
+                BOARD AUDIT VERIFIED
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {managementInsights.length > 0 ? (
+                managementInsights.map((ins, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">{ins.title}</span>
+                    <div className="text-sm font-bold text-slate-900 truncate">{ins.value}</div>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed font-medium">{ins.desc}</p>
                   </div>
                 ))
               ) : (
-                <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                  No client accounts billed yet.
+                <div className="col-span-full py-4 text-center text-xs text-slate-500 font-medium">
+                  No executive performance insights generated yet. Telemetry will calibrate with live production data.
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-            <span>Outstanding Due: {kpis.outstandingAmount}</span>
-            <span className="text-emerald-700 font-bold">100% Verified</span>
-          </div>
-        </div>
-      </section>
+          {/* Revenue Trend Visualizer & Top Accounts Section */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <ChartCard
+                title="Consolidated Monthly Gross Revenue (Crores INR)"
+                subtitle="Trailing 6-month commercial revenue performance across all batching plants"
+                icon={TrendingUp}
+                data={revenueTrendData}
+                dataKey="revenue"
+                labelKey="month"
+                unit="Cr"
+                color="rose"
+              />
+            </div>
 
-      {/* Multi-Plant Performance Comparison Table */}
-      <section>
-        <DataTable
-          title="Multi-Plant Comparative Operations Table"
-          subtitle="Real-time KPI comparison across central, coastal, and highway concrete nodes"
-          icon={Building2}
-          columns={plantColumns}
-          data={plantComparison}
-          searchPlaceholder="Search plant node..."
-          renderMobileCard={(p) => (
-            <div className="w-full max-w-full overflow-hidden min-w-0">
-              <div className="flex items-start justify-between gap-2 min-w-0">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-slate-900 truncate">{p.plant}</div>
-                  <div className="text-xs text-slate-500">Dispatches: {p.dispatches} Loads</div>
+            {/* Top 5 Revenue Contributing Clients */}
+            <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="w-4 h-4 text-emerald-600" />
+                    <span>Top Revenue Accounts</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">TOP 5</span>
                 </div>
-                <StatusBadge status={p.status} />
+
+                <div className="space-y-3">
+                  {topClients.length > 0 ? (
+                    topClients.map((client, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-800 font-bold truncate max-w-[65%]">{client.client}</span>
+                          <span className="font-bold text-emerald-700 font-mono">{client.revenue}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                          <span>{client.volume}</span>
+                          <span className="text-amber-700 font-bold">{client.share} of gross</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                      No client accounts billed yet.
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
-                <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Actual Production:</span>
-                  <span className="font-mono font-bold text-slate-900 truncate block">{p.production}</span>
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Gross Revenue:</span>
-                  <span className="font-mono font-bold text-emerald-700 truncate block">{p.revenue}</span>
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Target Goal:</span>
-                  <span className="font-mono text-slate-600 truncate block">{p.target}</span>
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Equipment OEE:</span>
-                  <span className="font-mono text-cyan-700 font-bold truncate block">{p.oee}</span>
-                </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+                <span>Outstanding Due: {kpis.outstandingAmount}</span>
+                <span className="text-emerald-700 font-bold">100% Verified</span>
               </div>
             </div>
-          )}
-        />
-      </section>
+          </section>
 
       {/* Major Operational Alerts for Directors */}
       <section className="space-y-3">

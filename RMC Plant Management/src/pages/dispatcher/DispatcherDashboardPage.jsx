@@ -186,8 +186,8 @@ export default function DispatcherDashboardPage() {
 
       {activeTab === 'dashboard' && (
         <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
-          {/* 4 Primary KPI Cards + Secondary */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 4 Primary KPI Cards */}
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
             <KPICard
               title="Vehicles On Route"
               value={`${kpis.vehiclesOnRoute} Mixers`}
@@ -226,12 +226,100 @@ export default function DispatcherDashboardPage() {
             />
           </section>
 
+          {/* Primary Operations Table: Main Dispatch Queue Section with Filter Bar */}
+          <section className="space-y-3">
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+              {['All', 'On Route', 'Loading', 'Assigned', 'Pending', 'Delivered', 'Delayed'].map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shadow-2xs ${
+                    statusFilter === status
+                      ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-500/25 ring-2 ring-blue-500/30'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            <DataTable
+              title="Central Dispatch Queue"
+              subtitle="Real-time transit mixer journey milestones from batching gate release to site pour completion"
+              icon={Navigation}
+              columns={columns}
+              data={filteredDispatches}
+              searchPlaceholder="Search dispatch ID, customer, site, vehicle, driver..."
+              renderMobileCard={(dsp) => (
+                <div className="w-full max-w-full overflow-hidden min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs font-bold text-blue-600 truncate">{dsp.id}</div>
+                      <div className="text-sm font-bold text-slate-900 mt-0.5 truncate">{dsp.customer}</div>
+                      <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span className="truncate">{dsp.site}</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={dsp.status} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block">Vehicle:</span>
+                      <span className="font-mono text-slate-800 font-medium truncate block">{dsp.vehicle}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block">Driver:</span>
+                      <span className="text-slate-700 font-medium truncate block">{dsp.driver}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block">Mix & Qty:</span>
+                      <span className="font-semibold text-amber-700">{dsp.grade} • {dsp.qty}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block">Target ETA:</span>
+                      <span className="font-mono text-amber-700 font-semibold">{dsp.eta}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 font-mono">Loaded: {dsp.loadTime}</span>
+                    {dsp.status === 'Loading' && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus(dsp.id, 'On Route')}
+                        className="px-3 py-1 rounded-xl bg-cyan-600 text-white text-xs font-bold shadow-xs hover:bg-cyan-700"
+                      >
+                        Release Dispatch
+                      </button>
+                    )}
+                    {dsp.status === 'On Route' && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus(dsp.id, 'Delivered')}
+                        className="px-3 py-1 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs hover:bg-emerald-700"
+                      >
+                        Mark Delivered
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            />
+          </section>
+
           {/* Quick Operational Commands Bar */}
           <section>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
               Dispatch Operations Commands
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <QuickAction
                 icon={Plus}
                 title="Create Dispatch"
@@ -262,94 +350,6 @@ export default function DispatcherDashboardPage() {
               />
             </div>
           </section>
-
-          {/* Main Dispatch Queue Section with Filter Bar */}
-          <section className="space-y-3">
-            {/* Status Filter Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
-              {['All', 'On Route', 'Loading', 'Assigned', 'Pending', 'Delivered', 'Delayed'].map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shadow-2xs ${
-                    statusFilter === status
-                      ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-500/25 ring-2 ring-blue-500/30'
-                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-
-            <DataTable
-              title="Central Dispatch Queue"
-          subtitle="Real-time transit mixer journey milestones from batching gate release to site pour completion"
-          icon={Navigation}
-          columns={columns}
-          data={filteredDispatches}
-          searchPlaceholder="Search dispatch ID, customer, site, vehicle, driver..."
-          renderMobileCard={(dsp) => (
-            <div className="w-full max-w-full overflow-hidden min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-xs font-bold text-blue-600 truncate">{dsp.id}</div>
-                  <div className="text-sm font-bold text-slate-900 mt-0.5 truncate">{dsp.customer}</div>
-                  <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
-                    <span className="truncate">{dsp.site}</span>
-                  </div>
-                </div>
-                <div className="shrink-0">
-                  <StatusBadge status={dsp.status} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Vehicle:</span>
-                  <span className="font-mono text-slate-800 font-medium truncate block">{dsp.vehicle}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Driver:</span>
-                  <span className="text-slate-700 font-medium truncate block">{dsp.driver}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Mix & Qty:</span>
-                  <span className="font-semibold text-amber-700">{dsp.grade} • {dsp.qty}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Target ETA:</span>
-                  <span className="font-mono text-amber-700 font-semibold">{dsp.eta}</span>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
-                <span className="text-[10px] text-slate-500 font-mono">Loaded: {dsp.loadTime}</span>
-                {dsp.status === 'Loading' && (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(dsp.id, 'On Route')}
-                    className="px-3 py-1 rounded-xl bg-cyan-600 text-white text-xs font-bold shadow-xs hover:bg-cyan-700"
-                  >
-                    Release Dispatch
-                  </button>
-                )}
-                {dsp.status === 'On Route' && (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(dsp.id, 'Delivered')}
-                    className="px-3 py-1 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs hover:bg-emerald-700"
-                  >
-                    Mark Delivered
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        />
-      </section>
 
       {/* Fleet Live Yard Roster */}
       <section className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs">

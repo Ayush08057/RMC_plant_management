@@ -103,43 +103,41 @@ export default function KPICard({
             handleCardClick(e);
           }
         }}
-        className={`p-3.5 sm:p-4 rounded-2xl ${activeColor.cardBg} border border-slate-200/90 transition-all duration-300 shadow-2xs hover:shadow-lg flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer ${activeColor.bgHover} hover:-translate-y-0.5 active:scale-[0.99]`}
+        className={`px-3 py-2 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl ${activeColor.cardBg} border border-slate-200/85 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer ${activeColor.bgHover} hover:-translate-y-0.5 active:scale-[0.99]`}
       >
         <div className="relative z-10">
-          <div className="flex items-start justify-between gap-2 mb-1.5">
-            <div className="min-w-0 flex-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight block">
-                {title}
-              </span>
-            </div>
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-tight block truncate font-sans">
+              {title}
+            </span>
             {Icon && (
-              <div className="w-8 h-8 rounded-xl bg-white border border-black text-black flex items-center justify-center shrink-0 shadow-2xs transition-transform duration-200 group-hover:scale-105">
-                <Icon className="w-4 h-4 text-black" />
+              <div className="w-5.5 h-5.5 rounded-md bg-slate-50 border border-slate-200/70 text-slate-500 flex items-center justify-center shrink-0 shadow-2xs transition-transform duration-200 group-hover:scale-105">
+                <Icon className="w-3 h-3 text-slate-500" />
               </div>
             )}
           </div>
-          <div className="text-2xl sm:text-[26px] font-black text-slate-900 tracking-tight font-sans my-1 group-hover:text-slate-950 transition-colors">
+          <div className="text-base sm:text-[17px] font-extrabold text-slate-900 tracking-tight font-sans tabular-nums my-0.5 leading-snug group-hover:text-blue-900 transition-colors">
             {value}
           </div>
         </div>
 
         {(subtext || trend) && (
-          <div className="mt-2.5 pt-2 border-t border-slate-100/90 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-1.5 font-medium min-w-0 relative z-10">
+          <div className="mt-1 pt-1 border-t border-slate-100/90 flex items-center justify-between text-[9.5px] sm:text-[10px] text-slate-500 gap-1 font-medium min-w-0 relative z-10">
             {subtext && (
-              <span className="font-semibold text-slate-600 text-[11px] leading-tight truncate flex-1 min-w-0" title={subtext}>
+              <span className="font-medium text-slate-500 text-[9.5px] sm:text-[10px] leading-tight truncate flex-1 min-w-0" title={subtext}>
                 {subtext}
               </span>
             )}
             {trend && (
-              <span className={`inline-flex items-center gap-1 font-bold shrink-0 text-[10px] px-2 py-0.5 rounded-md border shadow-2xs ${
+              <span className={`inline-flex items-center gap-0.5 font-bold shrink-0 text-[8.5px] px-1.5 py-0.2 rounded border shadow-2xs ${
                 trendType === 'up' 
                   ? 'text-emerald-800 bg-emerald-50 border-emerald-200' 
                   : trendType === 'down' 
                     ? 'text-rose-800 bg-rose-50 border-rose-200' 
                     : activeColor.badgeBg
               }`}>
-                {trendType === 'up' ? <TrendingUp className="w-3 h-3 text-emerald-600 shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-3 h-3 text-rose-600 shrink-0" /> : null}
-                <span className="font-mono whitespace-nowrap">{trend}</span>
+                {trendType === 'up' ? <TrendingUp className="w-2.5 h-2.5 text-emerald-600 shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-2.5 h-2.5 text-rose-600 shrink-0" /> : null}
+                <span className="whitespace-nowrap font-sans">{trend}</span>
               </span>
             )}
           </div>

@@ -84,6 +84,7 @@ export default function AppLayout({
       {/* Sidebar Navigation */}
       <Sidebar
         isOpen={sidebarOpen}
+        isCollapsed={!sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         activeTab={activeTab}
         onSelectTab={onSelectTab}
@@ -91,7 +92,7 @@ export default function AppLayout({
 
       {/* Main Content Layout - Header strictly pinned at the top */}
       <div className={`relative z-10 flex-1 h-screen max-h-screen flex flex-col transition-all duration-300 w-full max-w-full min-w-0 overflow-hidden ${
-        sidebarOpen ? 'md:pl-64' : 'md:pl-0'
+        sidebarOpen ? 'md:pl-64' : 'md:pl-[68px]'
       }`}>
         {/* Top Header Bar - Fixed strictly to the upper part */}
         <Header 
@@ -158,47 +159,22 @@ export default function AppLayout({
           </div>
         )}
 
-        {/* Operational Page Header Banner - Reference Styled Royal Navy Hero Card */}
-        {(title || subtitle) && (
-          <div className="px-2.5 sm:px-3.5 pt-2 pb-1 shrink-0">
-            <div className="bg-gradient-to-br from-[#091538] via-[#0d2a7a] to-[#1d52ce] text-white rounded-2xl md:rounded-3xl p-3 sm:p-4 shadow-xl shadow-blue-950/25 border border-blue-500/30 relative overflow-hidden backdrop-blur-xl">
-              {/* Subtle Ambient Glow & Industrial Factory Watermark */}
-              <div className="absolute -right-8 -bottom-8 w-44 h-44 bg-blue-400/15 rounded-full blur-2xl pointer-events-none" />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/[0.08] pointer-events-none hidden md:block">
-                <Factory className="w-28 h-28" />
+        {/* Sleek Compact Header Bar - Maximizes Screen Space for Tables */}
+        {(title || actions) && (
+          <div className="px-2 sm:px-3 pt-1.5 pb-0.5 shrink-0">
+            <div className="bg-gradient-to-r from-[#091538] via-[#0d2a7a] to-[#1d52ce] text-white rounded-xl px-3.5 py-1.5 shadow-sm border border-blue-500/25 flex items-center justify-between gap-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 shadow-xs shadow-cyan-300/50" />
+                <h1 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
+                  {title}
+                </h1>
               </div>
-              
-              <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0 relative z-10">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                    {badge && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/15 text-blue-100 border border-white/25 shadow-2xs tracking-wide flex items-center gap-1.5 backdrop-blur-md">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse shadow-xs shadow-cyan-300/50" />
-                        <span>{badge}</span>
-                      </span>
-                    )}
-                    <span className="px-2 py-0.5 rounded-full text-[9px] text-blue-100/90 font-mono font-bold bg-white/10 border border-white/20 tracking-widest uppercase backdrop-blur-md">
-                      RMC ENTERPRISE MODULE
-                    </span>
-                  </div>
-                  
-                  <h1 className="text-base sm:text-lg md:text-xl font-black text-white tracking-tight leading-snug truncate drop-shadow-sm">
-                    {title}
-                  </h1>
-                  
-                  {subtitle && (
-                    <p className="text-[11px] sm:text-xs text-blue-100/85 font-medium truncate mt-0.5">
-                      {subtitle}
-                    </p>
-                  )}
-                </div>
 
-                {actions && (
-                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                    {actions}
-                  </div>
-                )}
-              </div>
+              {actions && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {actions}
+                </div>
+              )}
             </div>
           </div>
         )}

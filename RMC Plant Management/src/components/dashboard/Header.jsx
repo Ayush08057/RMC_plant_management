@@ -202,22 +202,6 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             )}
           </button>
 
-          {/* Prominent Company Brand Emblem in Top Bar */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white p-0.5 border border-amber-300 shadow-xs ring-2 ring-amber-400/25 flex items-center justify-center shrink-0">
-              <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain" />
-            </div>
-            <div className="hidden lg:block leading-tight">
-              <div className="text-xs font-black text-slate-900 tracking-wider font-mono flex items-center gap-1.5">
-                <span>SM CONCRETECH</span>
-                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">RMC</span>
-              </div>
-              <div className="text-[10px] font-semibold text-slate-500">
-                Ready-Mix Concrete
-              </div>
-            </div>
-          </div>
-
           {/* Plant / Company Selector */}
           <div className="relative shrink-0">
             <button

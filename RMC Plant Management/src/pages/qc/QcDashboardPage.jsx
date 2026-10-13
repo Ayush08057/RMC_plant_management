@@ -163,7 +163,7 @@ export default function QcDashboardPage() {
       {activeTab === 'dashboard' && (
         <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* 4 Primary KPI Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
         <KPICard
           title="Tests Completed Today"
           value={kpis.testsToday}
@@ -202,44 +202,7 @@ export default function QcDashboardPage() {
         />
       </section>
 
-      {/* Operational Actions */}
-      <section>
-        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-          Quality Control Quick Commands
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction
-            icon={FlaskConical}
-            title="Log QC Sample"
-            desc="Enter slump & flow result"
-            color="cyan"
-            onClick={() => setShowTestModal(true)}
-          />
-          <QuickAction
-            icon={CheckCircle2}
-            title="Cube Crushing"
-            desc="Record 7d / 28d compressive"
-            color="emerald"
-            onClick={() => setToastMessage('Opened digital compressive testing machine input.')}
-          />
-          <QuickAction
-            icon={Sliders}
-            title="Mix Designs"
-            desc="Inspect M20 to M50 recipes"
-            color="purple"
-            onClick={() => setToastMessage('Mix design library (14 certified grades loaded).')}
-          />
-          <QuickAction
-            icon={Download}
-            title="Generate QC Cert"
-            desc="Export customer test sheet"
-            color="blue"
-            onClick={() => setToastMessage('Customer quality conformance certificate compiled.')}
-          />
-        </div>
-      </section>
-
-      {/* Today's QC Tests Table */}
+      {/* Primary Operations Table: Today's QC Tests Table */}
       <section>
         <DataTable
           title="Today's Concrete Quality Control Tests"
@@ -295,6 +258,43 @@ export default function QcDashboardPage() {
             </div>
           )}
         />
+      </section>
+
+      {/* Operational Actions */}
+      <section>
+        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+          Quality Control Quick Commands
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <QuickAction
+            icon={FlaskConical}
+            title="Log QC Sample"
+            desc="Enter slump & flow result"
+            color="cyan"
+            onClick={() => setShowTestModal(true)}
+          />
+          <QuickAction
+            icon={CheckCircle2}
+            title="Cube Crushing"
+            desc="Record 7d / 28d compressive"
+            color="emerald"
+            onClick={() => setToastMessage('Opened digital compressive testing machine input.')}
+          />
+          <QuickAction
+            icon={Sliders}
+            title="Mix Designs"
+            desc="Inspect M20 to M50 recipes"
+            color="purple"
+            onClick={() => setToastMessage('Mix design library (14 certified grades loaded).')}
+          />
+          <QuickAction
+            icon={Download}
+            title="Generate QC Cert"
+            desc="Export customer test sheet"
+            color="blue"
+            onClick={() => setToastMessage('Customer quality conformance certificate compiled.')}
+          />
+        </div>
       </section>
 
       {/* Cube Crushing Schedule & Failed Batches Section */}

@@ -174,7 +174,7 @@ export default function AccountantDashboardPage() {
           </section>
 
           {/* 4 Primary KPI Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
             <KPICard
               title="Today's Revenue"
               value={kpis.todayRevenue}
@@ -213,198 +213,198 @@ export default function AccountantDashboardPage() {
             />
           </section>
 
-      {/* Invoice Status Distribution & Revenue Trend Chart */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Invoice Status Snapshot Card */}
-        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <ReceiptText className="w-4 h-4 text-emerald-600" />
-                <span>Invoice Pipeline</span>
-              </h3>
-              <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                {invoiceBreakdown.paid + invoiceBreakdown.pending + invoiceBreakdown.overdue} TOTAL
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-emerald-900 block">Paid & Reconciled</span>
-                  <span className="text-[11px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
-                </div>
-                <span className="text-xl font-black text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-amber-900 block">Pending Clearance</span>
-                  <span className="text-[11px] text-slate-500">Awaiting credit period maturity</span>
-                </div>
-                <span className="text-xl font-black text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-rose-900 block">Overdue (&gt; 30 Days)</span>
-                  <span className="text-[11px] text-slate-500">Follow-up reminders issued</span>
-                </div>
-                <span className="text-xl font-black text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-            <span>GST E-Way Bills: 100% Synced</span>
-            <span className="text-emerald-700 font-bold">• Zero Non-Compliance</span>
-          </div>
-        </div>
-
-        {/* 7-Day Revenue & Collection Chart */}
-        <div className="lg:col-span-2">
-          <ChartCard
-            title="Daily Revenue vs Cash Collections (Lakhs INR)"
-            subtitle="Real-time cashflow balance from electronic invoice reconciliations"
-            icon={TrendingUp}
-            data={revenueTrend}
-            dataKey="revenue"
-            labelKey="day"
-            unit="Lakhs"
-            color="emerald"
-            secondaryKey="collections"
-            secondaryUnit="Lakhs"
-          />
-        </div>
-      </section>
-
-      {/* Quick Actions & Cost Breakdown */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Finance Operations Quick Commands
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <QuickAction
+          {/* Primary Operations Table: Customer Payment & Ledger Table */}
+          <section>
+            <DataTable
+              title="Customer Invoices & Ledger Table"
+              subtitle="Tax invoices generated from electronic batch delivery tickets"
               icon={ReceiptText}
-              title="Create Invoice"
-              desc="Draft GST delivery challan"
-              color="emerald"
-              onClick={() => setShowInvoiceModal(true)}
-            />
-            <QuickAction
-              icon={CreditCard}
-              title="Record Payment"
-              desc="Log RTGS / NEFT transfer"
-              color="blue"
-              onClick={() => setShowPaymentModal(true)}
-            />
-            <QuickAction
-              icon={IndianRupee}
-              title="Receivables"
-              desc="Inspect client aged ledgers"
-              color="amber"
-              onClick={() => setToastMessage(`Filtered to ${kpis.outstandingReceivables || '₹ 0'} pending receivables.`)}
-            />
-            <QuickAction
-              icon={FileText}
-              title="GST Audit"
-              desc="Export GSTR-1 & B2B report"
-              color="purple"
-              onClick={() => setToastMessage('GSTR-1 report export initiated.')}
-            />
-          </div>
-
-          {invoiceBreakdown.overdue > 0 && (
-            <AlertCard
-              title="Overdue Balance Notice Issued"
-              desc="Outstanding client invoices exceeded 30 days. Auto-reminder sent to accounts department."
-              time="Today"
-              type="warning"
-              actionLabel="View Statement"
-              onAction={() => setToastMessage('Opened Overdue Account Statements')}
-            />
-          )}
-        </div>
-
-        {/* Expense Summary Breakdown Card */}
-        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-rose-600" />
-            <span>Monthly Raw Material Costings</span>
-          </h3>
-
-          <div className="space-y-3">
-            {expenseSummary.length > 0 ? (
-              expenseSummary.map((exp, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-700 font-medium truncate max-w-[65%]">{exp.category}</span>
-                    <span className="font-bold text-slate-900 font-mono">{exp.amount}</span>
+              columns={columns}
+              data={ledgers}
+              searchPlaceholder="Search client, invoice number, mix grade..."
+              renderMobileCard={(inv) => (
+                <div className="w-full max-w-full overflow-hidden min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs font-bold text-emerald-700 truncate">{inv.invoice}</div>
+                      <div className="text-sm font-bold text-slate-900 mt-0.5 truncate">{inv.client}</div>
+                      <div className="text-xs text-slate-500 truncate">Mix: {inv.grade} • {inv.volume}</div>
+                    </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={inv.status} />
+                    </div>
                   </div>
-                  <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
-                      style={{ width: `${exp.percent}%` }}
-                    />
+
+                  <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Amount:</span>
+                      <span className="font-bold text-slate-900 font-mono text-sm">{inv.amount}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Due Date:</span>
+                      <span className="font-mono text-slate-700">{inv.dueDate}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-200 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setToastMessage(`Downloading Invoice ${inv.invoice}`)}
+                      className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl cursor-pointer transition-colors"
+                    >
+                      Download Challan PDF
+                    </button>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                No expense breakdown records logged for the current period.
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+              )}
+            />
+          </section>
 
-      {/* Customer Payment & Ledger Table */}
-      <section>
-        <DataTable
-          title="Customer Invoices & Ledger Table"
-          subtitle="Tax invoices generated from electronic batch delivery tickets"
-          icon={ReceiptText}
-          columns={columns}
-          data={ledgers}
-          searchPlaceholder="Search client, invoice number, mix grade..."
-          renderMobileCard={(inv) => (
-            <div className="w-full max-w-full overflow-hidden min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-xs font-bold text-emerald-700 truncate">{inv.invoice}</div>
-                  <div className="text-sm font-bold text-slate-900 mt-0.5 truncate">{inv.client}</div>
-                  <div className="text-xs text-slate-500 truncate">Mix: {inv.grade} • {inv.volume}</div>
+          {/* Invoice Status Distribution & Revenue Trend Chart */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Invoice Status Snapshot Card */}
+            <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <ReceiptText className="w-4 h-4 text-emerald-600" />
+                    <span>Invoice Pipeline</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                    {invoiceBreakdown.paid + invoiceBreakdown.pending + invoiceBreakdown.overdue} TOTAL
+                  </span>
                 </div>
-                <div className="shrink-0">
-                  <StatusBadge status={inv.status} />
+
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-emerald-900 block">Paid & Reconciled</span>
+                      <span className="text-[11px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
+                    </div>
+                    <span className="text-xl font-black text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-amber-900 block">Pending Clearance</span>
+                      <span className="text-[11px] text-slate-500">Awaiting credit period maturity</span>
+                    </div>
+                    <span className="text-xl font-black text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-rose-900 block">Overdue (&gt; 30 Days)</span>
+                      <span className="text-[11px] text-slate-500">Follow-up reminders issued</span>
+                    </div>
+                    <span className="text-xl font-black text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Amount:</span>
-                  <span className="font-bold text-slate-900 font-mono text-sm">{inv.amount}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Due Date:</span>
-                  <span className="font-mono text-slate-700">{inv.dueDate}</span>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2 border-t border-slate-200 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setToastMessage(`Downloading Invoice ${inv.invoice}`)}
-                  className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl cursor-pointer transition-colors"
-                >
-                  Download Challan PDF
-                </button>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+                <span>GST E-Way Bills: 100% Synced</span>
+                <span className="text-emerald-700 font-bold">• Zero Non-Compliance</span>
               </div>
             </div>
-          )}
-        />
-      </section>
+
+            {/* 7-Day Revenue & Collection Chart */}
+            <div className="lg:col-span-2">
+              <ChartCard
+                title="Daily Revenue vs Cash Collections (Lakhs INR)"
+                subtitle="Real-time cashflow balance from electronic invoice reconciliations"
+                icon={TrendingUp}
+                data={revenueTrend}
+                dataKey="revenue"
+                labelKey="day"
+                unit="Lakhs"
+                color="emerald"
+                secondaryKey="collections"
+                secondaryUnit="Lakhs"
+              />
+            </div>
+          </section>
+
+          {/* Quick Actions & Cost Breakdown */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                Finance Operations Quick Commands
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <QuickAction
+                  icon={ReceiptText}
+                  title="Create Invoice"
+                  desc="Draft GST delivery challan"
+                  color="emerald"
+                  onClick={() => setShowInvoiceModal(true)}
+                />
+                <QuickAction
+                  icon={CreditCard}
+                  title="Record Payment"
+                  desc="Log RTGS / NEFT transfer"
+                  color="blue"
+                  onClick={() => setShowPaymentModal(true)}
+                />
+                <QuickAction
+                  icon={IndianRupee}
+                  title="Receivables"
+                  desc="Inspect client aged ledgers"
+                  color="amber"
+                  onClick={() => setToastMessage(`Filtered to ${kpis.outstandingReceivables || '₹ 0'} pending receivables.`)}
+                />
+                <QuickAction
+                  icon={FileText}
+                  title="GST Audit"
+                  desc="Export GSTR-1 & B2B report"
+                  color="purple"
+                  onClick={() => setToastMessage('GSTR-1 report export initiated.')}
+                />
+              </div>
+
+              {invoiceBreakdown.overdue > 0 && (
+                <AlertCard
+                  title="Overdue Balance Notice Issued"
+                  desc="Outstanding client invoices exceeded 30 days. Auto-reminder sent to accounts department."
+                  time="Today"
+                  type="warning"
+                  actionLabel="View Statement"
+                  onAction={() => setToastMessage('Opened Overdue Account Statements')}
+                />
+              )}
+            </div>
+
+            {/* Expense Summary Breakdown Card */}
+            <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-rose-600" />
+                <span>Monthly Raw Material Costings</span>
+              </h3>
+
+              <div className="space-y-3">
+                {expenseSummary.length > 0 ? (
+                  expenseSummary.map((exp, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-700 font-medium truncate max-w-[65%]">{exp.category}</span>
+                        <span className="font-bold text-slate-900 font-mono">{exp.amount}</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
+                          style={{ width: `${exp.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                    No expense breakdown records logged for the current period.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
       )}
 

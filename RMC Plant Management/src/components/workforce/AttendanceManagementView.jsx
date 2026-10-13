@@ -38,7 +38,8 @@ import {
   Phone,
   LayoutList,
   LayoutGrid,
-  ArrowLeft
+  ArrowLeft,
+  Activity
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -494,7 +495,7 @@ export default function AttendanceManagementView({
       const staffReport = (dailyWork || []).find(
         (w) => (w.employeeId === emp.employeeId || w.employeeId === emp.id) && w.date === selectedDate
       );
-      const isReportDone = Boolean(staffReport);
+      const isReportDone = Boolean(staffReport || record?.workReport || (record?.remarks && !record.remarks.includes('Admin manual')));
 
       // 1. Punctuality: Is employee on time or not? (Shift starts 09:00 AM, 15m grace)
       let punctualityLabel = 'Not Clocked';
@@ -533,34 +534,8 @@ export default function AttendanceManagementView({
         dutyComplianceBadge = 'cyan';
       }
 
-      // 3. Today's Work Report: Concise summary of what specific work they have done today
-      let todayWorkSummary = staffReport?.remarks || '';
-      if (!todayWorkSummary || todayWorkSummary.startsWith('Submitted via')) {
-        const roleLower = emp.role.toLowerCase();
-        if (roleLower.includes('driver')) {
-          todayWorkSummary = isReportDone
-            ? 'Delivered 3 transit mixer loads (24 m³)'
-            : 'Transit mixer delivery trips in progress';
-        } else if (roleLower.includes('supervisor')) {
-          todayWorkSummary = isReportDone
-            ? 'Pier 24 concrete pouring inspected (slump pass)'
-            : 'Pouring inspection & slump verification';
-        } else if (roleLower.includes('accountant')) {
-          todayWorkSummary = isReportDone
-            ? 'Daybook verified & 6 Cash Memos posted'
-            : 'Cash memo invoicing & vouchers review';
-        } else if (roleLower.includes('incharge')) {
-          todayWorkSummary = isReportDone
-            ? '180 m³ plant batching & silos verified'
-            : 'Plant batching schedule supervision';
-        } else if (roleLower.includes('operator')) {
-          todayWorkSummary = isReportDone
-            ? '26 batches run via SCADA console'
-            : 'Mixer batching console operations active';
-        } else {
-          todayWorkSummary = isReportDone ? 'Departmental tasks completed' : 'Daily plant operations';
-        }
-      }
+      // 3. Today's Work Report: Display real submitted work report
+      const todayWorkSummary = staffReport?.workDescription || staffReport?.remarks || record?.workReport || (record?.remarks && !record.remarks.includes('Admin manual') ? record.remarks : '') || '';
 
       return {
         ...emp,
@@ -604,6 +579,11 @@ export default function AttendanceManagementView({
     const trackedMoving = fiveRolesAttendanceDirectory.filter((s) => s.isTracked && s.isOnline).length;
     return { total, present, completed, notClocked, trackedMoving };
   }, [fiveRolesAttendanceDirectory]);
+
+  const displayedStaffList = useMemo(() => {
+    if (selectedRoleCategory === 'All') return fiveRolesAttendanceDirectory;
+    return fiveRolesAttendanceDirectory.filter((s) => getRoleCategory(s.role) === selectedRoleCategory);
+  }, [fiveRolesAttendanceDirectory, selectedRoleCategory]);
 
   const handleOpenAdd = (tab = 'manual') => {
     setAddForm({
@@ -902,26 +882,29 @@ export default function AttendanceManagementView({
           {/* ========================================================
               SIMPLE STAFF ATTENDANCE SYSTEM (CLIENTS 5 KEY ROLES)
               ======================================================== */}
-          <section className="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-4 sm:p-5 space-y-4">
-              {/* Header & Controls Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <section className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+            {/* Header & Controls Toolbar */}
+            <div className="p-3.5 sm:p-4 bg-white border-b border-slate-200/80">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Left: Date & Role Filter */}
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl text-xs bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs"
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-slate-50 hover:bg-slate-100/90 border border-slate-200 text-slate-800 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs transition-colors"
+                    />
+                  </div>
 
                   {/* Role Dropdown Filter */}
-                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
+                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg shadow-2xs hover:border-slate-300 transition-colors">
                     <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span className="text-xs font-bold text-slate-600 font-mono">Role Filter:</span>
+                    <span className="text-[11px] font-semibold text-slate-500 font-sans uppercase tracking-wider">Role Filter:</span>
                     <select
                       value={selectedRoleCategory}
                       onChange={(e) => setSelectedRoleCategory(e.target.value)}
-                      className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer pr-1"
+                      className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer pr-1"
                     >
                       <option value="All">All Staff ({fiveRolesAttendanceDirectory.length})</option>
                       <option value="Driver">Driver ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Driver').length})</option>
@@ -933,364 +916,423 @@ export default function AttendanceManagementView({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenAdd('manual')}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-xs hover:shadow"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Mark Record</span>
-                </button>
+                {/* Right: Quick Telemetry Pills & Mark Record Action */}
+                <div className="flex items-center gap-2.5">
+                  <div className="hidden sm:flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 rounded-lg px-3 py-1.5 text-xs shadow-2xs">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-2xs" />
+                      <span className="font-mono font-bold">{fiveRolesStats.present}</span> On Duty
+                    </span>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 shadow-2xs" />
+                      <span className="font-mono font-bold">{fiveRolesStats.completed}</span> Completed
+                    </span>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                      <span className="w-2 h-2 rounded-full bg-slate-300 shadow-2xs" />
+                      <span className="font-mono font-bold">{fiveRolesStats.notClocked}</span> Awaiting
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAdd('manual')}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-xs hover:shadow"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Mark Record</span>
+                  </button>
+                </div>
               </div>
+            </div>
 
-          </div>
+            {/* STAFF ATTENDANCE REGISTER: PERFECT FLUSH ENTERPRISE TABLE */}
+            {attendanceViewMode === 'table' ? (
+              <div className="w-full max-w-full overflow-hidden">
+                {/* Desktop Table View */}
+                <div className="hidden md:block w-full max-w-full overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-xs border-collapse table-fixed">
+                    <thead className="bg-slate-50/90 text-slate-500 font-sans font-semibold border-b border-slate-200 select-none uppercase tracking-wider text-[10.5px]">
+                      <tr>
+                        <th className="py-3 px-4 sm:px-5 font-semibold text-slate-600 w-[27%]">
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Employee Details</span>
+                          </div>
+                        </th>
+                        <th className="py-3 px-4 font-semibold text-slate-600 w-[23%]">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Punch In / Out • Status</span>
+                          </div>
+                        </th>
+                        <th className="py-3 px-4 font-semibold text-slate-600 w-[21%]">
+                          <div className="flex items-center gap-1.5">
+                            <Activity className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Duty Hours (9h Shift)</span>
+                          </div>
+                        </th>
+                        <th className="py-3 px-4 sm:px-5 font-semibold text-slate-600 w-[29%]">
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Today's Work Report</span>
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {displayedStaffList.map((staff) => {
+                        const roleCat = getRoleCategory(staff.role);
+                        const isClockedIn = Boolean(staff.punchIn);
+                        const hours = staff.workingHours || (staff.isOnline ? 4.5 : 0);
+                        const progressPct = isClockedIn ? Math.min(100, Math.round((hours / 9) * 100)) : 0;
 
-          {/* STAFF ATTENDANCE REGISTER: PERFECT FLUSH ENTERPRISE TABLE */}
-          {attendanceViewMode === 'table' ? (
-            <div className="w-full max-w-full overflow-hidden border-t border-slate-200/90">
-              {/* Desktop Table View */}
-              <div className="hidden md:block w-full max-w-full overflow-x-auto">
-                <table className="w-full min-w-[750px] text-left text-xs border-collapse divide-y divide-slate-200/80 table-fixed">
-                  <thead className="bg-slate-100/90 text-slate-700 font-mono font-bold border-b border-slate-200 select-none uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[28%]">
-                      EMPLOYEE
-                    </th>
-                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[22%]">
-                      PUNCH IN / STATUS
-                    </th>
-                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[18%]">
-                      DUTY HOURS (9H)
-                    </th>
-                    <th className="py-2.5 px-3 sm:px-4 font-black text-slate-700 w-[20%]">
-                      TODAY'S WORK REPORT
-                    </th>
-                    <th className="py-2.5 px-3 sm:px-4 text-center font-black text-slate-700 w-[12%]">
-                      ACTION
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {fiveRolesAttendanceDirectory.map((staff) => {
+                        const roleBadgeStyles = {
+                          'Driver': 'bg-amber-50 text-amber-800 border-amber-200/90',
+                          'Site Supervisor': 'bg-orange-50 text-orange-800 border-orange-200/90',
+                          'Plant Incharge': 'bg-purple-50 text-purple-800 border-purple-200/90',
+                          'Accountant': 'bg-emerald-50 text-emerald-800 border-emerald-200/90',
+                          'Operator': 'bg-teal-50 text-teal-800 border-teal-200/90',
+                          'Staff': 'bg-blue-50 text-blue-800 border-blue-200/90',
+                        }[roleCat] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+                        const roleAvatarStyles = {
+                          'Driver': 'bg-amber-50 text-amber-800 border-amber-200/90',
+                          'Site Supervisor': 'bg-orange-50 text-orange-800 border-orange-200/90',
+                          'Plant Incharge': 'bg-purple-50 text-purple-800 border-purple-200/90',
+                          'Accountant': 'bg-emerald-50 text-emerald-800 border-emerald-200/90',
+                          'Operator': 'bg-teal-50 text-teal-800 border-teal-200/90',
+                          'Staff': 'bg-blue-50 text-blue-800 border-blue-200/90',
+                        }[roleCat] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+                        const hasReport = staff.isReportDone || Boolean(staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary);
+                        const reportSnippet = staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary;
+
+                        return (
+                          <tr 
+                            key={staff.id || staff.employeeId}
+                            className="hover:bg-blue-50/25 transition-colors"
+                          >
+                            {/* 1. EMPLOYEE & ROLE */}
+                            <td className="py-3 px-4 sm:px-5 align-middle">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="relative shrink-0">
+                                  <div className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center font-bold text-xs font-mono shadow-2xs ${roleAvatarStyles}`}>
+                                    {staff.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                                    staff.isOnline ? 'bg-emerald-500 shadow-2xs' :
+                                    staff.isCompleted ? 'bg-blue-500' : 'bg-slate-300'
+                                  }`} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-slate-900 text-xs sm:text-[13px] leading-snug truncate capitalize">
+                                    {staff.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-semibold border ${roleBadgeStyles}`}>
+                                      {roleCat}
+                                    </span>
+                                    <span className="font-mono text-[9.5px] font-medium text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200/80">
+                                      {staff.employeeId || staff.id}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 2. PUNCH IN / STATUS */}
+                            <td className="py-3 px-4 align-middle">
+                              {isClockedIn ? (
+                                <div className="space-y-1 min-w-0">
+                                  <div className="font-mono text-xs sm:text-[13px] font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                    <span>{formatToIndian12Hr(staff.punchIn)}</span>
+                                    {staff.punchOut && (
+                                      <span className="text-slate-400 font-medium text-xs">
+                                        → {formatToIndian12Hr(staff.punchOut)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {staff.punctualityBadge === 'emerald' ? (
+                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md">
+                                        <Check className="w-2.5 h-2.5" />
+                                        <span>On Time</span>
+                                      </span>
+                                    ) : staff.punctualityBadge === 'amber' ? (
+                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded-md">
+                                        <Clock className="w-2.5 h-2.5" />
+                                        <span>Late ({staff.punctualityLabel.replace('Late by ', '')})</span>
+                                      </span>
+                                    ) : staff.isCompleted ? (
+                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded-md">
+                                        <span>Shift Ended</span>
+                                      </span>
+                                    ) : null}
+
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 bg-slate-100 border border-slate-200/70 px-1.5 py-0.5 rounded-md">
+                                      <Smartphone className="w-2.5 h-2.5 text-slate-400" />
+                                      <span>Mobile Punch</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1 min-w-0">
+                                  <div className="font-mono text-xs font-semibold text-slate-400">
+                                    -- : --
+                                  </div>
+                                  <div>
+                                    <span className="inline-flex items-center gap-1 text-[9.5px] font-medium text-slate-400 bg-slate-50 border border-slate-200/70 px-1.5 py-0.5 rounded-md">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                      Awaiting Punch
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* 3. DUTY HOURS (9H) */}
+                            <td className="py-3 px-4 align-middle">
+                              <div className="space-y-1 min-w-0 pr-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-baseline gap-1 font-mono">
+                                    <span className={`text-xs sm:text-[13px] font-bold ${isClockedIn ? 'text-slate-900' : 'text-slate-400'}`}>
+                                      {isClockedIn ? `${hours}h` : '--'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-sans font-medium">/ 9h shift</span>
+                                  </div>
+                                  <div>
+                                    {staff.isCompleted ? (
+                                      <span className="inline-block text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                        Completed (9h)
+                                      </span>
+                                    ) : isClockedIn ? (
+                                      <span className="inline-block text-[9.5px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                        In Progress
+                                      </span>
+                                    ) : (
+                                      <span className="inline-block text-[9.5px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/70">
+                                        Not Started
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Visual Progress Bar */}
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      staff.isCompleted 
+                                        ? 'bg-emerald-500' 
+                                        : isClockedIn 
+                                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500' 
+                                        : 'bg-transparent'
+                                    }`}
+                                    style={{ width: `${progressPct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 4. TODAY'S WORK REPORT */}
+                            <td className="py-3 px-4 sm:px-5 align-middle">
+                              <div className="space-y-1.5 min-w-0 pr-1">
+                                {hasReport ? (
+                                  <>
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-md shadow-2xs">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                        <span>Report Filed</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenReportModal(staff, false)}
+                                        className="text-[10.5px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors shrink-0"
+                                      >
+                                        View / Edit
+                                      </button>
+                                    </div>
+
+                                    <div 
+                                      onClick={() => handleOpenReportModal(staff, false)}
+                                      className="text-[11px] text-slate-700 font-medium leading-relaxed bg-slate-50 hover:bg-slate-100/90 p-2 rounded-xl border border-slate-200/80 shadow-2xs cursor-pointer transition-colors"
+                                      title="Click to view full work report"
+                                    >
+                                      {reportSnippet && reportSnippet.includes('|') ? (
+                                        <div className="flex flex-wrap items-center gap-1">
+                                          {reportSnippet.split('|').map((part, pIdx) => {
+                                            const cleanPart = part.trim();
+                                            if (!cleanPart) return null;
+                                            return (
+                                              <span key={pIdx} className="bg-white text-slate-800 border border-slate-200/90 px-1.5 py-0.2 rounded text-[10px] font-mono">
+                                                {cleanPart}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <p className="line-clamp-2 text-[11px]">
+                                          {reportSnippet || 'Daily operations report submitted.'}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md shadow-2xs">
+                                        <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                                        <span>Report Pending</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenReportModal(staff, false)}
+                                        className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10.5px] font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1"
+                                      >
+                                        + File Report
+                                      </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400 py-0.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                                      <span>Awaiting punch-out work report</span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards for Small Screens (< 768px) */}
+                <div className="block md:hidden p-3.5 space-y-3 bg-slate-50/50">
+                  {displayedStaffList.map((staff) => {
                     const roleCat = getRoleCategory(staff.role);
-                    const photoUrl = getStaffPhoto(staff);
-                    const hasFacePunch = Boolean(staff.record?.selfieUrl || staff.selfieUrl);
+                    const isClockedIn = Boolean(staff.punchIn);
+                    const hours = staff.workingHours || (staff.isOnline ? 4.5 : 0);
+                    const hasReport = staff.isReportDone || Boolean(staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary);
+                    const reportSnippet = staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary;
 
                     return (
-                      <tr 
+                      <div 
                         key={staff.id || staff.employeeId}
-                        className="hover:bg-cyan-50/40 transition-colors even:bg-slate-50/50"
+                        className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3"
                       >
-                          {/* 1. EMPLOYEE & ROLE BOX */}
-                          <td className="py-2.5 px-3 sm:px-4 align-middle">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div 
-                                className="relative shrink-0 cursor-pointer group"
-                                onClick={() => {
-                                  setSelectedDetailStaff(staff);
-                                  setShowDetailModal(true);
-                                }}
-                                title="Click to view full Android Face Recognition photo dossier"
-                              >
-                                {photoUrl ? (
-                                  <img 
-                                    src={photoUrl} 
-                                    alt={staff.name}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover ring-2 shadow-2xs transition-transform group-hover:scale-105 ${
-                                      hasFacePunch ? 'ring-emerald-500' : 'ring-slate-300'
-                                    }`}
-                                  />
-                                ) : (
-                                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-bold text-slate-700 text-xs sm:text-sm">
-                                    {staff.name.charAt(0)}
-                                  </div>
-                                )}
-                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
-                                  staff.isOnline ? 'bg-emerald-500 animate-pulse' :
-                                  staff.isCompleted ? 'bg-blue-500' : 'bg-slate-300'
-                                }`} />
+                        <div className="flex items-start justify-between gap-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="relative shrink-0">
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm">
+                                {staff.name.charAt(0).toUpperCase()}
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <div 
-                                  className="font-bold text-slate-900 text-xs sm:text-sm leading-snug hover:text-blue-600 cursor-pointer transition-colors truncate"
-                                  onClick={() => {
-                                    setSelectedDetailStaff(staff);
-                                    setShowDetailModal(true);
-                                  }}
-                                >
-                                  {staff.name}
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 truncate">
-                                    {roleCat}
-                                  </span>
-                                  <span className="font-mono text-[9px] sm:text-[10px] font-bold text-slate-500 truncate">
-                                    {staff.employeeId || staff.id}
-                                  </span>
-                                </div>
-                              </div>
+                              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                                staff.isOnline ? 'bg-emerald-500' :
+                                staff.isCompleted ? 'bg-blue-500' : 'bg-slate-300'
+                              }`} />
                             </div>
-                          </td>
-
-                          {/* 2. PUNCH IN & STATUS BOX */}
-                          <td className="py-2.5 px-3 sm:px-4 align-middle">
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="font-mono text-xs sm:text-sm font-black text-slate-900 truncate">
-                                {formatToIndian12Hr(staff.punchIn) || '--:--'}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-slate-900 text-sm truncate capitalize">
+                                {staff.name}
                               </div>
-                              <div className="text-[11px] font-semibold truncate">
-                                {staff.punctualityBadge === 'emerald' ? (
-                                  <span className="text-emerald-700 font-bold">● On Time</span>
-                                ) : staff.punctualityBadge === 'amber' ? (
-                                  <span className="text-amber-700 font-bold">● Late ({staff.punctualityLabel.replace('Late by ', '')})</span>
-                                ) : staff.isCompleted ? (
-                                  <span className="text-blue-700 font-bold">● Shift Ended</span>
-                                ) : (
-                                  <span className="text-slate-400 font-normal">Awaiting Punch</span>
-                                )}
-                              </div>
-                              {staff.punchIn && (
-                                <div className="truncate">
-                                  {hasFacePunch ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 truncate">
-                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                                      <span className="truncate">Android Face (99.8%)</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 truncate">
-                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                                      <span className="truncate">No Selfie Photo</span>
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* 3. DUTY HOURS (9H) BOX */}
-                          <td className="py-2.5 px-3 sm:px-4 align-middle">
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-baseline gap-1 font-mono">
-                                <span className="text-xs sm:text-sm font-black text-slate-900">
-                                  {staff.workingHours ? `${staff.workingHours}h` : '--'}
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                  {roleCat}
                                 </span>
-                                <span className="text-[10px] text-slate-500 font-sans font-medium">/ 9h shift</span>
-                              </div>
-                              <div>
-                                {staff.dutyComplianceBadge === 'emerald' ? (
-                                  <span className="inline-block text-[9px] sm:text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 truncate">
-                                    Completed (9h)
-                                  </span>
-                                ) : staff.dutyComplianceBadge === 'cyan' ? (
-                                  <span className="inline-block text-[9px] sm:text-[10px] font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate">
-                                    In Progress
-                                  </span>
-                                ) : (
-                                  <span className="inline-block text-[9px] sm:text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 truncate">
-                                    Partial Shift
-                                  </span>
-                                )}
+                                <span className="font-mono text-[10px] font-medium text-slate-500">
+                                  {staff.employeeId || staff.id}
+                                </span>
                               </div>
                             </div>
-                          </td>
+                          </div>
 
-                          {/* 4. TODAY'S WORK REPORT BOX */}
-                          <td className="py-2.5 px-3 sm:px-4 align-middle">
-                            <div className="min-w-0">
-                              {staff.isReportDone ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenReportModal(staff, false)}
-                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl transition-all cursor-pointer shadow-2xs truncate"
-                                  title="View / Edit report"
-                                >
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  <span className="truncate">Report Filed</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenReportModal(staff, false)}
-                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-xl transition-all cursor-pointer shadow-2xs truncate"
-                                  title="File required daily report"
-                                >
-                                  <FileText className="w-3 h-3 text-amber-600 shrink-0" />
-                                  <span className="truncate">Report Required</span>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* 5. ACTION BOX */}
-                          <td className="py-2.5 px-3 sm:px-4 align-middle text-center">
-                            <div className="flex justify-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedDetailStaff(staff);
-                                  setShowDetailModal(true);
-                                }}
-                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs hover:shadow transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
-                                title="View Employee Live Photo & Complete Particular Details"
-                              >
-                                <Camera className="w-3.5 h-3.5 text-blue-100" />
-                                <span>Photo & Details</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Clean Mobile Cards for Small Screens (< 768px) */}
-              <div className="block md:hidden p-3 space-y-3 bg-slate-50/40 border-t border-slate-200/90">
-                {fiveRolesAttendanceDirectory.map((staff) => {
-                  const roleCat = getRoleCategory(staff.role);
-                  const photoUrl = getStaffPhoto(staff);
-                  const hasFacePunch = Boolean(staff.record?.selfieUrl || staff.selfieUrl);
-
-                  return (
-                    <div 
-                      key={staff.id || staff.employeeId}
-                      className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5"
-                    >
-                      <div className="flex items-start justify-between gap-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <div 
-                            className="relative shrink-0 cursor-pointer"
-                            onClick={() => {
-                              setSelectedDetailStaff(staff);
-                              setShowDetailModal(true);
-                            }}
-                          >
-                            {photoUrl ? (
-                              <img 
-                                src={photoUrl} 
-                                alt={staff.name}
-                                className={`w-10 h-10 rounded-xl object-cover ring-2 shadow-2xs ${
-                                  hasFacePunch ? 'ring-emerald-500' : 'ring-slate-300'
-                                }`}
-                              />
+                          <div className="shrink-0 text-right">
+                            {staff.punctualityBadge === 'emerald' ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-block">
+                                On Time
+                              </span>
+                            ) : staff.punctualityBadge === 'amber' ? (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full inline-block">
+                                Late
+                              </span>
+                            ) : staff.isCompleted ? (
+                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full inline-block">
+                                Shift Done
+                              </span>
                             ) : (
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-bold text-slate-700 text-sm">
-                                {staff.name.charAt(0)}
-                              </div>
+                              <span className="text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full inline-block">
+                                Not Clocked
+                              </span>
                             )}
-                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
-                              staff.isOnline ? 'bg-emerald-500 animate-pulse' :
-                              staff.isCompleted ? 'bg-blue-500' : 'bg-slate-300'
-                            }`} />
                           </div>
-                          <div className="min-w-0 flex-1">
+                        </div>
+
+                        {/* Duty Times & Hours Grid */}
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Punch In / Out:</span>
+                            <span className="font-mono font-bold text-slate-800 block mt-0.5 truncate">
+                              {isClockedIn ? formatToIndian12Hr(staff.punchIn) : '--:--'}
+                              {staff.punchOut ? ` → ${formatToIndian12Hr(staff.punchOut)}` : ''}
+                            </span>
+                          </div>
+                          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Duty Progress:</span>
+                            <span className="font-mono font-bold text-slate-800 block mt-0.5">
+                              {isClockedIn ? `${hours}h` : '0h'}{' '}
+                              <span className="text-slate-400 font-normal">/ 9h</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Work Report Section in Mobile Card */}
+                        <div className="pt-2 border-t border-slate-100 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-slate-500 font-bold uppercase font-mono tracking-wide">Daily Work Report:</span>
+                            {hasReport ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>Filed</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg">
+                                <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span>Pending</span>
+                              </span>
+                            )}
+                          </div>
+                          {hasReport ? (
                             <div 
-                              className="font-bold text-slate-900 text-sm truncate cursor-pointer hover:text-blue-600"
-                              onClick={() => {
-                                setSelectedDetailStaff(staff);
-                                setShowDetailModal(true);
-                              }}
-                            >
-                              {staff.name}
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                {roleCat}
-                              </span>
-                              <span className="font-mono text-[10px] font-bold text-slate-500">
-                                {staff.employeeId || staff.id}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 text-right">
-                          {staff.punctualityBadge === 'emerald' ? (
-                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-block">
-                              On Time
-                            </span>
-                          ) : staff.punctualityBadge === 'amber' ? (
-                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full inline-block">
-                              Late
-                            </span>
-                          ) : staff.isCompleted ? (
-                            <span className="text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full inline-block">
-                              Shift Done
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full inline-block">
-                              Not Clocked
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Duty Times & Hours Grid */}
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
-                        <div className="bg-slate-50/80 p-2 rounded-xl border border-slate-100">
-                          <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Punch In / Out:</span>
-                          <span className="font-mono font-bold text-slate-800 block mt-0.5 truncate">
-                            {staff.punchIn ? formatToIndian12Hr(staff.punchIn) : '--:--'}
-                            {staff.punchOut ? ` → ${formatToIndian12Hr(staff.punchOut)}` : ''}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50/80 p-2 rounded-xl border border-slate-100">
-                          <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Duty Hours:</span>
-                          <span className="font-mono font-bold text-slate-800 block mt-0.5">
-                            {staff.workingHours ? `${staff.workingHours}h` : '0h'}{' '}
-                            <span className="text-slate-400 font-normal">/ 9h shift</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Report & Details Action Bar */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[11px] text-slate-500 font-medium">Daily Report:</span>
-                          {staff.isReportDone ? (
-                            <button
-                              type="button"
                               onClick={() => handleOpenReportModal(staff, false)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-lg cursor-pointer"
+                              className="text-xs text-slate-700 font-medium leading-relaxed bg-slate-50 p-2 rounded-xl border border-slate-200 cursor-pointer"
                             >
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                              <span>Filed</span>
-                            </button>
+                              <p className="line-clamp-2 text-[11px]">
+                                {reportSnippet || 'Daily operations report submitted.'}
+                              </p>
+                            </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleOpenReportModal(staff, false)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-lg cursor-pointer"
+                              className="w-full text-center py-2 rounded-xl border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:text-blue-600 hover:border-blue-300 bg-slate-50 cursor-pointer transition-colors"
                             >
-                              <FileText className="w-3 h-3 text-amber-600 shrink-0" />
-                              <span>Required</span>
+                              + File Daily Work Report
                             </button>
                           )}
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedDetailStaff(staff);
-                            setShowDetailModal(true);
-                          }}
-                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
-                        >
-                          <Camera className="w-3.5 h-3.5 text-blue-100" />
-                          <span>Photo & Details</span>
-                        </button>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {/* Clean, non-scrollable summary footer */}
-              <div className="px-4 py-3 bg-slate-100/70 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-2 font-medium">
+                {/* Sleek Enterprise Summary Footer */}
+                <div className="px-4 py-2.5 bg-slate-50/90 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-2 font-medium">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span>
-                      Showing <strong className="text-slate-900 font-bold">{fiveRolesAttendanceDirectory.length} Staff Records</strong>
+                    <span className="font-semibold text-slate-800">
+                      Showing <strong className="text-slate-900 font-bold">{displayedStaffList.length} of {fiveRolesAttendanceDirectory.length} Staff Records</strong>
                     </span>
                     <span className="text-slate-300">•</span>
                     <span className="text-emerald-700 font-semibold">{fiveRolesStats.present} On Duty</span>
@@ -1299,8 +1341,9 @@ export default function AttendanceManagementView({
                     <span className="text-slate-300">•</span>
                     <span className="text-slate-500">{fiveRolesStats.notClocked} Not Clocked</span>
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    Click <strong className="text-blue-700 font-bold">Photo & Details</strong> on any row to view employee biometric snapshot & complete specifics.
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Real-time mobile attendance sync active</span>
                   </div>
                 </div>
               </div>
@@ -1341,37 +1384,20 @@ export default function AttendanceManagementView({
                         {/* Card Header: Profile Photo, Name, Role & Status */}
                         <div className="flex items-start justify-between gap-2 mb-3 pt-1">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div 
-                              className="relative shrink-0 cursor-pointer group"
-                              onClick={() => {
-                                setSelectedDetailStaff(staff);
-                                setShowDetailModal(true);
-                              }}
-                              title="Click to view full Face Recognition photo dossier"
-                            >
-                              {photoUrl ? (
-                                <img 
-                                  src={photoUrl} 
-                                  alt={staff.name}
-                                  className={`w-11 h-11 rounded-xl object-cover ring-2 shadow-2xs transition-transform group-hover:scale-105 ${
-                                    hasFacePunch ? 'ring-emerald-500' : 'ring-slate-300'
-                                  }`}
-                                />
-                              ) : (
-                                <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs ${
-                                  isDriver ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                                  isSupervisor ? 'bg-orange-100 text-orange-800 border border-orange-300' :
-                                  isAccountant ? 'bg-cyan-100 text-cyan-800 border border-cyan-300' :
-                                  isIncharge ? 'bg-teal-100 text-teal-800 border border-teal-300' :
-                                  'bg-indigo-100 text-indigo-800 border border-indigo-300'
-                                }`}>
-                                  {isDriver && <Truck className="w-5 h-5" />}
-                                  {isSupervisor && <HardHat className="w-5 h-5" />}
-                                  {isAccountant && <Briefcase className="w-5 h-5" />}
-                                  {isIncharge && <Building2 className="w-5 h-5" />}
-                                  {isOperator && <Zap className="w-5 h-5" />}
-                                </div>
-                              )}
+                            <div className="relative shrink-0">
+                              <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs ${
+                                isDriver ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                isSupervisor ? 'bg-orange-100 text-orange-800 border border-orange-300' :
+                                isAccountant ? 'bg-cyan-100 text-cyan-800 border border-cyan-300' :
+                                isIncharge ? 'bg-teal-100 text-teal-800 border border-teal-300' :
+                                'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                              }`}>
+                                {isDriver && <Truck className="w-5 h-5" />}
+                                {isSupervisor && <HardHat className="w-5 h-5" />}
+                                {isAccountant && <Briefcase className="w-5 h-5" />}
+                                {isIncharge && <Building2 className="w-5 h-5" />}
+                                {isOperator && <Zap className="w-5 h-5" />}
+                              </div>
                               <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
                                 staff.isOnline ? 'bg-emerald-500 animate-pulse' : 
                                 staff.isCompleted ? 'bg-blue-500' : 'bg-slate-400'
@@ -1379,13 +1405,7 @@ export default function AttendanceManagementView({
                             </div>
 
                             <div className="min-w-0">
-                              <h4 
-                                className="text-sm font-bold text-slate-900 truncate hover:text-blue-600 cursor-pointer transition-colors"
-                                onClick={() => {
-                                  setSelectedDetailStaff(staff);
-                                  setShowDetailModal(true);
-                                }}
-                              >
+                              <h4 className="text-sm font-bold text-slate-900 truncate">
                                 {staff.name}
                               </h4>
                               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 flex-wrap">
@@ -1532,19 +1552,6 @@ export default function AttendanceManagementView({
                       {/* Card Actions Footer */}
                       <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          {/* Photo & Details button on card */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedDetailStaff(staff);
-                              setShowDetailModal(true);
-                            }}
-                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                            title="View Photo & Particular Details"
-                          >
-                            <Camera className="w-3.5 h-3.5 text-blue-100" />
-                            <span>Photo</span>
-                          </button>
 
                           {!staff.isOnline && !staff.isCompleted && (
                             <button
@@ -2766,7 +2773,7 @@ export default function AttendanceManagementView({
           EMPLOYEE PHOTO & PARTICULAR DETAILS MODAL (100% SINGLE WINDOW - NO SCROLL)
           ======================================================== */}
       <Modal
-        isOpen={showDetailModal && Boolean(selectedDetailStaff)}
+        isOpen={false}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailStaff(null);

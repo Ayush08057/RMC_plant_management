@@ -113,13 +113,13 @@ export default function PlantManagerDashboardPage() {
       {activeTab === 'reports' && <HrReportsView />}
 
       {activeTab === 'dashboard' && (
-        <div className="space-y-5">
-          {/* 4 Primary Operational KPI Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="space-y-4 sm:space-y-5">
+          {/* 4 Primary Operational KPI Cards - Compact & Professional Typography */}
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
             <KPICard
               title="Today's Production"
               value={kpis.todayProduction}
-              subtext={`Shift Target: ${productionSummary.target} m³`}
+              subtext={`Target: ${productionSummary.target} m³`}
               trend={`${productionSummary.percentage}% Completed`}
               trendType="up"
               color="blue"
@@ -137,7 +137,7 @@ export default function PlantManagerDashboardPage() {
             <KPICard
               title="Active Mixer Trucks"
               value={kpis.activeVehicles}
-              subtext={`${vehicleStatusCounts.onRoute} On Route • ${vehicleStatusCounts.atSite} At Site`}
+              subtext={`${vehicleStatusCounts.onRoute} Transit • ${vehicleStatusCounts.atSite} Site`}
               trend="Fleet Active"
               trendType="neutral"
               color="amber"
@@ -146,7 +146,7 @@ export default function PlantManagerDashboardPage() {
             <KPICard
               title="Batching Plant Status"
               value="Online"
-              subtext="Capacity: 90 m³/hour"
+              subtext="Cap: 90 m³/hr"
               trend="Running Smoothly"
               trendType="up"
               color="cyan"
@@ -154,150 +154,7 @@ export default function PlantManagerDashboardPage() {
             />
           </section>
 
-          {/* Core Operations: Production Target & Mixer Fleet Snapshot */}
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Shift Production Progress */}
-            <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <Gauge className="w-4 h-4 text-blue-600" />
-                    <span>Today's Production Progress</span>
-                  </h3>
-                  <span className="text-xs font-bold text-blue-700 font-mono px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200">
-                    {productionSummary.percentage}% OF GOAL
-                  </span>
-                </div>
-
-                {/* Visual Progress Bar */}
-                <div className="w-full h-3 rounded-full bg-slate-100 border border-slate-200 overflow-hidden mb-3.5">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-full transition-all duration-500 shadow-xs"
-                    style={{ width: `${productionSummary.percentage}%` }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] text-slate-500 font-medium block">Target Volume</span>
-                    <span className="text-sm font-bold text-slate-900 font-mono">{productionSummary.target} m³</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                    <span className="text-[10px] text-emerald-800 font-medium block">Produced</span>
-                    <span className="text-sm font-bold text-emerald-700 font-mono">{productionSummary.produced} m³</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200">
-                    <span className="text-[10px] text-blue-800 font-medium block">Remaining</span>
-                    <span className="text-sm font-bold text-blue-700 font-mono">{productionSummary.remaining} m³</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-                <span>Peak Dispatch: {productionSummary.produced > 0 ? '10:00 AM' : 'None'}</span>
-                <span className="text-emerald-600 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>0 Delays Recorded</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Transit Mixer Fleet Status */}
-            <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-blue-600" />
-                    <span>Mixer Trucks in Operation</span>
-                  </h3>
-                  <span className="text-xs font-mono font-bold text-slate-700 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
-                    {vehicleStatusCounts.available + vehicleStatusCounts.loading + vehicleStatusCounts.onRoute + vehicleStatusCounts.atSite + (vehicleStatusCounts.maintenance || 0)} ACTIVE FLEET
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5 text-xs">
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Ready in Yard</span>
-                    <span className="text-lg sm:text-xl font-bold text-emerald-700 font-mono">{vehicleStatusCounts.available} Mixers</span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">Available for loading</span>
-                  </div>
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50 border border-amber-200">
-                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Under Batch Chute</span>
-                    <span className="text-lg sm:text-xl font-bold text-amber-700 font-mono">{vehicleStatusCounts.loading} Mixers</span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">Loading concrete</span>
-                  </div>
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-blue-50 border border-blue-200">
-                    <span className="text-slate-500 block text-[10px] font-bold uppercase">In Transit (On Road)</span>
-                    <span className="text-lg sm:text-xl font-bold text-blue-700 font-mono">{vehicleStatusCounts.onRoute} Mixers</span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">Heading to site</span>
-                  </div>
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-purple-50 border border-purple-200">
-                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Pouring at Site</span>
-                    <span className="text-lg sm:text-xl font-bold text-purple-700 font-mono">{vehicleStatusCounts.atSite} Mixers</span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">Unloading concrete</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-                <span>Fleet Available: {vehicleStatusCounts.available}</span>
-                <span className="text-slate-700 font-medium">In Maintenance: {vehicleStatusCounts.maintenance || 0}</span>
-              </div>
-            </div>
-          </section>
-
-          {/* Raw Material Silo Inventory */}
-          <section className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3.5">
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-amber-600" />
-                  <span>Raw Material Silo Stock</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Live storage levels of cement, fly ash & raw materials</p>
-              </div>
-              <span className="text-xs font-bold text-slate-600 font-mono px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 self-start sm:self-auto">
-                {siloStock.length > 0 ? '● SILO MONITORS ACTIVE' : 'NO SILOS CONFIGURED'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {siloStock.length === 0 ? (
-                <div className="col-span-full py-6 text-center text-xs text-slate-500 font-medium bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  No active silo inventory records. Silos will appear once raw materials are added.
-                </div>
-              ) : (
-                siloStock.map((silo, idx) => {
-                  const currentLevel = silo.level ?? 75;
-                  const currentTons = Math.round((currentLevel / 100) * (silo.capacity || 100));
-                  return (
-                    <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-1">
-                          <span className="truncate">{silo.material}</span>
-                          <span className="font-mono text-blue-700">{currentLevel}%</span>
-                        </div>
-                        <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden mb-2">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              currentLevel > 70 ? 'bg-emerald-500' : currentLevel > 40 ? 'bg-amber-500' : 'bg-rose-500'
-                            }`}
-                            style={{ width: `${currentLevel}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-600 font-mono">
-                        <span>{currentTons} / {silo.capacity} {silo.unit || 'Tons'}</span>
-                        <span className="text-emerald-700 font-bold">{silo.status || 'Good'}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
-
-          {/* Pending Batch Orders Queue */}
+          {/* PRIORITY 1: Scheduled Concrete Orders Queue Table (Placed Directly After Cards) */}
           <section>
             <DataTable
               title="Today's Scheduled Concrete Orders"
@@ -336,6 +193,149 @@ export default function PlantManagerDashboardPage() {
                 </div>
               )}
             />
+          </section>
+
+          {/* Core Operations: Production Target & Mixer Fleet Snapshot */}
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-5">
+            {/* Shift Production Progress */}
+            <div className="p-4 sm:p-4.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Gauge className="w-4 h-4 text-blue-600" />
+                    <span>Today's Production Progress</span>
+                  </h3>
+                  <span className="text-[11px] font-bold text-blue-700 font-mono px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200">
+                    {productionSummary.percentage}% OF GOAL
+                  </span>
+                </div>
+
+                {/* Visual Progress Bar */}
+                <div className="w-full h-2.5 rounded-full bg-slate-100 border border-slate-200 overflow-hidden mb-3">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-full transition-all duration-500 shadow-xs"
+                    style={{ width: `${productionSummary.percentage}%` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] text-slate-500 font-medium block">Target Volume</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 font-mono">{productionSummary.target} m³</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <span className="text-[10px] text-emerald-800 font-medium block">Produced</span>
+                    <span className="text-xs sm:text-sm font-bold text-emerald-700 font-mono">{productionSummary.produced} m³</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-blue-50 border border-blue-200">
+                    <span className="text-[10px] text-blue-800 font-medium block">Remaining</span>
+                    <span className="text-xs sm:text-sm font-bold text-blue-700 font-mono">{productionSummary.remaining} m³</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+                <span>Peak Dispatch: {productionSummary.produced > 0 ? '10:00 AM' : 'None'}</span>
+                <span className="text-emerald-600 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>0 Delays Recorded</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Transit Mixer Fleet Status */}
+            <div className="p-4 sm:p-4.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-blue-600" />
+                    <span>Mixer Trucks in Operation</span>
+                  </h3>
+                  <span className="text-[11px] font-mono font-bold text-slate-700 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
+                    {vehicleStatusCounts.available + vehicleStatusCounts.loading + vehicleStatusCounts.onRoute + vehicleStatusCounts.atSite + (vehicleStatusCounts.maintenance || 0)} ACTIVE FLEET
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Ready in Yard</span>
+                    <span className="text-base sm:text-lg font-bold text-emerald-700 font-mono">{vehicleStatusCounts.available} Mixers</span>
+                    <span className="text-[10px] text-slate-500 block mt-0.5">Available for loading</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Under Batch Chute</span>
+                    <span className="text-base sm:text-lg font-bold text-amber-700 font-mono">{vehicleStatusCounts.loading} Mixers</span>
+                    <span className="text-[10px] text-slate-500 block mt-0.5">Loading concrete</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200">
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">In Transit (On Road)</span>
+                    <span className="text-base sm:text-lg font-bold text-blue-700 font-mono">{vehicleStatusCounts.onRoute} Mixers</span>
+                    <span className="text-[10px] text-slate-500 block mt-0.5">Heading to site</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200">
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Pouring at Site</span>
+                    <span className="text-base sm:text-lg font-bold text-purple-700 font-mono">{vehicleStatusCounts.atSite} Mixers</span>
+                    <span className="text-[10px] text-slate-500 block mt-0.5">Unloading concrete</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+                <span>Fleet Available: {vehicleStatusCounts.available}</span>
+                <span className="text-slate-700 font-medium">In Maintenance: {vehicleStatusCounts.maintenance || 0}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Raw Material Silo Inventory */}
+          <section className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-amber-600" />
+                  <span>Raw Material Silo Stock</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Live storage levels of cement, fly ash & raw materials</p>
+              </div>
+              <span className="text-[11px] font-bold text-slate-600 font-mono px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 self-start sm:self-auto">
+                {siloStock.length > 0 ? '● SILO MONITORS ACTIVE' : 'NO SILOS CONFIGURED'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {siloStock.length === 0 ? (
+                <div className="col-span-full py-6 text-center text-xs text-slate-500 font-medium bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  No active silo inventory records. Silos will appear once raw materials are added.
+                </div>
+              ) : (
+                siloStock.map((silo, idx) => {
+                  const currentLevel = silo.level ?? 75;
+                  const currentTons = Math.round((currentLevel / 100) * (silo.capacity || 100));
+                  return (
+                    <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-1">
+                          <span className="truncate">{silo.material}</span>
+                          <span className="font-mono text-blue-700">{currentLevel}%</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden mb-2">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              currentLevel > 70 ? 'bg-emerald-500' : currentLevel > 40 ? 'bg-amber-500' : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${currentLevel}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-600 font-mono">
+                        <span>{currentTons} / {silo.capacity} {silo.unit || 'Tons'}</span>
+                        <span className="text-emerald-700 font-bold">{silo.status || 'Good'}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </section>
         </div>
       )}

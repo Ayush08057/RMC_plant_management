@@ -286,6 +286,74 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const plantColumns = [
+    {
+      header: 'Node Code',
+      accessor: 'code',
+      render: (row) => (
+        <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
+          {row.code || 'PLT'}
+        </span>
+      ),
+    },
+    {
+      header: 'Plant Facility Name',
+      accessor: 'name',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0">
+            <Factory className="w-3.5 h-3.5" />
+          </div>
+          <div>
+            <span className="font-bold text-slate-900 text-xs block">{row.name}</span>
+            {row.location && (
+              <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                <span>{row.location}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Hourly Capacity',
+      accessor: 'capacity',
+      render: (row) => (
+        <span className="font-mono font-bold text-slate-800 text-xs">{row.capacity}</span>
+      ),
+    },
+    {
+      header: 'Operating Status',
+      accessor: 'status',
+      render: (row) => <StatusBadge status={row.status || 'Online'} />,
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      render: (row) => (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => handleOpenEditPlant(row)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+            title={`Edit ${row.name}`}
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDeletePlant(row.id, row.name)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            title={`Delete ${row.name}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   const columns = [
     {
       header: 'Employee ID',
@@ -511,106 +579,68 @@ export default function AdminDashboardPage() {
             />
           </section>
 
-          {/* Plant Network Section — Clean Reference UI Style */}
-          <section className="flex flex-col space-y-2.5">
-            <div className="flex items-center justify-between gap-2 px-1">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20">
-                  <Factory className="h-4.5 w-4.5" />
-                </div>
-                <div>
-                  <h2 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">Plant Network</h2>
-                  <p className="text-[11px] font-medium text-slate-500">
-                    Active concrete batching facilities & nodes
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs">
-                  {plants.length} Active
-                </span>
+          {/* Primary Operations Table: Plant Facilities Network */}
+          <section>
+            <DataTable
+              title="Registered Plant Network & Facilities"
+              subtitle="Concrete batching nodes, hourly throughput capacity and operational clearance"
+              icon={Factory}
+              columns={plantColumns}
+              data={plants}
+              searchPlaceholder="Search plant node, facility name, location..."
+              actions={
                 <button
                   type="button"
                   onClick={handleOpenAddPlant}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-600 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:from-blue-700 hover:to-indigo-700 focus:outline-none cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-600 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:from-blue-700 hover:to-indigo-700 cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Add Plant</span>
+                  <span>Add Plant Node</span>
                 </button>
-              </div>
-            </div>
-
-            {plants.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                {plants.map((plant) => (
-                  <article 
-                    key={plant.id} 
-                    className="rounded-2xl md:rounded-3xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 flex items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                        <Factory className="w-5 h-5 text-white" />
+              }
+              renderMobileCard={(plant) => (
+                <div className="w-full max-w-full overflow-hidden min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/60">{plant.code}</span>
+                        <h4 className="text-sm font-bold text-slate-900 truncate">{plant.name}</h4>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="truncate text-sm sm:text-base font-bold text-slate-900">{plant.name}</h3>
-                          <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60 shrink-0">{plant.code}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/70 inline-flex items-center gap-1">
-                            <span>{plant.capacity}</span>
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            plant.status === 'Online'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                              : plant.status === 'Maintenance'
-                                ? 'border-amber-200 bg-amber-50 text-amber-800'
-                                : 'border-blue-200 bg-blue-50 text-blue-800'
-                          }`}>
-                            {plant.status || 'Online'}
-                          </span>
-                        </div>
-                        {plant.location && (
-                          <p className="truncate text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{plant.location}</span>
-                          </p>
-                        )}
+                      <div className="text-xs text-slate-500 flex items-center gap-1 mt-1 truncate">
+                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{plant.location || 'Industrial Estate'}</span>
                       </div>
                     </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={plant.status || 'Online'} />
+                    </div>
+                  </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-slate-200 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Capacity:</span>
+                      <span className="font-mono font-bold text-slate-900">{plant.capacity}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => handleOpenEditPlant(plant)}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                        title={`Edit ${plant.name}`}
-                        aria-label={`Edit ${plant.name}`}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer"
                       >
-                        <Edit3 className="w-4 h-4" />
+                        Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeletePlant(plant.id, plant.name)}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        title={`Delete ${plant.name}`}
-                        aria-label={`Delete ${plant.name}`}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        Delete
                       </button>
-                      <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                        <ChevronRight className="w-4 h-4" />
-                      </div>
                     </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-blue-200 bg-white px-4 py-8 text-center shadow-xs">
-                <p className="text-sm font-semibold text-slate-800">No plants registered yet.</p>
-                <p className="mt-1 text-xs text-slate-500">Add a plant to manage its capacity, location, and operating status.</p>
-              </div>
-            )}
+                  </div>
+                </div>
+              )}
+            />
           </section>
         </div>
       )}

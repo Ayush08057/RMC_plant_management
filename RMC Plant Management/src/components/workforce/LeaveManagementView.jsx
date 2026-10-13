@@ -101,40 +101,48 @@ export default function LeaveManagementView({ employeeFilter = null }) {
     {
       header: 'Application ID',
       accessor: 'id',
-      render: (row) => <span className="font-mono text-amber-400 font-bold">{row.id}</span>,
+      render: (row) => <span className="font-mono text-amber-800 font-bold text-xs">{row.id}</span>,
     },
     {
       header: 'Staff Member',
       accessor: 'employeeName',
       render: (row) => (
         <div>
-          <span className="font-bold text-white text-xs block">{row.employeeName}</span>
-          <span className="text-[10px] text-slate-400 font-mono">{row.employeeId} • {row.role}</span>
+          <span className="font-bold text-slate-900 text-xs block">{row.employeeName}</span>
+          <span className="text-[10px] text-slate-500 font-mono">{row.employeeId} • {row.role}</span>
         </div>
       ),
     },
-    { header: 'Leave Category', accessor: 'leaveType', className: 'text-xs text-purple-300 font-semibold' },
+    { 
+      header: 'Leave Category', 
+      accessor: 'leaveType', 
+      render: (row) => (
+        <span className="inline-block text-[11px] text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+          {row.leaveType}
+        </span>
+      ),
+    },
     {
       header: 'Duration Window',
       accessor: 'duration',
       render: (row) => (
         <div>
-          <span className="font-mono text-xs text-white block">{row.fromDate} to {row.toDate}</span>
-          <span className="text-[10px] text-slate-400 font-mono font-bold">{row.days} Working Day(s)</span>
+          <span className="font-mono text-xs text-slate-900 font-bold block">{row.fromDate} to {row.toDate}</span>
+          <span className="text-[10px] text-slate-500 font-mono font-medium">{row.days} Working Day(s)</span>
         </div>
       ),
     },
     {
       header: 'Operational Reason',
       accessor: 'reason',
-      render: (row) => <span className="text-xs text-slate-300 line-clamp-2 max-w-sm">{row.reason}</span>,
+      render: (row) => <span className="text-xs text-slate-600 line-clamp-2 max-w-sm">{row.reason}</span>,
     },
     { header: 'Status', accessor: 'status', type: 'status' },
     {
       header: 'Manager Remarks',
       accessor: 'reviewedBy',
       render: (row) => (
-        <span className="text-[11px] text-slate-400 font-mono block">
+        <span className="text-[11px] text-slate-600 font-mono block">
           {row.reviewedBy ? `${row.reviewedBy}` : 'Pending Review'}
         </span>
       ),
@@ -148,7 +156,7 @@ export default function LeaveManagementView({ employeeFilter = null }) {
             <button
               type="button"
               onClick={() => handleOpenReview(row)}
-              className="px-2.5 py-1 rounded-lg bg-purple-900/40 hover:bg-purple-850 text-purple-300 border border-purple-700/50 text-[11px] font-semibold cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
             >
               Review
             </button>
@@ -174,7 +182,7 @@ export default function LeaveManagementView({ employeeFilter = null }) {
                     setToastMessage(`Leave application ${row.id} deleted.`);
                   }
                 }}
-                className="p-1 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
                 title="Delete Leave"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -187,49 +195,97 @@ export default function LeaveManagementView({ employeeFilter = null }) {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Leave Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 rounded-xl bg-[#12151e] border border-slate-800">
-          <span className="text-[10px] text-amber-400 uppercase font-semibold block">Pending Approvals</span>
-          <span className="text-xl sm:text-2xl font-black text-amber-300 font-mono mt-0.5 block">{pendingCount}</span>
-          <span className="text-[10px] text-slate-500 font-mono">Awaiting manager signoff</span>
+    <div className="space-y-4">
+      {/* 4 Compact & Light Leave Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+              Pending Approvals
+            </span>
+            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+          </div>
+          <span className="text-base sm:text-[17px] font-extrabold text-amber-800 font-sans tabular-nums my-0.5 block">
+            {pendingCount}
+          </span>
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+            Awaiting manager signoff
+          </span>
         </div>
-        <div className="p-4 rounded-xl bg-[#12151e] border border-slate-800">
-          <span className="text-[10px] text-emerald-400 uppercase font-semibold block">Approved This Month</span>
-          <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono mt-0.5 block">{approvedCount}</span>
-          <span className="text-[10px] text-slate-500 font-mono">Deducted from leave bank</span>
+
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+              Approved This Month
+            </span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+          </div>
+          <span className="text-base sm:text-[17px] font-extrabold text-emerald-700 font-sans tabular-nums my-0.5 block">
+            {approvedCount}
+          </span>
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+            Deducted from leave bank
+          </span>
         </div>
-        <div className="p-4 rounded-xl bg-[#12151e] border border-slate-800">
-          <span className="text-[10px] text-cyan-400 uppercase font-semibold block">Casual Leave Quota</span>
-          <span className="text-xl sm:text-2xl font-black text-cyan-300 font-mono mt-0.5 block">12 / Year</span>
-          <span className="text-[10px] text-slate-500 font-mono">Paid statutory allowance</span>
+
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+              Casual Leave Quota
+            </span>
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+          </div>
+          <span className="text-base sm:text-[17px] font-extrabold text-slate-900 font-sans tabular-nums my-0.5 block">
+            12 / Year
+          </span>
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+            Paid statutory allowance
+          </span>
         </div>
-        <div className="p-4 rounded-xl bg-[#12151e] border border-slate-800">
-          <span className="text-[10px] text-purple-400 uppercase font-semibold block">Earned Leave Quota</span>
-          <span className="text-xl sm:text-2xl font-black text-purple-300 font-mono mt-0.5 block">15 / Year</span>
-          <span className="text-[10px] text-slate-500 font-mono">Encashable on tenure</span>
+
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+              Earned Leave Quota
+            </span>
+            <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+          </div>
+          <span className="text-base sm:text-[17px] font-extrabold text-slate-900 font-sans tabular-nums my-0.5 block">
+            15 / Year
+          </span>
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+            Encashable on tenure
+          </span>
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-[#12151e] border border-slate-800">
-        <div>
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-purple-400" />
-            <span>Leave Management & Relief Roster</span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Approved leaves automatically update daily attendance and payroll preparation sheets.
-          </p>
+      {/* Sleek, Compact Enterprise Action Toolbar */}
+      <div className="p-3 sm:px-4 sm:py-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-200/80 shrink-0">
+            <CalendarDays className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 tracking-tight">
+                Leave Management & Relief Roster
+              </h2>
+              <span className="hidden sm:inline-block text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded">
+                Roster Sync
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
+              Approved leaves automatically update daily attendance and payroll preparation sheets.
+            </p>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={() => setShowApplyModal(true)}
-          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-purple-600/20"
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 active:scale-95 text-white flex items-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs transition-all shrink-0"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           <span>Apply for Leave</span>
         </button>
       </div>
