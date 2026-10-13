@@ -200,60 +200,60 @@ export default function LeaveManagementView({ employeeFilter = null }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
         <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">
               Pending Approvals
             </span>
             <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
           </div>
-          <span className="text-base sm:text-[17px] font-extrabold text-amber-800 font-sans tabular-nums my-0.5 block">
+          <span className="text-base sm:text-[17px] font-semibold text-amber-800 font-sans tabular-nums my-0.5 block">
             {pendingCount}
           </span>
-          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-normal truncate block">
             Awaiting manager signoff
           </span>
         </div>
 
         <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">
               Approved This Month
             </span>
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
           </div>
-          <span className="text-base sm:text-[17px] font-extrabold text-emerald-700 font-sans tabular-nums my-0.5 block">
+          <span className="text-base sm:text-[17px] font-semibold text-emerald-700 font-sans tabular-nums my-0.5 block">
             {approvedCount}
           </span>
-          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-normal truncate block">
             Deducted from leave bank
           </span>
         </div>
 
         <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">
               Casual Leave Quota
             </span>
             <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
           </div>
-          <span className="text-base sm:text-[17px] font-extrabold text-slate-900 font-sans tabular-nums my-0.5 block">
+          <span className="text-base sm:text-[17px] font-semibold text-slate-800 font-sans tabular-nums my-0.5 block">
             12 / Year
           </span>
-          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-normal truncate block">
             Paid statutory allowance
           </span>
         </div>
 
         <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-sans">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">
               Earned Leave Quota
             </span>
             <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
           </div>
-          <span className="text-base sm:text-[17px] font-extrabold text-slate-900 font-sans tabular-nums my-0.5 block">
+          <span className="text-base sm:text-[17px] font-semibold text-slate-800 font-sans tabular-nums my-0.5 block">
             15 / Year
           </span>
-          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate block">
+          <span className="pt-1 border-t border-slate-100/90 text-[9.5px] sm:text-[10px] text-slate-500 font-normal truncate block">
             Encashable on tenure
           </span>
         </div>
@@ -345,16 +345,16 @@ export default function LeaveManagementView({ employeeFilter = null }) {
         <form onSubmit={handleApply} className="space-y-4 text-xs">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Employee</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">Employee</label>
               {employeeFilter || user?.role !== 'Admin' ? (
-                <div className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs">
+                <div className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono font-bold text-xs">
                   {user?.name || 'Staff'} ({employeeFilter || user?.employeeId || user?.id})
                 </div>
               ) : (
                 <select
                   value={form.employeeId}
                   onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:border-purple-500"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 >
                   {employees.map((e) => (
                     <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
@@ -363,11 +363,11 @@ export default function LeaveManagementView({ employeeFilter = null }) {
               )}
             </div>
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Leave Category</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">Leave Category</label>
               <select
                 value={form.leaveType}
                 onChange={(e) => setForm({ ...form, leaveType: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-purple-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               >
                 <option value="Casual Leave">Casual Leave (CL)</option>
                 <option value="Sick Leave">Sick Leave (SL)</option>
@@ -379,59 +379,59 @@ export default function LeaveManagementView({ employeeFilter = null }) {
 
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">From Date *</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">From Date *</label>
               <input
                 type="date"
                 required
                 value={form.fromDate}
                 onChange={(e) => handleDatesChange(e.target.value, form.toDate)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono focus:border-purple-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               />
             </div>
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">To Date *</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">To Date *</label>
               <input
                 type="date"
                 required
                 value={form.toDate}
                 onChange={(e) => handleDatesChange(form.fromDate, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono focus:border-purple-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               />
             </div>
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Days Count</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">Days Count</label>
               <input
                 type="number"
                 readOnly
                 value={form.days}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-amber-300 font-mono font-bold cursor-not-allowed"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-amber-800 font-mono font-bold cursor-not-allowed"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-slate-400 font-semibold block mb-1">Reason for Leave *</label>
+            <label className="text-slate-700 font-semibold block mb-1 text-xs">Reason for Leave *</label>
             <textarea
               required
               rows={3}
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              placeholder="e.g. Attending sibling wedding ceremony in native place."
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white placeholder-slate-500 focus:border-purple-500"
+              placeholder="e.g. Attending family wedding ceremony."
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex justify-end gap-2 pt-2.5 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowApplyModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white"
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-2xs"
             >
               Submit Application
             </button>
@@ -449,37 +449,37 @@ export default function LeaveManagementView({ employeeFilter = null }) {
       >
         {selectedLeave && (
           <div className="space-y-4 text-xs">
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800">
-              <div className="text-white font-bold">{selectedLeave.employeeName} ({selectedLeave.employeeId})</div>
-              <div className="text-purple-300 text-[11px] font-mono">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <div className="text-slate-900 font-bold text-sm">{selectedLeave.employeeName} ({selectedLeave.employeeId})</div>
+              <div className="text-purple-700 text-xs font-mono font-semibold">
                 {selectedLeave.leaveType} • {selectedLeave.days} Days ({selectedLeave.fromDate} to {selectedLeave.toDate})
               </div>
-              <p className="text-slate-300 mt-2 leading-relaxed">Reason: {selectedLeave.reason}</p>
+              <p className="text-slate-600 mt-1 leading-relaxed text-xs">Reason: {selectedLeave.reason}</p>
             </div>
 
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Manager Signoff Remarks</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">Manager Signoff Remarks</label>
               <input
                 type="text"
                 value={reviewRemarks}
                 onChange={(e) => setReviewRemarks(e.target.value)}
-                placeholder="e.g. Relief driver assigned during absence."
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-purple-500"
+                placeholder="e.g. Relief staff assigned during absence."
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-2.5 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => handleExecuteReview('Rejected')}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/60 cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer"
               >
                 Reject Leave
               </button>
               <button
                 type="button"
                 onClick={() => handleExecuteReview('Approved')}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-2xs"
               >
                 Approve & Update Attendance
               </button>
@@ -515,22 +515,22 @@ export default function LeaveManagementView({ employeeFilter = null }) {
             className="space-y-3.5 text-xs"
           >
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Employee</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">Employee</label>
               <input
                 type="text"
                 disabled
                 value={`${editingLeave.employeeName || ''} (${editingLeave.employeeId || ''})`}
-                className="w-full px-3 py-2 rounded-xl bg-slate-100 text-slate-600 border border-slate-300 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-mono"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Leave Type</label>
+                <label className="text-slate-700 font-semibold block mb-1 text-xs">Leave Type</label>
                 <select
                   value={editingLeave.leaveType}
                   onChange={(e) => setEditingLeave({ ...editingLeave, leaveType: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 >
                   <option value="Casual Leave">Casual Leave (CL)</option>
                   <option value="Sick Leave">Sick Leave (SL)</option>
@@ -539,11 +539,11 @@ export default function LeaveManagementView({ employeeFilter = null }) {
                 </select>
               </div>
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Status</label>
+                <label className="text-slate-700 font-semibold block mb-1 text-xs">Status</label>
                 <select
                   value={editingLeave.status}
                   onChange={(e) => setEditingLeave({ ...editingLeave, status: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 >
                   <option value="Pending">Pending</option>
                   <option value="Approved">Approved</option>
@@ -554,60 +554,60 @@ export default function LeaveManagementView({ employeeFilter = null }) {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">From Date</label>
+                <label className="text-slate-700 font-semibold block mb-1 text-xs">From Date</label>
                 <input
                   type="date"
                   value={editingLeave.fromDate}
                   onChange={(e) => setEditingLeave({ ...editingLeave, fromDate: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                   required
                 />
               </div>
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">To Date</label>
+                <label className="text-slate-700 font-semibold block mb-1 text-xs">To Date</label>
                 <input
                   type="date"
                   value={editingLeave.toDate}
                   onChange={(e) => setEditingLeave({ ...editingLeave, toDate: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                   required
                 />
               </div>
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Total Days</label>
+                <label className="text-slate-700 font-semibold block mb-1 text-xs">Total Days</label>
                 <input
                   type="number"
                   min="0.5"
                   step="0.5"
                   value={editingLeave.days}
                   onChange={(e) => setEditingLeave({ ...editingLeave, days: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Reason</label>
+              <label className="text-slate-700 font-semibold block mb-1 text-xs">Reason</label>
               <textarea
                 rows={2}
                 value={editingLeave.reason || ''}
                 onChange={(e) => setEditingLeave({ ...editingLeave, reason: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-2.5 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="px-4 py-2 rounded-xl font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                className="px-4 py-2 rounded-xl font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl font-bold bg-amber-400 text-slate-950 hover:bg-amber-300"
+                className="px-4 py-2 rounded-xl font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-2xs"
               >
                 Save Changes
               </button>

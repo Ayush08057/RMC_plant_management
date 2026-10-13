@@ -107,7 +107,7 @@ export default function KPICard({
       >
         <div className="relative z-10">
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-tight block truncate font-sans">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight block truncate font-sans">
               {title}
             </span>
             {Icon && (
@@ -116,20 +116,20 @@ export default function KPICard({
               </div>
             )}
           </div>
-          <div className="text-base sm:text-[17px] font-extrabold text-slate-900 tracking-tight font-sans tabular-nums my-0.5 leading-snug group-hover:text-blue-900 transition-colors">
+          <div className="text-base sm:text-[17px] font-semibold text-slate-800 tracking-tight font-sans tabular-nums my-0.5 leading-snug group-hover:text-blue-900 transition-colors">
             {value}
           </div>
         </div>
 
         {(subtext || trend) && (
-          <div className="mt-1 pt-1 border-t border-slate-100/90 flex items-center justify-between text-[9.5px] sm:text-[10px] text-slate-500 gap-1 font-medium min-w-0 relative z-10">
+          <div className="mt-1 pt-1 border-t border-slate-100/90 flex items-center justify-between text-[9.5px] sm:text-[10px] text-slate-500 gap-1 font-normal min-w-0 relative z-10">
             {subtext && (
-              <span className="font-medium text-slate-500 text-[9.5px] sm:text-[10px] leading-tight truncate flex-1 min-w-0" title={subtext}>
+              <span className="font-normal text-slate-500 text-[9.5px] sm:text-[10px] leading-tight truncate flex-1 min-w-0" title={subtext}>
                 {subtext}
               </span>
             )}
             {trend && (
-              <span className={`inline-flex items-center gap-0.5 font-bold shrink-0 text-[8.5px] px-1.5 py-0.2 rounded border shadow-2xs ${
+              <span className={`inline-flex items-center gap-0.5 font-medium shrink-0 text-[8.5px] px-1.5 py-0.2 rounded border shadow-2xs ${
                 trendType === 'up' 
                   ? 'text-emerald-800 bg-emerald-50 border-emerald-200' 
                   : trendType === 'down' 
@@ -137,7 +137,7 @@ export default function KPICard({
                     : activeColor.badgeBg
               }`}>
                 {trendType === 'up' ? <TrendingUp className="w-2.5 h-2.5 text-emerald-600 shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-2.5 h-2.5 text-rose-600 shrink-0" /> : null}
-                <span className="whitespace-nowrap font-sans">{trend}</span>
+                <span className="whitespace-nowrap font-normal font-sans">{trend}</span>
               </span>
             )}
           </div>

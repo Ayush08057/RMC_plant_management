@@ -191,82 +191,78 @@ export default function AdvanceManagementView({ employeeFilter = null }) {
   return (
     <div className="space-y-5">
       {/* Metrics Banner: Clean Light Theme Cards with Generous Spacing */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
         {/* Card 1: Total Disbursed */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-slate-500 to-slate-700 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 uppercase font-bold tracking-wider">Total Disbursed</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
-              <IndianRupee className="w-4 h-4" />
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">Total Disbursed</span>
+            <div className="w-5.5 h-5.5 rounded-md bg-slate-50 border border-slate-200/70 flex items-center justify-center text-slate-500 shadow-2xs">
+              <IndianRupee className="w-3 h-3" />
             </div>
           </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight block">
+          <div className="my-0.5">
+            <span className="text-base sm:text-[17px] font-semibold text-slate-800 font-sans tabular-nums tracking-tight block">
               ₹ {totalDisbursed.toLocaleString('en-IN')}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 pt-1 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 text-[9.5px] sm:text-[10px] font-normal text-slate-500 pt-1 border-t border-slate-100/90">
             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
             <span>Approved advances</span>
           </div>
         </div>
 
         {/* Card 2: Total Recovered */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-teal-400 to-emerald-500 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-teal-700 uppercase font-bold tracking-wider">Total Recovered</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700 shadow-2xs">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">Total Recovered</span>
+            <div className="w-5.5 h-5.5 rounded-md bg-emerald-50 border border-emerald-200/70 flex items-center justify-center text-emerald-600 shadow-2xs">
+              <CheckCircle2 className="w-3 h-3" />
             </div>
           </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-teal-800 font-mono tracking-tight block">
+          <div className="my-0.5">
+            <span className="text-base sm:text-[17px] font-semibold text-emerald-700 font-sans tabular-nums tracking-tight block">
               ₹ {totalRecovered.toLocaleString('en-IN')}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-teal-700 pt-1 border-t border-teal-50">
-            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+          <div className="flex items-center gap-1.5 text-[9.5px] sm:text-[10px] font-normal text-slate-500 pt-1 border-t border-slate-100/90">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span>Payroll deductions</span>
           </div>
         </div>
 
         {/* Card 3: Outstanding Balance */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-amber-700 uppercase font-bold tracking-wider">Outstanding Balance</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shadow-2xs">
-              <TrendingDown className="w-4 h-4" />
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">Outstanding Balance</span>
+            <div className="w-5.5 h-5.5 rounded-md bg-amber-50 border border-amber-200/70 flex items-center justify-center text-amber-600 shadow-2xs">
+              <TrendingDown className="w-3 h-3" />
             </div>
           </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-amber-800 font-mono tracking-tight block">
+          <div className="my-0.5">
+            <span className="text-base sm:text-[17px] font-semibold text-amber-800 font-sans tabular-nums tracking-tight block">
               ₹ {totalOutstanding.toLocaleString('en-IN')}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 pt-1 border-t border-amber-50">
+          <div className="flex items-center gap-1.5 text-[9.5px] sm:text-[10px] font-normal text-slate-500 pt-1 border-t border-slate-100/90">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             <span>To be recovered</span>
           </div>
         </div>
 
         {/* Card 4: Pending Requests */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-purple-400 to-indigo-500 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-purple-700 uppercase font-bold tracking-wider">Pending Requests</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700 shadow-2xs">
-              <FileText className="w-4 h-4" />
+        <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-white border border-slate-200/85 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider block font-sans">Pending Requests</span>
+            <div className="w-5.5 h-5.5 rounded-md bg-purple-50 border border-purple-200/70 flex items-center justify-center text-purple-600 shadow-2xs">
+              <FileText className="w-3 h-3" />
             </div>
           </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-purple-800 font-mono tracking-tight block">
+          <div className="my-0.5">
+            <span className="text-base sm:text-[17px] font-semibold text-purple-700 font-sans tabular-nums tracking-tight block">
               {pendingCount}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-purple-700 pt-1 border-t border-purple-50">
+          <div className="flex items-center gap-1.5 text-[9.5px] sm:text-[10px] font-normal text-slate-500 pt-1 border-t border-slate-100/90">
             <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
             <span>Awaiting finance approval</span>
           </div>

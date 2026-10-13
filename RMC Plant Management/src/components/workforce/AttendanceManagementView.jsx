@@ -1137,70 +1137,35 @@ export default function AttendanceManagementView({
 
                             {/* 4. TODAY'S WORK REPORT */}
                             <td className="py-3 px-4 sm:px-5 align-middle">
-                              <div className="space-y-1.5 min-w-0 pr-1">
-                                {hasReport ? (
-                                  <>
-                                    <div className="flex items-center justify-between gap-1.5">
-                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-md shadow-2xs">
-                                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                        <span>Report Filed</span>
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenReportModal(staff, false)}
-                                        className="text-[10.5px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors shrink-0"
-                                      >
-                                        View / Edit
-                                      </button>
-                                    </div>
-
-                                    <div 
-                                      onClick={() => handleOpenReportModal(staff, false)}
-                                      className="text-[11px] text-slate-700 font-medium leading-relaxed bg-slate-50 hover:bg-slate-100/90 p-2 rounded-xl border border-slate-200/80 shadow-2xs cursor-pointer transition-colors"
-                                      title="Click to view full work report"
-                                    >
-                                      {reportSnippet && reportSnippet.includes('|') ? (
-                                        <div className="flex flex-wrap items-center gap-1">
-                                          {reportSnippet.split('|').map((part, pIdx) => {
-                                            const cleanPart = part.trim();
-                                            if (!cleanPart) return null;
-                                            return (
-                                              <span key={pIdx} className="bg-white text-slate-800 border border-slate-200/90 px-1.5 py-0.2 rounded text-[10px] font-mono">
-                                                {cleanPart}
-                                              </span>
-                                            );
-                                          })}
-                                        </div>
-                                      ) : (
-                                        <p className="line-clamp-2 text-[11px]">
-                                          {reportSnippet || 'Daily operations report submitted.'}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="flex items-center justify-between gap-1.5">
-                                      <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md shadow-2xs">
-                                        <Clock className="w-3 h-3 text-amber-600 shrink-0" />
-                                        <span>Report Pending</span>
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenReportModal(staff, false)}
-                                        className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10.5px] font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1"
-                                      >
-                                        + File Report
-                                      </button>
-                                    </div>
-
-                                    <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400 py-0.5">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
-                                      <span>Awaiting punch-out work report</span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
+                              {hasReport ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-md shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span>Report Filed</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReportModal(staff, false)}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-blue-600 hover:text-blue-700 border border-slate-200 text-[10.5px] font-medium transition-colors cursor-pointer shadow-2xs"
+                                  >
+                                    View / Edit
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md shadow-2xs">
+                                    <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                                    <span>Pending</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReportModal(staff, false)}
+                                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10.5px] font-medium transition-colors cursor-pointer shadow-2xs flex items-center gap-1"
+                                  >
+                                    + File Report
+                                  </button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );
