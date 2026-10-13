@@ -185,106 +185,106 @@ export default function DispatcherDashboardPage() {
       {activeTab === 'leaves' && <LeaveManagementView />}
 
       {activeTab === 'dashboard' && (
-        <>
+        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* 4 Primary KPI Cards + Secondary */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title="Vehicles On Route"
-          value={`${kpis.vehiclesOnRoute} Mixers`}
-          subtext="In active transit to sites"
-          trend="GPS Synced"
-          trendType="up"
-          color="blue"
-          icon={Navigation}
-        />
-        <KPICard
-          title="Yard Free Mixers"
-          value={`${kpis.vehiclesAvailable} Free`}
-          subtext="Ready in staging yard"
-          trend="High Availability"
-          trendType="up"
-          color="emerald"
-          icon={Truck}
-        />
-        <KPICard
-          title="Today's Total Dispatches"
-          value={kpis.todayDispatches}
-          subtext={kpis.todayDispatches > 0 ? "Volume shipped today" : "No dispatches recorded today"}
-          trend="Today"
-          trendType="neutral"
-          color="amber"
-          icon={Clock}
-        />
-        <KPICard
-          title="Delayed Turnarounds"
-          value={kpis.delayed}
-          subtext={kpis.delayed > 0 ? "Transit delays detected" : "Zero transit delays"}
-          trend={kpis.delayed > 0 ? "Action Required" : "Normal"}
-          trendType={kpis.delayed > 0 ? "down" : "up"}
-          color="rose"
-          icon={AlertTriangle}
-        />
-      </section>
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPICard
+              title="Vehicles On Route"
+              value={`${kpis.vehiclesOnRoute} Mixers`}
+              subtext="In active transit to sites"
+              trend="GPS Synced"
+              trendType="up"
+              color="blue"
+              icon={Navigation}
+            />
+            <KPICard
+              title="Yard Free Mixers"
+              value={`${kpis.vehiclesAvailable} Free`}
+              subtext="Ready in staging yard"
+              trend="High Availability"
+              trendType="up"
+              color="emerald"
+              icon={Truck}
+            />
+            <KPICard
+              title="Today's Total Dispatches"
+              value={kpis.todayDispatches}
+              subtext={kpis.todayDispatches > 0 ? "Volume shipped today" : "No dispatches recorded today"}
+              trend="Today"
+              trendType="neutral"
+              color="amber"
+              icon={Clock}
+            />
+            <KPICard
+              title="Delayed Turnarounds"
+              value={kpis.delayed}
+              subtext={kpis.delayed > 0 ? "Transit delays detected" : "Zero transit delays"}
+              trend={kpis.delayed > 0 ? "Action Required" : "Normal"}
+              trendType={kpis.delayed > 0 ? "down" : "up"}
+              color="rose"
+              icon={AlertTriangle}
+            />
+          </section>
 
-      {/* Quick Operational Commands Bar */}
-      <section>
-        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-          Dispatch Operations Commands
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction
-            icon={Plus}
-            title="Create Dispatch"
-            desc="Allocate batch to mixer"
-            color="blue"
-            onClick={() => setShowCreateModal(true)}
-          />
-          <QuickAction
-            icon={Truck}
-            title="Assign Vehicle"
-            desc="Staging yard bay allocate"
-            color="amber"
-            onClick={() => setShowAssignModal(true)}
-          />
-          <QuickAction
-            icon={User}
-            title="Assign Driver"
-            desc="Match roster duty shift"
-            color="emerald"
-            onClick={() => setToastMessage('Driver shift allocation opened.')}
-          />
-          <QuickAction
-            icon={RotateCw}
-            title="Drum Telemetry"
-            desc="Check RPM & slump clock"
-            color="purple"
-            onClick={() => setToastMessage('Drum rotation telemetry confirmed safe (3.5 RPM).')}
-          />
-        </div>
-      </section>
+          {/* Quick Operational Commands Bar */}
+          <section>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+              Dispatch Operations Commands
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <QuickAction
+                icon={Plus}
+                title="Create Dispatch"
+                desc="Allocate batch to mixer"
+                color="blue"
+                onClick={() => setShowCreateModal(true)}
+              />
+              <QuickAction
+                icon={Truck}
+                title="Assign Vehicle"
+                desc="Staging yard bay allocate"
+                color="amber"
+                onClick={() => setShowAssignModal(true)}
+              />
+              <QuickAction
+                icon={User}
+                title="Assign Driver"
+                desc="Match roster duty shift"
+                color="emerald"
+                onClick={() => setToastMessage('Driver shift allocation opened.')}
+              />
+              <QuickAction
+                icon={RotateCw}
+                title="Drum Telemetry"
+                desc="Check RPM & slump clock"
+                color="purple"
+                onClick={() => setToastMessage('Drum rotation telemetry verified with on-board sensor.')}
+              />
+            </div>
+          </section>
 
-      {/* Status Filter Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scroll">
-        {['All', 'On Route', 'Loading', 'Assigned', 'Pending', 'Delivered', 'Delayed'].map((status) => (
-          <button
-            key={status}
-            type="button"
-            onClick={() => setStatusFilter(status)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-              statusFilter === status
-                ? 'bg-cyan-600 text-white font-bold shadow-md shadow-cyan-500/20'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {status}
-          </button>
-        ))}
-      </div>
+          {/* Main Dispatch Queue Section with Filter Bar */}
+          <section className="space-y-3">
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
+              {['All', 'On Route', 'Loading', 'Assigned', 'Pending', 'Delivered', 'Delayed'].map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shadow-2xs ${
+                    statusFilter === status
+                      ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-500/25 ring-2 ring-blue-500/30'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
 
-      {/* Main Dispatch Queue Section */}
-      <section>
-        <DataTable
-          title="Central Dispatch Queue"
+            <DataTable
+              title="Central Dispatch Queue"
           subtitle="Real-time transit mixer journey milestones from batching gate release to site pour completion"
           icon={Navigation}
           columns={columns}
@@ -388,7 +388,7 @@ export default function DispatcherDashboardPage() {
           )}
         </div>
       </section>
-      </>
+        </div>
       )}
 
       {/* Modals */}
@@ -501,23 +501,23 @@ export default function DispatcherDashboardPage() {
         subtitle="Allocate available yard staging vehicles."
         icon={Truck}
       >
-        <div className="space-y-3 text-xs text-slate-300">
-          <p className="text-slate-400">
-            8 mixers currently available in yard staging. Vehicles TM-08 and TM-06 are fully refueled and pre-inspected.
+        <div className="space-y-3 text-xs text-slate-700">
+          <p className="text-slate-600">
+            Select an available mixer vehicle from the active fleet staging roster for loading bay allocation.
           </p>
-          <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/90 font-mono text-emerald-800">
-            Ready Bay: Bay #01 chute cleared for loading TM-08
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-600">
+            Loading bays are available. Queue an active transit mixer from dispatch roster.
           </div>
           <div className="flex justify-end pt-2">
             <button
               type="button"
               onClick={() => {
                 setShowAssignModal(false);
-                setToastMessage('TM-08 assigned to Loading Bay #01');
+                setToastMessage('Loading bay queue updated.');
               }}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-500 text-slate-950"
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
             >
-              Confirm Bay Assignment
+              Close
             </button>
           </div>
         </div>

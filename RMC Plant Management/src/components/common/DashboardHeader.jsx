@@ -20,7 +20,6 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
   };
 
   const handleQuickSwitchRole = (targetRole) => {
@@ -56,20 +55,20 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
   return (
     <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-18 sm:h-20">
           
           {/* Left: Brand & Plant Identity */}
           <div className="flex items-center gap-3">
             <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 group">
-              <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain drop-shadow-sm" />
+              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-white p-1 border border-amber-300 shadow-md ring-2 ring-amber-400/25 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
+                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain drop-shadow-xs" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-amber-600 uppercase tracking-wider group-hover:text-amber-500 transition-colors">
+                  <span className="text-xs sm:text-sm font-black text-amber-600 uppercase tracking-wider group-hover:text-amber-500 transition-colors">
                     SM CONCRETECH
                   </span>
-                  <span className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-300">
+                  <span className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 font-bold">
                     RMC OPS
                   </span>
                 </div>

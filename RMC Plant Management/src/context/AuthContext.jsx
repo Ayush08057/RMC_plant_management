@@ -21,6 +21,7 @@ import {
   validateEmployeeForRegistration, 
   validateLoginAttempt 
 } from '../services/employeeAuthService.js';
+import LogoutConfirmModal from '../components/common/LogoutConfirmModal.jsx';
 
 const AuthContext = createContext(null);
 
@@ -79,6 +80,8 @@ export const AuthProvider = ({ children }) => {
   const [pendingFirstLoginUser, setPendingFirstLoginUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Auto-sync all 8 official role accounts to Firebase Cloud Firestore on mount
   useEffect(() => {
@@ -502,9 +505,24 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Logout
+   * Request Logout: prompts confirmation dialog first
    */
-  const logout = async () => {
+  const requestLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  /**
+   * Cancel Logout: closes confirmation dialog
+   */
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
+
+  /**
+   * Complete forced logout action (session wipe)
+   */
+  const executeLogout = async () => {
+    setIsLoggingOut(true);
     try {
       await signOut(auth);
     } catch (err) {
@@ -520,9 +538,25 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('rmc_current_user_v2');
       sessionStorage.removeItem('rmc_current_user_v2');
       localStorage.removeItem('rmc_remember_choice_v2');
+      sessionStorage.removeItem('rmc_login_toast');
     } catch (err) {
       console.error('Logout storage error:', err);
+    } finally {
+      setIsLoggingOut(false);
+      setShowLogoutConfirm(false);
     }
+  };
+
+  /**
+   * Logout wrapper:
+   * Prompts confirmation dialog by default.
+   * If invoked with { force: true } or true, executes immediately.
+   */
+  const logout = async (forceOrEvent) => {
+    if (forceOrEvent === true || (forceOrEvent && forceOrEvent.force === true)) {
+      return await executeLogout();
+    }
+    setShowLogoutConfirm(true);
   };
 
   const clearAuthError = () => setAuthError(null);
@@ -540,6 +574,10 @@ export const AuthProvider = ({ children }) => {
     register,
     login,
     logout,
+    requestLogout,
+    confirmLogout: executeLogout,
+    cancelLogout,
+    isLogoutModalOpen: showLogoutConfirm,
     switchRole,
     returnToAdmin,
     isMasterAdmin: Boolean(user?.isMasterAdmin || user?.role === ROLES.ADMIN || user?.originalAdminUser),
@@ -556,7 +594,18 @@ export const AuthProvider = ({ children }) => {
     syncRolesToFirebase,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={cancelLogout}
+        onConfirm={executeLogout}
+        user={user}
+        isLoggingOut={isLoggingOut}
+      />
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {

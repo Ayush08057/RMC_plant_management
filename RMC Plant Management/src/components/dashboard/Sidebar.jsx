@@ -44,7 +44,7 @@ export default function Sidebar({ isOpen, onClose, activeTab, onSelectTab }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [expandedGroups, setExpandedGroups] = useState({ employees_group: true });
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   const getNavItemsForRole = (role) => {
     switch (role) {
@@ -210,21 +210,23 @@ export default function Sidebar({ isOpen, onClose, activeTab, onSelectTab }) {
         }`}
       >
         {/* Top: Logo & System Identity */}
-        <div className="h-14 px-4 border-b border-slate-200/90 flex items-center justify-between bg-white shrink-0">
-          <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-2.5">
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+        <div className="py-3 px-3.5 border-b border-slate-200/90 flex items-center justify-between bg-white shrink-0">
+          <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 w-full">
+            <div className="w-14 h-14 rounded-2xl bg-white p-1 border border-amber-300 shadow-md ring-2 ring-amber-400/25 flex items-center justify-center shrink-0 transition-transform hover:scale-105">
               <img 
                 src="/logo.png" 
                 alt="SM ConcreTech" 
-                className="w-full h-full object-contain drop-shadow-sm transition-transform hover:scale-105" 
+                className="w-full h-full object-contain drop-shadow-xs" 
               />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="sidebar-label text-xs font-black tracking-wider font-mono">SM CONCRETECH</span>
-                <span className="text-[9px] font-mono px-1 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">RMC</span>
+                <span className="sidebar-label text-xs font-black tracking-wider font-mono text-slate-900 truncate">SM CONCRETECH</span>
               </div>
-              <div className="sidebar-label text-[10px] font-bold truncate max-w-[130px] text-slate-500">
+              <div className="text-[10px] font-bold text-amber-600 font-mono tracking-wider">
+                READY MIX CONCRETE
+              </div>
+              <div className="sidebar-label text-[10px] font-semibold truncate text-slate-500 mt-0.5">
                 {user?.role || 'Portal'}
               </div>
             </div>

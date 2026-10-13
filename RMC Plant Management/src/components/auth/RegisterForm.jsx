@@ -214,37 +214,37 @@ export default function RegisterForm() {
       <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl shadow-amber-950/10 transition-all duration-300">
         
         {/* Top Accent Line */}
-        <div className="h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400" />
+        <div className="h-1.5 bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300" />
 
-        {/* Brand Header Banner - Generous Professional Spacing */}
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 pt-7 pb-6 px-6 sm:pt-8 sm:pb-7 text-slate-950 text-center relative overflow-hidden shadow-inner">
+        {/* Brand Header Banner - Balanced Warm Industrial Gold-Orange Theme */}
+        <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-400 pt-6 pb-5 px-6 text-slate-950 text-center relative overflow-hidden shadow-inner">
           
           <div className="relative z-10 flex flex-col items-center">
             
-            {/* CRISP 3D LOGO EMBLEM - Balanced with clear breathing room */}
-            <div className="relative group mb-3 sm:mb-3.5">
-              <div className="absolute -inset-2 bg-white/25 rounded-full blur-md group-hover:opacity-100 transition duration-300 pointer-events-none" />
+            {/* COMPANY LOGO EMBLEM - PROPORTIONAL & BALANCED SIZE */}
+            <div className="relative group mb-3">
+              <div className="absolute -inset-2 bg-white/40 rounded-full blur-lg group-hover:opacity-100 transition duration-300 pointer-events-none" />
               
-              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white p-1.5 border-2 border-amber-300 shadow-lg shadow-black/15 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ring-4 ring-white/30">
+              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white p-1.5 border-2 border-amber-200/90 shadow-xl shadow-amber-950/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ring-4 ring-white/70">
                 <img 
                   src="/logo.png" 
                   alt="SM ConcreTech Logo" 
-                  className="w-full h-full object-contain rounded-full drop-shadow-xs"
+                  className="w-full h-full object-contain rounded-full drop-shadow-sm"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.nextSibling.style.display = 'flex';
                   }}
                 />
                 <div className="w-full h-full rounded-full bg-amber-50 items-center justify-center text-amber-700 hidden">
-                  <Building2 className="w-8 h-8" />
+                  <Building2 className="w-12 h-12" />
                 </div>
               </div>
             </div>
 
-            <h1 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight leading-snug">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight leading-snug drop-shadow-2xs">
               Register Plant Account
             </h1>
-            <p className="text-xs text-slate-900/90 font-bold tracking-wide mt-1">
+            <p className="text-xs text-amber-950 font-extrabold tracking-wide mt-0.5">
               Link your Employee ID to activate credentials
             </p>
 

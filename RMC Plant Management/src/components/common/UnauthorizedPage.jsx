@@ -90,10 +90,7 @@ export default function UnauthorizedPage({ attemptedPath = '', requiredRoles = [
 
           <button
             type="button"
-            onClick={() => {
-              logout();
-              navigate('/login');
-            }}
+            onClick={() => logout()}
             className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs border border-slate-700 hover:border-slate-600 bg-slate-900/60 text-slate-300 hover:text-white flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />

@@ -67,15 +67,35 @@ export default function LoginForm() {
 
       if (result.success) {
         if (result.requiresFirstLoginSetup) {
-          setSuccessMessage('First-time login detected. Redirecting to password setup...');
+          setSuccessMessage('User login successfully! Redirecting to first-time credentials setup...');
           setTimeout(() => {
             navigate('/first-time-setup');
-          }, 600);
-        } else {
-          setSuccessMessage(`Authenticated as ${result.role}. Redirecting...`);
-          setTimeout(() => {
-            navigate(result.redirectPath);
           }, 700);
+        } else {
+          const displayName = result.user?.name || identifier;
+          setSuccessMessage(`User login successfully! Welcome back, ${displayName}.`);
+          
+          try {
+            sessionStorage.setItem('rmc_login_toast', JSON.stringify({
+              title: 'User login successfully',
+              userName: displayName,
+              role: result.role,
+              timestamp: Date.now()
+            }));
+          } catch {
+            // ignore
+          }
+
+          setTimeout(() => {
+            navigate(result.redirectPath, {
+              state: {
+                loginSuccess: true,
+                message: `User login successfully! Welcome back, ${displayName}.`,
+                userName: displayName,
+                userRole: result.role
+              }
+            });
+          }, 750);
         }
       } else {
         setLocalError(result.error || 'Authentication failed. Please check credentials.');
@@ -96,43 +116,43 @@ export default function LoginForm() {
       <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl shadow-amber-950/10 transition-all duration-300">
         
         {/* Top Accent Line */}
-        <div className="h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400" />
+        <div className="h-1.5 bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300" />
 
-        {/* Brand Header Banner - Perfectly Proportioned Professional Spacing */}
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 pt-5 pb-4 px-5 sm:pt-6 sm:pb-5 sm:px-6 text-slate-950 text-center relative overflow-hidden shadow-inner">
+        {/* Brand Header Banner - Balanced Warm Industrial Gold-Orange Theme */}
+        <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-400 pt-5 pb-4 px-5 sm:pt-6 sm:pb-5 sm:px-6 text-slate-950 text-center relative overflow-hidden shadow-inner">
           
-          {/* Subtle Ambient Light Accents */}
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-56 h-56 bg-white/20 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -bottom-8 right-0 w-40 h-40 bg-amber-400/30 rounded-full blur-xl pointer-events-none" />
+          {/* Subtle Ambient Depth */}
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-52 h-52 bg-white/25 rounded-full blur-xl pointer-events-none" />
+          <div className="absolute -bottom-8 right-0 w-36 h-36 bg-orange-300/30 rounded-full blur-lg pointer-events-none" />
           
           <div className="relative z-10 flex flex-col items-center">
             
-            {/* CRISP 3D LOGO EMBLEM - Balanced with clear breathing room */}
-            <div className="relative group mb-2.5">
-              <div className="absolute -inset-2 bg-white/25 rounded-full blur-md group-hover:opacity-100 transition duration-300 pointer-events-none" />
+            {/* COMPANY LOGO EMBLEM - PROPORTIONAL & BALANCED SIZE */}
+            <div className="relative group mb-3">
+              <div className="absolute -inset-2 bg-white/40 rounded-full blur-lg group-hover:opacity-100 transition duration-300 pointer-events-none" />
               
-              <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white p-1 border-2 border-amber-300 shadow-md shadow-black/15 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ring-4 ring-white/30">
+              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white p-1.5 border-2 border-amber-200/90 shadow-xl shadow-amber-950/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ring-4 ring-white/70">
                 <img 
                   src="/logo.png" 
                   alt="SM ConcreTech Logo" 
-                  className="w-full h-full object-contain rounded-full drop-shadow-xs"
+                  className="w-full h-full object-contain rounded-full drop-shadow-sm"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.nextSibling.style.display = 'flex';
                   }}
                 />
                 <div className="w-full h-full rounded-full bg-amber-50 items-center justify-center text-amber-700 hidden">
-                  <Building2 className="w-7 h-7" />
+                  <Building2 className="w-12 h-12" />
                 </div>
               </div>
             </div>
 
             {/* Title & Subtitle */}
-            <h1 className="text-base sm:text-lg font-black text-slate-950 tracking-tight leading-snug">
-              RMC Plant Management
+            <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight leading-snug drop-shadow-2xs">
+              SM CONCRETECH
             </h1>
-            <p className="text-[11px] sm:text-xs text-slate-900/90 font-bold tracking-wide mt-0.5">
-              Ready-Mix Concrete Industrial Control System
+            <p className="text-xs text-amber-950 font-extrabold tracking-wide mt-0.5">
+              Ready-Mix Concrete Plant Management ERP
             </p>
 
           </div>
@@ -149,11 +169,22 @@ export default function LoginForm() {
             </div>
           )}
 
-          {/* Success Alert */}
+          {/* Executive Success Notification */}
           {successMessage && (
-            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-emerald-800 text-xs shadow-2xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <div className="font-semibold flex-1 text-[11px]">{successMessage}</div>
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 flex items-center gap-3 text-emerald-950 shadow-md animate-fadeIn">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs ring-2 ring-emerald-300/60">
+                <CheckCircle2 className="w-4.5 h-4.5 animate-pulse" />
+              </div>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="text-[11px] font-black text-emerald-900 tracking-wider uppercase font-mono flex items-center gap-1.5">
+                  <span>User login successfully</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                </div>
+                <div className="text-[11px] font-semibold text-emerald-700 truncate mt-0.5">
+                  {successMessage.replace('User login successfully! ', '')}
+                </div>
+              </div>
+              <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin shrink-0" />
             </div>
           )}
 

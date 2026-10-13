@@ -138,7 +138,7 @@ export default function AccountantDashboardPage() {
       {activeTab === 'reports' && <HrReportsView />}
 
       {activeTab === 'dashboard' && (
-        <>
+        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* Phase 1 Payroll & Advances Financial Telemetry Strip */}
           <section className="p-4.5 rounded-3xl bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/90 border border-emerald-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-3">
@@ -304,14 +304,14 @@ export default function AccountantDashboardPage() {
               title="Receivables"
               desc="Inspect client aged ledgers"
               color="amber"
-              onClick={() => setToastMessage('Filtered to ₹68.4L pending receivables.')}
+              onClick={() => setToastMessage(`Filtered to ${kpis.outstandingReceivables || '₹ 0'} pending receivables.`)}
             />
             <QuickAction
               icon={FileText}
               title="GST Audit"
               desc="Export GSTR-1 & B2B report"
               color="purple"
-              onClick={() => setToastMessage('GSTR-1 report compiled for FY26-Q3.')}
+              onClick={() => setToastMessage('GSTR-1 report export initiated.')}
             />
           </div>
 
@@ -405,7 +405,7 @@ export default function AccountantDashboardPage() {
           )}
         />
       </section>
-        </>
+        </div>
       )}
 
       {/* Modals */}

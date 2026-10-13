@@ -161,7 +161,7 @@ export default function QcDashboardPage() {
       {activeTab === 'documents' && <EmployeeDocumentsView />}
 
       {activeTab === 'dashboard' && (
-        <>
+        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* 4 Primary KPI Cards */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
@@ -371,7 +371,7 @@ export default function QcDashboardPage() {
           </div>
         </div>
       </section>
-      </>
+        </div>
       )}
 
       {/* Modals */}

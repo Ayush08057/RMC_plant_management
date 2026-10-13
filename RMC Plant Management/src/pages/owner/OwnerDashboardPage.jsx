@@ -109,7 +109,7 @@ export default function OwnerDashboardPage() {
       {activeTab === 'reports' && <HrReportsView />}
 
       {activeTab === 'dashboard' && (
-        <>
+        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* Executive Workforce Intelligence Strip */}
           <section className="p-4.5 rounded-3xl bg-gradient-to-r from-rose-50/90 via-white to-purple-50/90 border border-rose-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-3">
@@ -172,10 +172,10 @@ export default function OwnerDashboardPage() {
             />
             <KPICard
               title="Overall Equipment Uptime (OEE)"
-              value="100%"
-              subtext="Zero catastrophic breakdowns"
-              trend="Optimal"
-              trendType="up"
+              value="--"
+              subtext="Awaiting plant telemetry"
+              trend="Standby"
+              trendType="neutral"
               color="cyan"
               icon={Building2}
             />
@@ -317,26 +317,11 @@ export default function OwnerDashboardPage() {
           <span className="text-[10px] font-mono text-emerald-700 font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">NO ESCALATIONS</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <AlertCard
-            title="Capital Expenditure ROI Validated"
-            desc="Automated moisture probes installed at Plant Unit #01 achieved 4.2% cement savings over 60 days."
-            time="Yesterday"
-            type="success"
-            actionLabel="View Analysis"
-            onAction={() => setToastMessage('CapEx analysis sheet opened.')}
-          />
-          <AlertCard
-            title="Credit Insurance Limit Review"
-            desc="L&T Metro Infra credit ceiling raised to ₹ 2.50 Cr following spotless 6-month payment cycle."
-            time="2 days ago"
-            type="info"
-            actionLabel="View Approval"
-            onAction={() => setToastMessage('Credit approval ledger verified.')}
-          />
+        <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
+          No executive risk or compliance alerts recorded for active period.
         </div>
       </section>
-      </>
+        </div>
       )}
 
       {/* Board Summary Modal */}
@@ -349,12 +334,25 @@ export default function OwnerDashboardPage() {
       >
         <div className="space-y-3 text-xs text-slate-700">
           <p className="text-slate-600 leading-relaxed font-medium">
-            SM CONCRETECH continues to operate with healthy 22.4% gross operating margins across 3 plants. Quality pass rate is 98.4%, with zero customer rejections on major infrastructure piers.
+            Executive oversight summary compiled for SM CONCRETECH operations. Live business indicators reflect verified enterprise records across all enrolled plant units.
           </p>
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1 font-mono text-xs">
-            <div className="text-slate-900 font-bold">Active Transit Mixers: 24 Trucks</div>
-            <div className="text-emerald-700 font-bold">Monthly Run Rate: ₹ 6.42 Cr</div>
-            <div className="text-amber-700 font-bold">Average Turnaround Time: 38.4 mins</div>
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 font-mono text-xs">
+            <div className="flex items-center justify-between text-slate-900">
+              <span>Enrolled Workforce:</span>
+              <strong className="font-bold">{employees.length} Personnel</strong>
+            </div>
+            <div className="flex items-center justify-between text-slate-900">
+              <span>Active Shifts Today:</span>
+              <strong className="font-bold">{presentCount} Clocked In</strong>
+            </div>
+            <div className="flex items-center justify-between text-slate-900">
+              <span>Gross Monthly Wages:</span>
+              <strong className="text-rose-700 font-bold">₹ {totalPayroll.toLocaleString('en-IN')}</strong>
+            </div>
+            <div className="flex items-center justify-between text-slate-900">
+              <span>Salary Advances Book:</span>
+              <strong className="text-cyan-700 font-bold">₹ {totalRecoverables.toLocaleString('en-IN')}</strong>
+            </div>
           </div>
           <div className="flex justify-end pt-2">
             <button

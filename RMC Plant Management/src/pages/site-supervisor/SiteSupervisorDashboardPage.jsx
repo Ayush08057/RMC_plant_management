@@ -148,7 +148,7 @@ export default function SiteSupervisorDashboardPage() {
       {activeTab === 'leaves' && <LeaveManagementView />}
 
       {activeTab === 'dashboard' && (
-        <>
+        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* Site Team Workforce Telemetry Strip */}
           <section className="p-4.5 rounded-3xl bg-gradient-to-r from-orange-50/90 via-white to-amber-50/90 border border-orange-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-3">
@@ -319,7 +319,7 @@ export default function SiteSupervisorDashboardPage() {
             title="Update Pour"
             desc="Log pump bar pressure"
             color="emerald"
-            onClick={() => setToastMessage('Pour telemetry recorded (142 Bar).')}
+            onClick={() => setToastMessage('Pour pump telemetry recorded.')}
           />
           <QuickAction
             icon={Camera}
@@ -453,7 +453,7 @@ export default function SiteSupervisorDashboardPage() {
           </div>
         </div>
       </section>
-        </>
+        </div>
       )}
 
       {/* Modals */}
@@ -558,7 +558,7 @@ export default function SiteSupervisorDashboardPage() {
             }}
             className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 inline-block"
           >
-            Simulate Camera Snapshot
+            Upload Photo
           </button>
         </div>
       </Modal>

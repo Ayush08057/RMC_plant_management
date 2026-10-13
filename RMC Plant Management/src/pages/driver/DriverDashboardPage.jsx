@@ -105,7 +105,7 @@ export default function DriverDashboardPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setToastMessage('Connecting to Dispatcher Hotline: +91 98200 44004')}
+            onClick={() => setToastMessage('Connecting to Plant Dispatcher Hotline...')}
             className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <PhoneCall className="w-4 h-4 text-white" />

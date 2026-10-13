@@ -345,23 +345,27 @@ export default function PlantManagerDashboardPage() {
         isOpen={showPlanModal}
         onClose={() => setShowPlanModal(false)}
         title="Shift Production Schedule"
-        subtitle="Batching plan for current 12-hour operations window."
+        subtitle="Batching plan for current operations window."
         icon={Gauge}
       >
         <div className="space-y-3 text-xs text-slate-800">
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-slate-500 block text-[10px] uppercase font-mono">Total Target Volume:</span>
-            <span className="text-lg font-bold text-blue-700 font-mono">480.0 m³</span>
+            <span className="text-lg font-bold text-blue-700 font-mono">
+              {productionSummary.target > 0 ? `${productionSummary.target} m³` : '0.0 m³'}
+            </span>
           </div>
           <p className="leading-relaxed text-slate-600">
-            Mix allocations include 240 m³ M35 Metro Spec, 180 m³ M30 Residential, and 60 m³ M40 Marine Grade.
+            {productionSummary.target > 0 
+              ? 'Shift production plan configured for active batch orders.' 
+              : 'No active batch mix allocations queued for this shift. Shift production logs will update when batch orders are scheduled.'}
           </p>
           <div className="flex justify-end pt-2">
             <button
               type="button"
               onClick={() => {
                 setShowPlanModal(false);
-                setToastMessage('Production plan confirmed for active shift.');
+                setToastMessage('Production plan status updated.');
               }}
               className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
             >
@@ -380,10 +384,10 @@ export default function PlantManagerDashboardPage() {
       >
         <div className="space-y-3 text-xs text-slate-800">
           <p className="text-slate-600">
-            All material silos operate well above the minimum threshold. Bulk cement tankers are scheduled as per routine cycle.
+            Material silo telemetry monitors active storage bins and raw aggregate levels in real time.
           </p>
-          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] font-mono text-emerald-800">
-            Bulk Inbound: 60 Tons OPC Cement scheduled today
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600">
+            No inbound raw material bulk tankers scheduled for today.
           </div>
           <div className="flex justify-end pt-2">
             <button

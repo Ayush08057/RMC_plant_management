@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Factory, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Factory, ShieldCheck, ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +21,40 @@ export default function AppLayout({
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
   );
+  const [loginToast, setLoginToast] = useState(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('rmc_login_toast');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Date.now() - (data.timestamp || 0) < 15000) {
+          setLoginToast({
+            title: data.title || 'User login successfully',
+            userName: data.userName || user?.name,
+            role: data.role || user?.role,
+          });
+        }
+        sessionStorage.removeItem('rmc_login_toast');
+      } else if (location.state?.loginSuccess) {
+        setLoginToast({
+          title: 'User login successfully',
+          userName: location.state.userName || user?.name,
+          role: location.state.userRole || user?.role,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, [location.state, user]);
+
+  useEffect(() => {
+    if (!loginToast) return;
+    const timer = setTimeout(() => {
+      setLoginToast(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [loginToast]);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia('(min-width: 768px)');
@@ -65,6 +99,39 @@ export default function AppLayout({
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           isSidebarOpen={sidebarOpen}
         />
+
+        {/* Professional Login Success Floating Toast Notification */}
+        {loginToast && (
+          <div className="fixed top-16 right-3 sm:right-6 z-50 max-w-sm w-[calc(100vw-24px)] animate-slide-in pointer-events-auto">
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-emerald-300 p-3.5 shadow-2xl shadow-emerald-950/20 flex items-start gap-3 ring-4 ring-emerald-500/10">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-md ring-2 ring-emerald-300/50">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    AUTHENTICATED
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">Just Now</span>
+                </div>
+                <div className="text-xs font-black text-slate-900 mt-1">
+                  {loginToast.title || 'User login successfully'}
+                </div>
+                <p className="text-[11px] font-semibold text-slate-600 truncate mt-0.5">
+                  Welcome back, {loginToast.userName || user?.name || 'Authorized User'} {loginToast.role ? `(${loginToast.role})` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLoginToast(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Admin Master Mode Inspection Indicator Banner */}
         {Boolean(user?.isMasterAdmin || user?.originalAdminUser) && user?.role !== ROLES.ADMIN && (
