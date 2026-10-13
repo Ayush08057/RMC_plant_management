@@ -60,6 +60,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
   const [activeEmployee, setActiveEmployee] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -267,9 +269,28 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     }
   };
 
-  const handleDelete = (id, name) => {
+  const handleRequestDelete = (emp) => {
+    setEmployeeToDelete(emp);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!employeeToDelete) return;
+    const { id, name } = employeeToDelete;
     deleteEmployee(id);
-    setToastMessage(`Employee ${name || id} (${id}) has been removed from workforce records.`);
+    setShowDeleteModal(false);
+    setEmployeeToDelete(null);
+    setToastMessage(`Employee ${name || id} (${id}) has been permanently deleted from workforce records.`);
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setEmployeeToDelete(null);
+  };
+
+  const handleDelete = (id, name) => {
+    const emp = employees.find((e) => e.id === id) || { id, name };
+    handleRequestDelete(emp);
   };
 
   const handleOpenEdit = (emp) => {
@@ -475,7 +496,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
           )}
           <button
             type="button"
-            onClick={() => handleDelete(row.id, row.name)}
+            onClick={() => handleRequestDelete(row)}
             className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-800 border border-rose-200/80 transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95 flex items-center justify-center"
             title="Permanently Delete Employee"
           >
@@ -625,7 +646,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               </button>
               <button
                 type="button"
-                onClick={() => handleDelete(row.id, row.name)}
+                onClick={() => handleRequestDelete(row)}
                 className="py-1.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-xs font-bold text-rose-700 border border-rose-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
                 title="Delete Employee"
               >
@@ -1158,6 +1179,84 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
               >
                 Close Dossier
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Employee Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={handleCancelDelete}
+        title="Confirm Employee Record Deletion"
+        subtitle="Permanent removal from enterprise workforce directory."
+        icon={AlertTriangle}
+        maxWidth="max-w-md"
+      >
+        {employeeToDelete && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-2xl bg-rose-50/90 border border-rose-200/90 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-300 text-rose-700 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-extrabold text-rose-950 text-sm">
+                  Delete {employeeToDelete.name}?
+                </h4>
+                <p className="text-rose-800/90 text-xs mt-0.5 leading-relaxed">
+                  This action cannot be undone. All role authorizations, shift rosters, and employee profile records for this account will be permanently erased.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Employee Summary Card */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 font-mono text-[11px]">
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Employee ID:</span>
+                <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {employeeToDelete.id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Assigned Role:</span>
+                <span className="font-semibold text-slate-900">
+                  {employeeToDelete.role}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Plant Node:</span>
+                <span className="font-semibold text-slate-900 truncate max-w-[180px]">
+                  {employeeToDelete.plant || 'Main Plant'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Current Status:</span>
+                <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+                  employeeToDelete.status === 'Active' 
+                    ? 'bg-emerald-100 text-emerald-800' 
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {employeeToDelete.status || 'Active'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-md shadow-rose-600/25 flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-white" />
+                <span>Confirm Delete</span>
               </button>
             </div>
           </div>
