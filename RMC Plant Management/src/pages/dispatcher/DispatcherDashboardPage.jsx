@@ -7,14 +7,14 @@ import QuickAction from '../../components/dashboard/QuickAction';
 import AlertCard from '../../components/dashboard/AlertCard';
 import Modal from '../../components/dashboard/Modal';
 import Toast from '../../components/dashboard/Toast';
-import { 
-  Truck, 
-  Clock, 
-  Navigation, 
-  MapPin, 
-  User, 
-  CheckCircle2, 
-  Plus, 
+import {
+  Truck,
+  Clock,
+  Navigation,
+  MapPin,
+  User,
+  CheckCircle2,
+  Plus,
   AlertTriangle,
   RotateCw,
   Send
@@ -75,14 +75,14 @@ export default function DispatcherDashboardPage() {
     : dispatches.filter(d => d.status.toLowerCase() === statusFilter.toLowerCase());
 
   const columns = [
-    { 
-      header: 'Dispatch ID', 
-      accessor: 'id', 
-      render: (row) => <span className="font-mono text-blue-400 font-bold">{row.id}</span> 
+    {
+      header: 'Dispatch ID',
+      accessor: 'id',
+      render: (row) => <span className="font-mono text-blue-400 font-bold">{row.id}</span>
     },
-    { 
-      header: 'Customer & Site', 
-      accessor: 'customer', 
+    {
+      header: 'Customer & Site',
+      accessor: 'customer',
       render: (row) => (
         <div>
           <div className="font-semibold text-white">{row.customer}</div>
@@ -91,21 +91,21 @@ export default function DispatcherDashboardPage() {
             <span>{row.site}</span>
           </div>
         </div>
-      ) 
+      )
     },
-    { 
-      header: 'Grade / Qty', 
-      accessor: 'grade', 
+    {
+      header: 'Grade / Qty',
+      accessor: 'grade',
       render: (row) => (
         <div>
           <span className="px-1.5 py-0.5 rounded bg-amber-100/80 text-amber-900 border border-amber-300/80 font-mono text-[10px] font-semibold">{row.grade}</span>
           <span className="font-bold text-white font-mono ml-2 text-xs">{row.qty}</span>
         </div>
-      ) 
+      )
     },
-    { 
-      header: 'Assigned Vehicle', 
-      accessor: 'vehicle', 
+    {
+      header: 'Assigned Vehicle',
+      accessor: 'vehicle',
       render: (row) => (
         <div>
           <div className="font-mono text-xs text-slate-200">{row.vehicle}</div>
@@ -114,7 +114,7 @@ export default function DispatcherDashboardPage() {
             <span>{row.driver}</span>
           </div>
         </div>
-      ) 
+      )
     },
     { header: 'Loading', accessor: 'loadTime', className: 'font-mono text-slate-400' },
     { header: 'ETA Site', accessor: 'eta', className: 'font-mono text-amber-400 font-semibold' },
@@ -235,11 +235,10 @@ export default function DispatcherDashboardPage() {
                   key={status}
                   type="button"
                   onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shadow-2xs ${
-                    statusFilter === status
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shadow-2xs ${statusFilter === status
                       ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-500/25 ring-2 ring-blue-500/30'
                       : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
+                    }`}
                 >
                   {status}
                 </button>
@@ -351,43 +350,43 @@ export default function DispatcherDashboardPage() {
             </div>
           </section>
 
-      {/* Fleet Live Yard Roster */}
-      <section className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-            <Truck className="w-4 h-4 text-amber-600" />
-            <span>Transit Mixer Yard & Telematics Roster</span>
-          </h3>
-          <span className="text-[10px] font-mono text-emerald-700 font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200">
-            GPS CARRIERS ONLINE
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {fleetList.length > 0 ? (
-            fleetList.map((tm) => (
-              <div key={tm.id} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col justify-between hover:border-cyan-300 transition-all">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900 text-xs font-mono">{tm.id} • {tm.vehicleNo}</span>
-                    <StatusBadge status={tm.status} />
-                  </div>
-                  <div className="text-xs text-slate-700 mt-1 font-medium">{tm.driver}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5 truncate">{tm.location}</div>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-mono">
-                  <span>Capacity: {tm.capacity}</span>
-                  <span className="text-amber-700 font-bold">Drum Sensor OK</span>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium">
-              No transit mixers currently logged in the staging yard roster.
+          {/* Fleet Live Yard Roster */}
+          <section className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Transit Mixer Yard & Telematics Roster</span>
+              </h3>
+              <span className="text-[9px] font-mono text-emerald-700 font-semibold px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200">
+                GPS CARRIERS ONLINE
+              </span>
             </div>
-          )}
-        </div>
-      </section>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {fleetList.length > 0 ? (
+                fleetList.map((tm) => (
+                  <div key={tm.id} className="p-2 rounded-md bg-slate-50 border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition-colors">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900 text-xs font-mono">{tm.id} • {tm.vehicleNo}</span>
+                        <StatusBadge status={tm.status} />
+                      </div>
+                      <div className="text-xs text-slate-700 mt-1 font-medium">{tm.driver}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5 truncate">{tm.location}</div>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-mono">
+                      <span>Capacity: {tm.capacity}</span>
+                      <span className="text-amber-700 font-bold">Drum Sensor OK</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium">
+                  No transit mixers currently logged in the staging yard roster.
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       )}
 

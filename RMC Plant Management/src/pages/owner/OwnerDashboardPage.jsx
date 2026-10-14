@@ -8,15 +8,15 @@ import QuickAction from '../../components/dashboard/QuickAction';
 import AlertCard from '../../components/dashboard/AlertCard';
 import Modal from '../../components/dashboard/Modal';
 import Toast from '../../components/dashboard/Toast';
-import { 
-  Building2, 
-  IndianRupee, 
-  Truck, 
-  ShieldCheck, 
-  TrendingUp, 
-  Layers, 
-  Users, 
-  Download, 
+import {
+  Building2,
+  IndianRupee,
+  Truck,
+  ShieldCheck,
+  TrendingUp,
+  Layers,
+  Users,
+  Download,
   FileText,
   Activity,
   Award
@@ -45,15 +45,15 @@ export default function OwnerDashboardPage() {
   const { kpis, plantComparison, topClients, managementInsights } = MOCK_OWNER_DATA;
 
   const plantColumns = [
-    { 
-      header: 'Plant Node', 
-      accessor: 'plant', 
+    {
+      header: 'Plant Node',
+      accessor: 'plant',
       render: (row) => (
         <div>
           <span className="font-bold text-slate-900 text-xs">{row.plant}</span>
           <span className="text-[10px] text-slate-500 block font-mono">SCADA Connected</span>
         </div>
-      ) 
+      )
     },
     { header: 'Actual Production', accessor: 'production', className: 'font-mono font-bold text-slate-900' },
     { header: 'Target Goal', accessor: 'target', className: 'font-mono text-slate-500' },
@@ -268,32 +268,32 @@ export default function OwnerDashboardPage() {
             </div>
 
             {/* Top 5 Revenue Contributing Clients */}
-            <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
+            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <Users className="w-4 h-4 text-emerald-600" />
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
                     <span>Top Revenue Accounts</span>
                   </h3>
-                  <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">TOP 5</span>
+                  <span className="text-[9px] font-mono text-slate-500 font-bold px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200">TOP 5</span>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {topClients.length > 0 ? (
                     topClients.map((client, idx) => (
-                      <div key={idx} className="space-y-1">
+                      <div key={idx} className="space-y-0.5">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-800 font-bold truncate max-w-[65%]">{client.client}</span>
-                          <span className="font-bold text-emerald-700 font-mono">{client.revenue}</span>
+                          <span className="text-slate-800 font-semibold truncate max-w-[65%]">{client.client}</span>
+                          <span className="font-bold text-emerald-700 font-mono text-xs">{client.revenue}</span>
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
                           <span>{client.volume}</span>
-                          <span className="text-amber-700 font-bold">{client.share} of gross</span>
+                          <span className="text-amber-700 font-semibold">{client.share} of gross</span>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                    <div className="py-4 text-center text-xs text-slate-400 font-medium">
                       No client accounts billed yet.
                     </div>
                   )}
@@ -307,20 +307,20 @@ export default function OwnerDashboardPage() {
             </div>
           </section>
 
-      {/* Major Operational Alerts for Directors */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-rose-600" />
-            <span>Executive Risk & Compliance Alerts</span>
-          </h3>
-          <span className="text-[10px] font-mono text-emerald-700 font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">NO ESCALATIONS</span>
-        </div>
+          {/* Major Operational Alerts for Directors */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-rose-600" />
+                <span>Executive Risk & Compliance Alerts</span>
+              </h3>
+              <span className="text-[10px] font-mono text-emerald-700 font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">NO ESCALATIONS</span>
+            </div>
 
-        <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
-          No executive risk or compliance alerts recorded for active period.
-        </div>
-      </section>
+            <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
+              No executive risk or compliance alerts recorded for active period.
+            </div>
+          </section>
         </div>
       )}
 

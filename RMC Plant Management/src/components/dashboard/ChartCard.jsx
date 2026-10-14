@@ -37,46 +37,45 @@ export default function ChartCard({
 
   return (
     <>
-      <div className="p-5 sm:p-6 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between w-full max-w-full overflow-hidden min-w-0">
+      <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between w-full max-w-full overflow-hidden min-w-0">
         {/* Chart Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 mb-4 sm:mb-6">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 sm:mb-2.5">
+          <div className="flex items-center gap-2 min-w-0">
             {Icon && (
-              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shrink-0 shadow-sm shadow-blue-500/20">
-                <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+              <div className="w-6 h-6 rounded-md bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0">
+                <Icon className="w-3 h-3" />
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate">{title}</h3>
-              {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5 font-medium">{subtitle}</p>}
+              <h3 className="text-xs font-bold text-slate-900 tracking-tight truncate">{title}</h3>
+              {subtitle && <p className="text-[10px] text-slate-500 truncate mt-0.5">{subtitle}</p>}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
             {/* Pop-Up Modal Expansion Button */}
             <button
               type="button"
               onClick={() => setShowPopUp(true)}
-              className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+              className="px-1.5 py-0.5 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
               title="Open Detailed Analytics Pop-Up"
             >
-              <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
+              <Maximize2 className="w-2.5 h-2.5 text-slate-500" />
               <span>Pop-Up</span>
             </button>
 
             {/* Tab Filters */}
             {tabs && tabs.length > 0 && (
-              <div className="flex items-center bg-slate-100 border border-slate-200/90 rounded-xl p-0.5 self-start sm:self-auto shrink-0 shadow-2xs">
+              <div className="flex items-center bg-slate-100 border border-slate-200/90 rounded-md p-0.5 self-start sm:self-auto shrink-0 shadow-2xs">
                 {tabs.map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     onClick={() => setActiveTab(tab)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeTab === tab
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${activeTab === tab
                         ? 'bg-blue-600 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     {tab}
                   </button>
@@ -87,9 +86,9 @@ export default function ChartCard({
         </div>
 
         {/* SVG Responsive Bar Visualizer */}
-        <div 
+        <div
           onClick={() => setShowPopUp(true)}
-          className="h-44 sm:h-56 w-full flex items-end gap-1.5 sm:gap-3 pt-6 pb-2 px-1 relative min-w-0 overflow-hidden bg-slate-50/80 rounded-2xl border border-slate-200/80 p-3 cursor-pointer group/chart"
+          className="h-28 sm:h-36 w-full flex items-end gap-1.5 sm:gap-2 pt-3 pb-1.5 px-1 relative min-w-0 overflow-hidden bg-slate-50/70 rounded-lg border border-slate-200/80 p-2 cursor-pointer group/chart"
           title="Click to view detailed analytics Pop-Up"
         >
           {data.map((item, idx) => {
@@ -105,7 +104,7 @@ export default function ChartCard({
               >
                 {/* Tooltip on Hover */}
                 {isHovered && (
-                  <div className="absolute -top-12 z-30 px-3 py-1.5 bg-slate-50 border border-slate-300 text-white text-[11px] font-mono rounded-xl shadow-xl pointer-events-none whitespace-nowrap animate-pop-in">
+                  <div className="absolute -top-12 z-30 px-2.5 py-1 bg-slate-50 border border-slate-300 text-white text-[10px] font-mono rounded-lg shadow-xl pointer-events-none whitespace-nowrap animate-pop-in">
                     <div>{item[labelKey]}: <span className="font-bold text-amber-400">{item[dataKey]} {unit}</span></div>
                     {secondaryKey && item[secondaryKey] && (
                       <div className="text-cyan-300">Col: {item[secondaryKey]} {secondaryUnit}</div>
@@ -114,15 +113,14 @@ export default function ChartCard({
                 )}
 
                 {/* Bar */}
-                <div 
-                  className={`w-full max-w-[36px] rounded-t-lg transition-all duration-300 bg-gradient-to-t ${activeTheme.bar} ${
-                    isHovered ? 'opacity-100 scale-y-105 shadow-md shadow-cyan-500/20' : 'opacity-85 group-hover:opacity-100'
-                  }`}
+                <div
+                  className={`w-full max-w-[32px] rounded-t-md transition-all duration-300 bg-gradient-to-t ${activeTheme.bar} ${isHovered ? 'opacity-100 scale-y-105 shadow-md shadow-cyan-500/20' : 'opacity-85 group-hover:opacity-100'
+                    }`}
                   style={{ height: `${heightPercent}%` }}
                 />
 
                 {/* Label */}
-                <span className="text-[10px] font-mono text-slate-500 mt-2 truncate max-w-full text-center font-bold">
+                <span className="text-[9px] font-mono text-slate-500 mt-1.5 truncate max-w-full text-center font-bold">
                   {item[labelKey]}
                 </span>
               </div>
@@ -131,9 +129,9 @@ export default function ChartCard({
         </div>
 
         {/* Metric legend footer */}
-        <div className="pt-3 mt-4 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-600 gap-1 overflow-hidden">
-          <div className="flex items-center gap-2 truncate">
-            <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-cyan-600 to-blue-600 shrink-0 shadow-2xs" />
+        <div className="pt-2 mt-2.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] text-slate-600 gap-1 overflow-hidden">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="w-2 h-2 rounded-sm bg-gradient-to-r from-cyan-600 to-blue-600 shrink-0 shadow-2xs" />
             <span className="truncate font-semibold text-slate-700">Primary Metric: {unit}</span>
           </div>
           <button
@@ -197,9 +195,8 @@ export default function ChartCard({
                       <td className="p-2.5 text-right font-bold text-cyan-700">{val} {unit}</td>
                       {secondaryKey && <td className="p-2.5 text-right text-slate-600">{item[secondaryKey] || '-'}</td>}
                       <td className="p-2.5 pr-4 text-right">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          pct > 80 ? 'bg-emerald-100 text-emerald-800' : pct > 40 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pct > 80 ? 'bg-emerald-100 text-emerald-800' : pct > 40 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                          }`}>
                           {pct}%
                         </span>
                       </td>

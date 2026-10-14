@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { 
-  Users, 
-  UserPlus, 
-  Search, 
-  Filter, 
-  Eye, 
-  Edit3, 
-  CheckCircle2, 
-  XCircle, 
-  Building2, 
-  Phone, 
-  Mail, 
-  Briefcase, 
-  Calendar, 
-  IndianRupee, 
-  ShieldCheck, 
+import {
+  Users,
+  UserPlus,
+  Search,
+  Filter,
+  Eye,
+  Edit3,
+  CheckCircle2,
+  XCircle,
+  Building2,
+  Phone,
+  Mail,
+  Briefcase,
+  Calendar,
+  IndianRupee,
+  ShieldCheck,
   FileText,
   UserCheck,
   AlertTriangle,
@@ -38,12 +38,12 @@ import { formatShiftOption } from '../../utils/shiftUtils';
 
 export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
-  const { 
-    employees, 
-    shifts, 
-    addEmployee, 
-    updateEmployee, 
-    setEmployeeStatus, 
+  const {
+    employees,
+    shifts,
+    addEmployee,
+    updateEmployee,
+    setEmployeeStatus,
     deleteEmployee,
     approveEmployeeRegistration,
     rejectEmployeeRegistration
@@ -1054,10 +1054,10 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
           <div className="space-y-4 text-xs">
             <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="flex items-center gap-3">
-                <img 
-                  src={getEmployeePhoto(activeEmployee)} 
-                  alt={activeEmployee.name} 
-                  className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs shrink-0" 
+                <img
+                  src={getEmployeePhoto(activeEmployee)}
+                  alt={activeEmployee.name}
+                  className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs shrink-0"
                 />
                 <div>
                   <div className="font-bold text-slate-900 text-sm">{activeEmployee.name}</div>
@@ -1232,11 +1232,10 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               </div>
               <div className="flex justify-between items-center text-slate-600">
                 <span>Current Status:</span>
-                <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-                  employeeToDelete.status === 'Active' 
-                    ? 'bg-emerald-100 text-emerald-800' 
+                <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${employeeToDelete.status === 'Active'
+                    ? 'bg-emerald-100 text-emerald-800'
                     : 'bg-amber-100 text-amber-800'
-                }`}>
+                  }`}>
                   {employeeToDelete.status || 'Active'}
                 </span>
               </div>

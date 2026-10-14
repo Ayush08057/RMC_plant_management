@@ -3,13 +3,13 @@ import React from 'react';
 export default function AuthLayout({ children }) {
   return (
     <div className="min-h-screen min-h-[100dvh] w-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-50/60 via-slate-50 to-orange-50/40 text-slate-800 selection:bg-amber-500 selection:text-black relative overflow-x-hidden overflow-y-auto font-sans p-4 sm:p-6 md:p-8">
-      
+
       {/* ========================================================
           MATCHING INDUSTRIAL LIGHT BACKGROUND WITH TEXTURE & WARMTH
           Identical across Login and Registration screens
           ======================================================== */}
       {/* Real Concrete Background Texture with balanced opacity */}
-      <div 
+      <div
         className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center bg-no-repeat opacity-20 mix-blend-multiply"
         style={{
           backgroundImage: "url('/bg-texture.jpg')",

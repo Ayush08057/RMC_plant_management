@@ -3,8 +3,8 @@ import React from 'react';
 export default function StatusBadge({ status, text, size = 'sm' }) {
   const norm = (status || text || '').toString().toLowerCase();
 
-  let styles = 'bg-slate-100 text-slate-700 border-slate-200';
-  let dotColor = 'bg-slate-400';
+  let styles = 'bg-[#F5F9FF] text-[#1D5FA7] border-[#D4E4F7]';
+  let dotColor = 'bg-[#1D5FA7]';
 
   if (
     norm.includes('pass') ||
@@ -20,8 +20,8 @@ export default function StatusBadge({ status, text, size = 'sm' }) {
     norm.includes('on duty') ||
     norm.includes('ok')
   ) {
-    styles = 'bg-emerald-50 text-emerald-700 border-emerald-300';
-    dotColor = 'bg-emerald-500';
+    styles = 'bg-[#EAF3FF] text-[#123B6D] border-[#246BCE] font-semibold';
+    dotColor = 'bg-[#246BCE]';
   } else if (
     norm.includes('pend') ||
     norm.includes('load') ||
@@ -30,8 +30,8 @@ export default function StatusBadge({ status, text, size = 'sm' }) {
     norm.includes('warn') ||
     norm.includes('assigned')
   ) {
-    styles = 'bg-amber-50 text-amber-800 border-amber-300';
-    dotColor = 'bg-amber-500';
+    styles = 'bg-white text-[#1D5FA7] border-[#D4E4F7] font-medium';
+    dotColor = 'bg-[#1D5FA7]';
   } else if (
     norm.includes('fail') ||
     norm.includes('overdue') ||
@@ -42,8 +42,8 @@ export default function StatusBadge({ status, text, size = 'sm' }) {
     norm.includes('suspend') ||
     norm.includes('deactivate')
   ) {
-    styles = 'bg-rose-50 text-rose-700 border-rose-300';
-    dotColor = 'bg-rose-500';
+    styles = 'bg-[#123B6D] text-white border-[#123B6D] font-semibold';
+    dotColor = 'bg-white';
   } else if (
     norm.includes('dispatch') ||
     norm.includes('arrive') ||
@@ -51,17 +51,17 @@ export default function StatusBadge({ status, text, size = 'sm' }) {
     norm.includes('unload') ||
     norm.includes('info')
   ) {
-    styles = 'bg-cyan-50 text-cyan-800 border-cyan-300';
-    dotColor = 'bg-cyan-600';
+    styles = 'bg-[#F5F9FF] text-[#123B6D] border-[#D4E4F7] font-medium';
+    dotColor = 'bg-[#1D5FA7]';
   } else if (norm.includes('admin') || norm.includes('master') || norm.includes('enforce')) {
-    styles = 'bg-purple-50 text-purple-700 border-purple-300';
-    dotColor = 'bg-purple-500';
+    styles = 'bg-[#1D5FA7] text-white border-[#1D5FA7] font-semibold';
+    dotColor = 'bg-[#EAF3FF]';
   }
 
-  const sizeClasses = size === 'xs' 
-    ? 'text-[10px] px-2 py-0.5' 
-    : size === 'lg' 
-      ? 'text-xs px-3.5 py-1 font-bold' 
+  const sizeClasses = size === 'xs'
+    ? 'text-[10px] px-2 py-0.5'
+    : size === 'lg'
+      ? 'text-xs px-3.5 py-1 font-bold'
       : 'text-[11px] px-2.5 py-0.5 font-bold';
 
   return (

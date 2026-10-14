@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  Briefcase, 
-  Plus, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  FileText, 
-  Calendar, 
-  UserCheck, 
+import {
+  Briefcase,
+  Plus,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  FileText,
+  Calendar,
+  UserCheck,
   MessageSquare,
   AlertCircle,
   Edit3,

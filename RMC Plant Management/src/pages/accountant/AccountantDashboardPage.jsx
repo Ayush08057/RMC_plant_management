@@ -8,14 +8,14 @@ import QuickAction from '../../components/dashboard/QuickAction';
 import AlertCard from '../../components/dashboard/AlertCard';
 import Modal from '../../components/dashboard/Modal';
 import Toast from '../../components/dashboard/Toast';
-import { 
-  ReceiptText, 
-  IndianRupee, 
-  CreditCard, 
-  FileCheck2, 
-  TrendingUp, 
-  Layers, 
-  Plus, 
+import {
+  ReceiptText,
+  IndianRupee,
+  CreditCard,
+  FileCheck2,
+  TrendingUp,
+  Layers,
+  Plus,
   FileText,
   AlertCircle,
   Download
@@ -37,11 +37,11 @@ export default function AccountantDashboardPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [ledgers, setLedgers] = useState(MOCK_ACCOUNTANT_DATA.customerLedgers);
 
-  const { 
-    payrollRecords, 
-    advances, 
-    loans, 
-    employees 
+  const {
+    payrollRecords,
+    advances,
+    loans,
+    employees
   } = useWorkforce();
 
   // Phase 1 Payroll & Advances stats
@@ -261,48 +261,48 @@ export default function AccountantDashboardPage() {
           </section>
 
           {/* Invoice Status Distribution & Revenue Trend Chart */}
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 sm:gap-3">
             {/* Invoice Status Snapshot Card */}
-            <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs flex flex-col justify-between">
+            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <ReceiptText className="w-4 h-4 text-emerald-600" />
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <ReceiptText className="w-3.5 h-3.5 text-blue-600" />
                     <span>Invoice Pipeline</span>
                   </h3>
-                  <span className="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                  <span className="text-[9px] font-mono text-slate-500 font-semibold px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200">
                     {invoiceBreakdown.paid + invoiceBreakdown.pending + invoiceBreakdown.overdue} TOTAL
                   </span>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between">
+                <div className="space-y-1.5">
+                  <div className="p-2 rounded-md bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-bold text-emerald-900 block">Paid & Reconciled</span>
-                      <span className="text-[11px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
+                      <span className="text-xs font-semibold text-emerald-900 block">Paid & Reconciled</span>
+                      <span className="text-[9.5px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
                     </div>
-                    <span className="text-xl font-black text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
+                    <span className="text-base font-bold text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between">
+                  <div className="p-2 rounded-md bg-amber-50/80 border border-amber-200/80 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-bold text-amber-900 block">Pending Clearance</span>
-                      <span className="text-[11px] text-slate-500">Awaiting credit period maturity</span>
+                      <span className="text-xs font-semibold text-amber-900 block">Pending Clearance</span>
+                      <span className="text-[9.5px] text-slate-500">Awaiting credit period maturity</span>
                     </div>
-                    <span className="text-xl font-black text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
+                    <span className="text-base font-bold text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 flex items-center justify-between">
+                  <div className="p-2 rounded-md bg-rose-50/80 border border-rose-200/80 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-bold text-rose-900 block">Overdue (&gt; 30 Days)</span>
-                      <span className="text-[11px] text-slate-500">Follow-up reminders issued</span>
+                      <span className="text-xs font-semibold text-rose-900 block">Overdue (&gt; 30 Days)</span>
+                      <span className="text-[9.5px] text-slate-500">Follow-up reminders issued</span>
                     </div>
-                    <span className="text-xl font-black text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
+                    <span className="text-base font-bold text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+              <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] text-slate-500 flex items-center justify-between">
                 <span>GST E-Way Bills: 100% Synced</span>
                 <span className="text-emerald-700 font-bold">• Zero Non-Compliance</span>
               </div>
@@ -375,21 +375,21 @@ export default function AccountantDashboardPage() {
             </div>
 
             {/* Expense Summary Breakdown Card */}
-            <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-rose-600" />
+            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
                 <span>Monthly Raw Material Costings</span>
               </h3>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {expenseSummary.length > 0 ? (
                   expenseSummary.map((exp, idx) => (
-                    <div key={idx} className="space-y-1">
+                    <div key={idx} className="space-y-0.5">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-700 font-medium truncate max-w-[65%]">{exp.category}</span>
-                        <span className="font-bold text-slate-900 font-mono">{exp.amount}</span>
+                        <span className="font-bold text-slate-900 font-mono text-xs">{exp.amount}</span>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
                           style={{ width: `${exp.percent}%` }}
@@ -398,7 +398,7 @@ export default function AccountantDashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                  <div className="py-4 text-center text-xs text-slate-400 font-medium">
                     No expense breakdown records logged for the current period.
                   </div>
                 )}

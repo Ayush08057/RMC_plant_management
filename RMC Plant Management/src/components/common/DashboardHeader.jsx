@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-  LogOut, 
-  User, 
-  ChevronDown, 
-  ShieldCheck, 
-  Menu, 
+import {
+  LogOut,
+  User,
+  ChevronDown,
+  ShieldCheck,
+  Menu,
   X,
   RefreshCw,
 } from 'lucide-react';
@@ -56,12 +56,12 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
     <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 sm:h-20">
-          
+
           {/* Left: Brand & Plant Identity */}
           <div className="flex items-center gap-3">
             <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 group">
-              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-white p-1 border border-amber-300 shadow-md ring-2 ring-amber-400/25 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
-                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain drop-shadow-xs" />
+              <div className="w-12 h-12 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex items-center justify-center shrink-0 overflow-hidden p-0.5 transition-transform group-hover:scale-105">
+                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
 
           {/* Center/Right Desktop Controls */}
           <div className="hidden md:flex items-center gap-3">
-            
+
             {/* Active User Information Card */}
             <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 font-extrabold text-xs flex items-center justify-center shadow-sm">
@@ -126,9 +126,8 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
                         <button
                           key={profile.role}
                           onClick={() => handleQuickSwitchRole(profile.role)}
-                          className={`w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between transition-colors ${
-                            profile.role === user?.role ? 'bg-amber-50/60 font-semibold' : ''
-                          }`}
+                          className={`w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between transition-colors ${profile.role === user?.role ? 'bg-amber-50/60 font-semibold' : ''
+                            }`}
                         >
                           <div className="min-w-0 pr-2">
                             <div className="text-xs font-semibold text-slate-800 truncate">

@@ -29,15 +29,15 @@ export default function AlertCard({ title, desc, time, type = 'warning', onActio
   const IconComponent = active.icon;
 
   return (
-    <div className={`p-3.5 sm:p-4 rounded-xl border backdrop-blur-md ${active.border} flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs hover:shadow-md transition-all w-full max-w-full overflow-hidden min-w-0`}>
-      <div className="flex items-start gap-2.5 sm:gap-3 min-w-0 flex-1">
-        <div className="p-1.5 rounded-lg bg-white border border-slate-200 shadow-2xs shrink-0 mt-0.5">
-          <IconComponent className={`w-4 h-4 ${active.iconColor}`} />
+    <div className={`p-2 sm:p-2.5 rounded-lg border ${active.border} flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs hover:shadow-xs transition-all w-full max-w-full overflow-hidden min-w-0`}>
+      <div className="flex items-start gap-2 min-w-0 flex-1">
+        <div className="w-5 h-5 rounded bg-white border border-slate-200/80 shadow-2xs shrink-0 flex items-center justify-center mt-0.5">
+          <IconComponent className={`w-3 h-3 ${active.iconColor}`} />
         </div>
         <div className="min-w-0 flex-1">
-          <h4 className="text-xs font-bold text-slate-900 break-words">{title}</h4>
-          <p className="text-xs text-slate-600 mt-0.5 leading-relaxed break-words">{desc}</p>
-          {time && <span className="text-[10px] text-slate-500 font-mono mt-1 block">{time}</span>}
+          <h4 className="text-[11px] sm:text-xs font-semibold text-slate-900 break-words">{title}</h4>
+          <p className="text-[10px] sm:text-[10.5px] text-slate-600 mt-0.5 leading-tight break-words">{desc}</p>
+          {time && <span className="text-[8.5px] text-slate-500 font-mono mt-0.5 block">{time}</span>}
         </div>
       </div>
 
@@ -45,7 +45,7 @@ export default function AlertCard({ title, desc, time, type = 'warning', onActio
         <button
           type="button"
           onClick={onAction}
-          className="self-start sm:self-auto px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-colors shrink-0 cursor-pointer shadow-2xs"
+          className="self-start sm:self-auto px-2 py-0.5 rounded text-[10px] font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-colors shrink-0 cursor-pointer shadow-2xs"
         >
           {actionLabel}
         </button>

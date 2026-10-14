@@ -5,13 +5,13 @@ import DataTable from '../../components/dashboard/DataTable';
 import StatusBadge from '../../components/dashboard/StatusBadge';
 import Modal from '../../components/dashboard/Modal';
 import Toast from '../../components/dashboard/Toast';
-import { 
-  Gauge, 
-  Truck, 
-  Building2, 
-  Activity, 
-  Layers, 
-  FileText, 
+import {
+  Gauge,
+  Truck,
+  Building2,
+  Activity,
+  Layers,
+  FileText,
   CheckCircle2
 } from 'lucide-react';
 import { MOCK_PLANT_MANAGER_DATA } from '../../data/mockDashboardData';
@@ -35,45 +35,45 @@ export default function PlantManagerDashboardPage() {
   const { kpis, productionSummary, vehicleStatusCounts, siloStock, pendingOrders } = MOCK_PLANT_MANAGER_DATA;
 
   const orderColumns = [
-    { 
-      header: 'Order ID', 
-      accessor: 'orderId', 
-      render: (row) => <span className="font-mono text-blue-600 font-bold">{row.orderId}</span> 
+    {
+      header: 'Order ID',
+      accessor: 'orderId',
+      render: (row) => <span className="font-mono text-blue-600 font-bold">{row.orderId}</span>
     },
-    { 
-      header: 'Client / Project', 
-      accessor: 'client', 
-      render: (row) => <span className="font-bold text-slate-900">{row.client}</span> 
+    {
+      header: 'Client / Project',
+      accessor: 'client',
+      render: (row) => <span className="font-bold text-slate-900">{row.client}</span>
     },
-    { 
-      header: 'Concrete Grade', 
-      accessor: 'grade', 
+    {
+      header: 'Concrete Grade',
+      accessor: 'grade',
       render: (row) => (
         <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-mono text-[10px] font-bold">
           {row.grade}
         </span>
-      ) 
+      )
     },
-    { 
-      header: 'Volume', 
-      accessor: 'qty', 
-      className: 'font-bold text-slate-900 font-mono' 
+    {
+      header: 'Volume',
+      accessor: 'qty',
+      className: 'font-bold text-slate-900 font-mono'
     },
-    { 
-      header: 'Pour Location', 
+    {
+      header: 'Pour Location',
       accessor: 'site',
       className: 'text-slate-600'
     },
-    { 
-      header: 'Time Window', 
-      accessor: 'timeSlot', 
+    {
+      header: 'Time Window',
+      accessor: 'timeSlot',
       className: 'font-mono text-slate-500',
       render: (row) => <span>{formatToIndian12Hr(row.timeSlot)}</span>
     },
-    { 
-      header: 'Priority', 
-      accessor: 'priority', 
-      render: (row) => <StatusBadge status={row.priority === 'High' ? 'danger' : 'warning'} text={row.priority} /> 
+    {
+      header: 'Priority',
+      accessor: 'priority',
+      render: (row) => <StatusBadge status={row.priority === 'High' ? 'danger' : 'warning'} text={row.priority} />
     },
   ];
 
@@ -320,9 +320,8 @@ export default function PlantManagerDashboardPage() {
                         </div>
                         <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden mb-2">
                           <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              currentLevel > 70 ? 'bg-emerald-500' : currentLevel > 40 ? 'bg-amber-500' : 'bg-rose-500'
-                            }`}
+                            className={`h-full rounded-full transition-all duration-300 ${currentLevel > 70 ? 'bg-emerald-500' : currentLevel > 40 ? 'bg-amber-500' : 'bg-rose-500'
+                              }`}
                             style={{ width: `${currentLevel}%` }}
                           />
                         </div>
@@ -356,8 +355,8 @@ export default function PlantManagerDashboardPage() {
             </span>
           </div>
           <p className="leading-relaxed text-slate-600">
-            {productionSummary.target > 0 
-              ? 'Shift production plan configured for active batch orders.' 
+            {productionSummary.target > 0
+              ? 'Shift production plan configured for active batch orders.'
               : 'No active batch mix allocations queued for this shift. Shift production logs will update when batch orders are scheduled.'}
           </p>
           <div className="flex justify-end pt-2">

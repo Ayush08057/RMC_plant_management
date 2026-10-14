@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { 
-  User, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
+import {
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
   Building2,
   ShieldCheck
 } from 'lucide-react';
@@ -30,7 +30,7 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -74,7 +74,7 @@ export default function LoginForm() {
         } else {
           const displayName = result.user?.name || identifier;
           setSuccessMessage(`User login successfully! Welcome back, ${displayName}.`);
-          
+
           try {
             sessionStorage.setItem('rmc_login_toast', JSON.stringify({
               title: 'User login successfully',
@@ -109,39 +109,37 @@ export default function LoginForm() {
 
   return (
     <div className="w-full max-w-md mx-auto">
-      
+
       {/* ========================================================
           ENTERPRISE INDUSTRIAL LOGIN CARD - PROPER UPPER SPACING
           ======================================================== */}
       <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl shadow-amber-950/10 transition-all duration-300">
-        
+
         {/* Top Accent Line */}
         <div className="h-1.5 bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300" />
 
         {/* Brand Header Banner - Balanced Warm Industrial Gold-Orange Theme */}
         <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-400 pt-5 pb-4 px-5 sm:pt-6 sm:pb-5 sm:px-6 text-slate-950 text-center relative overflow-hidden shadow-inner">
-          
+
           {/* Subtle Ambient Depth */}
           <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-52 h-52 bg-white/25 rounded-full blur-xl pointer-events-none" />
           <div className="absolute -bottom-8 right-0 w-36 h-36 bg-orange-300/30 rounded-full blur-lg pointer-events-none" />
-          
+
           <div className="relative z-10 flex flex-col items-center">
-            
+
             {/* COMPANY LOGO EMBLEM - PROPORTIONAL & BALANCED SIZE */}
             <div className="relative group mb-3">
-              <div className="absolute -inset-2 bg-white/40 rounded-full blur-lg group-hover:opacity-100 transition duration-300 pointer-events-none" />
-              
-              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white p-1.5 border-2 border-amber-200/90 shadow-xl shadow-amber-950/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ring-4 ring-white/70">
-                <img 
-                  src="/logo.png" 
-                  alt="SM ConcreTech Logo" 
-                  className="w-full h-full object-contain rounded-full drop-shadow-sm"
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white p-1 border border-slate-200 shadow-md flex items-center justify-center transition-transform duration-300 group-hover:scale-105 overflow-hidden">
+                <img
+                  src="/logo.png"
+                  alt="SM ConcreTech Logo"
+                  className="w-full h-full object-contain rounded-xl"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.nextSibling.style.display = 'flex';
                   }}
                 />
-                <div className="w-full h-full rounded-full bg-amber-50 items-center justify-center text-amber-700 hidden">
+                <div className="w-full h-full rounded-xl bg-slate-50 items-center justify-center text-slate-700 hidden">
                   <Building2 className="w-12 h-12" />
                 </div>
               </div>
@@ -190,7 +188,7 @@ export default function LoginForm() {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-2.5">
-            
+
             {/* Identifier Field */}
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-0.5 flex items-center justify-between">

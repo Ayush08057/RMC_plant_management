@@ -216,26 +216,23 @@ export default function RegisterForm() {
         {/* Top Accent Line */}
         <div className="h-1.5 bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300" />
 
-        {/* Brand Header Banner - Balanced Warm Industrial Gold-Orange Theme */}
-        <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-400 pt-6 pb-5 px-6 text-slate-950 text-center relative overflow-hidden shadow-inner">
-          
+        {/* Brand Header Banner */}
+        <div className="bg-slate-900 pt-6 pb-5 px-6 text-white text-center relative overflow-hidden">
           <div className="relative z-10 flex flex-col items-center">
             
-            {/* COMPANY LOGO EMBLEM - PROPORTIONAL & BALANCED SIZE */}
+            {/* COMPANY LOGO EMBLEM */}
             <div className="relative group mb-3">
-              <div className="absolute -inset-2 bg-white/40 rounded-full blur-lg group-hover:opacity-100 transition duration-300 pointer-events-none" />
-              
-              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white p-1.5 border-2 border-amber-200/90 shadow-xl shadow-amber-950/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ring-4 ring-white/70">
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white p-1 border border-slate-700 shadow-md flex items-center justify-center transition-transform duration-300 group-hover:scale-105 overflow-hidden">
                 <img 
                   src="/logo.png" 
                   alt="SM ConcreTech Logo" 
-                  className="w-full h-full object-contain rounded-full drop-shadow-sm"
+                  className="w-full h-full object-contain rounded-xl" 
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.nextSibling.style.display = 'flex';
                   }}
                 />
-                <div className="w-full h-full rounded-full bg-amber-50 items-center justify-center text-amber-700 hidden">
+                <div className="w-full h-full rounded-xl bg-slate-800 items-center justify-center text-slate-300 hidden">
                   <Building2 className="w-12 h-12" />
                 </div>
               </div>

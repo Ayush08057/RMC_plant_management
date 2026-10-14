@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, ArrowUpRight, BarChart2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart2, CheckCircle2 } from 'lucide-react';
 import Modal from './Modal';
 
 export default function KPICard({ 
@@ -9,79 +9,11 @@ export default function KPICard({
   icon: Icon, 
   trend, 
   trendType = 'up',
-  color = 'amber',
+  color = 'blue',
   onClick = null,
   detailsData = null,
 }) {
   const [showInternalModal, setShowInternalModal] = useState(false);
-
-  const colorMap = {
-    purple: {
-      accentBar: 'bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-500',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-indigo-600 to-blue-700 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-blue-600',
-      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-    amber: {
-      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-blue-500',
-      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-    emerald: {
-      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-blue-600 to-teal-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-emerald-500',
-      glow: 'from-blue-500/10 via-teal-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-    blue: {
-      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-blue-600',
-      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-    cyan: {
-      accentBar: 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-blue-500',
-      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-    rose: {
-      accentBar: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-rose-500',
-      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-    slate: {
-      accentBar: 'bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-600',
-      bgHover: 'hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10',
-      iconBg: 'bg-gradient-to-br from-slate-700 to-blue-900 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-100',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/80',
-      dotColor: 'bg-blue-600',
-      glow: 'from-blue-500/10 via-indigo-500/5 to-transparent',
-      cardBg: 'bg-white',
-    },
-  };
-
-  const activeColor = colorMap[color] || colorMap.blue;
 
   const handleCardClick = (e) => {
     if (onClick) {
@@ -103,41 +35,41 @@ export default function KPICard({
             handleCardClick(e);
           }
         }}
-        className={`px-3 py-2 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl ${activeColor.cardBg} border border-slate-200/85 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer ${activeColor.bgHover} hover:-translate-y-0.5 active:scale-[0.99]`}
+        className="p-2 sm:p-2.5 rounded-lg bg-white border border-[#D4E4F7] hover:border-[#1D5FA7] hover:shadow-xs transition-all duration-150 flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer shadow-2xs"
       >
-        <div className="relative z-10">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight block truncate font-sans">
+        <div>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[9px] sm:text-[9.5px] font-semibold text-[#1D5FA7] uppercase tracking-wider leading-none block truncate font-sans">
               {title}
             </span>
             {Icon && (
-              <div className="w-5.5 h-5.5 rounded-md bg-slate-50 border border-slate-200/70 text-slate-500 flex items-center justify-center shrink-0 shadow-2xs transition-transform duration-200 group-hover:scale-105">
-                <Icon className="w-3 h-3 text-slate-500" />
+              <div className="w-4.5 h-4.5 rounded bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0">
+                <Icon className="w-2.5 h-2.5" />
               </div>
             )}
           </div>
-          <div className="text-base sm:text-[17px] font-semibold text-slate-800 tracking-tight font-sans tabular-nums my-0.5 leading-snug group-hover:text-blue-900 transition-colors">
+          <div className="text-sm sm:text-base font-bold text-[#123B6D] tracking-tight font-sans tabular-nums my-0.5 leading-tight">
             {value}
           </div>
         </div>
 
         {(subtext || trend) && (
-          <div className="mt-1 pt-1 border-t border-slate-100/90 flex items-center justify-between text-[9.5px] sm:text-[10px] text-slate-500 gap-1 font-normal min-w-0 relative z-10">
+          <div className="mt-0.5 pt-1 border-t border-[#D4E4F7] flex items-center justify-between text-[9px] text-[#1D5FA7] gap-1 min-w-0">
             {subtext && (
-              <span className="font-normal text-slate-500 text-[9.5px] sm:text-[10px] leading-tight truncate flex-1 min-w-0" title={subtext}>
+              <span className="text-[#1D5FA7]/70 text-[9px] font-normal leading-tight truncate flex-1 min-w-0" title={subtext}>
                 {subtext}
               </span>
             )}
             {trend && (
-              <span className={`inline-flex items-center gap-0.5 font-medium shrink-0 text-[8.5px] px-1.5 py-0.2 rounded border shadow-2xs ${
+              <span className={`inline-flex items-center gap-0.5 shrink-0 text-[8.5px] font-medium px-1 py-0.2 rounded border ${
                 trendType === 'up' 
-                  ? 'text-emerald-800 bg-emerald-50 border-emerald-200' 
+                  ? 'text-[#123B6D] bg-[#EAF3FF] border-[#D4E4F7]' 
                   : trendType === 'down' 
-                    ? 'text-rose-800 bg-rose-50 border-rose-200' 
-                    : activeColor.badgeBg
+                    ? 'text-[#123B6D] bg-white border-[#D4E4F7]' 
+                    : 'text-[#123B6D] bg-[#F5F9FF] border-[#D4E4F7]'
               }`}>
-                {trendType === 'up' ? <TrendingUp className="w-2.5 h-2.5 text-emerald-600 shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-2.5 h-2.5 text-rose-600 shrink-0" /> : null}
-                <span className="whitespace-nowrap font-normal font-sans">{trend}</span>
+                {trendType === 'up' ? <TrendingUp className="w-2.5 h-2.5 text-[#1D5FA7] shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-2.5 h-2.5 text-[#1D5FA7] shrink-0" /> : null}
+                <span className="whitespace-nowrap">{trend}</span>
               </span>
             )}
           </div>
@@ -153,48 +85,48 @@ export default function KPICard({
           subtitle="Real-time KPI breakdown and SCADA synchronized parameters"
           icon={Icon || BarChart2}
         >
-          <div className="space-y-4 text-xs">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 to-cyan-50/50 border border-slate-200 space-y-1">
-              <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Current Metric Value</span>
-              <div className="text-3xl font-black text-slate-900 font-mono">{value}</div>
-              <p className="text-xs text-slate-600 font-medium">{subtext}</p>
+          <div className="space-y-3.5 text-xs">
+            <div className="p-4 rounded-xl bg-[#F5F9FF] border border-[#D4E4F7] space-y-1">
+              <span className="text-[10px] font-mono text-[#1D5FA7] uppercase font-semibold">Current Metric Value</span>
+              <div className="text-2xl sm:text-3xl font-bold text-[#123B6D] font-mono">{value}</div>
+              <p className="text-xs text-[#1D5FA7] font-medium">{subtext}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-              <div className="p-3 rounded-xl bg-white border border-slate-200">
-                <span className="text-[10px] text-slate-400 block font-bold">Trend Status</span>
-                <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+            <div className="grid grid-cols-2 gap-2.5 font-mono text-xs">
+              <div className="p-3 rounded-lg bg-white border border-[#D4E4F7]">
+                <span className="text-[10px] text-[#1D5FA7] block font-semibold">Trend Status</span>
+                <span className="font-semibold text-[#123B6D] flex items-center gap-1 mt-0.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#1D5FA7]" />
                   <span>{trend || 'Active Telemetry'}</span>
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-white border border-slate-200">
-                <span className="text-[10px] text-slate-400 block font-bold">SCADA Sync Time</span>
-                <span className="font-bold text-slate-800 mt-0.5 block">
+              <div className="p-3 rounded-lg bg-white border border-[#D4E4F7]">
+                <span className="text-[10px] text-[#1D5FA7] block font-semibold">SCADA Sync Time</span>
+                <span className="font-semibold text-[#123B6D] mt-0.5 block">
                   {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                 </span>
               </div>
             </div>
 
             {detailsData && (
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span className="font-bold text-slate-900 text-xs">Sub-system Breakdown</span>
-                <div className="space-y-1.5 text-xs">
+              <div className="p-3 rounded-xl bg-[#F5F9FF] border border-[#D4E4F7] space-y-2">
+                <span className="font-bold text-[#123B6D] text-xs">Sub-system Breakdown</span>
+                <div className="space-y-1 text-xs">
                   {Object.entries(detailsData).map(([k, v], i) => (
-                    <div key={i} className="flex justify-between border-b border-slate-200/60 pb-1">
-                      <span className="text-slate-600 capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
-                      <span className="font-bold text-slate-900 font-mono">{String(v)}</span>
+                    <div key={i} className="flex justify-between border-b border-[#D4E4F7] pb-1">
+                      <span className="text-[#1D5FA7] capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
+                      <span className="font-semibold text-[#123B6D] font-mono">{String(v)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="flex justify-end pt-2 border-t border-slate-200">
+            <div className="flex justify-end pt-2 border-t border-[#D4E4F7]">
               <button
                 type="button"
                 onClick={() => setShowInternalModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs"
+                className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white cursor-pointer shadow-2xs"
               >
                 Close Pop-Up
               </button>

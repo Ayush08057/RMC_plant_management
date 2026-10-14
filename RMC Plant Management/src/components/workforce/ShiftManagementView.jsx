@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  Clock, 
-  Plus, 
-  Edit3, 
-  UserCheck, 
-  Layers, 
-  ShieldCheck, 
-  Users, 
+import {
+  Clock,
+  Plus,
+  Edit3,
+  UserCheck,
+  Layers,
+  ShieldCheck,
+  Users,
   AlertCircle,
   Sun,
   Moon,
@@ -195,8 +195,8 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
         );
       },
     },
-    { 
-      header: 'Assigned Plant', 
+    {
+      header: 'Assigned Plant',
       accessor: 'plant',
       width: '18%',
       render: (row) => (
@@ -249,14 +249,14 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
     ? employees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId).length > 0
       ? employees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId)
       : [{
-          id: effectiveEmployeeId || 'EMP-505',
-          employeeId: effectiveEmployeeId || 'EMP-505',
-          name: user?.name || 'Driver',
-          role: user?.role || 'Driver',
-          department: user?.department || 'Transit Mixer Fleet',
-          plant: user?.plantLocation || 'Main Plant Unit #01',
-          shiftId: 'SFT-MORN',
-        }]
+        id: effectiveEmployeeId || 'EMP-505',
+        employeeId: effectiveEmployeeId || 'EMP-505',
+        name: user?.name || 'Driver',
+        role: user?.role || 'Driver',
+        department: user?.department || 'Transit Mixer Fleet',
+        plant: user?.plantLocation || 'Main Plant Unit #01',
+        shiftId: 'SFT-MORN',
+      }]
     : employees;
 
   const myShift = shifts.find((s) => s.id === displayEmployees[0]?.shiftId) || shifts[0] || {

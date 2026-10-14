@@ -7,15 +7,15 @@ import QuickAction from '../../components/dashboard/QuickAction';
 import AlertCard from '../../components/dashboard/AlertCard';
 import Modal from '../../components/dashboard/Modal';
 import Toast from '../../components/dashboard/Toast';
-import { 
-  HardHat, 
-  Truck, 
-  CheckCircle2, 
-  Clock, 
-  FileCheck, 
-  MapPin, 
-  AlertTriangle, 
-  Camera, 
+import {
+  HardHat,
+  Truck,
+  CheckCircle2,
+  Clock,
+  FileCheck,
+  MapPin,
+  AlertTriangle,
+  Camera,
   Activity,
   Plus
 } from 'lucide-react';
@@ -64,30 +64,30 @@ export default function SiteSupervisorDashboardPage() {
   };
 
   const deliveryColumns = [
-    { 
-      header: 'Dispatch ID', 
-      accessor: 'dispatchId', 
-      render: (row) => <span className="font-mono text-orange-400 font-bold">{row.dispatchId}</span> 
+    {
+      header: 'Dispatch ID',
+      accessor: 'dispatchId',
+      render: (row) => <span className="font-mono text-orange-400 font-bold">{row.dispatchId}</span>
     },
-    { 
-      header: 'Vehicle & Driver', 
-      accessor: 'vehicle', 
+    {
+      header: 'Vehicle & Driver',
+      accessor: 'vehicle',
       render: (row) => (
         <div>
           <div className="font-bold text-white text-xs">{row.vehicle}</div>
           <div className="text-[11px] text-slate-400">{row.driver}</div>
         </div>
-      ) 
+      )
     },
-    { 
-      header: 'Grade / Volume', 
-      accessor: 'grade', 
+    {
+      header: 'Grade / Volume',
+      accessor: 'grade',
       render: (row) => (
         <div>
           <span className="px-1.5 py-0.5 rounded bg-amber-100/80 text-amber-900 border border-amber-300/80 font-mono text-[10px] font-semibold">{row.grade}</span>
           <span className="font-bold text-white font-mono ml-2 text-xs">{row.qty}</span>
         </div>
-      ) 
+      )
     },
     { header: 'Arrival Time', accessor: 'arrivalTime', className: 'font-mono text-slate-300' },
     { header: 'Site Status', accessor: 'status', type: 'status' },
@@ -390,69 +390,69 @@ export default function SiteSupervisorDashboardPage() {
             </div>
           </section>
 
-      {/* Pouring Telemetry & Site Issues Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Concrete Pump Telemetry */}
-        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-600" />
-              <span>Concrete Pump & Slump Telemetry</span>
-            </h3>
-            <span className="text-[10px] font-mono text-emerald-700 font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200">PUMP OPERATIONAL</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 text-xs">
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Pump Line Pressure:</span>
-              <span className="text-base font-bold text-slate-900 font-mono">{pouringStatus.pressure}</span>
-            </div>
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Measured Slump:</span>
-              <span className="text-base font-bold text-amber-700 font-mono">{pouringStatus.slumpOnSite}</span>
-            </div>
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Mix Temperature:</span>
-              <span className="text-base font-bold text-slate-900 font-mono">{pouringStatus.temperature}</span>
-            </div>
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Pump Unit:</span>
-              <span className="text-xs font-bold text-slate-800">{pouringStatus.pumpStatus !== 'Standby' ? 'Schwing Stetter CP-60' : 'Standby / Not In Use'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Site Issues / Incident Log */}
-        <div className="p-5 rounded-3xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-              <span>Site Safety & Incident Log</span>
-            </h3>
-            <span className="text-[10px] font-mono text-amber-700 font-bold px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200">{siteIssues.length} RECORDED</span>
-          </div>
-
-          <div className="space-y-2">
-            {siteIssues.length > 0 ? (
-              siteIssues.map((iss) => (
-                <AlertCard
-                  key={iss.id}
-                  title={iss.title}
-                  desc={iss.desc}
-                  time={iss.time}
-                  type="warning"
-                  actionLabel="Details"
-                  onAction={() => setToastMessage(`Inspecting ${iss.title}`)}
-                />
-              ))
-            ) : (
-              <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                No safety or field incidents recorded today.
+          {/* Pouring Telemetry & Site Issues Section */}
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
+            {/* Concrete Pump Telemetry */}
+            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Concrete Pump & Slump Telemetry</span>
+                </h3>
+                <span className="text-[9px] font-mono text-emerald-700 font-semibold px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200">PUMP OPERATIONAL</span>
               </div>
-            )}
-          </div>
-        </div>
-      </section>
+
+              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <div className="p-2 rounded-md bg-slate-50 border border-slate-200">
+                  <span className="text-[9px] text-slate-500 uppercase font-semibold block">Pump Line Pressure:</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-900 font-mono">{pouringStatus.pressure}</span>
+                </div>
+                <div className="p-2 rounded-md bg-slate-50 border border-slate-200">
+                  <span className="text-[9px] text-slate-500 uppercase font-semibold block">Measured Slump:</span>
+                  <span className="text-xs sm:text-sm font-bold text-amber-700 font-mono">{pouringStatus.slumpOnSite}</span>
+                </div>
+                <div className="p-2 rounded-md bg-slate-50 border border-slate-200">
+                  <span className="text-[9px] text-slate-500 uppercase font-semibold block">Mix Temperature:</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-900 font-mono">{pouringStatus.temperature}</span>
+                </div>
+                <div className="p-2 rounded-md bg-slate-50 border border-slate-200">
+                  <span className="text-[9px] text-slate-500 uppercase font-semibold block">Pump Unit:</span>
+                  <span className="text-xs font-semibold text-slate-800 truncate block">{pouringStatus.pumpStatus !== 'Standby' ? 'Schwing Stetter CP-60' : 'Standby / Not In Use'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Site Issues / Incident Log */}
+            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Site Safety & Incident Log</span>
+                </h3>
+                <span className="text-[9px] font-mono text-amber-700 font-semibold px-1.5 py-0.2 rounded bg-amber-50 border border-amber-200">{siteIssues.length} RECORDED</span>
+              </div>
+
+              <div className="space-y-2">
+                {siteIssues.length > 0 ? (
+                  siteIssues.map((iss) => (
+                    <AlertCard
+                      key={iss.id}
+                      title={iss.title}
+                      desc={iss.desc}
+                      time={iss.time}
+                      type="warning"
+                      actionLabel="Details"
+                      onAction={() => setToastMessage(`Inspecting ${iss.title}`)}
+                    />
+                  ))
+                ) : (
+                  <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                    No safety or field incidents recorded today.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
       )}
 

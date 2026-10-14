@@ -86,59 +86,57 @@ export default function Modal({
 
   const modalContent = (
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-fade-in ${
-        isFullscreen ? 'p-0 w-screen h-[100dvh] overflow-hidden' : 'p-2 sm:p-5 md:p-6 overflow-hidden'
-      }`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-fade-in ${isFullscreen ? 'p-0 w-screen h-[100dvh] overflow-hidden' : 'p-2 sm:p-5 md:p-6 overflow-hidden'
+        }`}
     >
       {/* Backdrop overlay (only active when not in edge-to-edge fullscreen) */}
       {!isFullscreen && (
-        <div 
-          className="fixed inset-0 cursor-pointer" 
-          onClick={onClose} 
+        <div
+          className="fixed inset-0 cursor-pointer"
+          onClick={onClose}
         />
       )}
 
       {/* Modal Dialog Card */}
       <div
-        className={`w-full bg-white border border-slate-200 text-slate-900 shadow-2xl relative z-10 flex flex-col ring-1 ring-black/5 transition-all duration-300 ${
-          isFullscreen
+        className={`w-full bg-white border border-[#D4E4F7] text-[#123B6D] shadow-2xl relative z-10 flex flex-col ring-1 ring-[#123B6D]/10 transition-all duration-300 ${isFullscreen
             ? 'h-[100dvh] w-screen max-w-none max-h-none rounded-none p-3 sm:p-5 lg:p-6 overflow-hidden'
             : `${maxWidth} rounded-2xl md:rounded-3xl p-3 sm:p-4.5 md:p-5 max-h-[calc(100dvh-1.5rem)] sm:max-h-[94vh] overflow-hidden my-auto`
-        }`}
+          }`}
       >
         {/* Top Accent Gradient Bar */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-t-2xl md:rounded-t-3xl shrink-0" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#123B6D] via-[#1D5FA7] to-[#246BCE] rounded-t-2xl md:rounded-t-3xl shrink-0" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between gap-2.5 mb-2.5 sm:mb-3 border-b border-slate-200/80 pb-2 pt-0.5 shrink-0">
+        <div className="flex items-center justify-between gap-2.5 mb-2.5 sm:mb-3 border-b border-[#D4E4F7] pb-2 pt-0.5 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-slate-900 border border-slate-200 transition-all cursor-pointer shadow-xs shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-[#F5F9FF] hover:bg-[#EAF3FF] active:scale-95 text-[#123B6D] border border-[#D4E4F7] transition-all cursor-pointer shadow-xs shrink-0"
               title="Back (Esc)"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+              <ArrowLeft className="w-3.5 h-3.5 text-[#1D5FA7]" />
               <span>Back</span>
             </button>
 
-            <div className="h-4 w-px bg-slate-200 shrink-0 hidden sm:block" />
+            <div className="h-4 w-px bg-[#D4E4F7] shrink-0 hidden sm:block" />
 
             {Icon && (
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1D5FA7] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               </div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight truncate">{title}</h3>
+                <h3 className="text-sm sm:text-lg font-bold text-[#123B6D] tracking-tight truncate">{title}</h3>
                 {isFullscreen && (
-                  <span className="hidden sm:inline-flex items-center text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 shrink-0 font-mono">
+                  <span className="hidden sm:inline-flex items-center text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] shrink-0 font-mono">
                     Full Screen Mode
                   </span>
                 )}
               </div>
-              {subtitle && <p className="text-[11px] text-slate-500 truncate font-medium">{subtitle}</p>}
+              {subtitle && <p className="text-[11px] text-[#1D5FA7] truncate font-medium">{subtitle}</p>}
             </div>
           </div>
 
@@ -147,21 +145,17 @@ export default function Modal({
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
-                  isFullscreen
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                }`}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs bg-[#F5F9FF] hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]"
                 title={isFullscreen ? 'Exit Full Screen' : 'Expand to Full Screen'}
               >
                 {isFullscreen ? (
                   <>
-                    <Minimize2 className="w-4 h-4 text-cyan-600" />
+                    <Minimize2 className="w-4 h-4 text-[#1D5FA7]" />
                     <span className="hidden sm:inline">Exit Full Screen</span>
                   </>
                 ) : (
                   <>
-                    <Maximize2 className="w-4 h-4 text-slate-500" />
+                    <Maximize2 className="w-4 h-4 text-[#1D5FA7]" />
                     <span className="hidden sm:inline">Full Screen</span>
                   </>
                 )}
@@ -171,7 +165,7 @@ export default function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+              className="p-1.5 rounded-xl text-[#1D5FA7] hover:text-[#123B6D] hover:bg-[#EAF3FF] transition-colors cursor-pointer shrink-0"
               title="Close (Esc)"
             >
               <X className="w-5 h-5" />

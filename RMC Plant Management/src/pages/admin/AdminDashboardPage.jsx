@@ -592,7 +592,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={handleOpenAddPlant}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-600 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:from-blue-700 hover:to-indigo-700 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700 transition-colors cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Plant Node</span>
@@ -816,7 +816,7 @@ export default function AdminDashboardPage() {
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs cursor-pointer"
             >
               Save Employee
             </button>
@@ -978,7 +978,7 @@ export default function AdminDashboardPage() {
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs cursor-pointer"
             >
               Save Changes
             </button>
@@ -994,7 +994,7 @@ export default function AdminDashboardPage() {
         subtitle="Connect telemetry and SCADA dispatch network."
         icon={Building2}
       >
-        <form onSubmit={handleSaveAddPlant} className="space-y-4 rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50/90 via-white/90 to-cyan-50/80 p-4 text-xs shadow-inner shadow-blue-100/60 backdrop-blur-xl sm:p-5">
+        <form onSubmit={handleSaveAddPlant} className="space-y-3.5 p-4 rounded-xl border border-slate-200 bg-white text-xs">
           <div className="rounded-xl border border-blue-100 bg-white/65 px-3.5 py-3 text-xs leading-relaxed text-slate-700 shadow-sm backdrop-blur-md">
             Add the plant’s operating details. Leave the node code blank to generate it from the plant name.
           </div>
@@ -1078,7 +1078,7 @@ export default function AdminDashboardPage() {
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-gradient-to-r from-blue-700 via-blue-700 to-cyan-700 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-900/20 transition hover:from-blue-800 hover:to-cyan-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-[0.98]"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-blue-700 cursor-pointer"
             >
               Save Plant Node
             </button>
@@ -1172,7 +1172,7 @@ export default function AdminDashboardPage() {
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs cursor-pointer"
             >
               Update Plant Node
             </button>
@@ -1284,7 +1284,7 @@ export default function AdminDashboardPage() {
                   setActiveKpiModal(null);
                   setActiveTab('employees');
                 }}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
               >
                 <span>Open Full Directory</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1399,7 +1399,7 @@ export default function AdminDashboardPage() {
                   setActiveKpiModal(null);
                   setActiveTab('attendance');
                 }}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
               >
                 <span>Open Attendance Module</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1513,7 +1513,7 @@ export default function AdminDashboardPage() {
                 setActiveKpiModal(null);
                 setActiveTab('approvals');
               }}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
             >
               <span>Open Approvals Hub</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -1603,7 +1603,7 @@ export default function AdminDashboardPage() {
                 setActiveKpiModal(null);
                 setActiveTab('payroll');
               }}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
             >
               <span>Open Payroll Module</span>
               <ArrowRight className="w-3.5 h-3.5" />

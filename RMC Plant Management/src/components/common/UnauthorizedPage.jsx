@@ -31,7 +31,7 @@ export default function UnauthorizedPage({ attemptedPath = '', requiredRoles = [
   return (
     <div className="min-h-screen bg-[#0a0c10] text-slate-100 flex items-center justify-center p-4 selection:bg-amber-500 selection:text-black">
       <div className="w-full max-w-lg bg-[#13161f] border border-red-500/30 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden text-center">
-        
+
         {/* Top Danger Accent Bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-600 via-orange-500 to-red-600" />
 
