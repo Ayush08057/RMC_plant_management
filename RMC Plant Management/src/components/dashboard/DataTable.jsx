@@ -121,9 +121,9 @@ export default function DataTable({
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="text-sm sm:text-base font-bold text-[#123B6D] tracking-tight flex items-center gap-1.5 flex-wrap">
+              <h3 className="text-sm sm:text-base font-bold text-black tracking-tight flex items-center gap-1.5 flex-wrap">
                 <span className="whitespace-nowrap">{title}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] font-mono font-bold shrink-0 shadow-2xs">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] font-mono font-bold shrink-0 shadow-2xs">
                   {filteredData.length} records
                 </span>
                 {isFullscreen && (
@@ -132,7 +132,7 @@ export default function DataTable({
                   </span>
                 )}
               </h3>
-              {subtitle && <p className="text-[11px] text-[#1D5FA7] font-medium line-clamp-1">{subtitle}</p>}
+              {subtitle && <p className="text-[11px] text-slate-700 font-medium line-clamp-1">{subtitle}</p>}
             </div>
           </div>
 
@@ -148,7 +148,7 @@ export default function DataTable({
                     setCurrentPage(1);
                   }}
                   placeholder={searchPlaceholder}
-                  className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs text-[#123B6D] placeholder-[#1D5FA7]/50 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs"
+                  className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs"
                 />
               </div>
             )}
@@ -158,7 +158,7 @@ export default function DataTable({
 
         {/* DESKTOP TABLE VIEW - STRICT 100% CONTAINER FIT WITH PROPER ALIGNMENT */}
         <div className="hidden md:block w-full max-w-full overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-xs text-[#123B6D] border-collapse table-fixed">
+          <table className="w-full min-w-[700px] text-left text-xs text-black border-collapse table-fixed">
             <thead className="bg-[#123B6D] text-white font-mono font-bold uppercase text-[10px] tracking-wider border-b border-[#123B6D] select-none">
               <tr>
                 {columns.map((col, idx) => {
@@ -217,7 +217,7 @@ export default function DataTable({
                             ) : col.type === 'status' ? (
                               <StatusBadge status={row[col.accessor]} />
                             ) : (
-                              <span className="font-semibold text-[#123B6D] block truncate" title={String(row[col.accessor] ?? '')}>
+                              <span className="font-semibold text-black block truncate" title={String(row[col.accessor] ?? '')}>
                                 {row[col.accessor]}
                               </span>
                             )}
@@ -229,13 +229,13 @@ export default function DataTable({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={columns.length} className="py-14 text-center text-[#1D5FA7] bg-[#F5F9FF]">
+                  <td colSpan={columns.length} className="py-14 text-center text-slate-700 bg-[#F5F9FF]">
                     <div className="w-12 h-12 rounded-2xl bg-[#EAF3FF] border border-[#D4E4F7] flex items-center justify-center mx-auto mb-3 shadow-2xs">
                       <Inbox className="w-6 h-6 text-[#1D5FA7]" />
                     </div>
-                    <div className="text-sm font-bold text-[#123B6D] tracking-tight">{emptyMessage}</div>
+                    <div className="text-sm font-bold text-black tracking-tight">{emptyMessage}</div>
                     {searchQuery && (
-                      <p className="text-xs text-[#1D5FA7] mt-1 font-medium">Try refining search query parameters</p>
+                      <p className="text-xs text-slate-600 mt-1 font-medium">Try refining search query parameters</p>
                     )}
                   </td>
                 </tr>
@@ -275,7 +275,7 @@ export default function DataTable({
                               {titleCol?.render ? titleCol.render(row) : (row[titleCol?.accessor] || 'Record')}
                             </div>
                             {subtitleCol && (
-                              <div className="text-sm font-bold text-[#123B6D] mt-0.5 truncate">
+                              <div className="text-sm font-bold text-black mt-0.5 truncate">
                                 {subtitleCol.render ? subtitleCol.render(row) : row[subtitleCol.accessor]}
                               </div>
                             )}
@@ -292,13 +292,13 @@ export default function DataTable({
                         </div>
 
                         {detailCols.length > 0 && (
-                          <div className="grid grid-cols-2 gap-2.5 pt-3 mt-3 border-t border-[#D4E4F7] text-[11px] text-[#123B6D]">
+                          <div className="grid grid-cols-2 gap-2.5 pt-3 mt-3 border-t border-[#D4E4F7] text-[11px] text-slate-800">
                             {detailCols.map((col, cIdx) => (
                               <div key={cIdx} className="min-w-0">
-                                <span className="text-[10px] text-[#1D5FA7] font-bold uppercase tracking-wider block truncate">
+                                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider block truncate">
                                   {col.header}:
                                 </span>
-                                <div className="font-semibold text-[#123B6D] truncate mt-0.5">
+                                <div className="font-semibold text-black truncate mt-0.5">
                                   {col.render ? col.render(row) : row[col.accessor]}
                                 </div>
                               </div>
@@ -318,24 +318,24 @@ export default function DataTable({
               </div>
             ))
           ) : (
-            <div className="py-10 text-center text-[#1D5FA7] bg-white rounded-xl border border-[#D4E4F7]">
+            <div className="py-10 text-center text-slate-700 bg-white rounded-xl border border-[#D4E4F7]">
               <Inbox className="w-8 h-8 mx-auto mb-2 text-[#1D5FA7]" />
-              <div className="text-sm font-bold text-[#123B6D]">{emptyMessage}</div>
+              <div className="text-sm font-bold text-black">{emptyMessage}</div>
             </div>
           )}
         </div>
 
         {/* Pagination Footer */}
-        <div className="p-2 sm:p-2.5 border-t border-[#D4E4F7] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[#1D5FA7] w-full overflow-hidden bg-[#F5F9FF] shrink-0">
+        <div className="p-2 sm:p-2.5 border-t border-[#D4E4F7] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-700 w-full overflow-hidden bg-[#F5F9FF] shrink-0">
           <div className="flex items-center gap-4 text-xs font-semibold">
             <div>
-              Showing <span className="font-mono font-bold text-[#123B6D]">{filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{' '}
-              <span className="font-mono font-bold text-[#123B6D]">{Math.min(currentPage * pageSize, filteredData.length)}</span> of{' '}
-              <span className="font-mono font-bold text-[#123B6D]">{filteredData.length}</span> records
+              Showing <span className="font-mono font-bold text-black">{filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{' '}
+              <span className="font-mono font-bold text-black">{Math.min(currentPage * pageSize, filteredData.length)}</span> of{' '}
+              <span className="font-mono font-bold text-black">{filteredData.length}</span> records
             </div>
 
             {/* Page Size Selector */}
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#1D5FA7] font-medium">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-700 font-medium">
               <span>Per page:</span>
               <select
                 value={pageSize}
@@ -343,7 +343,7 @@ export default function DataTable({
                   setPageSize(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="bg-white border border-[#D4E4F7] rounded-lg px-2 py-0.5 text-xs font-bold text-[#123B6D] focus:outline-none focus:border-[#246BCE] cursor-pointer shadow-2xs"
+                className="bg-white border border-[#D4E4F7] rounded-lg px-2 py-0.5 text-xs font-bold text-black focus:outline-none focus:border-[#246BCE] cursor-pointer shadow-2xs"
               >
                 <option value={6}>6</option>
                 <option value={10}>10</option>
@@ -355,15 +355,15 @@ export default function DataTable({
 
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-xs font-semibold">
-              Page <span className="font-mono font-bold text-[#123B6D]">{currentPage}</span> of{' '}
-              <span className="font-mono font-bold text-[#123B6D]">{totalPages}</span>
+              Page <span className="font-mono font-bold text-black">{currentPage}</span> of{' '}
+              <span className="font-mono font-bold text-black">{totalPages}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                className="px-3 py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:bg-[#EAF3FF] text-[#123B6D] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs font-semibold text-xs flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:bg-[#EAF3FF] text-black disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs font-semibold text-xs flex items-center gap-1"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Previous</span>
@@ -372,7 +372,7 @@ export default function DataTable({
                 type="button"
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                className="px-3 py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:bg-[#EAF3FF] text-[#123B6D] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs font-semibold text-xs flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:bg-[#EAF3FF] text-black disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs font-semibold text-xs flex items-center gap-1"
               >
                 <span className="hidden sm:inline">Next</span>
                 <ChevronRight className="w-4 h-4" />

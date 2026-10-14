@@ -79,27 +79,26 @@ export default function PlantManagerDashboardPage() {
 
   return (
     <AppLayout
-      title="Plant Manager Dashboard"
-      subtitle="Today's concrete batching, material inventory & dispatch schedule"
-      badge="MAIN PLANT #01 • ONLINE"
+      title="Plant Manager"
+      badge="MAIN PLANT #01"
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setShowPlanModal(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-blue-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
           >
-            <Gauge className="w-4 h-4 text-blue-600" />
+            <Gauge className="w-3.5 h-3.5 text-white" />
             <span>Shift Plan</span>
           </button>
           <button
             type="button"
             onClick={() => setShowInventoryModal(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white border border-white/25 backdrop-blur-md shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Layers className="w-4 h-4 text-blue-200" />
+            <Layers className="w-3.5 h-3.5 text-[#1D5FA7]" />
             <span>Silo Stock</span>
           </button>
         </div>

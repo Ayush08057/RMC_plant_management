@@ -99,7 +99,7 @@ export default function Modal({
 
       {/* Modal Dialog Card */}
       <div
-        className={`w-full bg-white border border-[#D4E4F7] text-[#123B6D] shadow-2xl relative z-10 flex flex-col ring-1 ring-[#123B6D]/10 transition-all duration-300 ${isFullscreen
+        className={`w-full bg-white border border-[#D4E4F7] text-black shadow-2xl relative z-10 flex flex-col ring-1 ring-[#123B6D]/10 transition-all duration-300 ${isFullscreen
             ? 'h-[100dvh] w-screen max-w-none max-h-none rounded-none p-3 sm:p-5 lg:p-6 overflow-hidden'
             : `${maxWidth} rounded-2xl md:rounded-3xl p-3 sm:p-4.5 md:p-5 max-h-[calc(100dvh-1.5rem)] sm:max-h-[94vh] overflow-hidden my-auto`
           }`}
@@ -113,7 +113,7 @@ export default function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-[#F5F9FF] hover:bg-[#EAF3FF] active:scale-95 text-[#123B6D] border border-[#D4E4F7] transition-all cursor-pointer shadow-xs shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-[#F5F9FF] hover:bg-[#EAF3FF] active:scale-95 text-black border border-[#D4E4F7] transition-all cursor-pointer shadow-xs shrink-0"
               title="Back (Esc)"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-[#1D5FA7]" />
@@ -129,14 +129,14 @@ export default function Modal({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-lg font-bold text-[#123B6D] tracking-tight truncate">{title}</h3>
+                <h3 className="text-sm sm:text-lg font-bold text-black tracking-tight truncate">{title}</h3>
                 {isFullscreen && (
-                  <span className="hidden sm:inline-flex items-center text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] shrink-0 font-mono">
+                  <span className="hidden sm:inline-flex items-center text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0 font-mono">
                     Full Screen Mode
                   </span>
                 )}
               </div>
-              {subtitle && <p className="text-[11px] text-[#1D5FA7] truncate font-medium">{subtitle}</p>}
+              {subtitle && <p className="text-[11px] text-slate-800 truncate font-medium">{subtitle}</p>}
             </div>
           </div>
 
@@ -145,7 +145,7 @@ export default function Modal({
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs bg-[#F5F9FF] hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs bg-[#F5F9FF] hover:bg-[#EAF3FF] text-black border border-[#D4E4F7]"
                 title={isFullscreen ? 'Exit Full Screen' : 'Expand to Full Screen'}
               >
                 {isFullscreen ? (
@@ -165,7 +165,7 @@ export default function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-xl text-[#1D5FA7] hover:text-[#123B6D] hover:bg-[#EAF3FF] transition-colors cursor-pointer shrink-0"
+              className="p-1.5 rounded-xl text-slate-700 hover:text-black hover:bg-[#EAF3FF] transition-colors cursor-pointer shrink-0"
               title="Close (Esc)"
             >
               <X className="w-5 h-5" />

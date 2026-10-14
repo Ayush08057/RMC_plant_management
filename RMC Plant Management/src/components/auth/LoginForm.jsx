@@ -129,11 +129,11 @@ export default function LoginForm() {
 
             {/* COMPANY LOGO EMBLEM - PROPORTIONAL & BALANCED SIZE */}
             <div className="relative group mb-3">
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white p-1 border border-slate-200 shadow-md flex items-center justify-center transition-transform duration-300 group-hover:scale-105 overflow-hidden">
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl shadow-lg flex items-center justify-center transition-transform duration-300 group-hover:scale-105 overflow-hidden">
                 <img
                   src="/logo.png"
                   alt="SM ConcreTech Logo"
-                  className="w-full h-full object-contain rounded-xl"
+                  className="w-full h-full object-cover scale-[1.04]"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.nextSibling.style.display = 'flex';

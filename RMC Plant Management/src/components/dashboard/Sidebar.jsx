@@ -28,10 +28,13 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useWorkforce } from '../../context/WorkforceContext';
 import { ROLES, ROLE_ROUTES } from '../../data/mockUsers';
 
 export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTab, onSelectTab }) {
   const { user, logout, switchRole } = useAuth();
+  const workforce = useWorkforce();
+  const activeCompany = workforce?.activeCompany;
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -224,13 +227,13 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                 to={ROLE_ROUTES[user?.role] || '/'} 
                 onMouseEnter={(e) => handleMouseEnter({ type: 'logo' }, e)}
                 onMouseLeave={handleMouseLeave}
-                className="w-11 h-11 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex items-center justify-center shrink-0 hover:bg-[#F5F9FF] transition-colors cursor-pointer overflow-hidden p-0.5"
-                title="SM CONCRETECH"
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 hover:scale-105 transition-transform cursor-pointer overflow-hidden shadow-xs"
+                title={activeCompany?.name || "SM CONCRETECH"}
               >
                 <img 
-                  src="/logo.png" 
-                  alt="SM ConcreTech" 
-                  className="w-full h-full object-contain" 
+                  src={activeCompany?.logo || "/logo.png"} 
+                  alt={activeCompany?.name || "SM ConcreTech"} 
+                  className="w-full h-full object-cover scale-[1.04]" 
                 />
               </Link>
             </div>
@@ -353,19 +356,21 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
             {/* Top: Logo & System Identity */}
             <div className="py-3 px-3.5 border-b border-[#1D5FA7]/30 flex items-center justify-between bg-[#123B6D] shrink-0">
               <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-2.5 w-full">
-                <div className="w-11 h-11 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex items-center justify-center shrink-0 overflow-hidden p-0.5">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
                   <img 
-                    src="/logo.png" 
-                    alt="SM ConcreTech" 
-                    className="w-full h-full object-contain" 
+                    src={activeCompany?.logo || "/logo.png"} 
+                    alt={activeCompany?.name || "SM ConcreTech"} 
+                    className="w-full h-full object-cover scale-[1.04]" 
                   />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="sidebar-label text-xs font-bold tracking-wider text-white truncate">SM CONCRETECH</span>
+                    <span className="sidebar-label text-xs font-bold tracking-wider text-white truncate">
+                      {activeCompany?.name || "SM CONCRETECH"}
+                    </span>
                   </div>
-                  <div className="text-[10px] font-semibold text-[#D4E4F7]/90 font-mono tracking-wider">
-                    READY MIX CONCRETE
+                  <div className="text-[10px] font-semibold text-[#D4E4F7]/90 font-mono tracking-wider truncate">
+                    {activeCompany?.location || "READY MIX CONCRETE"}
                   </div>
                   <div className="sidebar-label text-[10px] font-semibold truncate text-[#EAF3FF] mt-0.5">
                     {user?.role || 'Portal'}

@@ -113,24 +113,23 @@ export default function EmployeeDocumentsView({ employeeFilter = null }) {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="p-4 rounded-2xl bg-[#12151e] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-cyan-400" />
-            <span>Digital Workforce Document Locker</span>
+      {/* Top Banner - Small, White Background, Clean */}
+      <div className="px-3 py-1.5 rounded-lg bg-white border border-[#D4E4F7] shadow-2xs flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-6 h-6 rounded-md bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-3.5 h-3.5" />
+          </div>
+          <h2 className="text-xs font-bold text-black uppercase tracking-wider truncate">
+            Digital Workforce Document Locker
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Aadhaar, PAN, Heavy Commercial Vehicle driving licenses, and banking proof documents.
-          </p>
         </div>
 
         <button
           type="button"
           onClick={() => setShowUploadModal(true)}
-          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-600/20"
+          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 transition-colors"
         >
-          <FileUp className="w-4 h-4" />
+          <FileUp className="w-3.5 h-3.5" />
           <span>Upload Document</span>
         </button>
       </div>
@@ -138,7 +137,6 @@ export default function EmployeeDocumentsView({ employeeFilter = null }) {
       {/* Documents Table */}
       <DataTable
         title="Encrypted Personnel Document Vault"
-        subtitle="Role-protected records with license renewal alerts and compliance certificates"
         icon={FileCheck}
         columns={columns}
         data={filteredDocs}
@@ -146,32 +144,32 @@ export default function EmployeeDocumentsView({ employeeFilter = null }) {
           <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2">
             <div className="flex items-start justify-between gap-2 min-w-0">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
-                <div className="text-xs text-amber-700 font-bold">{row.documentType}</div>
+                <div className="text-sm font-bold text-black truncate">{row.employeeName}</div>
+                <div className="text-xs text-[#1D5FA7] font-bold">{row.documentType}</div>
               </div>
               <StatusBadge status={row.status} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-slate-200">
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-[#D4E4F7]">
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Ref No:</span>
-                <span className="text-slate-900 font-bold truncate block">{row.documentNumber}</span>
+                <span className="text-[10px] text-slate-700 font-bold uppercase block">Ref No:</span>
+                <span className="text-black font-bold truncate block">{row.documentNumber}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Expiry:</span>
-                <span className={row.status === 'Expiring Soon' ? 'text-amber-700 font-bold' : 'text-slate-600'}>
+                <span className="text-[10px] text-slate-700 font-bold uppercase block">Expiry:</span>
+                <span className={row.status === 'Expiring Soon' ? 'text-black font-bold' : 'text-slate-800'}>
                   {row.expiryDate || 'N/A'}
                 </span>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-200 flex justify-end">
+            <div className="pt-2 border-t border-[#D4E4F7] flex justify-end">
               <button
                 type="button"
                 onClick={() => setToastMessage(`Secure download of ${row.documentType} initiated.`)}
-                className="w-full py-1.5 rounded-xl bg-cyan-50 text-cyan-800 border border-cyan-200 hover:bg-cyan-100 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                className="w-full py-1.5 rounded-lg bg-[#EAF3FF] text-black hover:bg-[#D4E4F7]/60 border border-[#D4E4F7] text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 text-[#1D5FA7]" />
                 <span>Download Encrypted PDF</span>
               </button>
             </div>
@@ -187,18 +185,18 @@ export default function EmployeeDocumentsView({ employeeFilter = null }) {
         subtitle="Attach statutory ID or compliance certification to employee file."
         icon={FileUp}
       >
-        <form onSubmit={handleUpload} className="space-y-4 text-xs">
+        <form onSubmit={handleUpload} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
           <div>
-            <label className="text-slate-400 font-semibold block mb-1">Employee</label>
+            <label className="text-black font-bold block mb-1">Employee</label>
             {employeeFilter || user?.role !== 'Admin' ? (
-              <div className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs">
+              <div className="w-full px-3 py-2 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-black font-mono font-bold text-xs">
                 {user?.name || 'Staff'} ({employeeFilter || user?.employeeId || user?.id})
               </div>
             ) : (
               <select
                 value={form.employeeId}
                 onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#D4E4F7] text-black font-medium focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20 outline-none cursor-pointer"
               >
                 {employees.map((e) => (
                   <option key={e.id} value={e.id}>{e.name} ({e.id} • {e.role})</option>
@@ -207,13 +205,13 @@ export default function EmployeeDocumentsView({ employeeFilter = null }) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Document Type</label>
+              <label className="text-black font-bold block mb-1">Document Type</label>
               <select
                 value={form.documentType}
                 onChange={(e) => setForm({ ...form, documentType: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#D4E4F7] text-black font-medium focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20 outline-none cursor-pointer"
               >
                 <option value="Aadhaar Card">Aadhaar Card</option>
                 <option value="PAN Card">PAN Card</option>
@@ -224,46 +222,46 @@ export default function EmployeeDocumentsView({ employeeFilter = null }) {
               </select>
             </div>
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Document Reference No *</label>
+              <label className="text-black font-bold block mb-1">Document Reference No *</label>
               <input
                 type="text"
                 required
                 value={form.documentNumber}
                 onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}
                 placeholder="e.g. MH-03-2015-0048192"
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#D4E4F7] text-black font-mono font-medium focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20 outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-slate-400 font-semibold block mb-1">Expiry Date (If applicable)</label>
+            <label className="text-black font-bold block mb-1">Expiry Date (If applicable)</label>
             <input
               type="date"
               value={form.expiryDate}
               onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono focus:border-cyan-500"
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#D4E4F7] text-black font-mono font-medium focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20 outline-none"
             />
           </div>
 
           {/* Drag & drop simulation */}
-          <div className="p-4 rounded-xl border border-dashed border-slate-700 bg-slate-50 border border-slate-200 text-center space-y-1">
-            <FileUp className="w-6 h-6 text-slate-400 mx-auto" />
-            <div className="text-slate-300 font-semibold">Select PDF or Scanned JPEG</div>
-            <div className="text-[10px] text-slate-500">Max file size 5MB • AES-256 encrypted storage</div>
+          <div className="p-4 rounded-xl border border-dashed border-[#D4E4F7] bg-[#F5F9FF] text-center space-y-1">
+            <FileUp className="w-5 h-5 text-[#1D5FA7] mx-auto" />
+            <div className="text-black font-bold">Select PDF or Scanned JPEG</div>
+            <div className="text-[10px] text-slate-700 font-mono">Max file size 5MB • AES-256 encrypted storage</div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-[#D4E4F7]">
             <button
               type="button"
               onClick={() => setShowUploadModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-black border border-[#D4E4F7] hover:bg-[#F5F9FF] transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 text-white"
+              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white shadow-xs transition-colors cursor-pointer"
             >
               Upload to Vault
             </button>

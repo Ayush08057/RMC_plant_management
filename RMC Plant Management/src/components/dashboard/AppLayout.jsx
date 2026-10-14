@@ -65,7 +65,7 @@ export default function AppLayout({
   }, []);
 
   return (
-    <div className="app-shell relative h-screen max-h-screen w-screen max-w-full overflow-hidden bg-[#F5F9FF] text-[#123B6D] flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
+    <div className="app-shell relative h-screen max-h-screen w-screen max-w-full overflow-hidden bg-[#F5F9FF] text-black flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
       {/* Sidebar Navigation */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -95,22 +95,22 @@ export default function AppLayout({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#123B6D] bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
+                  <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-black bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
                     AUTHENTICATED
                   </span>
-                  <span className="text-[10px] text-[#1D5FA7] font-mono">Just Now</span>
+                  <span className="text-[10px] text-slate-600 font-mono">Just Now</span>
                 </div>
-                <div className="text-xs font-bold text-[#123B6D] mt-1">
+                <div className="text-xs font-bold text-black mt-1">
                   {loginToast.title || 'User login successfully'}
                 </div>
-                <p className="text-[11px] font-medium text-[#1D5FA7] truncate mt-0.5">
+                <p className="text-[11px] font-medium text-slate-700 truncate mt-0.5">
                   Welcome, {loginToast.userName || user?.name || 'Authorized User'} {loginToast.role ? `(${loginToast.role})` : ''}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setLoginToast(null)}
-                className="text-[#1D5FA7] hover:text-[#123B6D] p-1 rounded-lg hover:bg-[#EAF3FF] transition-colors cursor-pointer"
+                className="text-slate-500 hover:text-black p-1 rounded-lg hover:bg-[#EAF3FF] transition-colors cursor-pointer"
                 title="Dismiss"
               >
                 <X className="w-3.5 h-3.5" />
@@ -122,11 +122,11 @@ export default function AppLayout({
         {/* Admin Master Mode Inspection Indicator Banner */}
         {Boolean(user?.isMasterAdmin || user?.originalAdminUser) && user?.role !== ROLES.ADMIN && (
           <div className="px-3 sm:px-4 pt-2 shrink-0 animate-fadeIn">
-            <div className="bg-[#EAF3FF] border border-[#D4E4F7] text-[#123B6D] px-3.5 py-1.5 rounded-xl flex items-center justify-between shadow-2xs text-xs">
+            <div className="bg-[#EAF3FF] border border-[#D4E4F7] text-black px-3.5 py-1.5 rounded-xl flex items-center justify-between shadow-2xs text-xs">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-[#246BCE] shrink-0" />
-                <span className="text-[11px] font-medium text-[#123B6D] truncate">
-                  Master Admin Clearance Active • Viewing <strong className="font-semibold text-[#123B6D]">{user?.role}</strong> Portal
+                <span className="text-[11px] font-medium text-black truncate">
+                  Master Admin Clearance Active • Viewing <strong className="font-semibold text-black">{user?.role}</strong> Portal
                 </span>
               </div>
               <button
@@ -135,7 +135,7 @@ export default function AppLayout({
                   const returnPath = switchRole(ROLES.ADMIN);
                   if (returnPath) navigate(returnPath);
                 }}
-                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
               >
                 <ArrowLeft className="w-3 h-3" />
                 <span>Return to Admin Console</span>
@@ -144,28 +144,19 @@ export default function AppLayout({
           </div>
         )}
 
-        {/* Professional Enterprise Page Title Bar - Clean & Compact */}
+        {/* Professional Enterprise Page Title Bar - Ultra-Slim & Compact */}
         {(title || actions) && (
-          <div className="px-3 sm:px-4 pt-1.5 pb-0.5 shrink-0">
-            <div className="bg-white border border-[#D4E4F7] rounded-lg px-3 py-1.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 min-w-0">
+          <div className="px-3 sm:px-4 pt-1 pb-0.5 shrink-0">
+            <div className="bg-white border border-[#D4E4F7] rounded-lg px-2.5 sm:px-3 py-1 shadow-2xs flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <h1 className="text-xs sm:text-[13px] font-bold text-[#123B6D] tracking-tight truncate leading-tight">
-                      {title}
-                    </h1>
-                    {badge && (
-                      <span className="text-[9px] font-mono font-medium px-1.5 py-0.2 rounded bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] shrink-0">
-                        {badge}
-                      </span>
-                    )}
-                  </div>
-                  {subtitle && (
-                    <p className="text-[10px] sm:text-[10.5px] text-[#1D5FA7] font-normal truncate mt-0.5 leading-tight">
-                      {subtitle}
-                    </p>
-                  )}
-                </div>
+                <h1 className="text-xs sm:text-[13px] font-bold text-black tracking-tight truncate leading-tight">
+                  {title}
+                </h1>
+                {badge && (
+                  <span className="text-[9px] font-mono font-medium px-1.5 py-0.2 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
+                    {badge}
+                  </span>
+                )}
               </div>
 
               {actions && (
@@ -178,36 +169,36 @@ export default function AppLayout({
         )}
 
         {/* Page Inner Content - Only this area scrolls vertically */}
-        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-4 py-1.5 sm:py-2 overflow-y-auto overflow-x-hidden flex flex-col">
+        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-4 py-1.5 sm:py-2 overflow-y-auto overflow-x-hidden flex flex-col text-black">
           {children}
         </main>
 
         {/* Pinned Operational Footer - Display Active Logged In Session Below */}
-        <footer className="border-t border-[#D4E4F7] py-1.5 px-3 sm:px-4 bg-white text-center text-[10px] text-[#1D5FA7] w-full max-w-full shrink-0 shadow-2xs">
+        <footer className="border-t border-[#D4E4F7] py-1.5 px-3 sm:px-4 bg-white text-center text-[10px] text-slate-700 w-full max-w-full shrink-0 shadow-2xs">
           <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-1.5 h-1.5 rounded-full bg-[#246BCE] shrink-0" />
-              <div className="text-[#123B6D] font-medium truncate text-[11px] flex items-center gap-1.5">
-                <span className="text-[#1D5FA7] hidden sm:inline">Active Session:</span>
-                <strong className="text-[#123B6D] font-semibold truncate">{user?.name || 'Administrator'}</strong>
+              <div className="text-black font-medium truncate text-[11px] flex items-center gap-1.5">
+                <span className="text-slate-600 hidden sm:inline">Active Session:</span>
+                <strong className="text-black font-semibold truncate">{user?.name || 'Administrator'}</strong>
                 {user?.role && (
-                  <span className="px-1.5 py-0.2 rounded bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] text-[10px] font-mono font-medium shrink-0">
+                  <span className="px-1.5 py-0.2 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[10px] font-mono font-medium shrink-0">
                     {user.role}
                   </span>
                 )}
                 {user?.employeeId && (
-                  <span className="text-[#1D5FA7] font-mono text-[10px] hidden md:inline">
+                  <span className="text-slate-600 font-mono text-[10px] hidden md:inline">
                     [{user.employeeId}]
                   </span>
                 )}
                 <span className="text-[#D4E4F7] hidden lg:inline">•</span>
-                <span className="text-[#1D5FA7] text-[10px] hidden lg:inline">
+                <span className="text-slate-700 text-[10px] hidden lg:inline">
                   Plant: {user?.plant || user?.plantLocation || 'Main Plant Unit #01'}
                 </span>
               </div>
             </div>
-            <div className="font-mono text-[10px] text-[#1D5FA7] font-medium truncate flex items-center gap-2">
-              <span className="hidden sm:inline text-[#1D5FA7] font-medium">● SCADA Connected</span>
+            <div className="font-mono text-[10px] text-slate-700 font-medium truncate flex items-center gap-2">
+              <span className="hidden sm:inline text-black font-medium">● SCADA Connected</span>
               <span>SM CONCRETECH Enterprise v2.4</span>
             </div>
           </div>

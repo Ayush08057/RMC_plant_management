@@ -60,8 +60,8 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
           {/* Left: Brand & Plant Identity */}
           <div className="flex items-center gap-3">
             <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 group">
-              <div className="w-12 h-12 rounded-xl bg-white border border-slate-200/90 shadow-2xs flex items-center justify-center shrink-0 overflow-hidden p-0.5 transition-transform group-hover:scale-105">
-                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-contain" />
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-xs transition-transform group-hover:scale-105">
+                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-cover scale-[1.04]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">

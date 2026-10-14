@@ -75,27 +75,26 @@ export default function OwnerDashboardPage() {
 
   return (
     <AppLayout
-      title="Executive Board & Ownership Cockpit"
-      subtitle="High-level consolidated multi-plant revenue, production targets, client profitability, and asset uptime."
-      badge="BOARD OF DIRECTORS COCKPIT"
+      title="Executive Board Cockpit"
+      badge="EXECUTIVE"
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={() => setShowBoardModal(true)}
-            className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <Award className="w-4 h-4" />
+            <Award className="w-3.5 h-3.5" />
             <span>Board Summary</span>
           </button>
           <button
             type="button"
             onClick={() => setToastMessage('Executive EBITDA & consolidated PDF report generated.')}
-            className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <Download className="w-4 h-4 text-cyan-600" />
+            <Download className="w-3.5 h-3.5 text-[#1D5FA7]" />
             <span className="hidden sm:inline">Export Executive Pack</span>
             <span className="sm:hidden">Export</span>
           </button>

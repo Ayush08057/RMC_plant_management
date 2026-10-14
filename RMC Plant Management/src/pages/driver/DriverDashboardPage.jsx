@@ -97,18 +97,17 @@ export default function DriverDashboardPage() {
   return (
     <AppLayout
       title="Driver Personal Portal"
-      subtitle={`Dedicated transit mixer console for ${currentDriverName} (${currentDriverId}). Shows assigned trips and delivery milestones.`}
-      badge={`DRIVER ID: ${currentDriverId}`}
+      badge={`ID: ${currentDriverId}`}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setToastMessage('Connecting to Plant Dispatcher Hotline...')}
-            className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <PhoneCall className="w-4 h-4 text-white" />
+            <PhoneCall className="w-3.5 h-3.5 text-white" />
             <span className="hidden xs:inline">Call Dispatch</span>
           </button>
         </div>

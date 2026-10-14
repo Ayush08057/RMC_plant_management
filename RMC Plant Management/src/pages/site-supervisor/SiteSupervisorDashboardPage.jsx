@@ -117,27 +117,26 @@ export default function SiteSupervisorDashboardPage() {
 
   return (
     <AppLayout
-      title="Site Pouring & Field Inspection Terminal"
-      subtitle="Mobile-ready construction site concrete reception, slump verification, pump telemetry, and digital delivery signoffs."
-      badge={currentSite ? `SITE TERMINAL • ${currentSite.name.toUpperCase()}` : "SITE TERMINAL • ACTIVE"}
+      title="Site Pouring & Inspection"
+      badge={currentSite ? currentSite.name.toUpperCase() : "ACTIVE SITE"}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setShowConfirmModal(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-400 text-slate-950 flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-orange-500/20"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <CheckCircle2 className="w-4 h-4" />
+            <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Confirm Delivery</span>
           </button>
           <button
             type="button"
             onClick={() => setShowIssueModal(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle className="w-3.5 h-3.5 text-[#1D5FA7]" />
             <span>Report Issue</span>
           </button>
         </div>

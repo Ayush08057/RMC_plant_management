@@ -244,7 +244,19 @@ export const WorkforceProvider = ({ children }) => {
 
   const switchCompany = (companyId) => {
     if (companyId === activeCompanyId || !companies.some((company) => company.id === companyId)) return;
-    setData(loadCompanyData(companyId));
+    
+    // 1. Explicitly persist current company data before switching
+    try {
+      if (activeCompanyId && data) {
+        localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(data));
+      }
+    } catch (err) {
+      console.warn('Failed to save current company before switch:', err);
+    }
+
+    // 2. Load target company data and update active ID
+    const targetData = loadCompanyData(companyId);
+    setData(targetData);
     setActiveCompanyId(companyId);
     try {
       localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, companyId);
@@ -276,14 +288,39 @@ export const WorkforceProvider = ({ children }) => {
     saveRawDocumentWithId(COLLECTIONS.COMPANIES, company.id, company).catch((error) => {
       console.warn('Company saved locally but cloud sync failed:', error.message);
     });
-    setData(loadCompanyData(id));
-    setActiveCompanyId(id);
+
+    // 1. Explicitly persist current active company data before switching
     try {
-      localStorage.setItem(STORAGE_WORKFORCE_KEY + '_' + id, JSON.stringify(createEmptyCompanyData(id)));
+      if (activeCompanyId && data) {
+        localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(data));
+      }
+    } catch (err) {
+      console.warn('Failed to save current company before adding new one:', err);
+    }
+
+    // 2. Initialize new company workspace with its primary plant node
+    const initialCompanyData = {
+      ...createEmptyCompanyData(id),
+      plants: [
+        {
+          id: `${id}-plant-01`,
+          name: `${name} Main Facility`,
+          code: code || 'PLT-1',
+          capacity: companyData.capacity || '90 m³/hr',
+          location: companyData.location || 'Headquarters Site',
+          status: 'Online',
+        }
+      ]
+    };
+
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${id}`, JSON.stringify(initialCompanyData));
       localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, id);
     } catch (error) {
       console.error('Failed to initialize company workspace:', error);
     }
+    setData(initialCompanyData);
+    setActiveCompanyId(id);
     return company;
   };
 
@@ -322,6 +359,29 @@ export const WorkforceProvider = ({ children }) => {
 
     addAuditLog(`Removed Plant (${targetCompany.name})`, 'Plant Management', `Plant workspace removed: ${targetCompany.name}`);
     return targetCompany;
+  };
+
+  const updateCompany = (companyId, fields) => {
+    if (!companyId) return;
+    setCompanies((current) => {
+      const updated = current.map((c) => (c.id === companyId ? { ...c, ...fields } : c));
+      try {
+        localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.error('Failed to save updated company:', err);
+      }
+      return updated;
+    });
+
+    updateRawDocument(COLLECTIONS.COMPANIES, companyId, fields).catch((err) => {
+      console.warn('Company updated locally but cloud sync notice:', err.message);
+    });
+
+    addAuditLog(`Updated Company (${companyId})`, 'Company Management', `Company properties updated.`);
+  };
+
+  const updateCompanyLogo = (companyId, logoDataUrl) => {
+    updateCompany(companyId, { logo: logoDataUrl });
   };
 
   // Helper: record an audit log entry
@@ -2033,6 +2093,8 @@ export const WorkforceProvider = ({ children }) => {
     activeCompanyId,
     switchCompany,
     addCompany,
+    updateCompany,
+    updateCompanyLogo,
     removeCompany,
     employees: data.employees,
     shifts: data.shifts,

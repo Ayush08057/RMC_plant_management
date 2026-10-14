@@ -103,27 +103,26 @@ export default function AccountantDashboardPage() {
 
   return (
     <AppLayout
-      title="Finance, Invoicing & Ledger Command"
-      subtitle="GST delivery challan reconciliation, client credit limits, cashflow collections, and material procurement costing."
-      badge="ACCOUNTS & TAX DESK"
+      title="Finance & Invoicing"
+      badge="ACCOUNTS"
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setActiveTab('billing')}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <ReceiptText className="w-4 h-4" />
+            <ReceiptText className="w-3.5 h-3.5" />
             <span>Cash Memo / Billing</span>
           </button>
           <button
             type="button"
             onClick={() => setShowPaymentModal(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <CreditCard className="w-4 h-4" />
+            <CreditCard className="w-3.5 h-3.5 text-[#1D5FA7]" />
             <span>Record Payment</span>
           </button>
         </div>
