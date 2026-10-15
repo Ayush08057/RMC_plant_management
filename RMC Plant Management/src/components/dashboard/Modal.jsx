@@ -86,8 +86,13 @@ export default function Modal({
 
   const modalContent = (
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-fade-in ${isFullscreen ? 'p-0 w-screen h-[100dvh] overflow-hidden' : 'p-2 sm:p-5 md:p-6 overflow-hidden'
+      className={`fixed inset-0 z-[9999] flex items-center justify-center app-modal-backdrop animate-fade-in ${isFullscreen ? 'p-0 w-screen h-[100dvh] overflow-hidden' : 'p-2 sm:p-5 md:p-6 overflow-hidden'
         }`}
+      style={{
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+      }}
     >
       {/* Backdrop overlay (only active when not in edge-to-edge fullscreen) */}
       {!isFullscreen && (

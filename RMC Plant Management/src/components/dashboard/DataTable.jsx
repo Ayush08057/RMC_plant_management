@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import StatusBadge from './StatusBadge';
-import { ChevronLeft, ChevronRight, Search, Inbox, Maximize2, Minimize2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Inbox, Maximize2, Minimize2, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function DataTable({
   title,
@@ -14,6 +14,10 @@ export default function DataTable({
   itemsPerPage = 6,
   renderMobileCard = null,
   emptyMessage = 'No records located',
+  noMatchesMessage = 'No matching orders found.',
+  isLoading = false,
+  error = null,
+  onRetry = null,
   actions = null,
   onRowClick = null,
   allowFullscreen = true,
@@ -82,15 +86,21 @@ export default function DataTable({
   // Filter data based on query
   const filteredData = data.filter((item) => {
     if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
 
     if (searchKeys && searchKeys.length > 0) {
-      return searchKeys.some((k) => String(item[k] || '').toLowerCase().includes(query));
+      return searchKeys.some((k) => {
+        const val = item[k];
+        return val !== undefined && val !== null && String(val).toLowerCase().includes(query);
+      });
     }
 
-    return Object.values(item).some((val) =>
-      String(val).toLowerCase().includes(query)
-    );
+    return Object.values(item).some((val) => {
+      if (typeof val === 'string' || typeof val === 'number') {
+        return String(val).toLowerCase().includes(query);
+      }
+      return false;
+    });
   });
 
   // Pagination
@@ -102,8 +112,17 @@ export default function DataTable({
       ref={containerRef}
       className={
         isFullscreen
-          ? 'fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md p-2 sm:p-4 flex flex-col h-screen w-screen overflow-hidden animate-in fade-in duration-200'
+          ? 'fixed inset-0 z-[9999] app-modal-backdrop p-2 sm:p-4 flex flex-col h-screen w-screen overflow-hidden animate-in fade-in duration-200'
           : 'w-full max-w-full min-w-0 relative flex flex-col'
+      }
+      style={
+        isFullscreen
+          ? {
+              backgroundColor: 'rgba(15, 23, 42, 0.45)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+            }
+          : undefined
       }
     >
       <div
@@ -149,8 +168,21 @@ export default function DataTable({
                     setCurrentPage(1);
                   }}
                   placeholder={searchPlaceholder}
-                  className={`w-full bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs ${compact ? 'pl-8 pr-2.5 py-1 sm:py-1.5' : 'pl-9 pr-3 py-1.5 sm:py-2'}`}
+                  className={`w-full bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs ${compact ? 'pl-8 pr-7 py-1 sm:py-1.5' : 'pl-9 pr-7 py-1.5 sm:py-2'}`}
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
             {actions}
@@ -188,7 +220,37 @@ export default function DataTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D4E4F7]">
-              {paginatedData.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={columns.length} className="py-14 text-center text-slate-700 bg-[#F5F9FF]">
+                    <div className="w-12 h-12 rounded-2xl bg-[#EAF3FF] border border-[#D4E4F7] flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                      <Loader2 className="w-6 h-6 text-[#1D5FA7] animate-spin" />
+                    </div>
+                    <div className="text-sm font-bold text-black tracking-tight">Loading records...</div>
+                    <p className="text-xs text-slate-500 mt-1">Connecting to plant telemetry and database</p>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={columns.length} className="py-14 text-center text-slate-700 bg-[#F5F9FF]">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                      <AlertCircle className="w-6 h-6 text-rose-600" />
+                    </div>
+                    <div className="text-sm font-bold text-black tracking-tight">{typeof error === 'string' ? error : 'Failed to retrieve records'}</div>
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Database request encountered an error or access restriction.</p>
+                    {onRetry && (
+                      <button
+                        type="button"
+                        onClick={onRetry}
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-xs font-semibold shadow-2xs cursor-pointer transition-all"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retry</span>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ) : paginatedData.length > 0 ? (
                 paginatedData.map((row, rIdx) => (
                   <tr
                     key={row.id || rIdx}
@@ -234,9 +296,13 @@ export default function DataTable({
                     <div className="w-12 h-12 rounded-2xl bg-[#EAF3FF] border border-[#D4E4F7] flex items-center justify-center mx-auto mb-3 shadow-2xs">
                       <Inbox className="w-6 h-6 text-[#1D5FA7]" />
                     </div>
-                    <div className="text-sm font-bold text-black tracking-tight">{emptyMessage}</div>
-                    {searchQuery && (
-                      <p className="text-xs text-slate-600 mt-1 font-medium">Try refining search query parameters</p>
+                    <div className="text-sm font-bold text-black tracking-tight">
+                      {searchQuery.trim() ? noMatchesMessage : emptyMessage}
+                    </div>
+                    {searchQuery.trim() ? (
+                      <p className="text-xs text-slate-600 mt-1 font-medium">Try refining search terms or clearing the search box</p>
+                    ) : (
+                      <p className="text-xs text-slate-500 mt-1 font-medium">New orders will appear as soon as they are scheduled</p>
                     )}
                   </td>
                 </tr>
@@ -247,7 +313,29 @@ export default function DataTable({
 
         {/* MOBILE CARD VIEW */}
         <div className={`block md:hidden p-3 space-y-3 w-full max-w-full bg-[#F5F9FF]/50 ${isFullscreen ? 'flex-1 overflow-y-auto' : ''}`}>
-          {paginatedData.length > 0 ? (
+          {isLoading ? (
+            <div className="py-10 text-center text-slate-700 bg-white rounded-xl border border-[#D4E4F7]">
+              <Loader2 className="w-7 h-7 mx-auto mb-2 text-[#1D5FA7] animate-spin" />
+              <div className="text-sm font-bold text-black">Loading records...</div>
+              <p className="text-xs text-slate-500 mt-1 font-medium">Fetching real-time plant telemetry</p>
+            </div>
+          ) : error ? (
+            <div className="py-10 text-center text-slate-700 bg-white rounded-xl border border-rose-200">
+              <AlertCircle className="w-8 h-8 mx-auto mb-2 text-rose-600" />
+              <div className="text-sm font-bold text-black">{typeof error === 'string' ? error : 'Failed to retrieve records'}</div>
+              <p className="text-xs text-slate-500 mt-1">Database request encountered an error</p>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1D5FA7] text-white text-xs font-semibold shadow-2xs cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry</span>
+                </button>
+              )}
+            </div>
+          ) : paginatedData.length > 0 ? (
             paginatedData.map((row, rIdx) => (
               <div
                 key={row.id || rIdx}
@@ -321,7 +409,12 @@ export default function DataTable({
           ) : (
             <div className="py-10 text-center text-slate-700 bg-white rounded-xl border border-[#D4E4F7]">
               <Inbox className="w-8 h-8 mx-auto mb-2 text-[#1D5FA7]" />
-              <div className="text-sm font-bold text-black">{emptyMessage}</div>
+              <div className="text-sm font-bold text-black">
+                {searchQuery.trim() ? noMatchesMessage : emptyMessage}
+              </div>
+              {searchQuery.trim() && (
+                <p className="text-xs text-slate-600 mt-1 font-medium">Try clearing or refining search terms</p>
+              )}
             </div>
           )}
         </div>

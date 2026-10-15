@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   MapPin, 
   Navigation, 
@@ -801,8 +802,15 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       </div>
 
       {/* Detail Dossier Modal for Selected Employee */}
-      {selectedEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+      {selectedEmployee && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-backdrop animate-fade-in"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
           <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden p-6 space-y-4 animate-pop-in">
             
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -941,7 +949,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

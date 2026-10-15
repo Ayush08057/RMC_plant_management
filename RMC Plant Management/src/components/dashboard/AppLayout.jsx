@@ -65,7 +65,7 @@ export default function AppLayout({
   }, []);
 
   return (
-    <div className="app-shell relative h-screen max-h-screen w-screen max-w-full overflow-hidden bg-[#F5F9FF] text-black flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
+    <div className="app-shell relative h-[100dvh] max-h-[100dvh] w-screen max-w-full overflow-hidden bg-[#F5F9FF] text-black flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
       {/* Sidebar Navigation */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -76,7 +76,7 @@ export default function AppLayout({
       />
 
       {/* Main Content Layout - Header strictly pinned at the top */}
-      <div className={`relative z-10 flex-1 h-screen max-h-screen flex flex-col transition-all duration-300 w-full max-w-full min-w-0 overflow-hidden ${
+      <div className={`relative z-10 flex-1 h-[100dvh] max-h-[100dvh] flex flex-col transition-all duration-300 w-full max-w-full min-w-0 overflow-hidden ${
         sidebarOpen ? 'md:pl-64' : 'md:pl-[68px]'
       }`}>
         {/* Top Header Bar - Fixed strictly to the upper part */}

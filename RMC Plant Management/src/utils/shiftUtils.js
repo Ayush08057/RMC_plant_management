@@ -111,4 +111,86 @@ export function formatShiftOption(shift) {
   const range = formatShiftRange(shift.startTime, shift.endTime);
   return `${name} (${range})`;
 }
+/**
+ * Splits any time string (12-hour or 24-hour) into 12-hour parts: hour ('01'-'12'), minute ('00'-'59'), ampm ('AM'/'PM').
+ * @param {string} timeStr - e.g. "09:00", "09:00 AM", "18:00", "06:00 PM", "20:30"
+ * @returns {{ hour: string, minute: string, ampm: 'AM'|'PM' }}
+ */
+export function splitTimeTo12Hr(timeStr) {
+  if (!timeStr) return { hour: '09', minute: '00', ampm: 'AM' };
+  const clean = String(timeStr).trim();
+
+  // Check if it already has AM or PM
+  const match12 = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)/i);
+  if (match12) {
+    let h = parseInt(match12[1], 10);
+    if (isNaN(h) || h < 1) h = 12;
+    if (h > 12) h = h % 12 || 12;
+    const m = match12[2].padStart(2, '0');
+    const ampm = match12[3].toUpperCase();
+    return {
+      hour: String(h).padStart(2, '0'),
+      minute: m,
+      ampm: ampm === 'PM' ? 'PM' : 'AM',
+    };
+  }
+
+  // Check 24-hour HH:mm
+  const match24 = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (match24) {
+    let h = parseInt(match24[1], 10);
+    const m = match24[2].padStart(2, '0');
+    if (isNaN(h)) h = 9;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return {
+      hour: String(h).padStart(2, '0'),
+      minute: m,
+      ampm,
+    };
+  }
+
+  return { hour: '09', minute: '00', ampm: 'AM' };
+}
+
+/**
+ * Builds a standardized 12-hour time string with AM/PM (e.g. "09:00 AM", "06:00 PM").
+ * @param {string|number} hour - 1 to 12
+ * @param {string|number} minute - 0 to 59
+ * @param {string} ampm - 'AM' or 'PM'
+ * @returns {string} e.g. "09:00 AM"
+ */
+export function build12HrTime(hour, minute, ampm) {
+  let h = parseInt(hour, 10);
+  if (isNaN(h) || h < 1) h = 12;
+  if (h > 12) h = h % 12 || 12;
+  const m = String(minute !== undefined && minute !== null ? minute : '00').padStart(2, '0');
+  const period = String(ampm || 'AM').toUpperCase() === 'PM' ? 'PM' : 'AM';
+  return `${String(h).padStart(2, '0')}:${m} ${period}`;
+}
+
+/**
+ * Converts a 12-hour or 24-hour time string to 24-hour format "HH:mm".
+ * @param {string} timeStr - e.g. "09:00 AM" or "06:00 PM"
+ * @returns {string} e.g. "09:00" or "18:00"
+ */
+export function convertTo24Hr(timeStr) {
+  if (!timeStr) return '09:00';
+  const clean = String(timeStr).trim();
+  const match = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*([AP]M))?/i);
+  if (!match) return '09:00';
+
+  let h = parseInt(match[1], 10);
+  const m = match[2].padStart(2, '0');
+  const ampm = match[3] ? match[3].toUpperCase() : null;
+
+  if (ampm === 'PM' && h < 12) {
+    h += 12;
+  } else if (ampm === 'AM' && h === 12) {
+    h = 0;
+  }
+  return `${String(h).padStart(2, '0')}:${m}`;
+}
+
 

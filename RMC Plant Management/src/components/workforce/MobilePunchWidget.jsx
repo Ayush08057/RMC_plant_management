@@ -25,6 +25,8 @@ export default function MobilePunchWidget({
 }) {
   const { user } = useAuth();
   const { attendance, employees, checkIn, checkOut, dailyWork, submitDailyWork } = useWorkforce();
+  const isAdmin = user?.role === 'Admin' || user?.role === 'Owner / Director';
+  const isPlantManager = user?.role === 'Plant Manager' || user?.role === 'Plant Incharge';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -48,17 +50,24 @@ export default function MobilePunchWidget({
     return () => clearInterval(timer);
   }, []);
 
-  // Master list of real workforce employees
+  // Master list of real workforce employees (scoped)
   const allEmployeesList = useMemo(() => {
-    return employees || [];
-  }, [employees]);
+    let list = employees || [];
+    if (!isAdmin) {
+      list = list.filter((e) => {
+        const empRole = (e.role || '').toLowerCase();
+        const empId = (e.employeeId || e.id || '').toUpperCase();
+        return empRole !== 'admin' && empId !== 'ADM-001' && empId !== 'USR-ADMIN-001';
+      });
+    }
+    return list;
+  }, [employees, isAdmin]);
 
-  const isAdmin = user?.role === 'Admin';
   const effectiveLockedId = lockedEmployeeId || (!isAdmin ? (user?.employeeId || user?.id) : null);
   const isLocked = Boolean(effectiveLockedId) || roleLocked || user?.role === 'Driver';
 
   // Selected Employee ID to clock for
-  const defaultEmpId = effectiveLockedId || user?.employeeId || user?.id || (user?.role === 'Driver' ? 'EMP-505' : 'ADM-001');
+  const defaultEmpId = effectiveLockedId || user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
   const [selectedEmpId, setSelectedEmpId] = useState(defaultEmpId);
 
   useEffect(() => {
@@ -207,7 +216,7 @@ export default function MobilePunchWidget({
 
     const selfie = capturedSelfie || userTodayRecord?.selfieUrl;
     if (!selfie) {
-      setError('⚠️ Please capture your photo first before Punch In (कृपया आधी फोटो काढा)');
+      setError('⚠️ Please capture your photo first before Punch In');
       return;
     }
 
@@ -218,7 +227,7 @@ export default function MobilePunchWidget({
         selfieUrl: selfie,
         remarks: 'Mobile Clock-in verified with photo',
       });
-      setSuccessMsg(`✓ Punched In Successfully at ${formatToIndian12Hr(rec.punchIn)}! (हाजेरी यशस्वीरित्या नोंदवली)`);
+      setSuccessMsg(`✓ Punched In Successfully at ${formatToIndian12Hr(rec.punchIn)}!`);
       if (onPunched) onPunched();
     } catch (err) {
       setError(err.message || 'Punch In failed. Please try again.');
@@ -262,7 +271,7 @@ export default function MobilePunchWidget({
           : staffReport.workDescription,
       });
 
-      setSuccessMsg(`✓ Shift Concluded & Punched Out at ${formatToIndian12Hr(rec.punchOut)}! Total Duty: ${rec.workingHours} Hours. (ड्युटी समाप्त झाली)`);
+      setSuccessMsg(`✓ Shift Concluded & Punched Out at ${formatToIndian12Hr(rec.punchOut)}! Total Duty: ${rec.workingHours} Hours.`);
       if (onPunched) onPunched();
     } catch (err) {
       setError(err.message || 'Punch Out failed. Please try again.');
@@ -304,7 +313,7 @@ export default function MobilePunchWidget({
           <div>
             {!hasPunchedIn ? (
               <span className="text-[11px] font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
-                Not Clocked In (सुरुवात करा)
+                Not Clocked In
               </span>
             ) : !hasPunchedOut ? (
               <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
@@ -335,7 +344,7 @@ export default function MobilePunchWidget({
       )}
 
       {/* ========================================================
-          PART 1: PUNCH IN (Start of Shift / ड्युटी सुरू करा)
+          PART 1: PUNCH IN (Start of Shift)
           ======================================================== */}
       <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
         hasPunchedIn 
@@ -348,7 +357,7 @@ export default function MobilePunchWidget({
               1
             </span>
             <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-              Part 1: Punch In (कामाची सुरुवात / हाजेरी)
+              Part 1: Punch In (Start of Shift)
             </h4>
           </div>
           {hasPunchedIn && (
@@ -377,7 +386,7 @@ export default function MobilePunchWidget({
                 )}
                 <div>
                   <span className="text-xs font-black text-slate-900 block">
-                    {(capturedSelfie || userTodayRecord?.selfieUrl) ? '✓ Photo Captured (फोटो घेतला आहे)' : 'Take Face Photo (सेल्फी फोटो काढा)'}
+                    {(capturedSelfie || userTodayRecord?.selfieUrl) ? '✓ Photo Captured' : 'Take Face Photo'}
                   </span>
                   <span className="text-[11px] text-slate-500 block">
                     {(capturedSelfie || userTodayRecord?.selfieUrl) ? 'Ready for Punch In.' : 'Required for attendance verification.'}
@@ -392,7 +401,7 @@ export default function MobilePunchWidget({
                   className="px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm w-full sm:w-auto"
                 >
                   <Camera className="w-4 h-4" />
-                  <span>{(capturedSelfie || userTodayRecord?.selfieUrl) ? 'Retake Photo (पुन्हा फोटो काढा)' : 'Take Photo (फोटो काढा)'}</span>
+                  <span>{(capturedSelfie || userTodayRecord?.selfieUrl) ? 'Retake Photo' : 'Take Photo'}</span>
                 </button>
               </div>
             </div>
@@ -405,7 +414,7 @@ export default function MobilePunchWidget({
                   <canvas ref={canvasRef} className="hidden" />
                   <div className="absolute inset-4 rounded-full border-2 border-white/70 pointer-events-none flex items-center justify-center">
                     <span className="text-[10px] font-mono text-white bg-black/60 px-2 py-0.5 rounded-full">
-                      Align Face (चेहरा समोर ठेवा)
+                      Align Face
                     </span>
                   </div>
                 </div>
@@ -416,7 +425,7 @@ export default function MobilePunchWidget({
                     className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black flex items-center gap-2 cursor-pointer shadow-md"
                   >
                     <Camera className="w-4 h-4" />
-                    <span>Snap Photo (फोटो घ्या)</span>
+                    <span>Snap Photo</span>
                   </button>
                   <button
                     type="button"
@@ -441,7 +450,7 @@ export default function MobilePunchWidget({
               }`}
             >
               <Play className="w-5 h-5 fill-current" />
-              <span>PUNCH IN (हाजेरी लावा)</span>
+              <span>PUNCH IN</span>
             </button>
             {!(capturedSelfie || userTodayRecord?.selfieUrl) && (
               <p className="text-[11px] text-center text-amber-700 font-semibold">
@@ -452,13 +461,13 @@ export default function MobilePunchWidget({
         ) : (
           <div className="flex items-center justify-between text-xs text-emerald-900 font-semibold bg-emerald-100/60 p-3 rounded-xl border border-emerald-200">
             <span>✓ Checked in today at <strong>{formatToIndian12Hr(userTodayRecord.punchIn)}</strong></span>
-            <span>Shift in progress (ड्युटी चालू आहे)</span>
+            <span>Shift in progress</span>
           </div>
         )}
       </div>
 
       {/* ========================================================
-          PART 2: DAILY REPORT & PUNCH OUT (End of Shift / कामाचा शेवट)
+          PART 2: DAILY REPORT & PUNCH OUT (End of Shift)
           ======================================================== */}
       <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
         hasPunchedOut 
@@ -473,7 +482,7 @@ export default function MobilePunchWidget({
               2
             </span>
             <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-              Part 2: Work Report & Punch Out (अहवाल आणि ड्युटी समाप्त)
+              Part 2: Work Report & Punch Out
             </h4>
           </div>
           {hasPunchedOut && (
@@ -486,12 +495,12 @@ export default function MobilePunchWidget({
 
         {!hasPunchedIn ? (
           <p className="text-xs text-slate-500 font-medium py-2">
-            🔒 Unlocked after you Punch In above (आधी वर हाजेरी लावा).
+            🔒 Unlocked after you Punch In above.
           </p>
         ) : !hasPunchedOut ? (
           <form onSubmit={handlePunchOutWithReport} className="space-y-4 pt-1">
             <p className="text-xs text-slate-600 font-medium">
-              Enter your work summary below before Punch Out (ड्युटी संपण्यापूर्वी आजचे काम भरा):
+              Enter your work summary below before Punch Out:
             </p>
 
             {/* Simple Report Inputs */}
@@ -499,7 +508,7 @@ export default function MobilePunchWidget({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Mixer Vehicle No (गाडी नंबर) *
+                    Mixer Vehicle No *
                   </label>
                   <input
                     type="text"
@@ -511,7 +520,7 @@ export default function MobilePunchWidget({
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Trips Completed (एकूण फेऱ्या) *
+                    Trips Completed *
                   </label>
                   <input
                     type="number"
@@ -525,7 +534,7 @@ export default function MobilePunchWidget({
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Delivered Concrete m³ (एकूण माल) *
+                    Delivered Concrete m³ *
                   </label>
                   <input
                     type="number"
@@ -539,7 +548,7 @@ export default function MobilePunchWidget({
                 </div>
                 <div className="sm:col-span-3">
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Remarks / Drum Wash (टीप / ड्रम वॉश)
+                    Remarks / Drum Wash
                   </label>
                   <input
                     type="text"
@@ -554,7 +563,7 @@ export default function MobilePunchWidget({
               <div className="space-y-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Today's Work Summary (आजचे काम) *
+                    Today's Work Summary *
                   </label>
                   <input
                     type="text"
@@ -574,14 +583,14 @@ export default function MobilePunchWidget({
               className="w-full py-4 px-4 rounded-2xl text-sm sm:text-base font-black text-white bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-700 hover:to-red-700 active:scale-[0.99] shadow-md shadow-rose-500/25 ring-2 ring-rose-400/40 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
             >
               <Square className="w-5 h-5 fill-current" />
-              <span>SUBMIT REPORT & PUNCH OUT (ड्युटी समाप्त करा)</span>
+              <span>SUBMIT REPORT & PUNCH OUT</span>
             </button>
           </form>
         ) : (
           <div className="p-4 rounded-xl bg-blue-100/70 border border-blue-200 text-xs text-blue-950 font-medium space-y-1">
             <div className="font-black text-sm text-blue-900 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-blue-700" />
-              <span>Shift Finished for Today! (आजची ड्युटी यशस्वीरित्या समाप्त झाली)</span>
+              <span>Shift Finished for Today!</span>
             </div>
             <p>
               Clock In: <strong>{formatToIndian12Hr(userTodayRecord.punchIn)}</strong> • Clock Out: <strong>{formatToIndian12Hr(userTodayRecord.punchOut)}</strong> • Total Duty: <strong>{userTodayRecord.workingHours} Hours</strong>

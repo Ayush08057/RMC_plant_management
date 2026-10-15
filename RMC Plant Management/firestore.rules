@@ -50,7 +50,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Operational Workforce Collections
+    // Operational Workforce & Plant Operations Collections
+    match /orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin() || isManager();
+    }
+    
     match /attendance/{attId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();
@@ -117,6 +123,11 @@ service cloud.firestore {
     match /plants_CMP-SM-001/{plantId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+    }
+    match /orders_CMP-SM-001/{orderId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin() || isManager();
     }
     match /attendance_CMP-SM-001/{attId} {
       allow read: if isAuthenticated();

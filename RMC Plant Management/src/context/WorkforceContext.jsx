@@ -66,6 +66,7 @@ function createEmptyCompanyData(companyId) {
       payrollRecords: [],
       notifications: [],
       trips: [],
+      orders: [],
     };
   }
 
@@ -84,6 +85,7 @@ function createEmptyCompanyData(companyId) {
     payrollRecords: [],
     notifications: [],
     trips: [],
+    orders: [],
   };
 }
 
@@ -208,6 +210,7 @@ export const WorkforceProvider = ({ children }) => {
     syncCollection(COLLECTIONS.LOANS, 'loans');
     syncCollection(COLLECTIONS.DAILY_WORK, 'dailyWork');
     syncCollection(COLLECTIONS.DOCUMENTS, 'documents');
+    syncCollection(COLLECTIONS.ORDERS, 'orders');
 
     return () => {
       isCurrentCompany = false;
@@ -735,6 +738,120 @@ export const WorkforceProvider = ({ children }) => {
     );
   };
 
+  // Concrete Orders & Logistics Management (Plant Scheduling & Dispatch)
+  const createOrder = (orderData) => {
+    const orderId = orderData.orderId || orderData.id || `ORD-${Date.now().toString().slice(-6)}`;
+    let nowIstDate;
+    try {
+      nowIstDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(new Date());
+    } catch {
+      nowIstDate = new Date().toISOString().split('T')[0];
+    }
+
+    const clientName = orderData.client || orderData.customer || 'Standard Client';
+    const projectName = orderData.project || orderData.projectName || 'Site Project';
+    const grade = orderData.grade || orderData.mixGrade || orderData.concreteGrade || 'M25';
+    const rawVolume = parseFloat(orderData.volume || orderData.qty) || 6.0;
+    const qtyStr = orderData.qty
+      ? (String(orderData.qty).includes('m³') ? String(orderData.qty) : `${orderData.qty} m³`)
+      : `${rawVolume} m³`;
+
+    const newOrder = {
+      id: orderId,
+      orderId: orderId,
+      plant: orderData.plant || 'Main Plant Unit #01',
+      plantId: orderData.plantId || 'PLANT-001',
+      client: clientName,
+      customer: clientName,
+      project: projectName,
+      projectName: projectName,
+      grade: grade,
+      mixGrade: grade,
+      concreteGrade: grade,
+      qty: qtyStr,
+      volume: rawVolume,
+      site: orderData.site || orderData.pourLocation || orderData.siteAddress || 'Main Pour Location',
+      pourLocation: orderData.pourLocation || orderData.site || 'Main Pour Location',
+      timeSlot: orderData.timeSlot || orderData.timeWindow || '09:00 AM - 11:00 AM',
+      timeWindow: orderData.timeWindow || orderData.timeSlot || '09:00 AM - 11:00 AM',
+      priority: orderData.priority || 'Normal',
+      status: orderData.status || 'Scheduled',
+      scheduledDate: orderData.scheduledDate || nowIstDate,
+      createdAt: orderData.createdAt || new Date().toISOString(),
+      createdBy: user?.name || 'Authorized User',
+      vehicle: orderData.vehicle || '',
+      driver: orderData.driver || '',
+      notes: orderData.notes || '',
+    };
+
+    saveDocumentWithId(COLLECTIONS.ORDERS, newOrder.id, newOrder).catch((err) => {
+      console.warn('Failed to sync new order to Cloud Firestore:', err.message);
+    });
+
+    setData((prev) => {
+      const existing = prev.orders || [];
+      const filtered = existing.filter((o) => o.id !== newOrder.id && o.orderId !== newOrder.id);
+      return {
+        ...prev,
+        orders: [newOrder, ...filtered],
+      };
+    });
+
+    addAuditLog(`Created Concrete Order (${newOrder.id})`, 'Orders & Scheduling', `${newOrder.client} - ${newOrder.grade} (${newOrder.qty})`);
+    addNotification({
+      title: 'Order Scheduled',
+      desc: `Order ${newOrder.id} for ${newOrder.client} (${newOrder.grade}) scheduled.`,
+      type: 'info',
+      category: 'order',
+    });
+
+    return newOrder;
+  };
+
+  const updateOrder = (orderId, fields) => {
+    updateDocument(COLLECTIONS.ORDERS, orderId, fields).catch((err) => {
+      console.warn('Failed to update order in Cloud Firestore:', err.message);
+    });
+
+    setData((prev) => ({
+      ...prev,
+      orders: (prev.orders || []).map((o) => (o.id === orderId || o.orderId === orderId ? { ...o, ...fields } : o)),
+    }));
+
+    addAuditLog(`Updated Concrete Order (${orderId})`, 'Orders & Scheduling', `Updated: ${Object.keys(fields).join(', ')}`);
+  };
+
+  const cancelOrder = (orderId, reason = 'Cancelled by operations') => {
+    const cancellationFields = {
+      status: 'Cancelled',
+      cancelReason: reason,
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: user?.name || 'Plant Manager',
+    };
+
+    updateDocument(COLLECTIONS.ORDERS, orderId, cancellationFields).catch((err) => {
+      console.warn('Failed to cancel order in Cloud Firestore:', err.message);
+    });
+
+    setData((prev) => ({
+      ...prev,
+      orders: (prev.orders || []).map((o) => (o.id === orderId || o.orderId === orderId ? { ...o, ...cancellationFields } : o)),
+    }));
+
+    addAuditLog(`Cancelled Concrete Order (${orderId})`, 'Orders & Scheduling', `Reason: ${reason}`);
+    addNotification({
+      title: 'Order Cancelled',
+      desc: `Order ${orderId} was cancelled. Reason: ${reason}`,
+      type: 'warning',
+      category: 'order',
+    });
+  };
+
   const updateEmployee = (id, fields) => {
     // Update in Cloud Firestore
     updateDocument(COLLECTIONS.EMPLOYEES, id, fields).catch(() => {});
@@ -957,7 +1074,8 @@ export const WorkforceProvider = ({ children }) => {
   const checkIn = (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
-    const targetId = employeeId || user?.employeeId || user?.id || 'ADM-001';
+    const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
+    const targetId = employeeId || defaultId;
     
     // 1. Search in data.employees
     let emp = data.employees.find(
@@ -1110,7 +1228,8 @@ export const WorkforceProvider = ({ children }) => {
   const checkOut = (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
-    const targetId = employeeId || user?.employeeId || user?.id || 'ADM-001';
+    const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
+    const targetId = employeeId || defaultId;
     
     let emp = data.employees.find(
       (e) => e.id === targetId || 
@@ -2110,6 +2229,7 @@ export const WorkforceProvider = ({ children }) => {
     hrSettings: data.hrSettings,
     notifications: data.notifications,
     trips: data.trips || [],
+    orders: data.orders || [],
     pendingApprovals,
     EMPLOYEE_STATUS,
 
@@ -2126,6 +2246,11 @@ export const WorkforceProvider = ({ children }) => {
     addTrip,
     updateTripMilestone,
     getDriverTrips,
+
+    // Concrete Orders & Plant Scheduling
+    createOrder,
+    updateOrder,
+    cancelOrder,
 
     // Plant Actions
     addPlant,

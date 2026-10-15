@@ -27,6 +27,7 @@ export const COLLECTIONS = {
   COMPANIES: 'companies',
   EMPLOYEES: 'employees',
   PLANTS: 'plants',
+  ORDERS: 'orders',
   ATTENDANCE: 'attendance',
   SHIFTS: 'shifts',
   DAILY_WORK: 'dailyWork',

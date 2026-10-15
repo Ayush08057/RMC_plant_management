@@ -43,7 +43,12 @@ export default function LogoutConfirmModal({
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-backdrop transition-opacity duration-200"
+      style={{
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget && !isLoggingOut) {
           onClose();

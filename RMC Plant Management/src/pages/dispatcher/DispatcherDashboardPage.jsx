@@ -20,6 +20,7 @@ import {
   Send
 } from 'lucide-react';
 import { MOCK_DISPATCHER_DATA } from '../../data/mockDashboardData';
+import { useWorkforce } from '../../context/WorkforceContext';
 import AttendanceManagementView from '../../components/workforce/AttendanceManagementView';
 import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
@@ -32,6 +33,7 @@ export default function DispatcherDashboardPage() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedDispatch, setSelectedDispatch] = useState(null);
 
+  const { createOrder } = useWorkforce();
   const [dispatches, setDispatches] = useState(MOCK_DISPATCHER_DATA.dispatchQueue);
   const { kpis, fleetList } = MOCK_DISPATCHER_DATA;
 
@@ -47,18 +49,38 @@ export default function DispatcherDashboardPage() {
 
   const handleCreateDispatch = (e) => {
     e.preventDefault();
+    const dspId = `DSP-${Math.floor(8828 + Math.random() * 80)}`;
+    const ordId = `ORD-${Math.floor(8828 + Math.random() * 80)}`;
     const created = {
-      id: `DSP-${Math.floor(8828 + Math.random() * 80)}`,
+      id: dspId,
+      orderId: ordId,
       customer: newDispatch.customer,
+      client: newDispatch.customer,
       site: newDispatch.site,
+      pourLocation: newDispatch.site,
       grade: newDispatch.grade,
-      qty: newDispatch.qty,
+      mixGrade: newDispatch.grade,
+      qty: newDispatch.qty.includes('m³') ? newDispatch.qty : `${newDispatch.qty} m³`,
+      volume: parseFloat(newDispatch.qty) || 0,
       vehicle: newDispatch.vehicle,
       driver: newDispatch.driver,
       loadTime: 'Just Now',
       eta: '45 mins',
       status: 'Loading',
+      timeSlot: '10:00 AM - 12:00 PM',
+      timeWindow: '10:00 AM - 12:00 PM',
+      priority: 'Normal',
+      plant: 'Main Plant Unit #01',
     };
+
+    if (createOrder) {
+      createOrder({
+        ...created,
+        id: ordId,
+        orderId: ordId,
+      });
+    }
+
     setDispatches([created, ...dispatches]);
     setShowCreateModal(false);
     setToastMessage(`Dispatch ${created.id} initiated for vehicle ${created.vehicle}!`);

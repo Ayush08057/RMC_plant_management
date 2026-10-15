@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ReceiptText, 
@@ -191,7 +191,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   useExclusiveModal(showBillFormModal, () => setShowBillFormModal(false));
   useExclusiveModal(showPurchaseFormModal, () => setShowPurchaseFormModal(false));
   useExclusiveModal(isTableFullScreen, () => setIsTableFullScreen(false));
-  useExclusiveModal(Boolean(printingBill), () => setPrintingBill(null));
 
   const showToast = (msg) => {
     setNotification(msg);
@@ -244,6 +243,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   });
 
   const [billMobileError, setBillMobileError] = useState(null);
+  const [billFormErrors, setBillFormErrors] = useState({});
+  const customerNameInputRef = useRef(null);
 
   // Strict 10-Digit Mobile Handler
   const handleMobileChange = (e) => {
@@ -296,6 +297,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const handleOpenCreateBill = () => {
     setEditingBill(null);
     setBillMobileError(null);
+    setBillFormErrors({});
     setBillForm({
       billNo: `25-26/${bills.length + 115}`,
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -493,6 +495,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const openEditBillModal = (bill, authorizedByOtp = false) => {
     setEditingBill({ ...bill, authorizedByOtp });
     setBillMobileError(null);
+    setBillFormErrors({});
     const rawMobile = (bill.customerMobile || '').replace(/\D/g, '');
     const cleanMobile = rawMobile.length === 12 && rawMobile.startsWith('91') ? rawMobile.slice(2) : rawMobile.slice(-10);
     setBillForm({
@@ -569,33 +572,49 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
   // Save / Update Bill
   const handleSaveBill = (e) => {
-    e.preventDefault();
-    if (!billForm.customerName.trim()) {
-      showToast('⚠️ Please enter party/client name.');
-      return;
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
 
-    // Strict 10-Digit Mobile Number Validation
-    const rawMobile = (billForm.customerMobile || '').replace(/\D/g, '');
-    if (rawMobile) {
-      if (rawMobile.length !== 10) {
-        setBillMobileError(`Incomplete mobile number (${rawMobile.length}/10 digits). Must be exactly 10 digits.`);
-        showToast(`⚠️ Please enter a complete 10-digit mobile number (${rawMobile.length}/10 entered)`);
-        return;
-      }
-      if (!/^[6-9]/.test(rawMobile)) {
-        setBillMobileError('Invalid mobile number: Must start with 6, 7, 8, or 9 (Indian cellular standard)');
-        showToast('⚠️ Invalid mobile number: Must start with 6, 7, 8, or 9');
-        return;
-      }
-    }
+    setBillFormErrors({});
     setBillMobileError(null);
 
-    const formattedMobile = rawMobile ? `+91 ${rawMobile}` : '';
-    const totalAmount = billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+    // Fallback party name to 'Cash Customer' if empty
+    const partyName = (billForm.customerName || '').trim() || 'Cash Customer';
+
+    // Format mobile number safely
+    let cleanMobile = (billForm.customerMobile || '').replace(/\D/g, '');
+    if (cleanMobile.length === 12 && cleanMobile.startsWith('91')) {
+      cleanMobile = cleanMobile.slice(2);
+    }
+    const formattedMobile = cleanMobile.length === 10 ? `+91 ${cleanMobile}` : (cleanMobile || '');
+
+    // Ensure valid items
+    const validItems = (billForm.items && billForm.items.length > 0)
+      ? billForm.items.map((it, idx) => {
+          const qty = Number(it.qty) || 1;
+          const rate = Number(it.rate) || 4200;
+          return {
+            sn: idx + 1,
+            material: (it.material || '').trim() || 'M25 Concrete',
+            qty,
+            unit: it.unit || 'm³',
+            rate,
+            total: qty * rate,
+          };
+        })
+      : [{ sn: 1, material: 'M25 Concrete', qty: 6, unit: 'm³', rate: 4200, total: 25200 }];
+
+    const totalAmount = validItems.reduce((s, it) => s + (Number(it.total) || 0), 0);
     const trans = Number(billForm.transportation) || 0;
     const finalAmount = totalAmount + trans;
     const amountInWords = numberToIndianWords(finalAmount);
+
+    const billNumber = (billForm.billNo || '').trim() || `25-26/${bills.length + 115}`;
+    const billDate = (billForm.date || '').trim() || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const billVehicle = (billForm.vehicle || '').trim() || 'MH-10-CR-1212';
+    const billPlace = (billForm.place || '').trim() || 'Aaudumbar';
 
     if (editingBill) {
       // Update existing bill
@@ -604,7 +623,13 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           return {
             ...b,
             ...billForm,
+            billNo: billNumber,
+            date: billDate,
+            vehicle: billVehicle,
+            place: billPlace,
+            customerName: partyName,
             customerMobile: formattedMobile,
+            items: validItems,
             totalAmount,
             transportation: trans,
             finalAmount,
@@ -615,13 +640,30 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         return b;
       });
       setBills(updatedList);
-      showToast(`✓ Bill #${billForm.billNo} updated successfully!`);
+      try {
+        localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedList));
+      } catch (err) {
+        console.error('Storage error:', err);
+      }
+      showToast(`✓ Bill #${billNumber} updated successfully!`);
+      const updatedItem = updatedList.find((b) => b.id === editingBill.id);
+      setShowBillFormModal(false);
+      setEditingBill(null);
+      if (updatedItem) {
+        setPrintingBill(updatedItem);
+      }
     } else {
       // Create new bill
       const newBill = {
-        id: `BILL-${Date.now()}`,
+        id: `BILL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         ...billForm,
+        billNo: billNumber,
+        date: billDate,
+        vehicle: billVehicle,
+        place: billPlace,
+        customerName: partyName,
         customerMobile: formattedMobile,
+        items: validItems,
         type: 'Cash Memo',
         totalAmount,
         transportation: trans,
@@ -630,11 +672,21 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      setBills([newBill, ...bills]);
-      showToast(`✓ Cash Memo #${newBill.billNo} generated successfully! (10-Minute direct edit window active)`);
+      const updatedList = [newBill, ...bills];
+      setBills(updatedList);
+      try {
+        localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedList));
+      } catch (err) {
+        console.error('Storage error:', err);
+      }
+      showToast(`✓ Cash Memo #${newBill.billNo} generated successfully!`);
+      setShowBillFormModal(false);
+      setEditingBill(null);
+      setPrintingBill(newBill);
     }
 
-    setShowBillFormModal(false);
+    setActiveSection('cash_memos');
+    setSearchQuery('');
   };
 
   // Save / Update Plant Material Purchase
@@ -700,12 +752,17 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   return (
     <div className="space-y-5 text-xs text-slate-800">
       
-      {/* Toast Notification Banner */}
-      {notification && (
-        <div className="fixed top-5 right-5 z-50 p-4 rounded-2xl bg-slate-900 text-white border border-emerald-500 shadow-xl flex items-center gap-3 animate-pop-in">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+      {/* Toast Notification Banner (Rendered via Portal so it is always on top) */}
+      {notification && typeof document !== 'undefined' && createPortal(
+        <div className="fixed top-5 right-5 z-[100000] p-4 rounded-2xl bg-slate-900/95 text-white border border-slate-700 shadow-2xl flex items-center gap-3 animate-pop-in backdrop-blur-md">
+          {notification.startsWith('⚠️') ? (
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          )}
           <span className="font-semibold text-xs">{notification}</span>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Navigation Tabs & Action Toolbar - Responsive Grid on Mobile */}
@@ -1367,8 +1424,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {/* ========================================================
           MODAL: OWNER MOBILE OTP VERIFICATION (10-MIN GATE)
           ======================================================== */}
-      {otpModalOpen && targetItemForOtp && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-hidden animate-pop-in">
+      {otpModalOpen && targetItemForOtp && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] app-modal-backdrop flex items-center justify-center p-3 sm:p-4 overflow-hidden animate-pop-in"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-lg w-full flex flex-col overflow-hidden text-slate-900 my-auto">
             {/* Modal Header - Sleek Executive Navy / Slate Theme */}
             <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 p-4 sm:p-4.5 text-white flex items-center justify-between shrink-0 border-b border-white/10">
@@ -1544,14 +1608,22 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================
           MODAL: CREATE / EDIT CASH MEMO BILL FORM (REDESIGNED)
           ======================================================== */}
-      {showBillFormModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in">
+      {showBillFormModal && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] app-modal-backdrop flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
           <div className="bg-white rounded-3xl border border-[#D4E4F7] shadow-2xl max-w-4xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] flex flex-col my-auto overflow-hidden text-slate-900 text-xs">
             
             {/* Header: Executive Royal Navy with Amber Accent Bar */}
@@ -1607,7 +1679,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             </div>
 
             {/* Bill Form Content */}
-            <form onSubmit={handleSaveBill} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-slate-50/50">
+            <form onSubmit={handleSaveBill} noValidate className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-slate-50/50">
               
               {/* Section 1: Memo Metadata & Dispatch Info */}
               <div className="bg-white rounded-2xl border border-[#D4E4F7] p-4 shadow-2xs space-y-3">
@@ -1633,7 +1705,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         value={billForm.billNo}
                         onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
-                        required
                       />
                     </div>
                   </div>
@@ -1649,7 +1720,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         value={billForm.date}
                         onChange={(e) => setBillForm({ ...billForm, date: e.target.value })}
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
-                        required
                       />
                     </div>
                   </div>
@@ -1682,7 +1752,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         onChange={(e) => setBillForm({ ...billForm, place: e.target.value })}
                         placeholder="e.g. Aaudumbar"
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-medium text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
-                        required
                       />
                     </div>
                   </div>
@@ -1703,20 +1772,55 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                      Party / Client Name <span className="text-rose-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Party / Client Name <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBillForm((prev) => ({ ...prev, customerName: 'Cash Customer' }));
+                            setBillFormErrors((prev) => ({ ...prev, customerName: null }));
+                          }}
+                          className="text-[10px] font-bold text-[#1D5FA7] hover:text-white bg-blue-50 hover:bg-[#1D5FA7] px-2 py-0.5 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+                        >
+                          + Cash Sale
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBillForm((prev) => ({ ...prev, customerName: 'Walk-in Client' }));
+                            setBillFormErrors((prev) => ({ ...prev, customerName: null }));
+                          }}
+                          className="text-[10px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          + Walk-in
+                        </button>
+                      </div>
+                    </div>
                     <div className="relative">
                       <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
+                        ref={customerNameInputRef}
                         type="text"
                         value={billForm.customerName}
-                        onChange={(e) => setBillForm({ ...billForm, customerName: e.target.value })}
-                        placeholder="e.g. Patil Infrastructure & Builders"
+                        onChange={(e) => {
+                          setBillForm({ ...billForm, customerName: e.target.value });
+                          if (billFormErrors.customerName) {
+                            setBillFormErrors((prev) => ({ ...prev, customerName: null }));
+                          }
+                        }}
+                        placeholder="e.g. Patil Infrastructure (or leave blank for Cash Customer)"
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 text-slate-900 font-bold focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
-                        required
                       />
                     </div>
+                    {billFormErrors.customerName && (
+                      <p className="mt-1 text-[11px] font-semibold text-rose-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{billFormErrors.customerName}</span>
+                      </p>
+                    )}
                   </div>
 
                   {/* 10-Digit Mobile Number Validation Component */}
@@ -1878,7 +1982,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                               onChange={(e) => handleItemChange(idx, 'material', e.target.value)}
                               placeholder="e.g. M25 Concrete or Concrete Pump"
                               className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-slate-900 font-medium focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
-                              required
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -1888,7 +1991,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                               value={item.qty}
                               onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
                               className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-center font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
-                              required
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -1906,7 +2008,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                               value={item.rate}
                               onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
                               className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-right font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
-                              required
                             />
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-black text-slate-950 text-xs">
@@ -1996,35 +2097,56 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               </div>
 
               {/* Sticky Submit Bar */}
-              <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-200 bg-white -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-4 sm:p-5 shrink-0 rounded-b-3xl">
-                <button
-                  type="button"
-                  onClick={() => setShowBillFormModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Cancel / Close</span>
-                </button>
+              <div className="flex flex-col gap-2.5 pt-3 border-t border-slate-200 bg-white -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-4 sm:p-5 shrink-0 rounded-b-3xl">
+                {/* Form Errors Banner */}
+                {(billFormErrors.customerName || billFormErrors.customerMobile || billFormErrors.items || billFormErrors.general) && (
+                  <div className="w-full p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 animate-shake">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span className="font-semibold">
+                      {billFormErrors.customerName || billFormErrors.customerMobile || billFormErrors.items || billFormErrors.general}
+                    </span>
+                  </div>
+                )}
 
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#123B6D] to-[#1D5FA7] hover:from-[#0F2D54] hover:to-[#123B6D] shadow-md shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <ReceiptText className="w-4 h-4 text-amber-300" />
-                  <span>{editingBill ? 'Save & Update Cash Memo' : 'Generate Official Cash Memo'}</span>
-                </button>
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowBillFormModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Cancel / Close</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveBill}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#123B6D] to-[#1D5FA7] hover:from-[#0F2D54] hover:to-[#123B6D] shadow-md shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <ReceiptText className="w-4 h-4 text-amber-300" />
+                    <span>{editingBill ? 'Save & Update Cash Memo' : 'Generate Official Cash Memo'}</span>
+                  </button>
+                </div>
               </div>
 
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================
           MODAL: CREATE / EDIT PLANT MATERIAL PURCHASE FORM
           ======================================================== */}
-      {showPurchaseFormModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in">
+      {showPurchaseFormModal && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] app-modal-backdrop flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] flex flex-col my-auto overflow-hidden text-slate-900 text-xs">
             <div className="bg-slate-900 text-white p-3.5 sm:px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -2169,7 +2291,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================

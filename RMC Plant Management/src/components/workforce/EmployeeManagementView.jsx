@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Users,
   UserPlus,
@@ -113,8 +113,46 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
 
   const [formError, setFormError] = useState(null);
 
+  const isSuperAdmin = user?.role === 'Admin' || user?.role === 'Owner / Director';
+  const isPlantManager = user?.role === 'Plant Manager' || user?.role === 'Plant Incharge';
+
+  // Base employees list scoped to user's permissions - System Admin NEVER visible to Plant Manager
+  const visibleEmployees = useMemo(() => {
+    let list = employees || [];
+    if (!isSuperAdmin) {
+      list = list.filter((e) => {
+        const empRole = (e.role || '').toLowerCase();
+        const empId = (e.employeeId || e.id || '').toUpperCase();
+        const empName = (e.name || '').toLowerCase();
+        const isSysAdmin =
+          empRole === 'admin' ||
+          empRole.includes('executive administration') ||
+          empId === 'ADM-001' ||
+          empId === 'USR-ADMIN-001' ||
+          empName.includes('system admin');
+        return !isSysAdmin;
+      });
+    }
+    if (isPlantManager) {
+      list = list.filter((e) => {
+        const empRole = (e.role || '').toLowerCase();
+        const isPlantScope =
+          empRole.includes('plant') ||
+          empRole.includes('operator') ||
+          empRole.includes('driver') ||
+          empRole.includes('dispatcher') ||
+          empRole.includes('supervisor') ||
+          (e.plant && user?.plantLocation && e.plant === user.plantLocation) ||
+          e.employeeId === user?.employeeId ||
+          e.id === user?.id;
+        return isPlantScope;
+      });
+    }
+    return list;
+  }, [employees, isSuperAdmin, isPlantManager, user]);
+
   // Filtered employees
-  const filteredEmployees = employees.filter((emp) => {
+  const filteredEmployees = visibleEmployees.filter((emp) => {
     const matchesSearch =
       emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||

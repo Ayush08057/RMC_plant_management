@@ -4,8 +4,10 @@
   html, body, #root {
     width: 100%;
     height: 100%;
+    height: 100dvh;
     max-width: 100vw;
     max-height: 100vh;
+    max-height: 100dvh;
     margin: 0;
     padding: 0;
     overflow: hidden !important;
@@ -168,10 +170,25 @@ table,
   color: #FFFFFF !important;
 }
 
-/* Deep navy buttons or dark badges */
-[class*="bg-slate-900"], [class*="bg-slate-800"] {
+/* Deep navy buttons or dark badges (strictly solid, never translucent backdrops) */
+button[class~="bg-slate-900"],
+button[class~="bg-slate-800"],
+.badge[class~="bg-slate-900"],
+.badge[class~="bg-slate-800"] {
   background-color: #123B6D !important;
   color: #FFFFFF !important;
+}
+
+/* ========================================================
+   FROSTED GLASS MODAL & CARD BACKDROP BLUR
+   Guarantees transparent darkened blur across all cards & dialogs
+   ======================================================== */
+.app-modal-backdrop,
+.modal-backdrop-blur,
+[data-modal-backdrop] {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
 }
 
 /* ========================================================
@@ -253,26 +270,128 @@ input:focus, select:focus, textarea:focus {
    PRINT STYLESHEET FOR CASH MEMO & BILLING
    ======================================================== */
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
   }
 
-  .no-print {
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* When Cash Memo modal is active or printable invoice is present, hide the web application */
+  body.cash-memo-printing-active #root,
+  body:has(.cash-memo-printable) #root,
+  .app-sidebar,
+  .app-shell > div > header,
+  .app-shell > div > footer,
+  aside,
+  header,
+  footer {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Hide interactive toolbar, buttons, and notifications in print */
+  .no-print,
+  button,
+  .app-modal-backdrop:not(.cash-memo-modal-overlay),
+  [role="status"],
+  [role="alert"] {
     display: none !important;
   }
 
+  /* Convert Cash Memo Modal Overlay to normal document flow in Print / PDF */
+  .cash-memo-modal-overlay {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .cash-memo-modal-container {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  .cash-memo-scroll-area {
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* Official SM CONCRETECH Cash Memo Printable Container */
   .cash-memo-printable {
+    display: block !important;
     margin: 0 auto !important;
     padding: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: 760px !important;
     box-shadow: none !important;
+    border: 2px solid #000000 !important;
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
   }
 
-  @page {
-    size: A4 portrait;
-    margin: 10mm;
+  .cash-memo-printable table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .cash-memo-printable * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .cash-memo-printable th,
+  .cash-memo-printable td {
+    color: #000000 !important;
+  }
+
+  .cash-memo-printable [class*="border"] {
+    border-color: #000000 !important;
   }
 }

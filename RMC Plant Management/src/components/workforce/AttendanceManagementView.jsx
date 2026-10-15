@@ -39,7 +39,8 @@ import {
   LayoutList,
   LayoutGrid,
   ArrowLeft,
-  Activity
+  Activity,
+  ChevronDown
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -77,14 +78,78 @@ export default function AttendanceManagementView({
     addAuditLog
   } = useWorkforce();
 
-  const isAdmin = user?.role === 'Admin' || user?.role === 'Plant Manager' || user?.role === 'Owner / Director';
-  const effectiveFilter = employeeFilter || (!isAdmin ? (user?.employeeId || user?.id) : null);
+  const isAdmin = user?.role === 'Admin' || user?.role === 'Owner / Director';
+  const isPlantManager = user?.role === 'Plant Manager' || user?.role === 'Plant Incharge';
+  const effectiveFilter = employeeFilter || (!isAdmin ? (user?.employeeId || user?.id || (isPlantManager ? 'PM-001' : null)) : null);
 
-  // Master list of real workforce employees
+  // Master list of real workforce employees scoped strictly to role permissions
   const allEmployeesList = useMemo(() => {
-    if (!effectiveFilter) return employees || [];
-    return (employees || []).filter((e) => e.id === effectiveFilter || e.employeeId === effectiveFilter);
-  }, [employees, effectiveFilter]);
+    let list = employees && employees.length > 0 ? [...employees] : [];
+
+    // Ensure official role accounts are available as fallback
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
+      const id = (official.employeeId || official.id || '').toUpperCase();
+      const exists = list.some((e) => {
+        const eId = (e.employeeId || e.id || '').toUpperCase();
+        return eId === id;
+      });
+      if (!exists) {
+        list.push({
+          id: official.employeeId || official.id,
+          employeeId: official.employeeId || official.id,
+          name: official.name,
+          role: official.role,
+          department: official.department,
+          plant: official.plantLocation || defaultPlant || 'Main Plant Unit #01',
+          mobile: official.phone,
+          email: official.email,
+          status: 'Active',
+          avatarUrl: null,
+        });
+      }
+    });
+
+    // 1. NON-ADMIN RESTRICTION: System Admin is an executive root account and must NEVER be visible to Plant Manager or any non-admin!
+    if (!isAdmin) {
+      list = list.filter((e) => {
+        const empRole = (e.role || '').toLowerCase();
+        const empId = (e.employeeId || e.id || '').toUpperCase();
+        const empName = (e.name || '').toLowerCase();
+        const isSysAdmin =
+          empRole === 'admin' ||
+          empRole.includes('executive administration') ||
+          empId === 'ADM-001' ||
+          empId === 'USR-ADMIN-001' ||
+          empName.includes('system admin');
+        return !isSysAdmin;
+      });
+    }
+
+    // 2. PLANT MANAGER SCOPE: The plant manager should only be visible the related information of the plant manager only and his role only!
+    if (isPlantManager) {
+      const pmTargetId = (user?.employeeId || user?.id || 'PM-001').toUpperCase();
+      return list.filter((e) => {
+        const eId = (e.employeeId || e.id || '').toUpperCase();
+        const eRole = (e.role || '').toLowerCase();
+        return (
+          eId === pmTargetId ||
+          eRole.includes('plant manager') ||
+          eRole.includes('plant incharge')
+        );
+      });
+    }
+
+    if (effectiveFilter) {
+      const filterUpper = effectiveFilter.toUpperCase();
+      return list.filter((e) => {
+        const eId = (e.id || '').toUpperCase();
+        const eEmpId = (e.employeeId || '').toUpperCase();
+        return eId === filterUpper || eEmpId === filterUpper;
+      });
+    }
+
+    return list;
+  }, [employees, effectiveFilter, isAdmin, isPlantManager, user, defaultPlant]);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -405,7 +470,7 @@ export default function AttendanceManagementView({
         setToastMessage(`✓ Daily Report filed! (${err.message})`);
       }
     } else {
-      setToastMessage(`✓ Daily Report for ${reportTargetStaff.name} saved successfully! (काम अहवाल यशस्वीरित्या नोंदवला)`);
+      setToastMessage(`✓ Daily Report for ${reportTargetStaff.name} saved successfully!`);
     }
 
     setShowReportModal(false);
@@ -898,21 +963,26 @@ export default function AttendanceManagementView({
               </div>
 
               {/* Role Dropdown Filter */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg shadow-2xs hover:border-slate-300 transition-colors">
+              <div className="relative flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg shadow-2xs hover:border-slate-300 transition-colors">
                 <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span className="text-[11px] font-semibold text-slate-500 font-sans uppercase tracking-wider">Role Filter:</span>
+                <span className="text-[11px] font-semibold text-slate-500 font-sans uppercase tracking-wider shrink-0">Role Filter:</span>
                 <select
                   value={selectedRoleCategory}
                   onChange={(e) => setSelectedRoleCategory(e.target.value)}
-                  className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer pr-1"
+                  className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer pr-5 appearance-none"
                 >
                   <option value="All">All Staff ({fiveRolesAttendanceDirectory.length})</option>
-                  <option value="Driver">Driver ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Driver').length})</option>
-                  <option value="Site Supervisor">Site Supervisor ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Site Supervisor').length})</option>
-                  <option value="Accountant">Accountant ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Accountant').length})</option>
-                  <option value="Plant Incharge">Plant Incharge ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Plant Incharge').length})</option>
-                  <option value="Operator">Operator ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Operator').length})</option>
+                  {!isPlantManager && (
+                    <>
+                      <option value="Driver">Driver ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Driver').length})</option>
+                      <option value="Site Supervisor">Site Supervisor ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Site Supervisor').length})</option>
+                      <option value="Accountant">Accountant ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Accountant').length})</option>
+                      <option value="Operator">Operator ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Operator').length})</option>
+                    </>
+                  )}
+                  <option value="Plant Incharge">Plant Manager ({fiveRolesAttendanceDirectory.filter(s => getRoleCategory(s.role) === 'Plant Incharge').length})</option>
                 </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 pointer-events-none absolute right-2 top-1/2 -translate-y-1/2" />
               </div>
             </div>
 
@@ -1137,30 +1207,32 @@ export default function AttendanceManagementView({
                         <td className="py-3 px-4 sm:px-5 align-middle">
                           {hasReport ? (
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-md shadow-2xs">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-md shadow-2xs shrink-0">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                                 <span>Report Filed</span>
                               </span>
                               <button
                                 type="button"
                                 onClick={() => handleOpenReportModal(staff, false)}
-                                className="px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-blue-600 hover:text-blue-700 border border-slate-200 text-[10.5px] font-medium transition-colors cursor-pointer shadow-2xs"
+                                className="px-2 py-0.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-blue-600 hover:text-blue-700 border border-slate-200 text-[10.5px] font-semibold transition-colors cursor-pointer shadow-2xs shrink-0 flex items-center gap-1"
                               >
-                                View / Edit
+                                <Eye className="w-3 h-3 text-blue-600" />
+                                <span>View / Edit</span>
                               </button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md shadow-2xs">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md shadow-2xs shrink-0">
                                 <Clock className="w-3 h-3 text-amber-600 shrink-0" />
                                 <span>Pending</span>
                               </span>
                               <button
                                 type="button"
                                 onClick={() => handleOpenReportModal(staff, false)}
-                                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10.5px] font-medium transition-colors cursor-pointer shadow-2xs flex items-center gap-1"
+                                className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10.5px] font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1 shrink-0"
                               >
-                                + File Report
+                                <Plus className="w-3 h-3 text-blue-600" />
+                                <span>+ File Report</span>
                               </button>
                             </div>
                           )}
@@ -1251,38 +1323,38 @@ export default function AttendanceManagementView({
                     </div>
 
                     {/* Work Report Section in Mobile Card */}
-                    <div className="pt-2 border-t border-slate-100 text-xs space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-slate-500 font-bold uppercase font-mono tracking-wide">Daily Work Report:</span>
-                        {hasReport ? (
+                    <div className="pt-2 border-t border-slate-100 text-xs flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500 font-bold uppercase font-mono tracking-wide">Daily Work Report:</span>
+                      {hasReport ? (
+                        <div className="flex items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                             <span>Filed</span>
                           </span>
-                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReportModal(staff, false)}
+                            className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[10.5px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3 text-blue-600" />
+                            <span>View / Edit</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg">
                             <Clock className="w-3 h-3 text-amber-600 shrink-0" />
                             <span>Pending</span>
                           </span>
-                        )}
-                      </div>
-                      {hasReport ? (
-                        <div
-                          onClick={() => handleOpenReportModal(staff, false)}
-                          className="text-xs text-slate-700 font-medium leading-relaxed bg-slate-50 p-2 rounded-xl border border-slate-200 cursor-pointer"
-                        >
-                          <p className="line-clamp-2 text-[11px]">
-                            {reportSnippet || 'Daily operations report submitted.'}
-                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReportModal(staff, false)}
+                            className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 text-[10.5px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3 text-slate-600" />
+                            <span>File Report</span>
+                          </button>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenReportModal(staff, false)}
-                          className="w-full text-center py-2 rounded-xl border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:text-blue-600 hover:border-blue-300 bg-slate-50 cursor-pointer transition-colors"
-                        >
-                          + File Daily Work Report
-                        </button>
                       )}
                     </div>
                   </div>
@@ -2222,7 +2294,7 @@ export default function AttendanceManagementView({
         </div>
       </Modal>
 
-      {/* 6. Department Daily Work Report Modal (दैनिक काम अहवाल) */}
+      {/* 6. Department Daily Work Report Modal */}
       <Modal
         isOpen={showReportModal && Boolean(reportTargetStaff)}
         onClose={() => {
@@ -2231,7 +2303,7 @@ export default function AttendanceManagementView({
           setReportModalAutoPunchOut(false);
           setIsEditingExistingReport(false);
         }}
-        title={`Daily Work Report (दैनिक काम अहवाल) — ${reportTargetStaff?.name || ''}`}
+        title={`Daily Work Report — ${reportTargetStaff?.name || ''}`}
         subtitle={`${reportTargetStaff?.role || 'Staff'} • ${reportTargetStaff?.plant || 'Main Plant'} (${selectedDate})`}
         icon={FileText}
         maxWidth="max-w-2xl"
@@ -2255,7 +2327,7 @@ export default function AttendanceManagementView({
                   </div>
                   <div>
                     <h4 className="font-black text-xs uppercase tracking-tight">
-                      {isDone ? 'Today\'s Work Report Filed ✓ (काम नोंदवले आहे)' : 'Work Report Needed (कामाचा अहवाल भरा)'}
+                      {isDone ? "Today's Work Report Filed ✓" : 'Work Report Needed'}
                     </h4>
                     <p className="text-[11px] opacity-90 mt-0.5">
                       {isDone
@@ -2270,19 +2342,19 @@ export default function AttendanceManagementView({
               </div>
 
               {/* View Mode: If already submitted and not currently editing */}
-              {isDone && report && !isEditingExistingReport ? (
+              {isDone && (report || reportTargetStaff.todayWorkSummary) && !isEditingExistingReport ? (
                 <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-900">{report.workType || 'Daily Work Log'}</span>
+                    <span className="font-bold text-slate-900">{report?.workType || `${roleCat} Daily Shift Log`}</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                       Verified ✓
                     </span>
                   </div>
                   <div className="p-3 bg-white rounded-xl border border-slate-200 text-slate-800 text-xs leading-relaxed font-sans font-medium whitespace-pre-wrap">
-                    {report.workDescription || reportTargetStaff.todayWorkSummary}
+                    {report?.workDescription || reportTargetStaff.todayWorkSummary}
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1 border-t border-slate-200/60">
-                    <span>Date: {report.date || selectedDate}</span>
+                    <span>Date: {report?.date || selectedDate}</span>
                     <span>Staff: {reportTargetStaff.name} ({reportTargetStaff.employeeId || reportTargetStaff.id})</span>
                   </div>
 
@@ -2293,7 +2365,7 @@ export default function AttendanceManagementView({
                       className="px-3.5 py-2 rounded-xl text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 cursor-pointer inline-flex items-center gap-1.5 transition-colors"
                     >
                       <Edit3 className="w-3.5 h-3.5 text-amber-700" />
-                      <span>Edit This Report (अहवालात बदल करा)</span>
+                      <span>Edit This Report</span>
                     </button>
 
                     <div className="flex items-center gap-2">
@@ -2302,7 +2374,7 @@ export default function AttendanceManagementView({
                         onClick={() => setShowReportModal(false)}
                         className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 cursor-pointer transition-colors"
                       >
-                        Close (बंद करा)
+                        Close
                       </button>
 
                       {reportTargetStaff.isOnline && (
@@ -2315,7 +2387,7 @@ export default function AttendanceManagementView({
                           className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer flex items-center gap-1.5 shadow-xs"
                         >
                           <Square className="w-3.5 h-3.5 fill-current" />
-                          <span>Clock Out (ड्युटी संपवा)</span>
+                          <span>Clock Out</span>
                         </button>
                       )}
                     </div>
@@ -2327,7 +2399,7 @@ export default function AttendanceManagementView({
                   {roleCat === 'Driver' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Mixer No. (गाडी नंबर) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Mixer No. *</label>
                         <input
                           type="text"
                           value={modalDriverReport.vehicleNo}
@@ -2337,7 +2409,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Trips Completed (एकूण फेऱ्या) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Trips Completed *</label>
                         <input
                           type="number"
                           value={modalDriverReport.tripsCount}
@@ -2347,7 +2419,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivered Concrete (पाठवलेले काँक्रीट m³) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivered Concrete (m³) *</label>
                         <input
                           type="number"
                           step="0.5"
@@ -2358,7 +2430,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Kilometers (एकूण किमी) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Kilometers (km) *</label>
                         <input
                           type="number"
                           value={modalDriverReport.odometerKm}
@@ -2376,17 +2448,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalDrumWash" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          ✓ Drum & Chute Wash Completed at Wash Rack (ड्रम आणि शूट धुतले)
+                          ✓ Drum & Chute Wash Completed at Wash Rack
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Remarks / इतर शेरा</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Transit Remarks</label>
                         <input
                           type="text"
                           value={modalDriverReport.remarks}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, remarks: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
-                          placeholder="रस्त्याची स्थिती किंवा इतर माहिती"
+                          placeholder="Road condition, transit or delivery notes..."
                         />
                       </div>
                     </div>
@@ -2395,7 +2467,7 @@ export default function AttendanceManagementView({
                   {roleCat === 'Site Supervisor' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site / Project Location (साईटचे नाव) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site / Project Location *</label>
                         <input
                           type="text"
                           value={modalSupervisorReport.siteName}
@@ -2405,7 +2477,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Concrete Grade (काँक्रीट ग्रेड) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Concrete Grade *</label>
                         <input
                           type="text"
                           value={modalSupervisorReport.gradePoured}
@@ -2415,7 +2487,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Volume Poured (ओतलेले प्रमाण m³) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Volume Poured (m³) *</label>
                         <input
                           type="number"
                           value={modalSupervisorReport.volumePoured}
@@ -2425,7 +2497,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Slump Measured (स्लम्प mm) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Slump Measured (mm) *</label>
                         <input
                           type="number"
                           value={modalSupervisorReport.slumpMm}
@@ -2435,7 +2507,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Cube Moulds Cast (क्यूब मोल्ड्स संख्या) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Cube Moulds Cast *</label>
                         <input
                           type="number"
                           value={modalSupervisorReport.cubesCast}
@@ -2445,13 +2517,13 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site Pour Remarks (साईट शेरा)</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Site Pour Remarks</label>
                         <input
                           type="text"
                           value={modalSupervisorReport.remarks}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, remarks: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
-                          placeholder="पंप किंवा स्लॅब ओतकाम शेरा"
+                          placeholder="Pump, slab pour, or quality notes..."
                         />
                       </div>
                     </div>
@@ -2460,7 +2532,7 @@ export default function AttendanceManagementView({
                   {roleCat === 'Accountant' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivery Invoices Processed (बिल संख्या) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivery Invoices Processed *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.invoicesCount}
@@ -2470,7 +2542,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Billed Amount (एकूण रक्कम ₹) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Total Billed Amount (₹) *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.billedAmount}
@@ -2480,7 +2552,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Collections Received (जमा रक्कम ₹) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Collections Received (₹) *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.collectionsAmount}
@@ -2490,7 +2562,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Vendor Inward Challans (चालन संख्या) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Vendor Inward Challans *</label>
                         <input
                           type="number"
                           value={modalAccountantReport.vendorChallansCount}
@@ -2508,17 +2580,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-cyan-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalBooksTallied" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          ✓ Day-End Cash Book & Bank Balance Tallied (दैनिक हिशोब जुळला)
+                          ✓ Day-End Cash Book & Bank Balance Tallied
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Financial Remarks / शेरा</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Financial Remarks</label>
                         <input
                           type="text"
                           value={modalAccountantReport.remarks}
                           onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, remarks: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
-                          placeholder="पेमेंट किंवा बँक तपशील"
+                          placeholder="Payment or banking notes..."
                         />
                       </div>
                     </div>
@@ -2527,7 +2599,7 @@ export default function AttendanceManagementView({
                   {roleCat === 'Plant Incharge' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Production (उत्पादन प्रमाण m³) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Production Volume (m³) *</label>
                         <input
                           type="number"
                           value={modalInchargeReport.productionM3}
@@ -2537,7 +2609,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Plant Uptime (प्लांट चालू तास) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Plant Uptime (Hours) *</label>
                         <input
                           type="number"
                           step="0.5"
@@ -2548,7 +2620,7 @@ export default function AttendanceManagementView({
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Silo Stock Status (सिमेंट / सायलो साठा) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Silo Stock Status *</label>
                         <input
                           type="text"
                           value={modalInchargeReport.siloStatus}
@@ -2566,17 +2638,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-teal-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalSafetyAudit" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          ✓ Plant Safety & Environmental Checklist Done (सुरक्षा तपासणी पूर्ण)
+                          ✓ Plant Safety & Environmental Checklist Done
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Operations Remarks / शेरा</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Operations Remarks</label>
                         <input
                           type="text"
                           value={modalInchargeReport.remarks}
                           onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, remarks: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
-                          placeholder="प्लांट कामकाज शेरा"
+                          placeholder="Plant operations and maintenance notes..."
                         />
                       </div>
                     </div>
@@ -2585,7 +2657,7 @@ export default function AttendanceManagementView({
                   {roleCat === 'Operator' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batches Mixed (बॅच संख्या) *</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batches Mixed *</label>
                         <input
                           type="number"
                           value={modalOperatorReport.batchesCount}
@@ -2603,7 +2675,7 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalScaleCheck" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          ✓ Scale Zero Check OK (काटा तपासणी OK)
+                          ✓ Scale Zero Check OK
                         </label>
                       </div>
                       <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
@@ -2615,7 +2687,7 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalAdmixCheck" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          ✓ Admixture Dispenser OK (अॅडमिक्सचर तपासणी)
+                          ✓ Admixture Dispenser OK
                         </label>
                       </div>
                       <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
@@ -2627,17 +2699,17 @@ export default function AttendanceManagementView({
                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                         />
                         <label htmlFor="modalBackupCheck" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                          ✓ SCADA Backup Done (डेटा सेव्ह झाला)
+                          ✓ SCADA Backup Done
                         </label>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batching Notes / शेरा</label>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Batching Notes</label>
                         <input
                           type="text"
                           value={modalOperatorReport.remarks}
                           onChange={(e) => setModalOperatorReport({ ...modalOperatorReport, remarks: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500"
-                          placeholder="बॅचिंग किंवा ओलावा शेरा"
+                          placeholder="Batching, moisture, or mix notes..."
                         />
                       </div>
                     </div>
@@ -2647,26 +2719,26 @@ export default function AttendanceManagementView({
                     <div className="space-y-3">
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                          Today's Work Summary (आज काय काम केले?) *
+                          Today's Work Summary *
                         </label>
                         <textarea
                           required
                           rows={3}
                           value={modalGeneralReport.workDescription || ''}
                           onChange={(e) => setModalGeneralReport({ ...modalGeneralReport, workDescription: e.target.value })}
-                          placeholder="उदा. लॅब टेस्टिंग / मशीन मेंटेनन्स / प्लांट सुपरव्हिजन केले"
+                          placeholder="e.g. Lab testing, machine maintenance, plant supervision..."
                           className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                          Remarks / Notes (इतर नोंदी / शेरा)
+                          Remarks / Notes
                         </label>
                         <input
                           type="text"
                           value={modalGeneralReport.remarks || ''}
                           onChange={(e) => setModalGeneralReport({ ...modalGeneralReport, remarks: e.target.value })}
-                          placeholder="काम सुरळीत पूर्ण झाले"
+                          placeholder="Work completed smoothly..."
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:bg-white focus:border-blue-500"
                         />
                       </div>
@@ -2684,15 +2756,16 @@ export default function AttendanceManagementView({
                       className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer inline-flex items-center justify-center gap-1.5 border border-slate-200 transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4 text-slate-600" />
-                      <span>Back (मागे जा)</span>
+                      <span>Back</span>
                     </button>
 
                     <button
                       type="submit"
-                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-colors border border-blue-700"
+                      style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
                     >
-                      <FileCheck2 className="w-4 h-4" />
-                      <span>Save Report (अहवाल नोंदवा)</span>
+                      <FileCheck2 className="w-4 h-4 text-white" />
+                      <span className="text-white font-bold">Save Report</span>
                     </button>
 
                     {(reportTargetStaff.isOnline || reportModalAutoPunchOut) && (
@@ -2702,7 +2775,7 @@ export default function AttendanceManagementView({
                         className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <Square className="w-4 h-4 fill-current" />
-                        <span>Save & Clock Out (अहवाल भरून ड्युटी संपवा)</span>
+                        <span>Save & Clock Out</span>
                       </button>
                     )}
                   </div>
@@ -2725,7 +2798,7 @@ export default function AttendanceManagementView({
           setShowDetailModal(false);
           setSelectedDetailStaff(null);
         }}
-        title={`Employee Profile & Daily Record (कर्मचारी माहिती व हजेरी) — ${selectedDetailStaff?.name || 'Staff'}`}
+        title={`Employee Profile & Daily Record — ${selectedDetailStaff?.name || 'Staff'}`}
         subtitle={`${selectedDetailStaff?.role || ''} • ID: ${selectedDetailStaff?.employeeId || selectedDetailStaff?.id || ''} • ${selectedDetailStaff?.department || 'Operations'} • ${selectedDetailStaff?.plant || 'Main Plant Unit #01'}`}
         icon={Users}
         maxWidth="max-w-5xl"
@@ -2766,17 +2839,17 @@ export default function AttendanceManagementView({
                   {staff.isOnline ? (
                     <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-2 shadow-sm">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                      ड्युटी सुरू आहे (Live Shift Active)
+                      Live Shift Active
                     </span>
                   ) : staff.isCompleted ? (
                     <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1.5 shadow-sm">
                       <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                      ड्युटी संपली (Shift Ended)
+                      Shift Ended
                     </span>
                   ) : (
                     <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-slate-400" />
-                      हजेरी बाकी (Not Clocked In)
+                      Not Clocked In
                     </span>
                   )}
                   <span className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-800 border border-slate-700 text-amber-300">
@@ -2795,13 +2868,13 @@ export default function AttendanceManagementView({
                     <div className="text-xs font-bold px-3 py-2 border-b flex items-center justify-between bg-slate-50 border-slate-200 text-slate-700">
                       <span className="flex items-center gap-1.5 font-bold">
                         <Camera className="w-4 h-4 text-blue-600" />
-                        <span>कर्मचाऱ्याचा फोटो (Staff Photo)</span>
+                        <span>Staff Photo</span>
                       </span>
                       <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${hasFacePunch
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                           : 'bg-blue-50 text-blue-700 border-blue-200'
                         }`}>
-                        {hasFacePunch ? '✓ फोटो पडताळणी पूर्ण' : 'प्रोफाइल फोटो'}
+                        {hasFacePunch ? '✓ Photo Verified' : 'Profile Photo'}
                       </span>
                     </div>
 
@@ -2816,7 +2889,7 @@ export default function AttendanceManagementView({
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-500 gap-2">
                           <Camera className="w-12 h-12 text-slate-400" />
-                          <span className="text-xs font-semibold">फोटो उपलब्ध नाही (No Photo)</span>
+                          <span className="text-xs font-semibold">No Photo Available</span>
                         </div>
                       )}
 
@@ -2825,10 +2898,10 @@ export default function AttendanceManagementView({
                         <div className="flex items-center justify-between text-xs font-bold">
                           <span className="flex items-center gap-1 text-slate-100">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                            <span>{hasFacePunch ? 'हजेरीचा थेट फोटो' : 'नोंदणीकृत फोटो'}</span>
+                            <span>{hasFacePunch ? 'Live Punch Photo' : 'Registered Photo'}</span>
                           </span>
                           <span className="font-mono text-emerald-300 text-xs">
-                            {staff.punchIn ? `@ ${formatToIndian12Hr(staff.punchIn)}` : 'नोंदणीकृत'}
+                            {staff.punchIn ? `@ ${formatToIndian12Hr(staff.punchIn)}` : 'Registered'}
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-300 truncate mt-0.5 flex items-center gap-1">
@@ -2848,15 +2921,15 @@ export default function AttendanceManagementView({
                           className="flex items-center gap-1.5 text-slate-800 hover:text-blue-600 font-bold transition-colors"
                         >
                           <Phone className="w-4 h-4 text-blue-600 shrink-0" />
-                          <span className="font-mono">{staff.phone || 'फोन उपलब्ध नाही'}</span>
+                          <span className="font-mono">{staff.phone || 'Phone Not Available'}</span>
                         </a>
                         <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-[10px]">
-                          ✓ संपर्क सक्रिय
+                          ✓ Contact Active
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 text-slate-600 truncate">
                         <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                        <span className="truncate font-medium">{staff.email || 'ईमेल उपलब्ध नाही'}</span>
+                        <span className="truncate font-medium">{staff.email || 'Email Not Available'}</span>
                       </div>
                     </div>
                   </div>
@@ -2864,34 +2937,34 @@ export default function AttendanceManagementView({
 
                 {/* COLUMN 2: TIMINGS, HOURS & EMPLOYMENT DETAILS (4 cols) */}
                 <div className="md:col-span-4 flex flex-col gap-2">
-                  {/* 4 Timing & Hours Tiles with Clear Marathi + English */}
+                  {/* 4 Timing & Hours Tiles */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-500 block">कामावर आले (Punch In)</span>
+                      <span className="text-[10px] font-bold text-slate-500 block">Punch In</span>
                       <span className="text-sm font-black font-mono text-slate-900 block my-0.5">
                         {formatToIndian12Hr(staff.punchIn) || '--:--'}
                       </span>
                       <span className="text-[10px] text-emerald-700 font-bold block">
-                        {staff.punchIn ? staff.punctualityLabel : 'हजेरी बाकी (Pending)'}
+                        {staff.punchIn ? staff.punctualityLabel : 'Pending'}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-500 block">काम संपले (Punch Out)</span>
+                      <span className="text-[10px] font-bold text-slate-500 block">Punch Out</span>
                       <span className="text-sm font-black font-mono text-slate-900 block my-0.5">
                         {formatToIndian12Hr(staff.punchOut) || '--:--'}
                       </span>
                       <span className="text-[10px] text-slate-600 font-medium block">
-                        {staff.punchOut ? 'ड्युटी संपली (Ended)' : (staff.isOnline ? 'काम सुरू आहे (Active)' : 'बाकी (Pending)')}
+                        {staff.punchOut ? 'Shift Ended' : (staff.isOnline ? 'Active on Duty' : 'Pending')}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-500 block">कामाचे तास (Duty Hours)</span>
+                      <span className="text-[10px] font-bold text-slate-500 block">Duty Hours</span>
                       <span className="text-sm font-black font-mono text-slate-900 block my-0.5">
-                        {staff.workingHours ? `${staff.workingHours} तास` : '--'}
+                        {staff.workingHours ? `${staff.workingHours} hrs` : '--'}
                       </span>
-                      <span className="text-[10px] text-slate-500 block">नियम: ९.० तास</span>
+                      <span className="text-[10px] text-slate-500 block">Standard: 9.0 hrs</span>
                     </div>
 
                     <div className={`p-2.5 rounded-xl border ${Number(staff.overtimeHours) > 0
@@ -2899,14 +2972,14 @@ export default function AttendanceManagementView({
                         : 'bg-slate-50 border-slate-200'
                       }`}>
                       <span className={`text-[10px] font-bold block ${Number(staff.overtimeHours) > 0 ? 'text-blue-700' : 'text-slate-500'
-                        }`}>ओव्हरटाईम (Overtime)</span>
+                        }`}>Overtime</span>
                       <span className={`text-sm font-black font-mono block my-0.5 ${Number(staff.overtimeHours) > 0 ? 'text-blue-900' : 'text-slate-900'
                         }`}>
-                        {Number(staff.overtimeHours) > 0 ? `+${staff.overtimeHours} तास` : '० तास'}
+                        {Number(staff.overtimeHours) > 0 ? `+${staff.overtimeHours} hrs` : '0 hrs'}
                       </span>
                       <span className={`text-[10px] block ${Number(staff.overtimeHours) > 0 ? 'text-blue-700 font-bold' : 'text-slate-500 font-medium'
                         }`}>
-                        {Number(staff.overtimeHours) > 0 ? 'मंजूर (Approved)' : 'सामान्य (Normal)'}
+                        {Number(staff.overtimeHours) > 0 ? 'Approved' : 'Normal'}
                       </span>
                     </div>
                   </div>
@@ -2915,32 +2988,32 @@ export default function AttendanceManagementView({
                   <div className="p-3 rounded-xl bg-white border border-slate-200 flex-1 flex flex-col justify-between">
                     <span className="font-bold text-slate-800 text-xs block border-b border-slate-100 pb-1.5 mb-2 flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5 text-blue-600" />
-                      कर्मचारी तपशील (Staff Details)
+                      Staff Details
                     </span>
                     <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
                       <div>
-                        <span className="text-slate-400 text-[10px] block">पद (Designation)</span>
+                        <span className="text-slate-400 text-[10px] block">Designation</span>
                         <strong className="text-slate-800">{staff.role}</strong>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">भूमिका गट (Role Group)</span>
+                        <span className="text-slate-400 text-[10px] block">Role Group</span>
                         <strong className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200/80 inline-block text-[11px]">{roleCat}</strong>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">विभाग (Department)</span>
+                        <span className="text-slate-400 text-[10px] block">Department</span>
                         <span className="text-slate-700 font-medium truncate block">{staff.department || 'Operations'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">प्लांट (Plant)</span>
+                        <span className="text-slate-400 text-[10px] block">Plant</span>
                         <span className="text-slate-700 font-medium truncate block">{staff.plant || 'Main Plant Unit #01'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">शिफ्ट वेळ (Shift Time)</span>
+                        <span className="text-slate-400 text-[10px] block">Shift Time</span>
                         <span className="font-mono text-slate-800 font-semibold">{formatToIndian12Hr(staff.shiftTime)}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">कामाचा प्रकार (Job Type)</span>
-                        <span className="text-slate-700 font-medium">कायमस्वरूपी (Full-Time)</span>
+                        <span className="text-slate-400 text-[10px] block">Job Type</span>
+                        <span className="text-slate-700 font-medium">Full-Time</span>
                       </div>
                     </div>
                   </div>
@@ -2957,16 +3030,16 @@ export default function AttendanceManagementView({
                       <div className="flex items-center justify-between gap-1 mb-1.5">
                         <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                           {staff.isReportDone ? <FileCheck2 className="w-4 h-4 text-emerald-600" /> : <FileText className="w-4 h-4 text-amber-600" />}
-                          <span>आजचे काम (Today's Work Report)</span>
+                          <span>Today's Work Report</span>
                         </span>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${staff.isReportDone ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
                           }`}>
-                          {staff.isReportDone ? '✓ भरला आहे' : 'बाकी आहे (Pending)'}
+                          {staff.isReportDone ? '✓ Submitted' : 'Pending'}
                         </span>
                       </div>
                       <div className="p-2 rounded-lg bg-white/80 border border-slate-200/70">
                         <p className="text-xs text-slate-800 leading-snug line-clamp-3">
-                          {staff.todayWorkSummary || 'अद्याप आजच्या कामाचा तपशील नोंदवलेला नाही.'}
+                          {staff.todayWorkSummary || 'No work summary submitted today.'}
                         </p>
                       </div>
                     </div>
@@ -2978,10 +3051,11 @@ export default function AttendanceManagementView({
                         setShowDetailModal(false);
                         handleOpenReportModal(staff, false);
                       }}
-                      className="mt-2.5 w-full py-2 px-3 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                      className="mt-2.5 w-full py-2 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-blue-700"
+                      style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
                     >
-                      <FileText className="w-4 h-4" />
-                      <span>{staff.isReportDone ? 'अहवाल पहा / बदला (View / Edit Report)' : 'अहवाल भरा (Fill Daily Report Now)'}</span>
+                      <FileText className="w-4 h-4 text-white" />
+                      <span className="text-white font-bold">{staff.isReportDone ? 'View / Edit Report' : 'Fill Daily Report Now'}</span>
                     </button>
                   </div>
 
@@ -2991,9 +3065,9 @@ export default function AttendanceManagementView({
                     <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                        <span className="font-bold text-xs text-slate-800 truncate">सध्याचे ठिकाण (Plant Location)</span>
+                        <span className="font-bold text-xs text-slate-800 truncate">Plant Location</span>
                         <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
-                          ✓ GPS चालू
+                          ✓ GPS Active
                         </span>
                       </div>
                       <a
@@ -3001,9 +3075,9 @@ export default function AttendanceManagementView({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[10px] flex items-center gap-1 shrink-0 transition-colors"
-                        title="Google Maps वर पहा"
+                        title="View on Google Maps"
                       >
-                        <span>नकाशा (Map)</span>
+                        <span>Map</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
@@ -3029,7 +3103,7 @@ export default function AttendanceManagementView({
                       {/* Bottom Overlay */}
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/90 via-slate-900/60 to-transparent p-2 text-white pointer-events-none">
                         <div className="font-bold text-[11px] text-white truncate">
-                          ✅ प्लांट परिसरात उपस्थित (Inside Plant Premises)
+                          ✅ Inside Plant Premises
                         </div>
                       </div>
                     </div>
@@ -3041,7 +3115,7 @@ export default function AttendanceManagementView({
               {/* 3. EASY FOOTER ACTION BAR */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-200">
                 <div className="text-xs text-slate-500 font-medium">
-                  नोंदणीकृत कर्मचारी हजेरी प्रणाली • सुरक्षित डेटा
+                  Staff Attendance System • Secure Operational Records
                 </div>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -3054,7 +3128,7 @@ export default function AttendanceManagementView({
                     className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer inline-flex items-center gap-1.5 border border-slate-200 transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4 text-slate-600" />
-                    <span>मागे जा (Back)</span>
+                    <span>Back</span>
                   </button>
 
                   {!staff.isOnline && !staff.isCompleted && (
@@ -3067,7 +3141,7 @@ export default function AttendanceManagementView({
                       className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>हजेरी लावा (Clock In)</span>
+                      <span>Clock In</span>
                     </button>
                   )}
 
@@ -3081,7 +3155,7 @@ export default function AttendanceManagementView({
                       className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
                     >
                       <Square className="w-3.5 h-3.5 fill-current" />
-                      <span>ड्युटी संपवा (Clock Out)</span>
+                      <span>Clock Out</span>
                     </button>
                   )}
                 </div>

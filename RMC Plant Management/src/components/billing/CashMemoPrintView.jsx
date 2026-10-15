@@ -1,14 +1,35 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Printer, Download, X, Check, ShieldCheck, Phone, MapPin, ArrowLeft } from 'lucide-react';
 import { numberToIndianWords } from '../../utils/numberToWords';
 
 export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   const printRef = useRef(null);
 
+  useEffect(() => {
+    document.body.classList.add('cash-memo-printing-active');
+    const handleBeforePrint = () => {
+      document.body.classList.add('cash-memo-printing-active');
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.classList.remove('cash-memo-printing-active');
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
   if (!bill) return null;
 
   const handleNativePrint = () => {
-    window.print();
+    document.body.classList.add('cash-memo-printing-active');
+    setTimeout(() => {
+      window.print();
+    }, 50);
   };
 
   const items = bill.items || [
@@ -28,10 +49,17 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   const finalAmount = totalAmount + transportation;
   const amountInWords = bill.amountInWords || numberToIndianWords(finalAmount);
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static">
+  const modalContent = (
+    <div 
+      className="cash-memo-modal-overlay fixed inset-0 z-[9999] overflow-hidden app-modal-backdrop flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:block animate-fade-in"
+      style={{
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+      }}
+    >
       {/* Container Card */}
-      <div className="bg-white text-slate-900 w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:h-auto my-auto">
+      <div className="cash-memo-modal-container bg-white text-slate-900 w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:h-auto print:w-full print:border-none print:m-0 print:p-0 print:overflow-visible print:block my-auto print:my-0">
         
         {/* Modal Top Bar (Hidden in Print) */}
         <div className="no-print bg-slate-900 text-white p-3 sm:px-5 flex items-center justify-between border-b border-slate-800 shrink-0">
@@ -39,10 +67,10 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 active:scale-95 text-white flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer shadow-2xs"
               title="Go Back (Esc)"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-slate-300" />
+              <ArrowLeft className="w-3.5 h-3.5 text-white" />
               <span>Back</span>
             </button>
 
@@ -66,7 +94,7 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
               title="Close"
             >
               <X className="w-4 h-4" />
@@ -77,7 +105,7 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
         {/* ========================================================
             PRINTABLE CASH MEMO INVOICE (EXACT DESIGN MATCH)
             ======================================================== */}
-        <div className="p-3 sm:p-6 overflow-y-auto overflow-x-auto bg-slate-100/60 flex-1 print:bg-white print:p-0 print:overflow-visible">
+        <div className="cash-memo-scroll-area p-3 sm:p-6 overflow-y-auto overflow-x-auto bg-slate-100/60 flex-1 print:bg-white print:p-0 print:overflow-visible print:block print:w-full">
           <div 
             ref={printRef}
             className="cash-memo-printable bg-white text-black border-2 border-black w-full max-w-[760px] mx-auto text-[13px] leading-tight font-sans select-text shadow-sm print:shadow-none print:border-2 print:border-black"
@@ -326,4 +354,6 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }
