@@ -297,6 +297,7 @@ export default function AdminDashboardPage() {
     {
       header: 'Node Code',
       accessor: 'code',
+      width: '12%',
       render: (row) => (
         <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
           {row.code || 'PLT'}
@@ -306,6 +307,7 @@ export default function AdminDashboardPage() {
     {
       header: 'Plant Facility Name',
       accessor: 'name',
+      width: '38%',
       render: (row) => (
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0">
@@ -326,6 +328,7 @@ export default function AdminDashboardPage() {
     {
       header: 'Hourly Capacity',
       accessor: 'capacity',
+      width: '20%',
       render: (row) => (
         <span className="font-mono font-bold text-slate-800 text-xs">{row.capacity}</span>
       ),
@@ -333,28 +336,33 @@ export default function AdminDashboardPage() {
     {
       header: 'Operating Status',
       accessor: 'status',
+      width: '18%',
       render: (row) => <StatusBadge status={row.status || 'Online'} />,
     },
     {
       header: 'Actions',
       accessor: 'id',
+      width: '12%',
+      align: 'right',
       render: (row) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 justify-end">
           <button
             type="button"
             onClick={() => handleOpenEditPlant(row)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 transition-colors cursor-pointer shrink-0 shadow-2xs"
             title={`Edit ${row.name}`}
+            aria-label={`Edit ${row.name}`}
           >
             <Edit3 className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleDeletePlant(row.id, row.name)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer shrink-0 shadow-2xs"
             title={`Delete ${row.name}`}
+            aria-label={`Delete ${row.name}`}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5 text-black" />
           </button>
         </div>
       ),
@@ -444,10 +452,11 @@ export default function AdminDashboardPage() {
               e.stopPropagation();
               handleDeleteEmployee(row.id);
             }}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+            className="p-1.5 rounded-lg text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer shrink-0 shadow-2xs"
             title="Delete Employee"
+            aria-label="Delete Employee"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5 text-black" />
           </button>
         </div>
       ),
@@ -579,10 +588,10 @@ export default function AdminDashboardPage() {
           <section>
             <DataTable
               title="Registered Plant Network & Facilities"
-              subtitle="Concrete batching nodes, hourly throughput capacity and operational clearance"
               icon={Factory}
               columns={plantColumns}
               data={plants}
+              compact={true}
               searchPlaceholder="Search plant node, facility name, location..."
               actions={
                 <button
@@ -628,9 +637,10 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => handleDeletePlant(plant.id, plant.name)}
-                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 cursor-pointer shadow-2xs"
                       >
-                        Delete
+                        <Trash2 className="w-3.5 h-3.5 text-black" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>

@@ -36,7 +36,10 @@ import {
   Table,
   Maximize2,
   Minimize2,
-  Loader2
+  Loader2,
+  IndianRupee,
+  Hash,
+  UserCheck
 } from 'lucide-react';
 import CashMemoPrintView from './CashMemoPrintView';
 import { useExclusiveModal } from '../dashboard/Modal';
@@ -240,6 +243,37 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     bankIfsc: 'SBIN0001234',
   });
 
+  const [billMobileError, setBillMobileError] = useState(null);
+
+  // Strict 10-Digit Mobile Handler
+  const handleMobileChange = (e) => {
+    let inputVal = e.target.value;
+    let digits = inputVal.replace(/\D/g, '');
+    
+    // If pasted with 91 prefix and 12 digits, strip 91
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    }
+    
+    // Limit to 10 digits
+    if (digits.length > 10) {
+      digits = digits.slice(0, 10);
+    }
+    
+    setBillForm((prev) => ({ ...prev, customerMobile: digits }));
+    
+    // Live validation feedback
+    if (digits.length === 0) {
+      setBillMobileError(null);
+    } else if (digits.length > 0 && !/^[6-9]/.test(digits)) {
+      setBillMobileError('Must start with 6, 7, 8, or 9 (Indian cellular standard)');
+    } else if (digits.length > 0 && digits.length < 10) {
+      setBillMobileError(`${10 - digits.length} digit${10 - digits.length > 1 ? 's' : ''} remaining`);
+    } else if (digits.length === 10) {
+      setBillMobileError(null);
+    }
+  };
+
   // Purchase Form State
   const [purchaseForm, setPurchaseForm] = useState({
     voucherNo: `PUR-25-26/0${purchases.length + 91}`,
@@ -261,6 +295,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   // Open Create Bill Form
   const handleOpenCreateBill = () => {
     setEditingBill(null);
+    setBillMobileError(null);
     setBillForm({
       billNo: `25-26/${bills.length + 115}`,
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -457,6 +492,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
   const openEditBillModal = (bill, authorizedByOtp = false) => {
     setEditingBill({ ...bill, authorizedByOtp });
+    setBillMobileError(null);
+    const rawMobile = (bill.customerMobile || '').replace(/\D/g, '');
+    const cleanMobile = rawMobile.length === 12 && rawMobile.startsWith('91') ? rawMobile.slice(2) : rawMobile.slice(-10);
     setBillForm({
       billNo: bill.billNo,
       date: bill.date,
@@ -464,7 +502,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       place: bill.place || '',
       customerName: bill.customerName || '',
       site: bill.site || '',
-      customerMobile: bill.customerMobile || '',
+      customerMobile: cleanMobile || '',
       refName: bill.refName || '',
       items: bill.items || [{ sn: 1, material: 'Pump', qty: 1, unit: 'Unit', rate: 6000, total: 6000 }],
       transportation: bill.transportation || 0,
@@ -533,10 +571,27 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const handleSaveBill = (e) => {
     e.preventDefault();
     if (!billForm.customerName.trim()) {
-      alert('Please enter party/customer name.');
+      showToast('⚠️ Please enter party/client name.');
       return;
     }
 
+    // Strict 10-Digit Mobile Number Validation
+    const rawMobile = (billForm.customerMobile || '').replace(/\D/g, '');
+    if (rawMobile) {
+      if (rawMobile.length !== 10) {
+        setBillMobileError(`Incomplete mobile number (${rawMobile.length}/10 digits). Must be exactly 10 digits.`);
+        showToast(`⚠️ Please enter a complete 10-digit mobile number (${rawMobile.length}/10 entered)`);
+        return;
+      }
+      if (!/^[6-9]/.test(rawMobile)) {
+        setBillMobileError('Invalid mobile number: Must start with 6, 7, 8, or 9 (Indian cellular standard)');
+        showToast('⚠️ Invalid mobile number: Must start with 6, 7, 8, or 9');
+        return;
+      }
+    }
+    setBillMobileError(null);
+
+    const formattedMobile = rawMobile ? `+91 ${rawMobile}` : '';
     const totalAmount = billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0);
     const trans = Number(billForm.transportation) || 0;
     const finalAmount = totalAmount + trans;
@@ -549,6 +604,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           return {
             ...b,
             ...billForm,
+            customerMobile: formattedMobile,
             totalAmount,
             transportation: trans,
             finalAmount,
@@ -565,6 +621,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       const newBill = {
         id: `BILL-${Date.now()}`,
         ...billForm,
+        customerMobile: formattedMobile,
         type: 'Cash Memo',
         totalAmount,
         transportation: trans,
@@ -1491,35 +1548,49 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       )}
 
       {/* ========================================================
-          MODAL: CREATE / EDIT CASH MEMO BILL FORM
+          MODAL: CREATE / EDIT CASH MEMO BILL FORM (REDESIGNED)
           ======================================================== */}
       {showBillFormModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] flex flex-col my-auto overflow-hidden text-slate-900 text-xs">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in">
+          <div className="bg-white rounded-3xl border border-[#D4E4F7] shadow-2xl max-w-4xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] flex flex-col my-auto overflow-hidden text-slate-900 text-xs">
             
-            {/* Header */}
-            <div className="bg-slate-900 text-white p-3.5 sm:px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
+            {/* Header: Executive Royal Navy with Amber Accent Bar */}
+            <div className="bg-gradient-to-r from-[#0D2847] via-[#123B6D] to-[#1E528F] text-white p-3.5 sm:px-6 flex items-center justify-between border-b border-[#123B6D]/60 shrink-0 relative overflow-hidden">
+              {/* Top Accent Gold Bar */}
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500" />
+
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   type="button"
                   onClick={() => setShowBillFormModal(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 active:scale-95 text-white flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer shadow-2xs shrink-0"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 active:scale-95 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
                   title="Go Back"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-slate-300" />
+                  <ArrowLeft className="w-3.5 h-3.5 text-amber-300" />
                   <span>Back</span>
                 </button>
 
-                <div className="h-4 w-px bg-slate-700 shrink-0 hidden sm:block" />
+                <div className="h-5 w-px bg-white/20 shrink-0 hidden sm:block" />
 
-                <div className="min-w-0">
-                  <h3 className="text-base font-black tracking-tight flex items-center gap-2 truncate">
-                    <ReceiptText className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span className="truncate">{editingBill ? `Edit Cash Memo #${billForm.billNo}` : 'Generate Official Cash Memo'}</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    SM CONCRETECH • Format matching official paper memo
-                  </p>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0 shadow-inner">
+                    <ReceiptText className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2 truncate text-white">
+                      <span className="truncate">{editingBill ? `Edit Cash Memo #${billForm.billNo}` : 'Generate Official Cash Memo'}</span>
+                      <span className="hidden md:inline-flex px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 uppercase tracking-wider">
+                        Official Paper Format
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-blue-200/90 truncate flex items-center gap-1.5">
+                      <span className="font-semibold text-white">SM CONCRETECH</span>
+                      <span>•</span>
+                      <span>Authorized Pre-printed Cash Voucher</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline font-mono text-amber-300">GST / Delivery Reconciled</span>
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1527,7 +1598,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 <button
                   type="button"
                   onClick={() => setShowBillFormModal(false)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
@@ -1536,180 +1607,320 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             </div>
 
             {/* Bill Form Content */}
-            <form onSubmit={handleSaveBill} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+            <form onSubmit={handleSaveBill} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-slate-50/50">
               
-              {/* Row 1: Bill No, Date, Vehicle, Place */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Bill No *</label>
-                  <input
-                    type="text"
-                    value={billForm.billNo}
-                    onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
-                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-mono font-bold text-slate-900"
-                    required
-                  />
+              {/* Section 1: Memo Metadata & Dispatch Info */}
+              <div className="bg-white rounded-2xl border border-[#D4E4F7] p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#1D5FA7] border border-blue-200/60 flex items-center justify-center">
+                      <FileText className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-slate-900">Document & Dispatch Details</span>
+                  </div>
+                  <span className="text-[10px] text-slate-600 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md">Step 1 of 3</span>
                 </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Date *</label>
-                  <input
-                    type="text"
-                    value={billForm.date}
-                    onChange={(e) => setBillForm({ ...billForm, date: e.target.value })}
-                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-bold text-slate-900"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Vehicle</label>
-                  <input
-                    type="text"
-                    value={billForm.vehicle}
-                    onChange={(e) => setBillForm({ ...billForm, vehicle: e.target.value })}
-                    placeholder="e.g. MH-10-CR-1212"
-                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-mono text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Place *</label>
-                  <input
-                    type="text"
-                    value={billForm.place}
-                    onChange={(e) => setBillForm({ ...billForm, place: e.target.value })}
-                    placeholder="e.g. Aaudumbar"
-                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-900"
-                    required
-                  />
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Bill No <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Hash className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.billNo}
+                        onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Date <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.date}
+                        onChange={(e) => setBillForm({ ...billForm, date: e.target.value })}
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Transit Vehicle
+                    </label>
+                    <div className="relative">
+                      <Truck className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.vehicle}
+                        onChange={(e) => setBillForm({ ...billForm, vehicle: e.target.value })}
+                        placeholder="e.g. MH-10-CR-1212"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono uppercase text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Place of Delivery <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.place}
+                        onChange={(e) => setBillForm({ ...billForm, place: e.target.value })}
+                        placeholder="e.g. Aaudumbar"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-medium text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Row 2: Bill To Party */}
-              <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-3">
-                <span className="font-bold text-xs text-amber-950 block">Bill To Party Information</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Party / Client Name *</label>
-                    <input
-                      type="text"
-                      value={billForm.customerName}
-                      onChange={(e) => setBillForm({ ...billForm, customerName: e.target.value })}
-                      placeholder="e.g. Patil Infrastructure & Builders"
-                      className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-bold"
-                      required
-                    />
+              {/* Section 2: Bill To Party Information (With Strict 10-Digit Mobile Validity) */}
+              <div className="bg-white rounded-2xl border border-[#D4E4F7] p-4 shadow-2xs space-y-3.5">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center justify-center">
+                      <Building2 className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-slate-900">Bill To Party & Client Dossier</span>
                   </div>
+                  <span className="text-[10px] text-slate-600 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md">Step 2 of 3</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Mobile Number</label>
-                    <input
-                      type="text"
-                      value={billForm.customerMobile}
-                      onChange={(e) => setBillForm({ ...billForm, customerMobile: e.target.value })}
-                      placeholder="e.g. +91 98221 54321"
-                      className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono"
-                    />
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Party / Client Name <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.customerName}
+                        onChange={(e) => setBillForm({ ...billForm, customerName: e.target.value })}
+                        placeholder="e.g. Patil Infrastructure & Builders"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 text-slate-900 font-bold focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        required
+                      />
+                    </div>
                   </div>
+
+                  {/* 10-Digit Mobile Number Validation Component */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                        <span>Mobile Number</span>
+                        <span className="text-[10px] text-slate-600 font-normal">(10-Digit Cellular)</span>
+                      </label>
+                      {billForm.customerMobile && (
+                        <div className="flex items-center gap-1">
+                          {billForm.customerMobile.length === 10 && /^[6-9]/.test(billForm.customerMobile) ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-mono">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span>Valid 10 Digits</span>
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                              !/^[6-9]/.test(billForm.customerMobile) && billForm.customerMobile.length > 0
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              <span>{billForm.customerMobile.length}/10 digits</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="relative flex rounded-xl shadow-2xs overflow-hidden">
+                      <div className="bg-slate-100 border border-r-0 border-slate-300 px-2.5 py-2 flex items-center gap-1.5 shrink-0 text-slate-700 font-mono font-bold text-xs select-none">
+                        <span className="text-xs">🇮🇳</span>
+                        <span>+91</span>
+                      </div>
+                      <div className="relative flex-1 min-w-0">
+                        <input
+                          type="tel"
+                          maxLength={10}
+                          inputMode="numeric"
+                          value={billForm.customerMobile}
+                          onChange={handleMobileChange}
+                          placeholder="e.g. 9822154321"
+                          className={`w-full pl-3 pr-9 py-2 rounded-r-xl bg-slate-50/70 border font-mono font-bold text-xs text-slate-900 focus:bg-white transition-all ${
+                            billForm.customerMobile?.length === 10 && /^[6-9]/.test(billForm.customerMobile)
+                              ? 'border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20'
+                              : billMobileError && billForm.customerMobile
+                              ? 'border-amber-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-400/20'
+                              : 'border-slate-300 focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15'
+                          }`}
+                        />
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {billForm.customerMobile?.length === 10 && /^[6-9]/.test(billForm.customerMobile) ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          ) : billForm.customerMobile?.length > 0 ? (
+                            <Phone className="w-3.5 h-3.5 text-amber-500" />
+                          ) : (
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Real-time Helper & Error Feedback */}
+                    <div className="mt-1 flex items-center justify-between text-[10px]">
+                      {billMobileError ? (
+                        <span className="text-amber-700 font-medium flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>{billMobileError}</span>
+                        </span>
+                      ) : billForm.customerMobile?.length === 10 && /^[6-9]/.test(billForm.customerMobile) ? (
+                        <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>Valid 10-digit Indian mobile verified</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">Enter standard 10 digits starting with 6, 7, 8, or 9</span>
+                      )}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">Site Location</label>
-                    <input
-                      type="text"
-                      value={billForm.site}
-                      onChange={(e) => setBillForm({ ...billForm, site: e.target.value })}
-                      placeholder="e.g. Aaudumbar Riverside Pier"
-                      className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-900"
-                    />
+                    <div className="relative">
+                      <MapPin className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.site}
+                        onChange={(e) => setBillForm({ ...billForm, site: e.target.value })}
+                        placeholder="e.g. Aaudumbar Riverside Pier"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                      />
+                    </div>
                   </div>
+
                   <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">Reference Name</label>
-                    <input
-                      type="text"
-                      value={billForm.refName}
-                      onChange={(e) => setBillForm({ ...billForm, refName: e.target.value })}
-                      placeholder="e.g. D. K. Patil"
-                      className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-900"
-                    />
+                    <div className="relative">
+                      <UserCheck className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={billForm.refName}
+                        onChange={(e) => setBillForm({ ...billForm, refName: e.target.value })}
+                        placeholder="e.g. D. K. Patil"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Row 3: Items Table (Material, Qty, Unit, Rate, Total) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-slate-900">Materials & Dispatch Items</span>
+              {/* Section 3: Materials & Dispatch Items */}
+              <div className="bg-white rounded-2xl border border-[#D4E4F7] p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#1D5FA7] border border-blue-200/60 flex items-center justify-center">
+                      <Layers className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs text-slate-900 block">Materials & Concrete Dispatch Items</span>
+                      <span className="text-[10px] text-slate-600 block">Step 3 of 3 • Dynamic line-item billing calculator</span>
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Item</span>
                   </button>
                 </div>
 
-                <div className="border border-slate-200 rounded-2xl overflow-x-auto">
-                  <table className="w-full min-w-[550px] text-left text-xs border-collapse">
-                    <thead className="bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
+                <div className="border border-[#D4E4F7] rounded-xl overflow-x-auto shadow-2xs">
+                  <table className="w-full min-w-[620px] text-left text-xs border-collapse">
+                    <thead className="bg-[#F5F9FF] font-mono font-bold text-[#123B6D] border-b border-[#D4E4F7] text-[10px] uppercase tracking-wider">
                       <tr>
-                        <th className="p-2 w-10 text-center">SN.</th>
-                        <th className="p-2">Material Description</th>
-                        <th className="p-2 w-16 text-center">Qty</th>
-                        <th className="p-2 w-20 text-center">Unit</th>
-                        <th className="p-2 w-24 text-right">Rate</th>
-                        <th className="p-2 w-28 text-right">Total (₹)</th>
-                        <th className="p-2 w-10 text-center"></th>
+                        <th className="py-2.5 px-3 w-12 text-center">SN.</th>
+                        <th className="py-2.5 px-3">Material Description / Concrete Grade</th>
+                        <th className="py-2.5 px-3 w-20 text-center">Qty</th>
+                        <th className="py-2.5 px-3 w-20 text-center">Unit</th>
+                        <th className="py-2.5 px-3 w-28 text-right">Rate (₹)</th>
+                        <th className="py-2.5 px-3 w-32 text-right">Total Amount (₹)</th>
+                        <th className="py-2.5 px-2 w-10 text-center"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-[#D4E4F7]">
                       {billForm.items.map((item, idx) => (
-                        <tr key={idx} className="bg-white">
-                          <td className="p-2 text-center font-bold text-slate-500">{idx + 1}</td>
-                          <td className="p-2">
+                        <tr key={idx} className="bg-white hover:bg-[#F5F9FF]/50 transition-colors">
+                          <td className="py-2 px-3 text-center font-mono font-bold text-slate-600">
+                            <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-[11px]">
+                              {idx + 1}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
                             <input
                               type="text"
                               value={item.material}
                               onChange={(e) => handleItemChange(idx, 'material', e.target.value)}
-                              placeholder="e.g. Pump or Concrete Grade"
-                              className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 text-slate-900 font-medium"
+                              placeholder="e.g. M25 Concrete or Concrete Pump"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-slate-900 font-medium focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
                               required
                             />
                           </td>
-                          <td className="p-2">
+                          <td className="py-2 px-3">
                             <input
                               type="number"
                               step="0.1"
                               value={item.qty}
                               onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
-                              className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 text-center font-mono font-bold text-slate-900"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-center font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
                               required
                             />
                           </td>
-                          <td className="p-2">
+                          <td className="py-2 px-3">
                             <input
                               type="text"
                               value={item.unit}
                               onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                              className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 text-center text-slate-700"
+                              placeholder="m³"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-center font-semibold text-slate-700 focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
                             />
                           </td>
-                          <td className="p-2">
+                          <td className="py-2 px-3">
                             <input
                               type="number"
                               value={item.rate}
                               onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
-                              className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 text-right font-mono font-bold text-slate-900"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50/70 border border-slate-300 text-right font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]/20 text-xs transition-all"
                               required
                             />
                           </td>
-                          <td className="p-2 text-right font-mono font-black text-slate-950">
-                            {Number(item.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          <td className="py-2 px-3 text-right font-mono font-black text-slate-950 text-xs">
+                            ₹ {Number(item.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="p-2 text-center">
+                          <td className="py-2 px-2 text-center">
                             {billForm.items.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItemRow(idx)}
-                                className="text-rose-500 hover:text-rose-700 font-bold"
+                                className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Remove line item"
                               >
-                                ✕
+                                <Trash2 className="w-3.5 h-3.5 text-black" />
                               </button>
                             )}
                           </td>
@@ -1720,53 +1931,87 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 </div>
               </div>
 
-              {/* Row 4: Transportation & Final Total Calculation */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Transportation Charges (₹)</label>
-                  <input
-                    type="number"
-                    value={billForm.transportation}
-                    onChange={(e) => setBillForm({ ...billForm, transportation: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-mono font-bold text-slate-900"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Total in Words will update automatically
-                  </span>
+              {/* Section 4: Transportation & Computed Financials */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                <div className="sm:col-span-5 bg-white rounded-2xl border border-[#D4E4F7] p-4 shadow-2xs space-y-2">
+                  <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                    <span>Transportation / Freight Charges</span>
+                    <span className="text-[10px] text-slate-600 font-normal">Optional</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-600 font-mono text-xs">₹</span>
+                    <input
+                      type="number"
+                      value={billForm.transportation}
+                      onChange={(e) => setBillForm({ ...billForm, transportation: Number(e.target.value) })}
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-600">
+                    Calculates directly into final memo amount & printable paper breakdown.
+                  </p>
                 </div>
 
-                <div className="flex flex-col justify-end text-right">
-                  <span className="text-slate-500 text-xs">Computed Final Amount:</span>
-                  <span className="text-xl font-black font-mono text-emerald-700">
-                    ₹ {(
-                      billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) +
-                      (Number(billForm.transportation) || 0)
-                    ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-600 truncate">
-                    {numberToIndianWords(
-                      billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) +
-                      (Number(billForm.transportation) || 0)
+                <div className="sm:col-span-7 bg-gradient-to-br from-[#F5F9FF] to-[#EAF3FF] rounded-2xl border border-[#D4E4F7] p-4 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+                      <span>Items Subtotal:</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        ₹ {billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {Number(billForm.transportation) > 0 && (
+                      <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+                        <span>Transportation:</span>
+                        <span className="font-mono font-bold text-slate-900">
+                          + ₹ {Number(billForm.transportation).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     )}
-                  </span>
+                    <div className="h-px bg-[#D4E4F7] my-2" />
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs font-bold text-slate-700">Computed Final Amount:</span>
+                      <span className="text-2xl font-black font-mono text-emerald-700 tracking-tight">
+                        ₹ {(
+                          billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) +
+                          (Number(billForm.transportation) || 0)
+                        ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-[#D4E4F7]/60 flex items-start gap-1.5">
+                    <span className="text-[10px] uppercase font-mono font-bold text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded shrink-0 border border-amber-200">
+                      In Words
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-800 italic line-clamp-2">
+                      {numberToIndianWords(
+                        billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) +
+                        (Number(billForm.transportation) || 0)
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 shrink-0">
+              {/* Sticky Submit Bar */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-200 bg-white -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-4 sm:p-5 shrink-0 rounded-b-3xl">
                 <button
                   type="button"
                   onClick={() => setShowBillFormModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer inline-flex items-center gap-1.5 border border-slate-200"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                  <ArrowLeft className="w-4 h-4 text-slate-600" />
-                  <span>Back</span>
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Cancel / Close</span>
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#123B6D] to-[#1D5FA7] hover:from-[#0F2D54] hover:to-[#123B6D] shadow-md shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  {editingBill ? 'Save & Update Bill' : 'Generate Cash Memo'}
+                  <ReceiptText className="w-4 h-4 text-amber-300" />
+                  <span>{editingBill ? 'Save & Update Cash Memo' : 'Generate Official Cash Memo'}</span>
                 </button>
               </div>
 

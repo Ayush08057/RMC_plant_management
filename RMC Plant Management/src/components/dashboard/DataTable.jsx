@@ -18,6 +18,7 @@ export default function DataTable({
   onRowClick = null,
   allowFullscreen = true,
   initialFullscreen = false,
+  compact = false,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -113,15 +114,15 @@ export default function DataTable({
         <div className="h-1 bg-gradient-to-r from-[#123B6D] via-[#1D5FA7] to-[#246BCE] shrink-0" />
 
         {/* Table Header & Search Controls */}
-        <div className="p-2 sm:p-2.5 border-b border-[#D4E4F7] flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full min-w-0 bg-[#F5F9FF] shrink-0">
+        <div className={`border-b border-[#D4E4F7] flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full min-w-0 bg-[#F5F9FF] shrink-0 ${compact ? 'p-1.5 sm:px-2.5 sm:py-2' : 'p-2 sm:p-2.5'}`}>
           <div className="flex items-center gap-2 min-w-0">
             {Icon && (
-              <div className="p-1.5 sm:p-2 rounded-xl bg-[#1D5FA7] text-white shrink-0 shadow-xs">
-                <Icon className="w-4 h-4" />
+              <div className={`rounded-xl bg-[#1D5FA7] text-white shrink-0 shadow-xs ${compact ? 'p-1.5' : 'p-1.5 sm:p-2'}`}>
+                <Icon className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="text-sm sm:text-base font-bold text-black tracking-tight flex items-center gap-1.5 flex-wrap">
+              <h3 className={`font-bold text-black tracking-tight flex items-center gap-1.5 flex-wrap ${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
                 <span className="whitespace-nowrap">{title}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] font-mono font-bold shrink-0 shadow-2xs">
                   {filteredData.length} records
@@ -139,7 +140,7 @@ export default function DataTable({
           <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-start sm:justify-end min-w-0">
             {searchable && (
               <div className="relative w-full sm:w-56 lg:w-64 max-w-full">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1D5FA7]" />
+                <Search className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1D5FA7] ${compact ? 'w-3.5 h-3.5 left-2.5' : 'w-4 h-4 left-3.5'}`} />
                 <input
                   type="text"
                   value={searchQuery}
@@ -148,7 +149,7 @@ export default function DataTable({
                     setCurrentPage(1);
                   }}
                   placeholder={searchPlaceholder}
-                  className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs"
+                  className={`w-full bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs ${compact ? 'pl-8 pr-2.5 py-1 sm:py-1.5' : 'pl-9 pr-3 py-1.5 sm:py-2'}`}
                 />
               </div>
             )}
@@ -174,7 +175,7 @@ export default function DataTable({
                     <th
                       key={idx}
                       style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                      className={`py-2 px-3 text-[10px] font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] ${isFirst ? 'pl-3.5 sm:pl-4' : ''
+                      className={`${compact ? 'py-1.5 px-2.5 text-[9px]' : 'py-2 px-3 text-[10px]'} font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] ${isFirst ? 'pl-3.5 sm:pl-4' : ''
                         } ${isLast ? 'pr-3.5 sm:pr-4' : ''
                         } ${alignClass} ${col.headerClassName || ''}`}
                     >
@@ -207,7 +208,7 @@ export default function DataTable({
                         <td
                           key={cIdx}
                           style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                          className={`py-1.5 px-3 align-middle min-w-0 ${isFirst ? 'pl-3.5 sm:pl-4' : ''
+                          className={`${compact ? 'py-1 px-2.5' : 'py-1.5 px-3'} align-middle min-w-0 ${isFirst ? 'pl-3.5 sm:pl-4' : ''
                             } ${isLast ? 'pr-3.5 sm:pr-4' : ''
                             } ${col.className || ''}`}
                         >

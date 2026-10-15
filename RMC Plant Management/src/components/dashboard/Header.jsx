@@ -368,10 +368,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                                 setShowPlantPicker(false);
                               }}
                               title={`Delete company ${company.name}`}
-                              className="p-1.5 rounded-md text-red-500 hover:text-white hover:bg-red-600 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-md text-red-600 hover:text-black hover:bg-red-600 transition-colors cursor-pointer"
                               aria-label={`Delete ${company.name}`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5 text-black hover:text-black" />
                             </button>
                           </div>
                         )}
