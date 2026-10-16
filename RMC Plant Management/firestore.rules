@@ -2,22 +2,42 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper authorization functions
+    // =========================================================================
+    // Helper Authorization & Identity Functions
+    // =========================================================================
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    function getUserRole() {
-      return request.auth.token.role != null ? request.auth.token.role : '';
+
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    
+
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Role resolution: checks custom claims first, falls back to Firestore user profile
+    function getUserRole() {
+      return request.auth.token.role != null
+        ? request.auth.token.role
+        : (hasUserDoc() && getUserDoc().role != null ? getUserDoc().role : '');
+    }
+
+    // Company resolution: checks custom claims first, falls back to Firestore user profile
+    function getUserCompanyId() {
+      return request.auth.token.companyId != null
+        ? request.auth.token.companyId
+        : (hasUserDoc() && getUserDoc().companyId != null ? getUserDoc().companyId : 'CMP-SM-001');
+    }
+
     function isAdmin() {
       return isAuthenticated() && (
         getUserRole() == 'Admin' ||
         request.auth.token.email == 'smconcretech@gmail.com'
       );
     }
-    
+
     function isManager() {
       return isAuthenticated() && (
         isAdmin() ||
@@ -25,162 +45,537 @@ service cloud.firestore {
       );
     }
 
-    // Users collection: Authenticated users can read directory; Admin can manage all; Users can update own profile
+    function isHR() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        getUserRole() in ['HR Manager', 'HR Executive']
+      );
+    }
+
+    function isAccountant() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        getUserRole() in ['Accountant', 'Owner / Director']
+      );
+    }
+
+    function isQuality() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        getUserRole() in ['Quality Incharge', 'Lab Assistant']
+      );
+    }
+
+    function isDispatcher() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        getUserRole() in ['Dispatcher', 'Weighbridge Operator']
+      );
+    }
+
+    // Checks whether the target record belongs to the authenticated user
+    function isOwner(empOrUserId) {
+      return isAuthenticated() && (
+        request.auth.uid == empOrUserId ||
+        (hasUserDoc() && getUserDoc().employeeId == empOrUserId) ||
+        (hasUserDoc() && getUserDoc().id == empOrUserId)
+      );
+    }
+
+    // Multi-tenant company isolation
+    function isSameCompany(targetCompanyId) {
+      return isAuthenticated() && (
+        isAdmin() ||
+        targetCompanyId == getUserCompanyId()
+      );
+    }
+
+    // =========================================================================
+    // Core User Directory & Profiles (/users)
+    // =========================================================================
     match /users/{userId} {
+      // Directory listing accessible to authenticated staff
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
+
+      // Admins can create any user. Self-registering users can create own unapproved record with non-privileged role
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (request.auth.uid == userId &&
+         request.resource.data.role != 'Admin' &&
+         request.resource.data.isApproved == false &&
+         request.resource.data.status in ['Pending', 'Pending Approval', 'Pending Registration'])
+      );
+
+      // Prevent privilege escalation: users updating their own profile CANNOT change role, companyId, isApproved, or status
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (request.auth.uid == userId &&
+         request.resource.data.role == resource.data.role &&
+         request.resource.data.companyId == resource.data.companyId &&
+         request.resource.data.isApproved == resource.data.isApproved &&
+         request.resource.data.status == resource.data.status)
+      );
+
+      // Deletions strictly restricted to Admins
       allow delete: if isAdmin();
     }
 
-    // Employees collection: Read by authenticated users; Created/managed by Plant Managers and Admins
+    // =========================================================================
+    // Employee Master Registry (/employees)
+    // =========================================================================
     match /employees/{empId} {
       allow read: if isAuthenticated();
-      allow create, update: if isManager();
+      allow create, update: if isManager() || isHR();
       allow delete: if isAdmin();
     }
 
-    // Master Plant Network & Companies: Auth read, strictly Admin write
+    // =========================================================================
+    // Plant Network & Companies
+    // =========================================================================
     match /plants/{plantId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
-    
+
     match /companies/{companyId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
-    // Operational Workforce & Plant Operations Collections
+    // =========================================================================
+    // Orders & Dispatch (/orders)
+    // =========================================================================
     match /orders/{orderId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (isManager() || isDispatcher() || isAdmin());
       allow delete: if isAdmin() || isManager();
     }
-    
+
+    // =========================================================================
+    // Attendance & GPS Records (/attendance)
+    // Drivers & non-management cannot view other employees' selfies or records
+    // =========================================================================
     match /attendance/{attId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isAuthenticated() && (
+        isManager() ||
+        isHR() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update: if isAuthenticated() && (isManager() || isHR());
       allow delete: if isAdmin();
-    }
-    
-    match /shifts/{shiftId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager();
-    }
-    
-    match /dailyWork/{workId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isManager();
-    }
-    
-    match /leaves/{leaveId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isManager();
-    }
-    
-    match /advances/{advId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isManager() || getUserRole() == 'Accountant';
-    }
-    
-    match /loans/{loanId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isManager() || getUserRole() == 'Accountant';
-    }
-    
-    match /payrollRecords/{payId} {
-      allow read: if isAuthenticated() && (isAdmin() || getUserRole() in ['Accountant', 'Owner / Director']);
-      allow write: if isAdmin() || getUserRole() in ['Accountant', 'Owner / Director'];
-    }
-    
-    match /documents/{docId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
-    }
-    
-    match /auditLogs/{logId} {
-      allow read: if isManager();
-      allow create: if isAuthenticated();
-      allow update, delete: if false; // Append-only immutable log
-    }
-    
-    match /hrSettings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
     }
 
-    // Company-Scoped Collections (CMP-SM-001)
-    match /employees_CMP-SM-001/{empId} {
+    // =========================================================================
+    // Shifts & Schedules (/shifts)
+    // =========================================================================
+    match /shifts/{shiftId} {
       allow read: if isAuthenticated();
-      allow create, update: if isManager();
+      allow write: if isManager() || isHR();
+    }
+
+    // =========================================================================
+    // Daily Work Logs (/dailyWork)
+    // =========================================================================
+    match /dailyWork/{workId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isManager() || isOwner(resource.data.employeeId));
+      allow delete: if isManager();
+    }
+
+    // =========================================================================
+    // Leave Management (/leaves)
+    // Employees can apply and view their own; only Managers/HR can approve
+    // =========================================================================
+    match /leaves/{leaveId} {
+      allow read: if isAuthenticated() && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isAuthenticated() && (
+        isManager() ||
+        isHR() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update, delete: if isManager() || isHR();
+    }
+
+    // =========================================================================
+    // Financial: Advances & Loans (/advances, /loans)
+    // Strictly restricted to Accountant, Manager, and the individual employee
+    // =========================================================================
+    match /advances/{advId} {
+      allow read: if isAuthenticated() && (
+        isAccountant() ||
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isAuthenticated() && (
+        isAccountant() ||
+        isManager() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update, delete: if isAccountant() || isManager();
+    }
+
+    match /loans/{loanId} {
+      allow read: if isAuthenticated() && (
+        isAccountant() ||
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isAuthenticated() && (
+        isAccountant() ||
+        isManager() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update, delete: if isAccountant() || isManager();
+    }
+
+    // =========================================================================
+    // Financial: Payroll Records (/payrollRecords)
+    // Strictly protected: only Accountant / Admin can manage; employees can only view own
+    // =========================================================================
+    match /payrollRecords/{payId} {
+      allow read: if isAuthenticated() && (
+        isAccountant() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow write: if isAccountant();
+    }
+
+    // =========================================================================
+    // Employee Documents & KYC Dossiers (/documents)
+    // Confidential: Aadhaar, PAN, Bank Details
+    // =========================================================================
+    match /documents/{docId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isHR() ||
+        isManager() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isHR() ||
+        isManager() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update, delete: if isAdmin() || isHR();
+    }
+
+    // =========================================================================
+    // System Audit Logs (/auditLogs)
+    // Append-only; immutable; readable by management
+    // =========================================================================
+    match /auditLogs/{logId} {
+      allow read: if isManager() || isHR();
+      allow create: if isAuthenticated();
+      allow update: if false; // Absolutely immutable to modifications
+      allow delete: if isAdmin(); // Admin can prune/cleanup
+    }
+
+    // =========================================================================
+    // HR System Settings (/hrSettings)
+    // =========================================================================
+    match /hrSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isHR();
+    }
+
+    // =========================================================================
+    // Multi-Company Partitioned Collections
+    // =========================================================================
+    
+    // --- CMP-SM-001 Partition ---
+    match /employees_CMP-SM-001/{empId} {
+      allow read: if isSameCompany('CMP-SM-001');
+      allow create, update: if isSameCompany('CMP-SM-001') && (isManager() || isHR());
       allow delete: if isAdmin();
     }
     match /plants_CMP-SM-001/{plantId} {
-      allow read: if isAuthenticated();
+      allow read: if isSameCompany('CMP-SM-001');
       allow write: if isAdmin();
     }
     match /orders_CMP-SM-001/{orderId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin() || isManager();
+      allow read: if isSameCompany('CMP-SM-001');
+      allow create, update: if isSameCompany('CMP-SM-001') && (isManager() || isDispatcher() || isAdmin());
+      allow delete: if isSameCompany('CMP-SM-001') && (isAdmin() || isManager());
     }
     match /attendance_CMP-SM-001/{attId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow read: if isSameCompany('CMP-SM-001') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('CMP-SM-001') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update: if isSameCompany('CMP-SM-001') && (isManager() || isHR());
       allow delete: if isAdmin();
     }
     match /shifts_CMP-SM-001/{shiftId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager();
+      allow read: if isSameCompany('CMP-SM-001');
+      allow write: if isSameCompany('CMP-SM-001') && (isManager() || isHR());
     }
     match /dailyWork_CMP-SM-001/{workId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isManager();
+      allow read: if isSameCompany('CMP-SM-001');
+      allow create: if isSameCompany('CMP-SM-001');
+      allow update: if isSameCompany('CMP-SM-001') && (isManager() || isOwner(resource.data.employeeId));
+      allow delete: if isSameCompany('CMP-SM-001') && isManager();
     }
     match /leaves_CMP-SM-001/{leaveId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isManager();
+      allow read: if isSameCompany('CMP-SM-001') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('CMP-SM-001') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('CMP-SM-001') && (isManager() || isHR());
     }
     match /advances_CMP-SM-001/{advId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isManager() || getUserRole() == 'Accountant';
+      allow read: if isSameCompany('CMP-SM-001') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('CMP-SM-001') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('CMP-SM-001') && (isAccountant() || isManager());
     }
     match /loans_CMP-SM-001/{loanId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isManager() || getUserRole() == 'Accountant';
+      allow read: if isSameCompany('CMP-SM-001') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('CMP-SM-001') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('CMP-SM-001') && (isAccountant() || isManager());
     }
     match /payrollRecords_CMP-SM-001/{payId} {
-      allow read: if isAuthenticated() && (isAdmin() || getUserRole() in ['Accountant', 'Owner / Director']);
-      allow write: if isAdmin() || getUserRole() in ['Accountant', 'Owner / Director'];
+      allow read: if isSameCompany('CMP-SM-001') && (isAccountant() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow write: if isSameCompany('CMP-SM-001') && isAccountant();
     }
     match /documents_CMP-SM-001/{docId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read: if isSameCompany('CMP-SM-001') && (isAdmin() || isHR() || isManager() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('CMP-SM-001') && (isAdmin() || isHR() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('CMP-SM-001') && (isAdmin() || isHR());
     }
     match /auditLogs_CMP-SM-001/{logId} {
-      allow read: if isManager();
-      allow create: if isAuthenticated();
-      allow update, delete: if false;
+      allow read: if isSameCompany('CMP-SM-001') && (isManager() || isHR());
+      allow create: if isSameCompany('CMP-SM-001');
+      allow update: if false;
+      allow delete: if isAdmin();
     }
     match /hrSettings_CMP-SM-001/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read: if isSameCompany('CMP-SM-001');
+      allow write: if isAdmin() || isHR();
     }
 
-    // General fallback: requires authentication at minimum
-    match /{document=**} {
-      allow read: if isAuthenticated();
+    // --- sm-concretech Partition ---
+    match /employees_sm-concretech/{empId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow create, update: if isSameCompany('sm-concretech') && (isManager() || isHR());
+      allow delete: if isAdmin();
+    }
+    match /plants_sm-concretech/{plantId} {
+      allow read: if isSameCompany('sm-concretech');
       allow write: if isAdmin();
+    }
+    match /orders_sm-concretech/{orderId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow create, update: if isSameCompany('sm-concretech') && (isManager() || isDispatcher() || isAdmin());
+      allow delete: if isSameCompany('sm-concretech') && (isAdmin() || isManager());
+    }
+    match /attendance_sm-concretech/{attId} {
+      allow read: if isSameCompany('sm-concretech') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update: if isSameCompany('sm-concretech') && (isManager() || isHR());
+      allow delete: if isAdmin();
+    }
+    match /shifts_sm-concretech/{shiftId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow write: if isSameCompany('sm-concretech') && (isManager() || isHR());
+    }
+    match /dailyWork_sm-concretech/{workId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow create: if isSameCompany('sm-concretech');
+      allow update: if isSameCompany('sm-concretech') && (isManager() || isOwner(resource.data.employeeId));
+      allow delete: if isSameCompany('sm-concretech') && isManager();
+    }
+    match /leaves_sm-concretech/{leaveId} {
+      allow read: if isSameCompany('sm-concretech') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech') && (isManager() || isHR());
+    }
+    match /advances_sm-concretech/{advId} {
+      allow read: if isSameCompany('sm-concretech') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech') && (isAccountant() || isManager());
+    }
+    match /loans_sm-concretech/{loanId} {
+      allow read: if isSameCompany('sm-concretech') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech') && (isAccountant() || isManager());
+    }
+    match /payrollRecords_sm-concretech/{payId} {
+      allow read: if isSameCompany('sm-concretech') && (isAccountant() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow write: if isSameCompany('sm-concretech') && isAccountant();
+    }
+    match /documents_sm-concretech/{docId} {
+      allow read: if isSameCompany('sm-concretech') && (isAdmin() || isHR() || isManager() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech') && (isAdmin() || isHR() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech') && (isAdmin() || isHR());
+    }
+    match /auditLogs_sm-concretech/{logId} {
+      allow read: if isSameCompany('sm-concretech') && (isManager() || isHR());
+      allow create: if isSameCompany('sm-concretech');
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    match /hrSettings_sm-concretech/{settingId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow write: if isAdmin() || isHR();
+    }
+
+    // --- sm-concretech-unit-2 Partition ---
+    match /employees_sm-concretech-unit-2/{empId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow create, update: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR());
+      allow delete: if isAdmin();
+    }
+    match /plants_sm-concretech-unit-2/{plantId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow write: if isAdmin();
+    }
+    match /orders_sm-concretech-unit-2/{orderId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow create, update: if isSameCompany('sm-concretech-unit-2') && (isManager() || isDispatcher() || isAdmin());
+      allow delete: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isManager());
+    }
+    match /attendance_sm-concretech-unit-2/{attId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR());
+      allow delete: if isAdmin();
+    }
+    match /shifts_sm-concretech-unit-2/{shiftId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow write: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR());
+    }
+    match /dailyWork_sm-concretech-unit-2/{workId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow create: if isSameCompany('sm-concretech-unit-2');
+      allow update: if isSameCompany('sm-concretech-unit-2') && (isManager() || isOwner(resource.data.employeeId));
+      allow delete: if isSameCompany('sm-concretech-unit-2') && isManager();
+    }
+    match /leaves_sm-concretech-unit-2/{leaveId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR());
+    }
+    match /advances_sm-concretech-unit-2/{advId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isManager());
+    }
+    match /loans_sm-concretech-unit-2/{loanId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isManager());
+    }
+    match /payrollRecords_sm-concretech-unit-2/{payId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isAccountant() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow write: if isSameCompany('sm-concretech-unit-2') && isAccountant();
+    }
+    match /documents_sm-concretech-unit-2/{docId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isHR() || isManager() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isHR() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isHR());
+    }
+    match /auditLogs_sm-concretech-unit-2/{logId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR());
+      allow create: if isSameCompany('sm-concretech-unit-2');
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    match /hrSettings_sm-concretech-unit-2/{settingId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow write: if isAdmin() || isHR();
+    }
+
+    // --- sm-infra-projects Partition ---
+    match /employees_sm-infra-projects/{empId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow create, update: if isSameCompany('sm-infra-projects') && (isManager() || isHR());
+      allow delete: if isAdmin();
+    }
+    match /plants_sm-infra-projects/{plantId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow write: if isAdmin();
+    }
+    match /orders_sm-infra-projects/{orderId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow create, update: if isSameCompany('sm-infra-projects') && (isManager() || isDispatcher() || isAdmin());
+      allow delete: if isSameCompany('sm-infra-projects') && (isAdmin() || isManager());
+    }
+    match /attendance_sm-infra-projects/{attId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-infra-projects') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update: if isSameCompany('sm-infra-projects') && (isManager() || isHR());
+      allow delete: if isAdmin();
+    }
+    match /shifts_sm-infra-projects/{shiftId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow write: if isSameCompany('sm-infra-projects') && (isManager() || isHR());
+    }
+    match /dailyWork_sm-infra-projects/{workId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow create: if isSameCompany('sm-infra-projects');
+      allow update: if isSameCompany('sm-infra-projects') && (isManager() || isOwner(resource.data.employeeId));
+      allow delete: if isSameCompany('sm-infra-projects') && isManager();
+    }
+    match /leaves_sm-infra-projects/{leaveId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-infra-projects') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-infra-projects') && (isManager() || isHR());
+    }
+    match /advances_sm-infra-projects/{advId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-infra-projects') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-infra-projects') && (isAccountant() || isManager());
+    }
+    match /loans_sm-infra-projects/{loanId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isAccountant() || isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-infra-projects') && (isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-infra-projects') && (isAccountant() || isManager());
+    }
+    match /payrollRecords_sm-infra-projects/{payId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isAccountant() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow write: if isSameCompany('sm-infra-projects') && isAccountant();
+    }
+    match /documents_sm-infra-projects/{docId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isAdmin() || isHR() || isManager() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
+      allow create: if isSameCompany('sm-infra-projects') && (isAdmin() || isHR() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
+      allow update, delete: if isSameCompany('sm-infra-projects') && (isAdmin() || isHR());
+    }
+    match /auditLogs_sm-infra-projects/{logId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isManager() || isHR());
+      allow create: if isSameCompany('sm-infra-projects');
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    match /hrSettings_sm-infra-projects/{settingId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow write: if isAdmin() || isHR();
+    }
+
+    // =========================================================================
+    // General Fallback: Strict Deny All Unmatched Documents
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

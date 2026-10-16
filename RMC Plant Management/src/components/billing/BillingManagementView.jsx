@@ -56,8 +56,8 @@ const OTP_LOGS_STORAGE_KEY = 'rmc_billing_otp_audit_v3';
 export const OWNER_SECURITY_PROFILE = {
   name: 'Sunil More / Shahesh D. Mane',
   role: 'Owner & Proprietor',
-  phone: '+91 9373488061',
-  altPhone: '+91 98200 00008',
+  phone: '+91 9421858683',
+  altPhone: '+91 9373488061',
   company: 'SM CONCRETECH',
   location: 'A/P Tanang, Sangli - 416410',
 };

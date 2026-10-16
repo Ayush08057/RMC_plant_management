@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../data/mockUsers';
+import NotImplementedView, { PLANT_OPERATIONS_TABS } from '../common/NotImplementedView';
 
 export default function AppLayout({ 
   children, 
@@ -171,7 +172,21 @@ export default function AppLayout({
 
         {/* Page Inner Content - Only this area scrolls vertically */}
         <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-4 py-1.5 sm:py-2 overflow-y-auto overflow-x-hidden flex flex-col text-black">
-          {children}
+          {(() => {
+            const validChildren = React.Children.toArray(children).filter(Boolean);
+            if (validChildren.length > 0) {
+              return children;
+            }
+            if (activeTab && PLANT_OPERATIONS_TABS[activeTab]) {
+              return (
+                <NotImplementedView
+                  module={PLANT_OPERATIONS_TABS[activeTab]}
+                  onBack={() => onSelectTab && onSelectTab('dashboard')}
+                />
+              );
+            }
+            return children;
+          })()}
         </main>
 
         {/* Pinned Operational Footer - Display Active Logged In Session Below */}

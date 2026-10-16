@@ -23,6 +23,11 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Active status validation: Inactive, suspended, or pending accounts cannot access protected routes
+  if (user.status && user.status !== 'Active') {
+    return <Navigate to="/login" state={{ from: location, error: 'Your account is not active. Please contact Admin.' }} replace />;
+  }
+
   // First-time login mandatory password change
   if (user.mustChangePassword) {
     return <Navigate to="/first-time-setup" replace />;

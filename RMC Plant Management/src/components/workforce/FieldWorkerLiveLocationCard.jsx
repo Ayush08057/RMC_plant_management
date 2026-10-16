@@ -43,38 +43,55 @@ export default function FieldWorkerLiveLocationCard({
   const effectiveName = workerName || user?.name || 'Field Specialist';
   const effectiveRole = workerRole || user?.role || 'Field Worker';
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayRecord = (attendance || []).find((a) => {
+    const aId = (a.employeeId || '').toUpperCase();
+    const effId = (effectiveId || '').toUpperCase();
+    return aId === effId && a.date === todayStr;
+  });
+
   // Base coords for Navi Mumbai / Pune RMC corridor
   const BASE_PLANT_LAT = 19.0558;
   const BASE_PLANT_LNG = 73.0163;
 
   // Real-time GPS states
-  const [gpsCoords, setGpsCoords] = useState({
-    lat: BASE_PLANT_LAT + 0.0125,
-    lng: BASE_PLANT_LNG + 0.0210,
-    accuracy: 6,
-    altitude: 42,
-    speed: effectiveRole.includes('Driver') ? 34 : 0,
-    heading: 68,
+  const [gpsCoords, setGpsCoords] = useState(() => {
+    if (todayRecord?.gpsLocation?.lat && todayRecord?.gpsLocation?.lng) {
+      return {
+        lat: Number(todayRecord.gpsLocation.lat),
+        lng: Number(todayRecord.gpsLocation.lng),
+        accuracy: todayRecord.gpsLocation.accuracy || 10,
+        altitude: 40,
+        speed: 0,
+        heading: 0,
+      };
+    }
+    return null;
   });
 
-  const [gpsStatus, setGpsStatus] = useState('LIVE_GNSS_LOCKED'); // 'SEARCHING' | 'LIVE_GNSS_LOCKED' | 'SIMULATED'
-  const [lastPingTime, setLastPingTime] = useState(getNowIndian12Hr(true));
+  const [gpsStatus, setGpsStatus] = useState(() => {
+    return todayRecord?.gpsLocation ? 'PUNCH_IN_FIX' : 'SEARCHING';
+  }); // 'SEARCHING' | 'LIVE_GNSS_LOCKED' | 'PUNCH_IN_FIX' | 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'OFFLINE'
+
+  const [lastPingTime, setLastPingTime] = useState(() => {
+    return todayRecord?.gpsLocation?.timestamp 
+      ? new Date(todayRecord.gpsLocation.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) 
+      : getNowIndian12Hr(true);
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
-  const [simulatedTick, setSimulatedTick] = useState(0);
   const [alertSentMsg, setAlertSentMsg] = useState(null);
-
-  // Check today's punch state for this worker
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayRecord = (attendance || []).find(
-    (a) => (a.employeeId === effectiveId || a.employeeId === user?.employeeId) && a.date === todayStr
-  );
-  const isPunchedIn = Boolean(todayRecord?.punchIn && !todayRecord?.punchOut);
 
   // 1. Hardware Geolocation acquisition if available in browser
   const refreshLocationFix = () => {
     setIsRefreshing(true);
-    if ('geolocation' in navigator) {
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      setGpsStatus('OFFLINE');
+      setIsRefreshing(false);
+      return;
+    }
+
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setGpsCoords({
@@ -83,22 +100,30 @@ export default function FieldWorkerLiveLocationCard({
             accuracy: Math.round(pos.coords.accuracy || 8),
             altitude: Math.round(pos.coords.altitude || 38),
             speed: Math.round((pos.coords.speed || 0) * 3.6),
-            heading: Math.round(pos.coords.heading || 45),
+            heading: Math.round(pos.coords.heading || 0),
           });
           setGpsStatus('LIVE_GNSS_LOCKED');
           setLastPingTime(getNowIndian12Hr(true));
           setIsRefreshing(false);
         },
-        () => {
-          // Fallback to simulated transit telemetry
-          setGpsStatus('SIMULATED');
-          setLastPingTime(getNowIndian12Hr(true));
+        (err) => {
+          if (err.code === 1) {
+            setGpsStatus('PERMISSION_DENIED');
+          } else if (todayRecord?.gpsLocation?.lat) {
+            setGpsStatus('PUNCH_IN_FIX');
+          } else {
+            setGpsStatus('UNAVAILABLE');
+          }
           setIsRefreshing(false);
         },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     } else {
-      setGpsStatus('SIMULATED');
+      if (todayRecord?.gpsLocation?.lat) {
+        setGpsStatus('PUNCH_IN_FIX');
+      } else {
+        setGpsStatus('UNAVAILABLE');
+      }
       setIsRefreshing(false);
     }
   };
@@ -108,32 +133,9 @@ export default function FieldWorkerLiveLocationCard({
     refreshLocationFix();
   }, []);
 
-  // 2. Periodic sync for live connection
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSimulatedTick((prev) => prev + 1);
-
-      // Minor realistic jitter to show live connection to Admin
-      if (gpsStatus === 'SIMULATED' || effectiveRole.includes('Driver')) {
-        setGpsCoords((prev) => {
-          const deltaLat = Math.sin(Date.now() / 4000) * 0.00015;
-          const deltaLng = Math.cos(Date.now() / 4000) * 0.00015;
-          return {
-            ...prev,
-            lat: Number((BASE_PLANT_LAT + 0.0125 + deltaLat).toFixed(6)),
-            lng: Number((BASE_PLANT_LNG + 0.0210 + deltaLng).toFixed(6)),
-            speed: isPunchedIn ? (effectiveRole.includes('Driver') ? Math.floor(28 + Math.sin(Date.now() / 3000) * 12) : 0) : 0,
-          };
-        });
-        setLastPingTime(getNowIndian12Hr(true));
-      }
-    }, 1200);
-
-    return () => clearInterval(timer);
-  }, [gpsStatus, effectiveRole, isPunchedIn]);
-
   // Distance from plant base calculation (Haversine formula approximation)
   const calculateDistanceKm = () => {
+    if (!gpsCoords?.lat || !gpsCoords?.lng) return 'N/A';
     const R = 6371; // Earth's radius in km
     const dLat = (gpsCoords.lat - BASE_PLANT_LAT) * (Math.PI / 180);
     const dLon = (gpsCoords.lng - BASE_PLANT_LNG) * (Math.PI / 180);
@@ -148,19 +150,21 @@ export default function FieldWorkerLiveLocationCard({
   const distanceKm = calculateDistanceKm();
 
   const handleCopyCoords = () => {
+    if (!gpsCoords) return;
     navigator.clipboard?.writeText(`${gpsCoords.lat}, ${gpsCoords.lng}`);
     setCopiedCoords(true);
     setTimeout(() => setCopiedCoords(false), 2000);
   };
 
   const handleSendPingToAdmin = () => {
+    if (!gpsCoords) return;
     setAlertSentMsg(`Location ping & status sent to Plant Admin Console! [${gpsCoords.lat}, ${gpsCoords.lng}]`);
     if (onAlertSent) onAlertSent(gpsCoords);
     setTimeout(() => setAlertSentMsg(null), 4000);
   };
 
   // Google Maps direct URL
-  const googleMapsUrl = `https://www.google.com/maps?q=${gpsCoords.lat},${gpsCoords.lng}`;
+  const googleMapsUrl = gpsCoords ? `https://www.google.com/maps?q=${gpsCoords.lat},${gpsCoords.lng}` : '#';
 
   return (
     <div className={`w-full rounded-2xl md:rounded-3xl bg-white border border-slate-200/90 shadow-md overflow-hidden relative ${className}`}>
@@ -262,6 +266,15 @@ export default function FieldWorkerLiveLocationCard({
           </div>
         </div>
 
+        {/* Hardware Tracking Disclaimer */}
+        <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-start gap-2.5 text-xs text-amber-900">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">Hardware Notice: </span>
+            Continuous real-time background tracking requires vehicle-mounted GPS hardware. Web browser geolocation reflects active punches or live browser sessions only.
+          </div>
+        </div>
+
         {/* Clean, Simple Field Location Summary */}
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
           <div className="space-y-1.5">
@@ -270,8 +283,14 @@ export default function FieldWorkerLiveLocationCard({
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
                 Current Work Location
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                Online
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                gpsStatus === 'LIVE_GNSS_LOCKED' 
+                  ? 'bg-emerald-100 text-emerald-800' 
+                  : gpsStatus === 'PUNCH_IN_FIX'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-slate-200 text-slate-700'
+              }`}>
+                {gpsStatus === 'LIVE_GNSS_LOCKED' ? 'Live Device GNSS' : (gpsStatus === 'PUNCH_IN_FIX' ? 'Punch-In Fix' : 'No GPS Fix')}
               </span>
             </div>
             <div className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
@@ -287,25 +306,35 @@ export default function FieldWorkerLiveLocationCard({
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
             <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-mono text-xs font-semibold flex items-center gap-2 shadow-2xs">
-              <span>GPS: {gpsCoords.lat.toFixed(4)}°N, {gpsCoords.lng.toFixed(4)}°E</span>
-              <button
-                type="button"
-                onClick={handleCopyCoords}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
-                title="Copy coordinates"
-              >
-                {copiedCoords ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
+              {gpsCoords ? (
+                <>
+                  <span>GPS: {gpsCoords.lat.toFixed(4)}°N, {gpsCoords.lng.toFixed(4)}°E (±{gpsCoords.accuracy}m)</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyCoords}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                    title="Copy coordinates"
+                  >
+                    {copiedCoords ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </>
+              ) : (
+                <span className="text-amber-800 font-bold">
+                  {gpsStatus === 'PERMISSION_DENIED' ? 'GPS Permission Denied' : 'GPS Signal Unavailable'}
+                </span>
+              )}
             </div>
-            <a
-              href={googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Google Maps</span>
-            </a>
+            {gpsCoords && (
+              <a
+                href={googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Google Maps</span>
+              </a>
+            )}
           </div>
         </div>
 

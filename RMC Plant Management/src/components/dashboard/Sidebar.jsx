@@ -30,11 +30,83 @@ import {
   MapPin,
   Monitor,
   Store,
+  Scale,
+  Fuel,
+  FileBarChart,
+  ClipboardList,
+  Factory,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { ROLES, ROLE_ROUTES } from '../../data/mockUsers';
+
+const ALL_PLANT_OPERATIONS_ITEMS = [
+  { 
+    id: 'plant-dashboard', 
+    label: 'Plant Dashboard', 
+    icon: Gauge, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.DISPATCHER, ROLES.QC_ENGINEER, ROLES.SITE_SUPERVISOR] 
+  },
+  { 
+    id: 'material-inward', 
+    label: 'Material Inward', 
+    icon: Layers, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT] 
+  },
+  { 
+    id: 'weighbridge', 
+    label: 'Weighbridge', 
+    icon: Scale, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT] 
+  },
+  { 
+    id: 'mix-design', 
+    label: 'Mix Design', 
+    icon: FlaskConical, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.QC_ENGINEER] 
+  },
+  { 
+    id: 'batching-sheets', 
+    label: 'Batching Sheets', 
+    icon: ClipboardList, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.QC_ENGINEER] 
+  },
+  { 
+    id: 'delivery-challans', 
+    label: 'Delivery Challans', 
+    icon: Truck, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.DISPATCHER, ROLES.ACCOUNTANT, ROLES.SITE_SUPERVISOR] 
+  },
+  { 
+    id: 'vehicle-management', 
+    label: 'Vehicle Management', 
+    icon: Truck, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.DISPATCHER, ROLES.DRIVER] 
+  },
+  { 
+    id: 'driver-trips', 
+    label: 'Driver Trips', 
+    icon: Navigation, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.DISPATCHER, ROLES.DRIVER, ROLES.SITE_SUPERVISOR] 
+  },
+  { 
+    id: 'diesel-management', 
+    label: 'Diesel Management', 
+    icon: Fuel, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT] 
+  },
+  { 
+    id: 'plant-reports', 
+    label: 'Plant Reports', 
+    icon: FileBarChart, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT, ROLES.QC_ENGINEER] 
+  },
+];
+
+const getPlantOperationsForRole = (role) => {
+  return ALL_PLANT_OPERATIONS_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+};
 
 const PORTAL_LINKS = [
   { role: ROLES.ADMIN, label: 'System Admin Console', path: '/admin', icon: Monitor, colorClass: 'bg-[#136dec]' },
@@ -59,6 +131,15 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
   const flyoutTimerRef = useRef(null);
 
   const getNavItemsForRole = (role) => {
+    const plantOps = getPlantOperationsForRole(role);
+    const plantOpsGroup = plantOps.length > 0 ? {
+      id: 'plant_operations_group',
+      label: 'Plant Operations',
+      icon: Factory,
+      badge: plantOps.length,
+      children: plantOps,
+    } : null;
+
     switch (role) {
       case ROLES.ADMIN:
         return [
@@ -88,6 +169,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.OPERATOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { 
             id: 'employees_group', 
             label: 'Employees', 
@@ -106,6 +188,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ACCOUNTANT:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { id: 'attendance', label: 'Daily Attendance', icon: Clock },
           { id: 'billing', label: 'Cash Memo & Invoicing', icon: Receipt },
           { id: 'purchases', label: 'Plant Material Purchase', icon: Layers },
@@ -126,6 +209,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.DISPATCHER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { id: 'attendance', label: 'My Attendance', icon: Clock },
           { id: 'daily-work', label: 'Daily Dispatch Work', icon: Navigation },
           { id: 'leaves', label: 'Leave Requests', icon: Calendar },
@@ -134,6 +218,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.QC_ENGINEER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { id: 'attendance', label: 'My Attendance', icon: Clock },
           { id: 'daily-work', label: 'Daily QC Work', icon: FlaskConical },
           { id: 'leaves', label: 'Leave Requests', icon: Calendar },
@@ -143,6 +228,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.SITE_SUPERVISOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { id: 'attendance', label: 'Team & My Attendance', icon: Clock },
           { id: 'daily-work', label: 'Daily Site Pouring', icon: Gauge },
           { id: 'leaves', label: 'Team Leave Requests', icon: Calendar },
@@ -151,6 +237,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.DRIVER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { id: 'attendance', label: 'Mobile Punch-In', icon: Clock },
           { id: 'daily-work', label: 'Trip Logs & TM Dispatches', icon: Truck },
           { id: 'leaves', label: 'Leave Requests', icon: Calendar },
@@ -159,6 +246,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.OWNER_DIRECTOR:
         return [
           { id: 'dashboard', label: 'Executive Cockpit', icon: Building2 },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { id: 'attendance', label: 'Executive Attendance', icon: Clock },
           { id: 'billing', label: 'Revenue & Cash Flow', icon: IndianRupee },
           { id: 'payroll', label: 'Workforce & Payroll Costs', icon: Users },

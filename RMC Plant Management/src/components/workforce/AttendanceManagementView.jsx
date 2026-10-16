@@ -319,14 +319,19 @@ export default function AttendanceManagementView({
     }
   };
 
+  const getNowHHMM = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
   // Manual Add Form State (for Popup Modal)
   const [addForm, setAddForm] = useState({
     employeeId: allEmployeesList[0]?.employeeId || allEmployeesList[0]?.id || '',
     date: todayStr,
-    punchIn: '09:00',
-    punchOut: '18:00',
-    workingHours: 9,
-    overtimeHours: 0.5,
+    punchIn: getNowHHMM(),
+    punchOut: '',
+    workingHours: '',
+    overtimeHours: 0,
     status: 'Present',
     remarks: 'Admin Manual Entry',
   });
@@ -654,10 +659,10 @@ export default function AttendanceManagementView({
     setAddForm({
       employeeId: allEmployeesList[0]?.employeeId || allEmployeesList[0]?.id || '',
       date: selectedDate || todayStr,
-      punchIn: '09:00',
-      punchOut: '18:00',
-      workingHours: 9,
-      overtimeHours: 0.5,
+      punchIn: getNowHHMM(),
+      punchOut: '',
+      workingHours: '',
+      overtimeHours: 0,
       status: 'Present',
       remarks: 'Admin manual clocking entry',
     });
@@ -698,17 +703,32 @@ export default function AttendanceManagementView({
     }
 
     const emp = allEmployeesList.find((em) => em.id === addForm.employeeId || em.employeeId === addForm.employeeId);
+    const shift = (shifts || []).find((s) => s.id === emp?.shiftId) || (shifts && shifts[0]);
+    let lateStatus = false;
+    let lateMinutes = 0;
+    if (shift && shift.startTime && addForm.punchIn) {
+      const shiftMins = parseTimeToMinutes(shift.startTime);
+      const inMins = parseTimeToMinutes(addForm.punchIn);
+      const allowed = shiftMins + (shift.gracePeriodMins || 15);
+      if (inMins > allowed) {
+        lateStatus = true;
+        lateMinutes = inMins - shiftMins;
+      }
+    }
+
     addAttendanceRecord({
       employeeId: addForm.employeeId,
       employeeName: emp?.name || addForm.employeeId,
       role: emp?.role || 'Staff',
       plant: emp?.plant || 'Central Plant',
       date: addForm.date,
-      punchIn: addForm.punchIn,
-      punchOut: addForm.punchOut,
-      workingHours: Number(addForm.workingHours) || 8,
+      punchIn: addForm.punchIn ? formatToIndian12Hr(addForm.punchIn) : null,
+      punchOut: addForm.punchOut ? formatToIndian12Hr(addForm.punchOut) : null,
+      workingHours: addForm.punchOut ? (Number(addForm.workingHours) || 8) : null,
       overtimeHours: Number(addForm.overtimeHours) || 0,
       status: addForm.status,
+      lateStatus,
+      lateMinutes,
       remarks: addForm.remarks,
       geofenceStatus: 'Admin Manual Log',
     });

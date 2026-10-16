@@ -13,6 +13,9 @@
  */
 
 import { ROLES, ROLE_ROUTES, SYSTEM_ADMIN, OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { app } from '../config/firebase.js';
 
 export const EMPLOYEE_STATUS = {
   PENDING_REGISTRATION: 'Pending Registration',
@@ -159,9 +162,10 @@ export function validateLoginAttempt(identifier, password, employees = [], users
 
   if (roleAcc) {
     if (password === roleAcc.password) {
+      const { password: _p, ...safeRoleAcc } = roleAcc;
       return {
         allowed: true,
-        user: roleAcc,
+        user: safeRoleAcc,
         role: roleAcc.role,
         redirectPath: roleAcc.portalRoute || ROLE_ROUTES[roleAcc.role] || '/login',
       };
@@ -257,7 +261,7 @@ export function validateLoginAttempt(identifier, password, employees = [], users
     };
   }
 
-  // 6. Build trusted session with backend-verified role
+  // 6. Build trusted session with backend-verified role (WITHOUT PLAINTEXT PASSWORD)
   const trustedRole = empRecord.role || ROLES.PLANT_MANAGER;
   const redirectPath = ROLE_ROUTES[trustedRole] || '/login';
 
@@ -282,4 +286,172 @@ export function validateLoginAttempt(identifier, password, employees = [], users
     role: trustedRole,
     redirectPath,
   };
+}
+
+/**
+ * Resolves any login identifier (Employee ID, Username, Email, Phone) to an
+ * authoritative account profile and verified email for Firebase Authentication.
+ * Strictly guarantees that user cannot tamper with role or company assignment.
+ */
+export function resolveLoginIdentity(identifier, employees = [], users = []) {
+  if (!identifier) return { found: false };
+
+  const cleanId = identifier.trim();
+  const lowerId = cleanId.toLowerCase();
+  const isPhoneFormat = /^[+]?[\d\s-]{7,15}$/.test(cleanId) && cleanId.replace(/\D/g, '').length >= 7;
+  const digitsOnly = isPhoneFormat ? normalizePhone(cleanId) : '';
+
+  // 1. Direct Official Role Accounts Check
+  const roleAcc = OFFICIAL_ROLE_ACCOUNTS.find((acc) => {
+    const accId = (acc.employeeId || '').toUpperCase();
+    const accEmail = (acc.email || '').toLowerCase();
+    const accSecEmail = (acc.secondaryEmail || '').toLowerCase();
+    const accUsername = accEmail.split('@')[0];
+    return (
+      accId === cleanId.toUpperCase() ||
+      accEmail === lowerId ||
+      accSecEmail === lowerId ||
+      accUsername === lowerId
+    );
+  });
+
+  if (roleAcc) {
+    const { password: _p, ...safeAcc } = roleAcc;
+    return {
+      found: true,
+      email: roleAcc.email,
+      user: safeAcc,
+      role: roleAcc.role,
+      status: EMPLOYEE_STATUS.ACTIVE,
+      employeeId: roleAcc.employeeId,
+      name: roleAcc.name,
+      department: roleAcc.department,
+      plantLocation: roleAcc.plantLocation,
+      avatar: roleAcc.avatar,
+      isOfficialAccount: true,
+      redirectPath: roleAcc.portalRoute || ROLE_ROUTES[roleAcc.role] || '/login',
+    };
+  }
+
+  // 2. Find employee in workforce database
+  const matchingEmp = employees.find((e) => {
+    const eId = (e.id || '').toUpperCase();
+    const eUsername = (e.username || '').toLowerCase();
+    const eEmail = (e.email || '').toLowerCase();
+    const ePhone = normalizePhone(e.mobile);
+    return (
+      (eUsername && eUsername === lowerId) ||
+      eId === cleanId.toUpperCase() ||
+      eEmail === lowerId ||
+      (digitsOnly && ePhone && (digitsOnly === ePhone || ePhone.endsWith(digitsOnly)))
+    );
+  });
+
+  // 3. Find registered user record
+  const matchingUser = users.find((u) => {
+    const uEmpId = (u.employeeId || '').toUpperCase();
+    const uId = (u.id || '').toUpperCase();
+    const uUsername = (u.username || '').toLowerCase();
+    const uEmail = (u.email || '').toLowerCase();
+    const uPhone = normalizePhone(u.phone || u.mobile);
+    return (
+      (uUsername && uUsername === lowerId) ||
+      uEmpId === cleanId.toUpperCase() ||
+      uId === cleanId.toUpperCase() ||
+      uId === `USR-${cleanId.toUpperCase()}` ||
+      uEmail === lowerId ||
+      (digitsOnly && uPhone && (digitsOnly === uPhone || uPhone.endsWith(digitsOnly)))
+    );
+  });
+
+  const empRecord = matchingEmp || matchingUser;
+
+  if (!empRecord) {
+    // If identifier is an email format, allow attempting Firebase Auth directly
+    if (lowerId.includes('@')) {
+      return {
+        found: true,
+        email: lowerId,
+        user: {
+          id: `USR-${cleanId}`,
+          email: lowerId,
+          name: lowerId.split('@')[0],
+          role: ROLES.PLANT_MANAGER,
+          status: EMPLOYEE_STATUS.ACTIVE,
+        },
+        role: ROLES.PLANT_MANAGER,
+        status: EMPLOYEE_STATUS.ACTIVE,
+        employeeId: cleanId,
+        name: lowerId.split('@')[0],
+        isOfficialAccount: false,
+        redirectPath: '/plant-manager',
+      };
+    }
+    return { found: false };
+  }
+
+  const trustedRole = empRecord.role || ROLES.PLANT_MANAGER;
+  const status = empRecord.status || (matchingUser ? EMPLOYEE_STATUS.ACTIVE : EMPLOYEE_STATUS.PENDING_REGISTRATION);
+  const resolvedEmail = empRecord.email || matchingUser?.email || empRecord.registeredEmail || `${cleanId.toLowerCase()}@smconcretech.com`;
+
+  const safeProfile = {
+    id: matchingUser?.id || `USR-${empRecord.id}`,
+    employeeId: empRecord.id || empRecord.employeeId,
+    name: empRecord.name,
+    email: resolvedEmail,
+    mobile: empRecord.mobile || empRecord.phone,
+    role: trustedRole,
+    department: empRecord.department || 'Operations',
+    plantLocation: empRecord.plant || empRecord.plantLocation || 'Main Plant HQ',
+    companyId: empRecord.companyId || 'CMP-SM-001',
+    status,
+    permissions: empRecord.permissions || ['ROLE_ACCESS'],
+    avatar: (empRecord.name || 'EM').substring(0, 2).toUpperCase(),
+    mustChangePassword: Boolean(empRecord.mustChangePassword),
+  };
+
+  return {
+    found: true,
+    email: resolvedEmail,
+    user: safeProfile,
+    role: trustedRole,
+    status,
+    employeeId: safeProfile.employeeId,
+    name: safeProfile.name,
+    department: safeProfile.department,
+    plantLocation: safeProfile.plantLocation,
+    avatar: safeProfile.avatar,
+    isOfficialAccount: false,
+    redirectPath: ROLE_ROUTES[trustedRole] || '/login',
+  };
+}
+
+/**
+ * Safely provisions an employee account in Firebase Authentication using a secondary App
+ * instance so that the currently active Administrator session is NOT signed out or disrupted.
+ */
+export async function createEmployeeFirebaseAuth(email, password) {
+  if (!email || !password) return { success: false, error: 'Email and password are required.' };
+  const tempAppName = `EmployeeAuth_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  let secondaryApp = null;
+  try {
+    secondaryApp = initializeApp(app.options, tempAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    await signOut(secondaryAuth);
+    return { success: true, uid: cred.user.uid };
+  } catch (err) {
+    if (err.code === 'auth/email-already-in-use') {
+      return { success: true, alreadyExists: true };
+    }
+    return { success: false, error: err.message, code: err.code };
+  } finally {
+    if (secondaryApp) {
+      try {
+        await deleteApp(secondaryApp);
+      } catch {
+        // ignore
+      }
+    }
+  }
 }

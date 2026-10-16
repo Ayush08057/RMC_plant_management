@@ -11,7 +11,11 @@ import {
   UploadCloud, 
   RefreshCw,
   User,
-  FileText
+  FileText,
+  MapPin,
+  Navigation,
+  Radio,
+  Loader2
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -25,7 +29,7 @@ export default function MobilePunchWidget({
   roleLocked = false
 }) {
   const { user } = useAuth();
-  const { attendance, employees, checkIn, checkOut, dailyWork, submitDailyWork } = useWorkforce();
+  const { attendance, employees, checkIn, checkOut, resetTodayAttendance, dailyWork, submitDailyWork } = useWorkforce();
   const isAdmin = user?.role === 'Admin' || user?.role === 'Owner / Director';
   const isPlantManager = user?.role === 'Plant Manager' || user?.role === 'Plant Incharge';
   const [loading, setLoading] = useState(false);
@@ -42,6 +46,69 @@ export default function MobilePunchWidget({
   const streamRef = useRef(null);
 
   const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
+
+  // Live GPS Acquisition States (Task 1)
+  const [gpsCoords, setGpsCoords] = useState(null); // { lat, lng, accuracy, timestamp }
+  const [gpsStatus, setGpsStatus] = useState('IDLE'); // 'IDLE' | 'ACQUIRING' | 'LOCKED' | 'DENIED' | 'UNAVAILABLE' | 'TIMEOUT'
+  const [gpsError, setGpsError] = useState(null);
+
+  const acquireGpsLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('UNAVAILABLE');
+      setGpsError('Geolocation API is not supported by your browser.');
+      return;
+    }
+
+    setGpsStatus('ACQUIRING');
+    setGpsError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = {
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+          accuracy: Math.round(pos.coords.accuracy || 10),
+          timestamp: new Date(pos.timestamp || Date.now()).toISOString(),
+        };
+        setGpsCoords(coords);
+        setGpsStatus('LOCKED');
+        setGpsError(null);
+      },
+      (err) => {
+        setGpsCoords(null);
+        if (err.code === 1) {
+          setGpsStatus('DENIED');
+          setGpsError('Location permission denied. Please allow location access in browser settings to punch in.');
+        } else if (err.code === 2) {
+          setGpsStatus('UNAVAILABLE');
+          setGpsError('GPS signal unavailable. Please ensure location/GPS is enabled on your device.');
+        } else if (err.code === 3) {
+          setGpsStatus('TIMEOUT');
+          setGpsError('GPS acquisition timed out. Please retry.');
+        } else {
+          setGpsStatus('UNAVAILABLE');
+          setGpsError(err.message || 'Failed to acquire device location.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  };
+
+  useEffect(() => {
+    acquireGpsLocation();
+  }, []);
+
+  // Distance calculator (Haversine in meters)
+  const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
 
   // Live clock interval
   useEffect(() => {
@@ -236,20 +303,49 @@ export default function MobilePunchWidget({
     setError(null);
     setSuccessMsg(null);
 
+    // Prevent duplicate punch-ins
+    if (hasPunchedIn) {
+      setError(`⚠️ Already clocked in today at ${formatToIndian12Hr(userTodayRecord?.punchIn)}.`);
+      return;
+    }
+
     const selfie = capturedSelfie || userTodayRecord?.selfieUrl;
     if (!selfie) {
-      setError('⚠️ Please capture your photo first before Punch In');
+      setError('⚠️ Please capture your photo first before Punch In.');
+      return;
+    }
+
+    // Require actual GPS coordinates - never substitute simulated coordinates
+    if (!gpsCoords || gpsStatus !== 'LOCKED') {
+      setError(gpsError || '⚠️ Live GPS coordinate fix is required to punch in. Please enable location access and click "Retry GPS Fix".');
       return;
     }
 
     setLoading(true);
     try {
       const targetId = activeEmployee.employeeId || activeEmployee.id;
+
+      // Geofencing verification against plant location
+      const plantBase = { lat: 18.5204, lng: 73.8567 };
+      const distMeters = calculateDistanceMeters(gpsCoords.lat, gpsCoords.lng, plantBase.lat, plantBase.lng);
+      const isInside = distMeters <= 500;
+      const geofenceStatus = isInside 
+        ? `Inside Plant Fence (${distMeters}m)` 
+        : `Outside Plant Boundary (${distMeters}m from plant)`;
+
       const rec = checkIn(targetId, {
         selfieUrl: selfie,
-        remarks: 'Mobile Clock-in verified with photo',
+        gpsLocation: {
+          lat: gpsCoords.lat,
+          lng: gpsCoords.lng,
+          accuracy: gpsCoords.accuracy,
+          timestamp: gpsCoords.timestamp,
+          address: `Live GPS Fix (±${gpsCoords.accuracy}m)`,
+        },
+        geofenceStatus,
+        remarks: `Mobile Clock-in verified with photo & live GPS (±${gpsCoords.accuracy}m)`,
       });
-      setSuccessMsg(`✓ Punched In Successfully at ${formatToIndian12Hr(rec.punchIn)}!`);
+      setSuccessMsg(`✓ Punched In Successfully at ${formatToIndian12Hr(rec.punchIn)}! (🛰️ GPS: ${gpsCoords.lat}, ${gpsCoords.lng})`);
       if (onPunched) onPunched();
     } catch (err) {
       setError(err.message || 'Punch In failed. Please try again.');
@@ -263,6 +359,16 @@ export default function MobilePunchWidget({
     if (e) e.preventDefault();
     setError(null);
     setSuccessMsg(null);
+
+    if (!hasPunchedIn) {
+      setError('⚠️ No punch-in recorded for today. You must punch in first before clocking out.');
+      return;
+    }
+
+    if (hasPunchedOut) {
+      setError('⚠️ Shift for today has already been concluded.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -286,8 +392,17 @@ export default function MobilePunchWidget({
         });
       }
 
-      // 2. Punch Out
+      // 2. Punch Out with real exit coordinates if locked
+      const exitGps = gpsCoords ? {
+        lat: gpsCoords.lat,
+        lng: gpsCoords.lng,
+        accuracy: gpsCoords.accuracy,
+        timestamp: new Date().toISOString(),
+        address: `Exit GPS Fix (±${gpsCoords.accuracy}m)`,
+      } : null;
+
       const rec = checkOut(targetId, {
+        exitGpsLocation: exitGps,
         remarks: isDriver 
           ? `Mixer ${driverReport.vehicleNo} | ${driverReport.tripsCount} Trips (${driverReport.deliveredM3} m³)` 
           : staffReport.workDescription,
@@ -460,13 +575,67 @@ export default function MobilePunchWidget({
               </div>
             )}
 
+            {/* Live GPS Coordinate Fix Status */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Verified Device GPS Fix</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={acquireGpsLocation}
+                  disabled={gpsStatus === 'ACQUIRING'}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
+                  title="Re-acquire live GPS fix"
+                >
+                  <RefreshCw className={`w-3 h-3 ${gpsStatus === 'ACQUIRING' ? 'animate-spin' : ''}`} />
+                  <span>Refresh GPS</span>
+                </button>
+              </div>
+
+              {gpsStatus === 'LOCKED' && gpsCoords ? (
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="font-mono font-bold block">
+                        Lat: {gpsCoords.lat}, Lng: {gpsCoords.lng}
+                      </span>
+                      <span className="text-[10px] text-emerald-700 block">
+                        Accuracy: ±{gpsCoords.accuracy}m • Live Hardware GNSS Locked
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-200/80 text-emerald-900 shrink-0">
+                    GPS Ready
+                  </span>
+                </div>
+              ) : gpsStatus === 'ACQUIRING' ? (
+                <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
+                  <span>Acquiring satellite coordinate lock from browser geolocation...</span>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Location Lock Required (Simulated GPS Disabled)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    {gpsError || 'Actual device GPS coordinates are mandatory to clock in. Please enable location permissions.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Step 1B: Big Punch In Button */}
             <button
               type="button"
               onClick={handlePunchIn}
-              disabled={loading || !(capturedSelfie || userTodayRecord?.selfieUrl)}
+              disabled={loading || !(capturedSelfie || userTodayRecord?.selfieUrl) || !gpsCoords || gpsStatus !== 'LOCKED'}
               className={`w-full py-4 px-4 rounded-2xl text-sm sm:text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md active:scale-[0.99] ${
-                (capturedSelfie || userTodayRecord?.selfieUrl)
+                (capturedSelfie || userTodayRecord?.selfieUrl) && gpsCoords && gpsStatus === 'LOCKED'
                   ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/40'
                   : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
               }`}
@@ -474,16 +643,47 @@ export default function MobilePunchWidget({
               <Play className="w-5 h-5 fill-current" />
               <span>PUNCH IN</span>
             </button>
-            {!(capturedSelfie || userTodayRecord?.selfieUrl) && (
+            {!(capturedSelfie || userTodayRecord?.selfieUrl) ? (
               <p className="text-[11px] text-center text-amber-700 font-semibold">
                 👆 Please click "Take Photo" first to enable Punch In
               </p>
-            )}
+            ) : (!gpsCoords || gpsStatus !== 'LOCKED') ? (
+              <p className="text-[11px] text-center text-amber-700 font-semibold">
+                📍 Live GPS location fix is required before Punch In
+              </p>
+            ) : null}
           </div>
         ) : (
-          <div className="flex items-center justify-between text-xs text-emerald-900 font-semibold bg-emerald-100/60 p-3 rounded-xl border border-emerald-200">
-            <span>✓ Checked in today at <strong>{formatToIndian12Hr(userTodayRecord.punchIn)}</strong></span>
-            <span>Shift in progress</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-emerald-900 font-semibold bg-emerald-100/60 p-3 rounded-xl border border-emerald-200 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>✓ Checked in today at <strong>{formatToIndian12Hr(userTodayRecord.punchIn)}</strong></span>
+              {userTodayRecord?.lateStatus ? (
+                <span className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 text-[10px] font-bold">
+                  Late ({userTodayRecord.lateMinutes}m)
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-900 text-[10px] font-bold">
+                  On Time
+                </span>
+              )}
+              <span>• Shift in progress</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (resetTodayAttendance) {
+                  resetTodayAttendance(activeEmployee.employeeId || activeEmployee.id);
+                }
+                setCapturedSelfie(null);
+                setSuccessMsg('Attendance reset for today. You can now Punch In with your real current time.');
+                if (onPunched) onPunched();
+              }}
+              className="px-2.5 py-1 rounded-lg bg-white/90 hover:bg-white text-slate-800 text-[11px] font-bold border border-emerald-300 flex items-center gap-1 cursor-pointer transition-all shrink-0 shadow-2xs"
+              title="Reset today's punch to clock in with live time"
+            >
+              <RefreshCw className="w-3 h-3 text-[#1D5FA7]" />
+              <span>Reset & Re-clock</span>
+            </button>
           </div>
         )}
       </div>
@@ -609,10 +809,28 @@ export default function MobilePunchWidget({
             </button>
           </form>
         ) : (
-          <div className="p-4 rounded-xl bg-blue-100/70 border border-blue-200 text-xs text-blue-950 font-medium space-y-1">
-            <div className="font-black text-sm text-blue-900 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-blue-700" />
-              <span>Shift Finished for Today!</span>
+          <div className="p-4 rounded-xl bg-blue-100/70 border border-blue-200 text-xs text-blue-950 font-medium space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="font-black text-sm text-blue-900 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-blue-700" />
+                <span>Shift Finished for Today!</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (resetTodayAttendance) {
+                    resetTodayAttendance(activeEmployee.employeeId || activeEmployee.id);
+                  }
+                  setCapturedSelfie(null);
+                  setSuccessMsg('Attendance reset for today. You can now punch in with the real live time.');
+                  if (onPunched) onPunched();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-blue-900 border border-blue-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Reset today's punch to record real timing"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#1D5FA7]" />
+                <span>Reset / Punch In Again (Live Time)</span>
+              </button>
             </div>
             <p>
               Clock In: <strong>{formatToIndian12Hr(userTodayRecord.punchIn)}</strong> • Clock Out: <strong>{formatToIndian12Hr(userTodayRecord.punchOut)}</strong> • Total Duty: <strong>{userTodayRecord.workingHours} Hours</strong>

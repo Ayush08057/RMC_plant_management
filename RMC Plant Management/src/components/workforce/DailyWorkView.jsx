@@ -21,7 +21,8 @@ import {
   Sparkles,
   ChevronRight,
   TrendingUp,
-  User
+  User,
+  Eye
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -36,6 +37,8 @@ export default function DailyWorkView({ employeeFilter = null }) {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedDetails, setSelectedDetails] = useState(null);
   const [editingWork, setEditingWork] = useState(null);
   const [selectedWork, setSelectedWork] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
@@ -176,6 +179,19 @@ export default function DailyWorkView({ employeeFilter = null }) {
     }
   };
 
+  // Clean short label for work classifications
+  const formatWorkTypeShort = (type) => {
+    if (!type) return 'Shift Duty';
+    const lower = type.toLowerCase();
+    if (lower.includes('transit') || lower.includes('mixer')) return 'Transit Mixer';
+    if (lower.includes('site') || lower.includes('pouring')) return 'Site Pouring';
+    if (lower.includes('batch') || lower.includes('production')) return 'Batching Duty';
+    if (lower.includes('qc') || lower.includes('quality') || lower.includes('test') || lower.includes('slump')) return 'Quality Test';
+    if (lower.includes('admin') || lower.includes('staff')) return 'Staff Shift';
+    if (lower.includes('plant') || lower.includes('standard')) return 'Plant Operations';
+    return type;
+  };
+
   // Helper for Work Classification Pill
   const renderWorkTypeBadge = (type) => {
     const t = (type || '').toLowerCase();
@@ -201,42 +217,83 @@ export default function DailyWorkView({ employeeFilter = null }) {
       iconColor = 'text-teal-700';
     }
 
+    const shortLabel = formatWorkTypeShort(type);
+
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${badgeStyle} shadow-2xs`}>
+      <span
+        title={type}
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-xs font-semibold ${badgeStyle} shadow-2xs whitespace-nowrap`}
+      >
         <IconComp className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
-        <span className="truncate max-w-[165px]" title={type}>{type}</span>
+        <span>{shortLabel}</span>
       </span>
     );
   };
 
-  // Helper for Operational Description with tags
-  const renderDescription = (text) => {
-    if (!text) return <span className="text-slate-400 italic text-xs">No execution details provided</span>;
-
-    if (text.includes('|')) {
-      const parts = text.split('|').map((p) => p.trim()).filter(Boolean);
-      return (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {parts.map((p, idx) => (
-            <span
-              key={idx}
-              className={`text-[11px] px-2 py-0.5 rounded-md border font-medium ${
-                idx === 0
-                  ? 'bg-slate-100 text-slate-900 font-semibold border-slate-300'
-                  : 'bg-[#F5F9FF] text-[#123B6D] border-[#D4E4F7]'
-              }`}
-            >
-              {p}
-            </span>
-          ))}
-        </div>
-      );
+  // Helper for parsing pipe-delimited operational details cleanly
+  const parseWorkDescription = (text) => {
+    if (!text) return { keyMetric: null, summary: 'No execution details provided', allParts: [] };
+    if (!text.includes('|')) {
+      return { keyMetric: null, summary: text, allParts: [text] };
     }
 
+    const parts = text.split('|').map((p) => p.trim()).filter(Boolean);
+    let keyMetric = null;
+    let remarks = null;
+
+    for (const part of parts) {
+      const lower = part.toLowerCase();
+      if (!keyMetric && (
+        lower.startsWith('production:') ||
+        lower.startsWith('trips:') ||
+        lower.startsWith('grade:') ||
+        lower.startsWith('batches:') ||
+        lower.startsWith('invoices:') ||
+        lower.startsWith('site:') ||
+        lower.startsWith('vehicle:')
+      )) {
+        keyMetric = part;
+      }
+      if (lower.startsWith('remarks:')) {
+        remarks = part.replace(/^remarks:\s*/i, '');
+      }
+    }
+
+    if (!keyMetric && parts.length > 0) {
+      keyMetric = parts[0];
+    }
+
+    const summary = remarks || (parts.length > 1 ? parts.slice(1).join(' • ') : parts[0]);
+    return { keyMetric, summary, allParts: parts };
+  };
+
+  // Helper for Execution Summary preview (clear, visible, readable, multi-line)
+  const renderDescription = (row) => {
+    const text = row.workDescription;
+    if (!text) return <span className="text-slate-400 italic text-xs">No execution details provided</span>;
+
+    const { keyMetric, summary } = parseWorkDescription(text);
+
     return (
-      <p className="text-xs text-slate-800 leading-relaxed font-normal line-clamp-2" title={text}>
-        {text}
-      </p>
+      <div
+        onClick={() => {
+          setSelectedDetails(row);
+          setShowDetailsModal(true);
+        }}
+        className="w-full text-xs cursor-pointer group py-0.5 leading-snug"
+        title="Click to view full work log breakdown"
+      >
+        <div className="flex flex-wrap items-center gap-1 mb-0.5">
+          {keyMetric && (
+            <span className="px-1.5 py-0.2 rounded-md bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] font-mono text-[10.5px] font-bold">
+              {keyMetric}
+            </span>
+          )}
+        </div>
+        <div className="text-slate-800 font-medium line-clamp-2 group-hover:text-[#123B6D] transition-colors">
+          {summary}
+        </div>
+      </div>
     );
   };
 
@@ -245,23 +302,23 @@ export default function DailyWorkView({ employeeFilter = null }) {
     const s = (status || '').toLowerCase();
     if (s === 'approved') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs whitespace-nowrap">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
           <span>Approved</span>
         </span>
       );
     }
     if (s === 'rejected') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
-          <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs whitespace-nowrap">
+          <XCircle className="w-3 h-3 text-rose-600 shrink-0" />
           <span>Rejected</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
-        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-pulse" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs whitespace-nowrap">
+        <Clock className="w-3 h-3 text-amber-600 shrink-0 animate-pulse" />
         <span>Submitted</span>
       </span>
     );
@@ -272,64 +329,45 @@ export default function DailyWorkView({ employeeFilter = null }) {
     if (reviewedBy && reviewedBy !== 'Pending Review') {
       const match = reviewedBy.match(/^(.*?)(?:\s*\((.*?)\))?$/);
       const name = match ? match[1].trim() : reviewedBy;
-      const role = match && match[2] ? match[2].trim() : null;
 
       return (
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap" title={reviewedBy}>
+          <div className="w-4 h-4 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-2.5 h-2.5" />
           </div>
-          <div className="min-w-0">
-            <span className="font-semibold text-slate-900 text-xs block truncate" title={name}>
-              {name}
-            </span>
-            {role && (
-              <span className="text-[10px] text-slate-500 font-medium block truncate">
-                {role}
-              </span>
-            )}
-          </div>
+          <span className="font-semibold text-slate-900 text-xs truncate max-w-[95px]">
+            {name}
+          </span>
         </div>
       );
     }
 
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 border border-amber-200/60 text-amber-800 text-[11px] font-medium">
-        <Clock className="w-3 h-3 text-amber-600 shrink-0" />
-        <span>Pending Review</span>
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-medium border border-amber-200 whitespace-nowrap">
+        <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+        <span>Pending</span>
       </span>
     );
   };
 
-  // High-Grade Enterprise Table Columns
+  // High-Grade Enterprise Table Columns (Fits 100% width with Zero Scrolling and Full Information Visibility)
   const columns = [
     {
       header: 'Date',
       accessor: 'date',
-      width: '130px',
-      minWidth: '120px',
+      width: '8%',
       render: (row) => {
         const meta = formatDateMeta(row.date);
         return (
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-[#F5F9FF] border border-[#D4E4F7] flex flex-col items-center justify-center shrink-0 shadow-2xs text-[#1D5FA7]">
-              <span className="text-[8px] font-extrabold uppercase tracking-tight leading-none text-[#1D5FA7]">
-                {meta.month}
+          <div className="leading-tight">
+            <span className="font-mono text-xs font-bold text-slate-900 block whitespace-nowrap">
+              {row.date}
+            </span>
+            {meta.weekday && (
+              <span className="text-[10px] text-slate-500 font-medium block whitespace-nowrap">
+                {meta.weekday}
               </span>
-              <span className="text-xs font-black font-mono leading-none mt-0.5 text-[#123B6D]">
-                {meta.day}
-              </span>
-            </div>
-            <div className="min-w-0">
-              <span className="font-mono text-xs font-bold text-slate-900 block leading-tight">
-                {row.date}
-              </span>
-              {meta.weekday && (
-                <span className="text-[10px] text-slate-500 font-medium block">
-                  {meta.weekday}
-                </span>
-              )}
-            </div>
+            )}
           </div>
         );
       },
@@ -337,21 +375,20 @@ export default function DailyWorkView({ employeeFilter = null }) {
     {
       header: 'Employee',
       accessor: 'employeeName',
-      width: '200px',
-      minWidth: '180px',
+      width: '14%',
       render: (row) => {
         const name = getEmployeeDisplayName(row);
         const { initials, colorClass } = getAvatarMeta(name);
         return (
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border shadow-2xs ${colorClass}`}>
+          <div className="flex items-center gap-2 min-w-0 w-full">
+            <div className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-[10px] shrink-0 border shadow-2xs ${colorClass}`}>
               {initials}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 truncate">
               <span className="font-bold text-slate-900 text-xs block truncate" title={name}>
                 {name}
               </span>
-              <span className="inline-block mt-0.5 text-[10px] text-slate-600 font-mono font-semibold bg-slate-100 border border-slate-200/80 px-1.5 py-0.2 rounded">
+              <span className="text-[10px] text-slate-500 font-mono block truncate">
                 {row.employeeId || 'STAFF'}
               </span>
             </div>
@@ -360,86 +397,99 @@ export default function DailyWorkView({ employeeFilter = null }) {
       },
     },
     {
-      header: 'Work Classification',
+      header: 'Work Type',
       accessor: 'workType',
-      width: '210px',
-      minWidth: '180px',
+      width: '12%',
       render: (row) => renderWorkTypeBadge(row.workType),
     },
     {
-      header: 'Operational Description',
+      header: 'Execution Summary',
       accessor: 'workDescription',
-      minWidth: '260px',
-      render: (row) => renderDescription(row.workDescription),
+      width: '30%',
+      render: (row) => renderDescription(row),
     },
     {
       header: 'Hours',
       accessor: 'hoursWorked',
-      width: '105px',
-      minWidth: '95px',
+      width: '6%',
       align: 'center',
       render: (row) => (
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-900 font-mono font-bold text-xs shadow-2xs">
-          <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-          <span>{Number(row.hoursWorked || 0).toFixed(1)} hrs</span>
-        </div>
+        <span className="inline-flex items-center justify-center gap-1 font-mono font-bold text-xs text-slate-900 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded-lg whitespace-nowrap">
+          <Clock className="w-3 h-3 text-[#1D5FA7] shrink-0" />
+          <span>{Number(row.hoursWorked || 0).toFixed(1)}h</span>
+        </span>
       ),
     },
     {
-      header: 'Approval Status',
+      header: 'Status',
       accessor: 'status',
-      width: '140px',
-      minWidth: '130px',
+      width: '9%',
       align: 'center',
       render: (row) => renderStatusBadge(row.status),
     },
     {
-      header: 'Supervisor Review',
+      header: 'Supervisor',
       accessor: 'reviewedBy',
-      width: '190px',
-      minWidth: '170px',
+      width: '11%',
       render: (row) => renderSupervisorReview(row.reviewedBy),
     },
     {
       header: 'Action',
       accessor: 'action',
-      width: '150px',
-      minWidth: '140px',
+      width: '10%',
       align: 'right',
       render: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap w-full">
           {canReview && (row.status === 'Submitted' || (row.status || '').toLowerCase() === 'submitted') && (
             <button
               type="button"
-              onClick={() => handleOpenReview(row)}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white border border-amber-500 text-xs font-bold cursor-pointer shadow-xs active:scale-95 transition-all flex items-center gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenReview(row);
+              }}
+              className="px-2 py-1 rounded-lg bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-[11px] font-bold cursor-pointer shadow-2xs active:scale-95 transition-all flex items-center gap-1"
+              title="Review Submission"
             >
-              <UserCheck className="w-3.5 h-3.5" />
+              <UserCheck className="w-3 h-3" />
               <span>Review</span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedDetails(row);
+              setShowDetailsModal(true);
+            }}
+            className="p-1 rounded-lg bg-slate-100 hover:bg-[#EAF3FF] text-slate-600 hover:text-[#123B6D] border border-slate-200 transition-colors cursor-pointer"
+            title="View Details"
+          >
+            <Eye className="w-3.5 h-3.5" />
+          </button>
           {canReview && (
             <>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setEditingWork({ ...row });
                   setShowEditModal(true);
                 }}
-                className="p-1.5 rounded-xl hover:bg-blue-50 text-slate-500 hover:text-[#1D5FA7] border border-transparent hover:border-blue-200 transition-colors cursor-pointer"
+                className="p-1 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#1D5FA7] transition-colors cursor-pointer"
                 title="Edit Work Log"
               >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (window.confirm(`Delete work log for ${getEmployeeDisplayName(row)}?`)) {
                     deleteDailyWork(row.id);
                     setToastMessage(`Daily work entry ${row.id} deleted.`);
                   }
                 }}
-                className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                 title="Delete Work Log"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -622,12 +672,22 @@ export default function DailyWorkView({ employeeFilter = null }) {
         icon={FileText}
         columns={columns}
         data={filteredWork}
-        tableMinWidth="min-w-[1050px]"
+        tableFixed={true}
+        onRowClick={(row) => {
+          setSelectedDetails(row);
+          setShowDetailsModal(true);
+        }}
         renderMobileCard={(row) => {
           const name = getEmployeeDisplayName(row);
           const { initials, colorClass } = getAvatarMeta(name);
           return (
-            <div className="w-full max-w-full overflow-hidden min-w-0 space-y-3">
+            <div 
+              onClick={() => {
+                setSelectedDetails(row);
+                setShowDetailsModal(true);
+              }}
+              className="w-full max-w-full overflow-hidden min-w-0 space-y-3 cursor-pointer"
+            >
               <div className="flex items-start justify-between gap-2 min-w-0">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${colorClass}`}>
@@ -646,8 +706,8 @@ export default function DailyWorkView({ employeeFilter = null }) {
               </div>
 
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Execution Log</div>
-                {renderDescription(row.workDescription)}
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Execution Summary</div>
+                {renderDescription(row)}
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-600 pt-1 border-t border-slate-200">
@@ -663,8 +723,11 @@ export default function DailyWorkView({ employeeFilter = null }) {
                 <div className="pt-2 border-t border-slate-200">
                   <button
                     type="button"
-                    onClick={() => handleOpenReview(row)}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-xs hover:from-amber-600 hover:to-orange-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenReview(row);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <UserCheck className="w-4 h-4" />
                     <span>Review Submission</span>
@@ -945,6 +1008,111 @@ export default function DailyWorkView({ employeeFilter = null }) {
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* Details Inspector Modal */}
+      <Modal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        title="Operational Work Log Details"
+        subtitle={selectedDetails ? `Execution record for ${getEmployeeDisplayName(selectedDetails)} on ${selectedDetails.date}` : ''}
+        icon={FileText}
+      >
+        {selectedDetails && (
+          <div className="space-y-4 text-xs">
+            {/* Header Identity Card */}
+            <div className="p-3.5 rounded-2xl bg-white border border-[#D4E4F7] shadow-2xs flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm border ${getAvatarMeta(getEmployeeDisplayName(selectedDetails)).colorClass}`}>
+                  {getAvatarMeta(getEmployeeDisplayName(selectedDetails)).initials}
+                </div>
+                <div>
+                  <div className="font-bold text-sm text-slate-900">{getEmployeeDisplayName(selectedDetails)}</div>
+                  <div className="text-slate-500 text-xs font-mono">{selectedDetails.employeeId || 'STAFF'} • {selectedDetails.date}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-mono font-bold text-xs border border-slate-200">
+                  {Number(selectedDetails.hoursWorked || 0).toFixed(1)} hrs
+                </span>
+                {renderStatusBadge(selectedDetails.status)}
+              </div>
+            </div>
+
+            {/* Classification & Operational Parameters */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Work Classification</span>
+                {renderWorkTypeBadge(selectedDetails.workType)}
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-2">
+                  Parameters & Telemetry Breakdown
+                </span>
+                {selectedDetails.workDescription && selectedDetails.workDescription.includes('|') ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedDetails.workDescription.split('|').map((part, pIdx) => {
+                      const [k, ...v] = part.split(':');
+                      const keyLabel = v.length > 0 ? k.trim() : `Item #${pIdx + 1}`;
+                      const valLabel = v.length > 0 ? v.join(':').trim() : part.trim();
+                      return (
+                        <div key={pIdx} className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                          <span className="text-[10px] font-mono uppercase text-slate-500 font-bold block">{keyLabel}</span>
+                          <span className="text-xs font-bold text-slate-900 mt-0.5 block">{valLabel}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-800 leading-relaxed bg-white p-3 rounded-xl border border-slate-200 font-medium">
+                    {selectedDetails.workDescription || 'Standard operational shift completed.'}
+                  </p>
+                )}
+              </div>
+
+              {selectedDetails.remarks && (
+                <div className="pt-2 border-t border-slate-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Additional Notes / Remarks</span>
+                  <p className="text-xs text-slate-700 mt-0.5">{selectedDetails.remarks}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Supervisor Review Card */}
+            <div className="p-3.5 rounded-2xl bg-white border border-[#D4E4F7] shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Supervisor Review</span>
+                {renderSupervisorReview(selectedDetails.reviewedBy)}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-between items-center pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDetailsModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+
+              {canReview && (selectedDetails.status === 'Submitted' || (selectedDetails.status || '').toLowerCase() === 'submitted') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleOpenReview(selectedDetails);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Review & Sign Off Now</span>
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </Modal>
 

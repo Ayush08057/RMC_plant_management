@@ -96,7 +96,7 @@ export async function saveDocumentWithId(collectionName, docId, data) {
     return { id: String(docId), ...data };
   } catch (error) {
     console.error(`Error saving document ${docId} in ${collectionName}:`, error);
-    return { id: String(docId), ...data };
+    throw error;
   }
 }
 
@@ -110,7 +110,7 @@ export async function createDocument(collectionName, data) {
     return { id: docRef.id, ...data };
   } catch (error) {
     console.error(`Error creating document in ${collectionName}:`, error);
-    return { id: `local_${Date.now()}`, ...data };
+    throw error;
   }
 }
 
@@ -124,7 +124,7 @@ export async function updateDocument(collectionName, docId, fields) {
     return { id: String(docId), ...fields };
   } catch (error) {
     console.error(`Error updating document ${docId} in ${collectionName}:`, error);
-    return { id: String(docId), ...fields };
+    throw error;
   }
 }
 
@@ -138,7 +138,7 @@ export async function removeDocument(collectionName, docId) {
     return docId;
   } catch (error) {
     console.error(`Error deleting document ${docId} in ${collectionName}:`, error);
-    return docId;
+    throw error;
   }
 }
 
@@ -191,8 +191,10 @@ export async function syncRoleAccountsToFirestore(accounts) {
     const promises = accounts.map((acc) => {
       const docId = String(acc.id || acc.employeeId);
       const docRef = doc(db, COLLECTIONS.USERS, docId);
+      // Strip plaintext password to strictly satisfy Requirement 7
+      const { password: _pw, ...safeAcc } = acc;
       return setDoc(docRef, {
-        ...acc,
+        ...safeAcc,
         syncedToFirebaseAt: new Date().toISOString(),
       }, { merge: true });
     });

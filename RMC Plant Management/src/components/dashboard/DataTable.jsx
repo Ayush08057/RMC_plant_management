@@ -24,6 +24,8 @@ export default function DataTable({
   initialFullscreen = false,
   compact = false,
   tableMinWidth = null,
+  tableFixed = false,
+  noScroll = false,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -191,8 +193,8 @@ export default function DataTable({
         </div>
 
         {/* DESKTOP TABLE VIEW - STRICT 100% CONTAINER FIT WITH PROPER ALIGNMENT */}
-        <div className="hidden md:block w-full max-w-full overflow-x-auto">
-          <table className={`w-full ${tableMinWidth || 'min-w-[760px]'} text-left text-xs sm:text-sm text-black border-collapse table-fixed`}>
+        <div className={`hidden md:block w-full max-w-full ${noScroll ? 'overflow-x-hidden' : 'overflow-x-auto'}`}>
+          <table className={`w-full ${tableMinWidth ? tableMinWidth : (tableFixed || noScroll) ? 'w-full' : 'min-w-[760px]'} text-left text-xs sm:text-sm text-black border-collapse ${tableFixed ? 'table-fixed' : 'table-auto'}`}>
             <thead className="bg-[#123B6D] text-white font-mono font-bold uppercase text-[11px] sm:text-xs tracking-wider border-b border-[#123B6D] select-none">
               <tr>
                 {columns.map((col, idx) => {
@@ -209,11 +211,11 @@ export default function DataTable({
                     <th
                       key={idx}
                       style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                      className={`${compact ? 'py-2 px-2.5 text-[10px] sm:text-[11px]' : 'py-2.5 px-3 text-[11px] sm:text-xs'} font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] ${isFirst ? 'pl-3.5 sm:pl-4' : ''
+                      className={`${compact ? 'py-2 px-2.5 text-[10px] sm:text-[11px]' : 'py-2.5 px-3 text-[11px] sm:text-xs'} font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] overflow-hidden ${isFirst ? 'pl-3.5 sm:pl-4' : ''
                         } ${isLast ? 'pr-3.5 sm:pr-4' : ''
                         } ${alignClass} ${col.headerClassName || ''}`}
                     >
-                      <span className={`font-mono font-bold text-white block ${col.truncateHeader ? 'truncate' : 'whitespace-nowrap'}`} title={typeof col.header === 'string' ? col.header : undefined}>
+                      <span className="font-mono font-bold text-white block truncate" title={typeof col.header === 'string' ? col.header : undefined}>
                         {col.header}
                       </span>
                     </th>
@@ -277,7 +279,7 @@ export default function DataTable({
                             } ${isLast ? 'pr-3.5 sm:pr-4' : ''
                             } ${col.className || ''}`}
                         >
-                          <div className={`min-w-0 flex items-center ${alignClass}`}>
+                          <div className={`w-full min-w-0 flex items-center ${alignClass}`}>
                             {col.render ? (
                               col.render(row)
                             ) : col.type === 'status' ? (

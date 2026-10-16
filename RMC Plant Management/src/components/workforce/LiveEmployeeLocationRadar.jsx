@@ -36,6 +36,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All'); // 'All' | 'Punched In' | 'Punched Out' | 'Not Checked In'
   const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'field' | 'plant'
+  const [mapDisplayType, setMapDisplayType] = useState('gis'); // 'gis' | 'radar'
   const [adminPingMsg, setAdminPingMsg] = useState(null);
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'cards' | 'radar'
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -149,11 +150,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
   // Combine live tracked employees with today's attendance records & GPS telemetry
   const telemetryList = useMemo(() => {
-    // Default plant base coordinates (Navi Mumbai / Pune RMC corridor)
-    const baseLat = 19.0558;
-    const baseLng = 73.0163;
-
-    return liveTrackedEmployees.map((emp, index) => {
+    return liveTrackedEmployees.map((emp) => {
       const record = (attendance || []).find((a) => {
         const aId = (a.employeeId || '').toUpperCase();
         const empId = (emp.id || '').toUpperCase();
@@ -163,39 +160,39 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
       const isPunchedIn = Boolean(record?.punchIn && !record?.punchOut);
       const isPunchedOut = Boolean(record?.punchIn && record?.punchOut);
-      
-      // Determine coordinates: Prioritize record's saved real GPS, then active browser device GPS, then base offset
-      const angle = (index * 45 + 15) * (Math.PI / 180);
-      const isDriverRole = (emp.role || '').toLowerCase().includes('driver');
-      const radiusKm = isPunchedIn 
-        ? (isDriverRole ? 2.4 : 0.08)
-        : (isPunchedOut ? 0.35 : 0.0);
-      
-      const offsetLat = (Math.sin(angle) * (radiusKm / 111)).toFixed(5);
-      const offsetLng = (Math.cos(angle) * (radiusKm / (111 * Math.cos(baseLat * (Math.PI / 180))))).toFixed(5);
 
-      let lat = record?.gpsLocation?.lat;
-      let lng = record?.gpsLocation?.lng;
+      // Check if this employee is the active user on this client device
+      const isCurrentUser = user && (
+        (user.employeeId && emp.employeeId && user.employeeId.toUpperCase() === emp.employeeId.toUpperCase()) ||
+        (user.id && emp.id && user.id === emp.id)
+      );
 
-      if (!lat || !lng) {
-        if (realDeviceGps.active && realDeviceGps.lat) {
-          // Dynamic offset for multiple employees around current live device location
-          const offset = (index * 0.0015);
-          lat = Number((realDeviceGps.lat + offset).toFixed(5));
-          lng = Number((realDeviceGps.lng + offset).toFixed(5));
-        } else {
-          lat = 18.5204;
-          lng = 73.8567;
-        }
+      let lat = null;
+      let lng = null;
+      let accuracy = null;
+      let gpsFixSource = 'NO_FIX'; // 'LIVE_DEVICE' | 'ATTENDANCE_PUNCH' | 'NO_FIX'
+
+      if (isCurrentUser && realDeviceGps.active && realDeviceGps.lat) {
+        lat = realDeviceGps.lat;
+        lng = realDeviceGps.lng;
+        accuracy = realDeviceGps.accuracy;
+        gpsFixSource = 'LIVE_DEVICE';
+      } else if (record?.gpsLocation?.lat && record?.gpsLocation?.lng) {
+        lat = Number(record.gpsLocation.lat);
+        lng = Number(record.gpsLocation.lng);
+        accuracy = record.gpsLocation.accuracy ? Math.round(record.gpsLocation.accuracy) : null;
+        gpsFixSource = 'ATTENDANCE_PUNCH';
       }
 
-      let geofenceLabel = 'Plant HQ Zone (18m)';
-      if (isDriverRole) {
-        geofenceLabel = isPunchedIn ? 'Highway Transit (NH-48 Sector 12)' : 'Truck Bay 03';
+      const hasGpsFix = lat !== null && lng !== null;
+
+      let geofenceLabel = 'Plant HQ Zone';
+      if ((emp.role || '').toLowerCase().includes('driver')) {
+        geofenceLabel = isPunchedIn ? 'Highway Transit' : 'Truck Bay';
       } else if ((emp.role || '').toLowerCase().includes('supervisor')) {
-        geofenceLabel = isPunchedIn ? 'Site Geofence: Godrej Prime Tower B' : 'Off-Duty';
+        geofenceLabel = isPunchedIn ? 'Site Geofence' : 'Off-Duty';
       } else if (isPunchedIn) {
-        geofenceLabel = 'Inside Plant Batching Geofence (22m)';
+        geofenceLabel = 'Plant Batching Geofence';
       }
 
       // Calculate elapsed active working duration
@@ -228,16 +225,20 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lateMinutes: record?.lateMinutes || 0,
         lat,
         lng,
-        accuracy: isPunchedIn ? 8 : 22,
-        geofenceStatus: record?.geofenceStatus || geofenceLabel,
-        speedKmh: isPunchedIn && emp.role === 'Driver' ? 38 : 0,
-        batteryPct: 88 - (index * 7) % 35,
-        network: isPunchedIn ? '5G GPS Active' : 'Offline',
+        accuracy,
+        hasGpsFix,
+        gpsFixSource,
+        geofenceStatus: record?.geofenceStatus || (hasGpsFix ? geofenceLabel : 'No GPS Fix Recorded'),
+        speedKmh: null,
+        batteryPct: null,
+        network: hasGpsFix 
+          ? (gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : 'Punch-In Verified Fix') 
+          : 'No GPS Telemetry',
         selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || null,
-        remarks: record?.remarks || 'Real-time telemetry verified',
+        remarks: record?.remarks || (hasGpsFix ? 'Verified GPS Telemetry' : 'No GPS Fix Recorded'),
       };
     });
-  }, [allEmployees, attendance, todayStr]);
+  }, [liveTrackedEmployees, attendance, todayStr, realDeviceGps, user]);
 
   // Filtered telemetry list
   const filteredList = useMemo(() => {
@@ -354,6 +355,15 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 Radar Only
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Hardware Tracking Notice Banner */}
+        <div className="p-3 mb-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-start gap-2.5 text-xs text-amber-900">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">Hardware Tracking Notice: </span>
+            Continuous real-time background GPS tracking of transit mixers and field personnel requires dedicated on-board vehicle IoT/GPS telematics or a persistent mobile app. Web-browser geolocation reflects active mobile punches or live foreground browser sessions only.
           </div>
         </div>
 
@@ -537,10 +547,23 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             {mapDisplayType === 'gis' ? (
               <div className="relative my-2 aspect-square max-w-[340px] mx-auto w-full rounded-2xl overflow-hidden border border-slate-700 shadow-xl bg-slate-900/90 min-h-[280px]">
                 {(() => {
-                  const punchedInList = telemetryList.filter((t) => t.status === 'Punched In');
-                  const activeTarget = selectedEmployee || punchedInList[0] || telemetryList[0];
-                  const lat = activeTarget?.lat || realDeviceGps.lat || 19.0558;
-                  const lng = activeTarget?.lng || realDeviceGps.lng || 73.0163;
+                  const punchedInList = telemetryList.filter((t) => t.status === 'Punched In' && t.hasGpsFix);
+                  const activeTarget = (selectedEmployee?.hasGpsFix ? selectedEmployee : null) || punchedInList[0] || telemetryList.find((t) => t.hasGpsFix);
+                  const lat = activeTarget?.lat || (realDeviceGps.active ? realDeviceGps.lat : null);
+                  const lng = activeTarget?.lng || (realDeviceGps.active ? realDeviceGps.lng : null);
+
+                  if (!lat || !lng) {
+                    return (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[280px] p-6 text-center text-slate-400 space-y-3">
+                        <MapPin className="w-8 h-8 text-amber-500/70" />
+                        <div className="text-xs font-semibold text-slate-200">No Active GPS Telemetry</div>
+                        <p className="text-[11px] text-slate-400 max-w-[220px]">
+                          Real coordinates will appear once staff punch in via mobile GPS or grant browser location permission.
+                        </p>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div className="relative w-full h-full min-h-[280px]">
                       <iframe
@@ -560,12 +583,12 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
                           )}
                           <div className="min-w-0">
-                            <span className="text-white block font-bold truncate text-[11px]">{activeTarget?.name || 'Staff User'}</span>
-                            <span className="text-emerald-400 block font-mono text-[9px] font-semibold">{activeTarget?.status || 'Active'} • {lat.toFixed(4)}°N, {lng.toFixed(4)}°E</span>
+                            <span className="text-slate-900 block font-bold truncate text-[11px]">{activeTarget?.name || 'Staff User'}</span>
+                            <span className="text-emerald-700 block font-mono text-[9px] font-semibold">{activeTarget?.status || 'Active'} • {lat.toFixed(4)}°N, {lng.toFixed(4)}°E</span>
                           </div>
                         </div>
-                        <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold shrink-0">
-                          GPS Live
+                        <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold shrink-0">
+                          {activeTarget?.gpsFixSource === 'LIVE_DEVICE' ? 'GNSS Live' : 'Punch Fix'}
                         </span>
                       </div>
                     </div>
@@ -603,42 +626,54 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   </span>
                 </div>
 
-                {/* Active Employee Blips scattered on Radar */}
-                {telemetryList.map((emp, i) => {
-                  const isOnline = emp.status === 'Punched In';
-                  const angleRad = (i * 45 + 25) * (Math.PI / 180);
-                  const distPercent = isOnline ? (emp.role === 'Driver' ? 42 : 18) : 38;
-                  const left = 50 + Math.cos(angleRad) * distPercent;
-                  const top = 50 + Math.sin(angleRad) * distPercent;
+                {/* Active Employee Blips with real GPS fixes on Radar */}
+                {(() => {
+                  const trackedWithFix = telemetryList.filter((emp) => emp.hasGpsFix && emp.lat && emp.lng);
+                  if (trackedWithFix.length === 0) {
+                    return (
+                      <div className="absolute inset-x-4 bottom-8 z-20 text-center bg-black/70 backdrop-blur-xs p-2 rounded-xl border border-slate-700">
+                        <span className="text-[10px] font-mono text-slate-300">
+                          No personnel with active GPS fixes currently visible on radar scope
+                        </span>
+                      </div>
+                    );
+                  }
+                  return trackedWithFix.map((emp, i) => {
+                    const isOnline = emp.status === 'Punched In';
+                    const angleRad = (i * 45 + 25) * (Math.PI / 180);
+                    const distPercent = isOnline ? (emp.role === 'Driver' ? 42 : 18) : 38;
+                    const left = 50 + Math.cos(angleRad) * distPercent;
+                    const top = 50 + Math.sin(angleRad) * distPercent;
 
-                  return (
-                    <button
-                      key={emp.id}
-                      type="button"
-                      onClick={() => setSelectedEmployee(emp)}
-                      className="absolute z-20 group -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform hover:scale-125"
-                      style={{ left: `${left}%`, top: `${top}%` }}
-                      title={`${emp.name} (${emp.role}) - ${emp.status}`}
-                    >
-                      <div className="relative">
-                        {isOnline && (
-                          <span className="animate-ping absolute -inset-1 rounded-full bg-emerald-400 opacity-75" />
-                        )}
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center ${
-                          isOnline 
-                            ? (emp.role === 'Driver' ? 'bg-cyan-500' : 'bg-emerald-500') 
-                            : 'bg-slate-500 opacity-60'
-                        }`}>
-                          <div className="w-1 h-1 rounded-full bg-white" />
+                    return (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        onClick={() => setSelectedEmployee(emp)}
+                        className="absolute z-20 group -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform hover:scale-125"
+                        style={{ left: `${left}%`, top: `${top}%` }}
+                        title={`${emp.name} (${emp.role}) - ${emp.status}`}
+                      >
+                        <div className="relative">
+                          {isOnline && (
+                            <span className="animate-ping absolute -inset-1 rounded-full bg-emerald-400 opacity-75" />
+                          )}
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center ${
+                            isOnline 
+                              ? (emp.role === 'Driver' ? 'bg-cyan-500' : 'bg-emerald-500') 
+                              : 'bg-slate-500 opacity-60'
+                          }`}>
+                            <div className="w-1 h-1 rounded-full bg-white" />
+                          </div>
                         </div>
-                      </div>
-                      {/* Hover Pill */}
-                      <div className="absolute left-1/2 -translate-x-1/2 top-4 hidden group-hover:block z-30 whitespace-nowrap bg-slate-50 border border-slate-300 text-white text-[10px] px-2 py-0.5 rounded shadow-lg pointer-events-none font-mono">
-                        {emp.name.split(' ')[0]} ({emp.role})
-                      </div>
-                    </button>
-                  );
-                })}
+                        {/* Hover Pill */}
+                        <div className="absolute left-1/2 -translate-x-1/2 top-4 hidden group-hover:block z-30 whitespace-nowrap bg-slate-900 border border-slate-700 text-white text-[10px] px-2 py-0.5 rounded shadow-lg pointer-events-none font-mono">
+                          {emp.name.split(' ')[0]} ({emp.role})
+                        </div>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             )}
 
@@ -764,23 +799,42 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       </div>
 
                       <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pl-5">
-                        <span>{emp.lat}° N, {emp.lng}° E</span>
-                        <span className="text-emerald-700 font-semibold">{isOnline ? 'Active GPS' : 'Last Known'}</span>
+                        {emp.hasGpsFix ? (
+                          <>
+                            <span>{Number(emp.lat).toFixed(4)}° N, {Number(emp.lng).toFixed(4)}° E</span>
+                            <span className="text-emerald-700 font-semibold">
+                              {emp.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : 'Punch Fix'}
+                              {emp.accuracy ? ` (±${emp.accuracy}m)` : ''}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-slate-400 italic">No GPS Fix</span>
+                            <span className="text-amber-700 font-semibold">Location Pending</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* Actions Row */}
                   <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <a
-                      href={`https://www.google.com/maps?q=${emp.lat},${emp.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 transition-colors cursor-pointer"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Google Maps</span>
-                    </a>
+                    {emp.hasGpsFix ? (
+                      <a
+                        href={`https://www.google.com/maps?q=${emp.lat},${emp.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 transition-colors cursor-pointer"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Google Maps</span>
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
+                        <ExternalLink className="w-3 h-3 text-slate-300" />
+                        <span>No GPS Fix</span>
+                      </span>
+                    )}
 
                     <button
                       type="button"
@@ -867,36 +921,43 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   <span>Real-time GPS Geofence Fix</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 font-mono text-[11px] pt-1">
-                  <div className="p-2 rounded-xl bg-white border border-amber-200">
-                    <span className="text-[10px] text-slate-400 block font-sans">LATITUDE</span>
-                    <span className="font-bold text-slate-900">{selectedEmployee.lat}° N</span>
+                {selectedEmployee.hasGpsFix ? (
+                  <div className="grid grid-cols-2 gap-2 font-mono text-[11px] pt-1">
+                    <div className="p-2 rounded-xl bg-white border border-amber-200">
+                      <span className="text-[10px] text-slate-400 block font-sans">LATITUDE</span>
+                      <span className="font-bold text-slate-900">{Number(selectedEmployee.lat).toFixed(5)}° N</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white border border-amber-200">
+                      <span className="text-[10px] text-slate-400 block font-sans">LONGITUDE</span>
+                      <span className="font-bold text-slate-900">{Number(selectedEmployee.lng).toFixed(5)}° E</span>
+                    </div>
                   </div>
-                  <div className="p-2 rounded-xl bg-white border border-amber-200">
-                    <span className="text-[10px] text-slate-400 block font-sans">LONGITUDE</span>
-                    <span className="font-bold text-slate-900">{selectedEmployee.lng}° E</span>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs text-amber-900">
+                    <span className="font-semibold block">No Real-time GPS Fix Recorded</span>
+                    <span className="text-[11px] text-slate-500">Attendance punch was saved without location permissions, or staff has not punched in today.</span>
                   </div>
-                </div>
+                )}
 
                 <div className="text-[11px] text-slate-700 bg-white p-2 rounded-xl border border-amber-200">
-                  <span className="font-bold text-slate-900">Geofence Location: </span>
+                  <span className="font-bold text-slate-900">Geofence Status: </span>
                   {selectedEmployee.geofenceStatus}
                 </div>
               </div>
 
-              {/* Transit & Device Telemetry */}
-              <div className="grid grid-cols-3 gap-2 text-center">
+              {/* Telemetry Source & GNSS Accuracy */}
+              <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block">SPEED</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.speedKmh} km/h</span>
+                  <span className="text-[10px] text-slate-400 block">TELEMETRY SOURCE</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {selectedEmployee.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : (selectedEmployee.gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Record' : 'No Signal')}
+                  </span>
                 </div>
                 <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block">BATTERY</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.batteryPct}%</span>
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block">NETWORK</span>
-                  <span className="font-mono font-bold text-emerald-700">Connected (5G)</span>
+                  <span className="text-[10px] text-slate-400 block">GNSS ACCURACY</span>
+                  <span className="font-mono font-bold text-emerald-700">
+                    {selectedEmployee.accuracy ? `±${selectedEmployee.accuracy}m` : 'Unavailable'}
+                  </span>
                 </div>
               </div>
 
@@ -929,15 +990,26 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
             {/* Modal Actions */}
             <div className="flex items-center gap-2.5 pt-2">
-              <a
-                href={`https://www.google.com/maps?q=${selectedEmployee.lat},${selectedEmployee.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open in Google Maps</span>
-              </a>
+              {selectedEmployee.hasGpsFix ? (
+                <a
+                  href={`https://www.google.com/maps?q=${selectedEmployee.lat},${selectedEmployee.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open in Google Maps</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-slate-100 text-slate-400 flex items-center justify-center gap-1.5 cursor-not-allowed"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                  <span>No GPS Coordinates</span>
+                </button>
+              )}
 
               <button
                 type="button"

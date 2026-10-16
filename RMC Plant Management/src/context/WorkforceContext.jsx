@@ -24,10 +24,12 @@ import {
 } from '../services/firestoreService.js';
 import { 
   EMPLOYEE_STATUS, 
-  validateEmployeeForRegistration 
+  validateEmployeeForRegistration,
+  createEmployeeFirebaseAuth
 } from '../services/employeeAuthService.js';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../utils/shiftUtils.js';
+import { deleteEmployeeDocumentFile } from '../services/storageService.js';
 
 const WorkforceContext = createContext(null);
 
@@ -468,15 +470,22 @@ export const WorkforceProvider = ({ children }) => {
       ...empData,
       id: cleanId,
       username: cleanUsername,
-      password: assignedPassword,
       status: assignedStatus,
       salary: Number(empData.salary) || 30000,
       joiningDate: empData.joiningDate || new Date().toISOString().split('T')[0],
       shiftId: empData.shiftId || 'SFT-GEN',
     };
+    // Strictly strip plaintext password from employee record
+    delete newEmp.password;
 
-    // If status is Active, automatically provision user account so employee can immediately login of their own
+    // If status is Active, automatically provision user account in Firebase Auth
     if (newEmp.status === EMPLOYEE_STATUS.ACTIVE) {
+      if (newEmp.email && assignedPassword) {
+        createEmployeeFirebaseAuth(newEmp.email, assignedPassword).catch((authErr) => {
+          console.warn('Firebase Auth employee account provisioning notice:', authErr.message);
+        });
+      }
+
       try {
         const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
         const currentUsers = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
@@ -494,7 +503,6 @@ export const WorkforceProvider = ({ children }) => {
           role: newEmp.role,
           department: newEmp.department || 'Operations',
           plantLocation: newEmp.plant || 'Plant Unit #01',
-          password: newEmp.password,
           status: EMPLOYEE_STATUS.ACTIVE,
           mustChangePassword: false,
           avatar: (newEmp.name || 'EM').substring(0, 2).toUpperCase(),
@@ -514,7 +522,7 @@ export const WorkforceProvider = ({ children }) => {
       }
     }
 
-    // Save to Cloud Firestore
+    // Save to Cloud Firestore without plaintext password
     saveDocumentWithId(COLLECTIONS.EMPLOYEES, newEmp.id, newEmp).catch(() => {});
 
     setData((prev) => ({
@@ -546,15 +554,14 @@ export const WorkforceProvider = ({ children }) => {
       registeredAt: new Date().toISOString(),
       registeredMobile: registrationPayload.mobile,
       registeredEmail: registrationPayload.email,
-      password: registrationPayload.password,
     };
+    delete updatedEmployee.password;
 
     updateDocument(COLLECTIONS.EMPLOYEES, employee.id, {
       status: EMPLOYEE_STATUS.PENDING_APPROVAL,
       registeredAt: updatedEmployee.registeredAt,
       registeredMobile: updatedEmployee.registeredMobile,
       registeredEmail: updatedEmployee.registeredEmail,
-      password: updatedEmployee.password,
     }).catch(() => {});
 
     setData((prev) => ({
@@ -601,7 +608,7 @@ export const WorkforceProvider = ({ children }) => {
       employees: prev.employees.map((e) => ((e.id || '').toUpperCase() === cleanId ? updatedEmp : e)),
     }));
 
-    // Sync to users database so employee can log in immediately
+    // Sync to users database so employee can log in immediately (without plaintext password)
     try {
       const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
       const currentUsers = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
@@ -616,7 +623,6 @@ export const WorkforceProvider = ({ children }) => {
         role: emp.role, // TRUSTED role from Admin record
         department: emp.department || 'Operations',
         plantLocation: emp.plant || 'Plant Unit #01',
-        password: emp.password,
         status: EMPLOYEE_STATUS.ACTIVE,
         mustChangePassword: false,
         avatar: (emp.name || 'EM').substring(0, 2).toUpperCase(),
@@ -876,7 +882,6 @@ export const WorkforceProvider = ({ children }) => {
             ...u,
             ...(fields.name && { name: fields.name }),
             ...(fields.username && { username: fields.username.toLowerCase() }),
-            ...(fields.password && { password: fields.password }),
             ...(fields.email && { email: fields.email }),
             ...(fields.mobile && { phone: fields.mobile }),
             ...(fields.role && { role: fields.role }),
@@ -884,6 +889,7 @@ export const WorkforceProvider = ({ children }) => {
             ...(fields.department && { department: fields.department }),
             ...(fields.plant && { plantLocation: fields.plant }),
           };
+          delete currentUsers[userIndex].password;
           localStorage.setItem('rmc_users_db_v2', JSON.stringify(currentUsers));
           updateDocument(COLLECTIONS.USERS, `USR-${cleanId}`, currentUsers[userIndex]).catch(() => {});
         }
@@ -1181,6 +1187,13 @@ export const WorkforceProvider = ({ children }) => {
       (a) => a.date === today && (a.employeeId === emp.id || a.employeeId === emp.employeeId || a.employeeId === targetId)
     );
 
+    // Prevent duplicate punch-ins unless explicitly overridden (e.g. by Admin reset)
+    if (existingIndex >= 0 && data.attendance[existingIndex]?.punchIn && !options.allowOverride) {
+      throw new Error(`Employee ${emp.name} has already punched in today at ${formatToIndian12Hr(data.attendance[existingIndex].punchIn)}.`);
+    }
+
+    const actualPunchIn = options.time ? formatToIndian12Hr(options.time) : nowTime;
+
     const newRecord = {
       id: existingIndex >= 0 ? data.attendance[existingIndex].id : `ATT-${today.replace(/-/g, '')}-${emp.employeeId || emp.id}`,
       date: today,
@@ -1188,17 +1201,17 @@ export const WorkforceProvider = ({ children }) => {
       employeeName: emp.name,
       role: emp.role,
       plant: emp.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
-      punchIn: existingIndex >= 0 && data.attendance[existingIndex].punchIn ? data.attendance[existingIndex].punchIn : nowTime,
-      punchOut: existingIndex >= 0 ? data.attendance[existingIndex].punchOut : null,
-      workingHours: existingIndex >= 0 ? data.attendance[existingIndex].workingHours : null,
+      punchIn: actualPunchIn, // Always record the actual real punch in time
+      punchOut: null, // Starting shift - punch out is null until clocked out
+      workingHours: null,
       status: 'Present',
       lateStatus,
       lateMinutes,
-      overtimeHours: existingIndex >= 0 ? data.attendance[existingIndex].overtimeHours : 0,
+      overtimeHours: 0,
       remarks: options.remarks || 'Clocked in via RMC Mobile/Web Console',
       selfieUrl: options.selfieUrl || (existingIndex >= 0 ? data.attendance[existingIndex].selfieUrl : null),
-      gpsLocation: options.gpsLocation || { lat: 18.5204, lng: 73.8567, address: options.address || 'Plant Geofence Area' },
-      geofenceStatus: options.geofenceStatus || 'Inside Plant Fence (18m)',
+      gpsLocation: options.gpsLocation || null,
+      geofenceStatus: options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available'),
     };
 
     saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch(() => {});
@@ -1214,15 +1227,40 @@ export const WorkforceProvider = ({ children }) => {
       return { ...prev, attendance: updatedAttendance };
     });
 
-    addAuditLog(`Punch In (${emp.name})`, 'Attendance', `In: ${nowTime} (${newRecord.geofenceStatus})`);
+    addAuditLog(`Punch In (${emp.name})`, 'Attendance', `In: ${actualPunchIn} (${newRecord.geofenceStatus})`);
     addNotification({
       title: 'Employee Punched In',
-      desc: `${emp.name} (${emp.employeeId || emp.id}) clocked in at ${nowTime} (${lateStatus ? `Late by ${lateMinutes}m` : 'On Time'}).`,
+      desc: `${emp.name} (${emp.employeeId || emp.id}) clocked in at ${actualPunchIn} (${lateStatus ? `Late by ${lateMinutes}m` : 'On Time'}).`,
       type: lateStatus ? 'warning' : 'success',
       category: 'attendance',
     });
 
     return newRecord;
+  };
+
+  const resetTodayAttendance = (employeeId) => {
+    const today = new Date().toISOString().split('T')[0];
+    const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
+    const targetId = employeeId || defaultId;
+
+    const recordIndex = data.attendance.findIndex(
+      (a) => a.date === today && (
+        a.employeeId === targetId || 
+        a.employeeId?.toLowerCase() === targetId?.toLowerCase()
+      )
+    );
+
+    if (recordIndex >= 0) {
+      const recId = data.attendance[recordIndex].id;
+      removeDocument(COLLECTIONS.ATTENDANCE, recId).catch(() => {});
+      setData((prev) => ({
+        ...prev,
+        attendance: prev.attendance.filter((_, idx) => idx !== recordIndex),
+      }));
+      addAuditLog(`Reset Attendance (${targetId})`, 'Attendance', `Cleared today's attendance record for fresh live clock-in`);
+      return true;
+    }
+    return false;
   };
 
   const checkOut = (employeeId, options = {}) => {
@@ -1262,6 +1300,10 @@ export const WorkforceProvider = ({ children }) => {
       throw new Error(`No punch-in recorded for ${emp.name || targetId} today (${today}). Please punch in first.`);
     }
 
+    if (data.attendance[recordIndex].punchOut && !options.allowOverride) {
+      throw new Error(`Shift for ${emp.name || targetId} has already been concluded today at ${formatToIndian12Hr(data.attendance[recordIndex].punchOut)}.`);
+    }
+
     const currentRecord = data.attendance[recordIndex];
     const inTotalMins = parseTimeToMinutes(currentRecord.punchIn);
     const outTotalMins = parseTimeToMinutes(nowTime);
@@ -1278,9 +1320,9 @@ export const WorkforceProvider = ({ children }) => {
       punchOut: nowTime,
       workingHours,
       overtimeHours,
-      exitGpsLocation: options.gpsLocation || options.exitGpsLocation || currentRecord.gpsLocation || { lat: 19.0558, lng: 73.0163, address: 'Plant HQ Gate' },
-      lastKnownLocation: options.gpsLocation || options.exitGpsLocation || currentRecord.gpsLocation || { lat: 19.0558, lng: 73.0163, address: 'Plant HQ Gate' },
-      exitGeofenceStatus: options.geofenceStatus || 'Shift Concluded',
+      exitGpsLocation: options.exitGpsLocation || options.gpsLocation || null,
+      lastKnownLocation: options.exitGpsLocation || options.gpsLocation || currentRecord.gpsLocation || null,
+      exitGeofenceStatus: options.geofenceStatus || (options.exitGpsLocation || options.gpsLocation ? 'Shift Concluded (GPS Verified)' : 'Shift Concluded'),
       remarks: options.remarks ? `${currentRecord.remarks} | Out: ${options.remarks}` : currentRecord.remarks,
     };
 
@@ -1310,16 +1352,30 @@ export const WorkforceProvider = ({ children }) => {
       (r) => r.employeeId === attData.employeeId || r.id === attData.employeeId
     );
 
+    const recordDate = attData.date || new Date().toISOString().split('T')[0];
+    const targetEmpId = attData.employeeId;
+
+    const existingIndex = data.attendance.findIndex(
+      (a) => a.date === recordDate && (
+        a.employeeId === targetEmpId ||
+        a.employeeId?.toLowerCase() === targetEmpId?.toLowerCase() ||
+        (emp && (a.employeeId === emp.id || a.employeeId === emp.employeeId))
+      )
+    );
+
+    const recordId = existingIndex >= 0 ? data.attendance[existingIndex].id : `ATT-${Date.now().toString().slice(-6)}`;
+
     const newRecord = {
-      id: `ATT-${Date.now().toString().slice(-6)}`,
-      date: attData.date || new Date().toISOString().split('T')[0],
+      ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
+      id: recordId,
+      date: recordDate,
       employeeId: attData.employeeId,
       employeeName: emp?.name || attData.employeeName || attData.employeeId,
       role: emp?.role || attData.role || 'Staff',
       plant: emp?.plant || attData.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
       punchIn: attData.punchIn ? formatToIndian12Hr(attData.punchIn) : null,
       punchOut: attData.punchOut ? formatToIndian12Hr(attData.punchOut) : null,
-      workingHours: attData.workingHours || null,
+      workingHours: attData.workingHours !== undefined ? attData.workingHours : null,
       overtimeHours: attData.overtimeHours || 0,
       status: attData.status || 'Present',
       lateStatus: attData.lateStatus || false,
@@ -1329,11 +1385,17 @@ export const WorkforceProvider = ({ children }) => {
       gpsLocation: attData.gpsLocation || { lat: 18.5204, lng: 73.8567, address: 'Plant Dispatch Hub' }
     };
     saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch(() => {});
-    setData((prev) => ({
-      ...prev,
-      attendance: [newRecord, ...prev.attendance],
-    }));
-    addAuditLog(`Manual Attendance Added (${newRecord.employeeName})`, 'Attendance', `${newRecord.date} | Status: ${newRecord.status}`);
+    setData((prev) => {
+      let updated;
+      if (existingIndex >= 0) {
+        updated = [...prev.attendance];
+        updated[existingIndex] = newRecord;
+      } else {
+        updated = [newRecord, ...prev.attendance];
+      }
+      return { ...prev, attendance: updated };
+    });
+    addAuditLog(`Attendance Saved (${newRecord.employeeName})`, 'Attendance', `${newRecord.date} | In: ${newRecord.punchIn || '--'} | Out: ${newRecord.punchOut || '--'}`);
     return newRecord;
   };
 
@@ -2158,38 +2220,86 @@ export const WorkforceProvider = ({ children }) => {
   /* -------------------------------------------------------------
    * 10. EMPLOYEE DOCUMENTS
    * ------------------------------------------------------------- */
-  const addDocument = (docData) => {
-    const emp = data.employees.find((e) => e.id === docData.employeeId);
+  const addDocument = async (docData) => {
+    const emp = (data.employees || []).find((e) => e.id === docData.employeeId);
     const newDoc = {
-      id: `DOC-${Date.now()}`,
+      id: docData.id || `DOC-${Date.now()}`,
       employeeId: docData.employeeId,
-      employeeName: emp?.name || docData.employeeName,
+      employeeName: emp?.name || docData.employeeName || 'Staff Member',
       documentType: docData.documentType,
       documentNumber: docData.documentNumber || 'N/A',
       uploadDate: new Date().toISOString().split('T')[0],
       expiryDate: docData.expiryDate || null,
       status: docData.status || 'Available',
-      fileSize: docData.fileSize || '1.4 MB (PDF)',
+      fileSize: docData.fileSize || 'Unknown Size',
+      storagePath: docData.storagePath || null,
+      downloadUrl: docData.downloadUrl || null,
+      originalFileName: docData.originalFileName || null,
     };
 
-    saveDocumentWithId(COLLECTIONS.DOCUMENTS, newDoc.id, newDoc).catch(() => {});
+    try {
+      await saveDocumentWithId(COLLECTIONS.DOCUMENTS, newDoc.id, newDoc);
+    } catch (err) {
+      console.error('Firestore document metadata write failed:', err);
+      throw new Error(`Failed to save document metadata in database: ${err.message}`);
+    }
 
     setData((prev) => ({
       ...prev,
       documents: [newDoc, ...prev.documents],
     }));
-    addAuditLog(`Uploaded Employee Document`, 'Employee Documents', `${emp?.name}: ${newDoc.documentType}`);
+    addAuditLog(`Uploaded Employee Document`, 'Employee Documents', `${emp?.name || docData.employeeId}: ${newDoc.documentType}`);
     return newDoc;
   };
 
-  const deleteDocument = (id) => {
-    removeDocument(COLLECTIONS.DOCUMENTS, id).catch(() => {});
+  const deleteDocument = async (id) => {
+    const targetDoc = (data.documents || []).find((d) => d.id === id);
+    if (!targetDoc) {
+      throw new Error(`Document record "${id}" was not found.`);
+    }
 
+    // Role check: Only Admin, Director, or HR Manager/Executive can delete confidential personnel documents
+    const currentUserRole = user?.role || '';
+    const isAuthorized = 
+      currentUserRole === 'Admin' ||
+      currentUserRole === 'Owner / Director' ||
+      currentUserRole === 'HR Manager' ||
+      currentUserRole === 'HR Executive' ||
+      user?.email === 'smconcretech@gmail.com';
+
+    if (!isAuthorized) {
+      throw new Error('Permission denied. Only Administrators and HR personnel are authorized to delete employee documents.');
+    }
+
+    // 1. Delete binary from Firebase Cloud Storage
+    if (targetDoc.storagePath) {
+      try {
+        await deleteEmployeeDocumentFile(targetDoc.storagePath);
+      } catch (storageErr) {
+        if (storageErr.code === 'storage/unauthorized') {
+          throw new Error('Permission denied by Cloud Storage. You are not authorized to delete this file.');
+        }
+        throw new Error(`Cloud Storage file deletion failed: ${storageErr.message}`);
+      }
+    }
+
+    // 2. Delete metadata record from Firestore
+    try {
+      await removeDocument(COLLECTIONS.DOCUMENTS, id);
+    } catch (firestoreErr) {
+      throw new Error(`Database record deletion failed: ${firestoreErr.message}`);
+    }
+
+    // 3. Update local state ONLY after backend operations succeed
     setData((prev) => ({
       ...prev,
       documents: prev.documents.filter((d) => d.id !== id),
     }));
-    addAuditLog(`Deleted Document (${id})`, 'Employee Documents', `Record removed.`);
+
+    // 4. Record audit log on verified success
+    addAuditLog(`Deleted Document (${id})`, 'Employee Documents', `Record "${targetDoc.documentType}" (${targetDoc.employeeName || targetDoc.employeeId}) removed.`);
+
+    return { success: true };
   };
 
   /* -------------------------------------------------------------
@@ -2266,6 +2376,7 @@ export const WorkforceProvider = ({ children }) => {
     // Attendance Actions
     checkIn,
     checkOut,
+    resetTodayAttendance,
     addAttendanceRecord,
     updateAttendanceRecord,
     deleteAttendanceRecord,

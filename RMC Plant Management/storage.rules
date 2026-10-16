@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // =========================================================================
+    // Helper Authorization & Identity Functions
+    // Resolves identity from Auth tokens & Cloud Firestore user profiles
+    // =========================================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Role resolution: checks custom claims first, falls back to Firestore user profile
+    function getUserRole() {
+      return request.auth.token.role != null
+        ? request.auth.token.role
+        : (hasUserDoc() && getUserDoc().role != null ? getUserDoc().role : '');
+    }
+
+    // Trusted company membership resolution: custom claims first, then Firestore profile
+    function getUserCompanyId() {
+      return request.auth.token.companyId != null
+        ? request.auth.token.companyId
+        : (hasUserDoc() && getUserDoc().companyId != null ? getUserDoc().companyId : '');
+    }
+
+    // Trusted employee ID resolution: custom claims first, then Firestore profile
+    function getUserEmployeeId() {
+      return request.auth.token.employeeId != null
+        ? request.auth.token.employeeId
+        : (hasUserDoc() && getUserDoc().employeeId != null ? getUserDoc().employeeId : '');
+    }
+
+    // Multi-tenant company isolation: caller must belong to target company or be superadmin
+    function isSameCompany(targetCompanyId) {
+      return isAuthenticated() && targetCompanyId != '' && (
+        request.auth.token.email == 'smconcretech@gmail.com' ||
+        getUserCompanyId() == targetCompanyId
+      );
+    }
+
+    function isAdmin(companyId) {
+      return isSameCompany(companyId) && (
+        getUserRole() == 'Admin' ||
+        request.auth.token.email == 'smconcretech@gmail.com'
+      );
+    }
+
+    function isHR(companyId) {
+      return isSameCompany(companyId) && (
+        getUserRole() == 'Admin' ||
+        getUserRole() in ['HR Manager', 'HR Executive'] ||
+        request.auth.token.email == 'smconcretech@gmail.com'
+      );
+    }
+
+    function isManager(companyId) {
+      return isSameCompany(companyId) && (
+        getUserRole() == 'Admin' ||
+        getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Owner / Director'] ||
+        request.auth.token.email == 'smconcretech@gmail.com'
+      );
+    }
+
+    function isSelf(companyId, employeeId) {
+      return isSameCompany(companyId) && (
+        request.auth.uid == employeeId ||
+        getUserEmployeeId() == employeeId
+      );
+    }
+
+    // =========================================================================
+    // Confidential Employee Document Vault
+    // Segregated path: documents/{companyId}/{employeeId}/{fileName}
+    // =========================================================================
+    match /documents/{companyId}/{employeeId}/{fileName} {
+      // Access strictly limited to Admin, HR, Manager, or the employee themselves within the SAME company
+      allow read: if isHR(companyId) ||
+        isManager(companyId) ||
+        isSelf(companyId, employeeId);
+
+      // Upload: restricted to authorized roles or the specific employee within the SAME company
+      // Must be under 5MB and valid PDF, JPEG, PNG, or WebP MIME type
+      allow create: if (
+        isHR(companyId) ||
+        isManager(companyId) ||
+        isSelf(companyId, employeeId)
+      ) && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png|image/webp');
+
+      // Update / replacement: strictly Admin or HR of the SAME company
+      allow update: if isHR(companyId);
+
+      // Deletion: strictly Admin or HR of the SAME company
+      allow delete: if isHR(companyId);
+    }
+
+    // =========================================================================
+    // Attendance Verification Selfies
+    // Path: attendance/{companyId}/{employeeId}/{fileName}
+    // =========================================================================
+    match /attendance/{companyId}/{employeeId}/{fileName} {
+      allow read: if isManager(companyId) ||
+        isHR(companyId) ||
+        isSelf(companyId, employeeId);
+
+      allow create: if (
+        isManager(companyId) ||
+        isHR(companyId) ||
+        isSelf(companyId, employeeId)
+      ) && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/jpeg|image/png');
+
+      allow update, delete: if isAdmin(companyId);
+    }
+
+    // =========================================================================
+    // Default Fallback: Strict Deny All Other Paths
+    // =========================================================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

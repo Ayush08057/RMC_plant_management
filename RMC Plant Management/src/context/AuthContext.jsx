@@ -3,13 +3,19 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  updatePassword,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { auth } from '../config/firebase.js';
 import { 
   COLLECTIONS, 
   saveDocumentWithId, 
   fetchCollection, 
+  fetchDocument,
   subscribeToCollection,
   removeDocument,
   updateDocument,
@@ -19,7 +25,9 @@ import { INITIAL_MOCK_USERS, ROLES, ROLE_ROUTES, SYSTEM_ADMIN, SYSTEM_ROLE_PROFI
 import { 
   EMPLOYEE_STATUS, 
   validateEmployeeForRegistration, 
-  validateLoginAttempt 
+  validateLoginAttempt,
+  resolveLoginIdentity,
+  createEmployeeFirebaseAuth
 } from '../services/employeeAuthService.js';
 import LogoutConfirmModal from '../components/common/LogoutConfirmModal.jsx';
 
@@ -45,24 +53,36 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const sanitizeUsersList = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map((u) => {
+      const { password: _p, ...safe } = u;
+      return safe;
+    });
+  };
+
   const [users, setUsers] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_USERS_KEY);
-      return stored ? JSON.parse(stored) : OFFICIAL_ROLE_ACCOUNTS;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return sanitizeUsersList(parsed);
+        }
+      }
+      return sanitizeUsersList(OFFICIAL_ROLE_ACCOUNTS);
     } catch {
-      return OFFICIAL_ROLE_ACCOUNTS;
+      return sanitizeUsersList(OFFICIAL_ROLE_ACCOUNTS);
     }
   });
 
   const [user, setUser] = useState(() => {
     try {
-      // Strictly require login on opening the site.
       // Active sessions are only preserved within current tab/window (sessionStorage) across page refreshes.
       const stored = sessionStorage.getItem(STORAGE_SESSION_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.id && parsed.role) {
-          // Check for expired session
+        if (parsed && (parsed.id || parsed.uid) && parsed.role) {
           if (parsed.sessionExpiresAt && Date.now() > parsed.sessionExpiresAt) {
             sessionStorage.removeItem(STORAGE_SESSION_KEY);
             return null;
@@ -73,7 +93,6 @@ export const AuthProvider = ({ children }) => {
     } catch {
       // ignore
     }
-    // Strictly require login on opening the site
     return null;
   });
 
@@ -83,7 +102,7 @@ export const AuthProvider = ({ children }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Auto-sync all 8 official role accounts to Firebase Cloud Firestore on mount
+  // Auto-sync all 8 official role accounts to Firebase Cloud Firestore on mount (passwords stripped)
   useEffect(() => {
     syncRoleAccountsToFirestore(OFFICIAL_ROLE_ACCOUNTS)
       .then((res) => {
@@ -96,6 +115,75 @@ export const AuthProvider = ({ children }) => {
       });
   }, []);
 
+  // Real-time Firebase Authentication listener for session restoration & verification
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          let profile = await fetchDocument(COLLECTIONS.USERS, firebaseUser.uid);
+
+          if (!profile && firebaseUser.email) {
+            const matchedOfficial = OFFICIAL_ROLE_ACCOUNTS.find(
+              (acc) => (acc.email || '').toLowerCase() === firebaseUser.email.toLowerCase()
+            );
+            if (matchedOfficial) {
+              const { password: _p, ...safeAcc } = matchedOfficial;
+              profile = {
+                ...safeAcc,
+                uid: firebaseUser.uid,
+              };
+              saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, profile).catch(() => {});
+            }
+          }
+
+          if (profile) {
+            if (profile.status && profile.status !== EMPLOYEE_STATUS.ACTIVE) {
+              console.warn(`User ${firebaseUser.email} has inactive status "${profile.status}". Revoking session.`);
+              await signOut(auth);
+              setUser(null);
+              sessionStorage.removeItem(STORAGE_SESSION_KEY);
+              return;
+            }
+
+            const isMaster = profile.role === ROLES.ADMIN || profile.email === SYSTEM_ADMIN.email;
+            const restoredUser = {
+              ...profile,
+              uid: firebaseUser.uid,
+              isMasterAdmin: isMaster,
+              originalAdminUser: isMaster ? profile : null,
+              lastRestoredAt: new Date().toISOString(),
+            };
+            delete restoredUser.password;
+
+            setUser(restoredUser);
+            sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(restoredUser));
+          }
+        } catch (err) {
+          console.warn('Firebase session restoration notice:', err.message);
+        }
+      } else {
+        if (typeof window !== 'undefined') {
+          const stored = sessionStorage.getItem(STORAGE_SESSION_KEY);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (parsed && parsed.uid) {
+                setUser(null);
+                sessionStorage.removeItem(STORAGE_SESSION_KEY);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
   // Synchronize users from Cloud Firestore in real-time
   useEffect(() => {
     // 1. Initial fetch from Firestore
@@ -104,9 +192,9 @@ export const AuthProvider = ({ children }) => {
         if (cloudUsers && cloudUsers.length > 0) {
           setUsers((prev) => {
             const mergedMap = new Map();
-            OFFICIAL_ROLE_ACCOUNTS.forEach((u) => mergedMap.set(u.id, u));
+            sanitizeUsersList(OFFICIAL_ROLE_ACCOUNTS).forEach((u) => mergedMap.set(u.id, u));
             prev.forEach((u) => mergedMap.set(u.id, u));
-            cloudUsers.forEach((cu) => mergedMap.set(cu.id, cu));
+            sanitizeUsersList(cloudUsers).forEach((cu) => mergedMap.set(cu.id, cu));
             return Array.from(mergedMap.values());
           });
         }
@@ -120,9 +208,9 @@ export const AuthProvider = ({ children }) => {
       if (updatedUsers && updatedUsers.length > 0) {
         setUsers((prev) => {
           const mergedMap = new Map();
-          OFFICIAL_ROLE_ACCOUNTS.forEach((u) => mergedMap.set(u.id, u));
+          sanitizeUsersList(OFFICIAL_ROLE_ACCOUNTS).forEach((u) => mergedMap.set(u.id, u));
           prev.forEach((u) => mergedMap.set(u.id, u));
-          updatedUsers.forEach((cu) => mergedMap.set(cu.id, cu));
+          sanitizeUsersList(updatedUsers).forEach((cu) => mergedMap.set(cu.id, cu));
           return Array.from(mergedMap.values());
         });
       }
@@ -133,10 +221,10 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Sync users list to localStorage for offline cache
+  // Sync users list to localStorage for offline cache without plaintext passwords
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(sanitizeUsersList(users)));
     } catch (err) {
       console.error('Failed to save users database cache:', err);
     }
@@ -192,6 +280,7 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Login action supporting Username, Email, Employee ID, or Mobile via verified employee record
+   * Authenticates directly against Firebase Authentication to establish legitimate request.auth tokens.
    */
   const login = async (identifier, password, rememberMe = false) => {
     setAuthError(null);
@@ -209,23 +298,93 @@ export const AuthProvider = ({ children }) => {
     }
 
     const workforceEmployees = getWorkforceEmployees();
-    const result = validateLoginAttempt(identifier, password, workforceEmployees, activeUsersList);
 
-    if (!result.allowed) {
+    // 1. Resolve identity & validate account status
+    const resolved = resolveLoginIdentity(identifier, workforceEmployees, activeUsersList);
+
+    if (!resolved.found) {
       setLoading(false);
-      setAuthError(result.error);
-      return { success: false, error: result.error };
+      const errorMsg = 'Employee record not found. Please contact Admin.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
     }
 
-    const isMaster = result.user.role === ROLES.ADMIN || result.user.email === SYSTEM_ADMIN.email || result.user.id === SYSTEM_ADMIN.id;
+    if (resolved.status === EMPLOYEE_STATUS.PENDING_REGISTRATION) {
+      setLoading(false);
+      const errorMsg = 'Please complete employee registration first.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    if (resolved.status === EMPLOYEE_STATUS.PENDING_APPROVAL) {
+      setLoading(false);
+      const errorMsg = 'Your account is pending Admin approval. Please wait for verification.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    if (resolved.status === EMPLOYEE_STATUS.REJECTED) {
+      setLoading(false);
+      const errorMsg = 'Your account has been rejected. Please contact Admin.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    if (resolved.status === EMPLOYEE_STATUS.INACTIVE || resolved.status === EMPLOYEE_STATUS.SUSPENDED) {
+      setLoading(false);
+      const errorMsg = 'Your account is inactive. Please contact Admin.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    if (resolved.status !== EMPLOYEE_STATUS.ACTIVE) {
+      setLoading(false);
+      const errorMsg = 'Your account is not active. Please contact Admin.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    // 2. Authenticate directly with Firebase Authentication
+    let firebaseUser = null;
+    try {
+      if (typeof window !== 'undefined') {
+        try {
+          await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+        } catch {
+          // ignore
+        }
+      }
+      const userCredential = await signInWithEmailAndPassword(auth, resolved.email, password);
+      firebaseUser = userCredential.user;
+    } catch (firebaseErr) {
+      console.warn('Firebase Auth sign-in notice:', firebaseErr.code, firebaseErr.message);
+      setLoading(false);
+      let errorMsg = 'Incorrect password. Please verify and try again.';
+      if (firebaseErr.code === 'auth/invalid-credential' || firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/user-not-found') {
+        errorMsg = 'Incorrect password. Please verify and try again.';
+      } else if (firebaseErr.code === 'auth/too-many-requests') {
+        errorMsg = 'Access temporarily locked due to multiple failed attempts. Please try again later or reset password.';
+      } else if (firebaseErr.code === 'auth/user-disabled') {
+        errorMsg = 'This account has been disabled. Please contact administrator.';
+      }
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    // 3. Build verified session without plaintext password
+    const isMaster = resolved.role === ROLES.ADMIN || resolved.email === SYSTEM_ADMIN.email || resolved.user?.id === SYSTEM_ADMIN.id;
     const SESSION_DURATION_MS = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
     const sessionData = {
-      ...result.user,
+      ...resolved.user,
+      uid: firebaseUser.uid,
+      role: resolved.role,
+      companyId: resolved.user?.companyId || localStorage.getItem('rmc_active_company_v1') || 'CMP-SM-001',
       isMasterAdmin: isMaster,
-      originalAdminUser: isMaster ? result.user : null,
+      originalAdminUser: isMaster ? { ...resolved.user, uid: firebaseUser.uid } : null,
       lastLoginAt: new Date().toISOString(),
       sessionExpiresAt: Date.now() + SESSION_DURATION_MS,
     };
+    delete sessionData.password;
 
     try {
       sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionData));
@@ -252,20 +411,27 @@ export const AuthProvider = ({ children }) => {
       // ignore
     }
 
+    // Save/update verified user profile in Cloud Firestore under UID (without password)
+    saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, {
+      ...sessionData,
+      syncedAt: new Date().toISOString(),
+    }).catch(() => {});
+
     setUser(sessionData);
     setLoading(false);
     return {
       success: true,
-      requiresFirstLoginSetup: false,
+      requiresFirstLoginSetup: Boolean(sessionData.mustChangePassword),
       user: sessionData,
       role: sessionData.role,
-      redirectPath: result.redirectPath,
+      redirectPath: resolved.redirectPath || ROLE_ROUTES[sessionData.role] || '/login',
     };
   };
 
   /**
    * Manual Employee Registration without role selection
    * Validates against Admin-created employee record and sets status to 'Pending Approval'
+   * Creates identity in Firebase Authentication and strips plaintext passwords from database records.
    */
   const register = async (registrationData) => {
     setAuthError(null);
@@ -282,34 +448,57 @@ export const AuthProvider = ({ children }) => {
 
     const { employee } = validation;
 
-    // Transition employee status: Pending Registration -> Pending Approval
+    // 1. Create account in Firebase Authentication
     try {
-      const storedRaw = localStorage.getItem('rmc_workforce_state_v5');
+      await createUserWithEmailAndPassword(auth, registrationData.email, registrationData.password);
+      // Immediately sign out since status is Pending Approval (not allowed into dashboards)
+      await signOut(auth);
+    } catch (firebaseErr) {
+      if (firebaseErr.code === 'auth/email-already-in-use') {
+        // Email already registered in Firebase Auth, proceed to update status
+      } else if (firebaseErr.code === 'auth/weak-password') {
+        setLoading(false);
+        const msg = 'Password must be at least 6 characters long.';
+        setAuthError(msg);
+        return { success: false, error: msg };
+      } else {
+        setLoading(false);
+        const msg = firebaseErr.message || 'Registration failed with identity service.';
+        setAuthError(msg);
+        return { success: false, error: msg };
+      }
+    }
+
+    // 2. Transition employee status: Pending Registration -> Pending Approval (NO PLAINTEXT PASSWORDS)
+    try {
+      const activeCompanyId = localStorage.getItem('rmc_active_company_v1') || 'CMP-SM-001';
+      const storageKey = `rmc_workforce_state_v9_${activeCompanyId}`;
+      const storedRaw = localStorage.getItem(storageKey);
       if (storedRaw) {
         const workforceState = JSON.parse(storedRaw);
         workforceState.employees = (workforceState.employees || []).map((e) => {
           if ((e.id || '').toUpperCase() === employee.id.toUpperCase()) {
-            return {
+            const updated = {
               ...e,
               status: EMPLOYEE_STATUS.PENDING_APPROVAL,
               registeredAt: new Date().toISOString(),
               registeredMobile: registrationData.mobile,
               registeredEmail: registrationData.email,
-              password: registrationData.password,
             };
+            delete updated.password;
+            return updated;
           }
           return e;
         });
-        localStorage.setItem('rmc_workforce_state_v5', JSON.stringify(workforceState));
+        localStorage.setItem(storageKey, JSON.stringify(workforceState));
       }
 
-      // Update in Cloud Firestore
+      // Update in Cloud Firestore (NO PLAINTEXT PASSWORDS)
       updateDocument(COLLECTIONS.EMPLOYEES, employee.id, {
         status: EMPLOYEE_STATUS.PENDING_APPROVAL,
         registeredAt: new Date().toISOString(),
         registeredMobile: registrationData.mobile,
         registeredEmail: registrationData.email,
-        password: registrationData.password,
       }).catch(() => {});
     } catch (err) {
       console.warn('Failed to update workforce employee during registration:', err);
@@ -407,13 +596,19 @@ export const AuthProvider = ({ children }) => {
       role: newUser.role,
       department: newUser.department || 'Operations',
       plantLocation: newUser.plantLocation || 'Main Plant',
-      password: newUser.password || 'Password@123',
       mustChangePassword: false,
       avatar: (newUser.name || 'EM').split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
       createdAt: new Date().toISOString(),
     };
 
-    // Sync to Firestore
+    // If password provided and email exists, provision in Firebase Auth safely
+    if (newUser.email && newUser.password) {
+      createEmployeeFirebaseAuth(newUser.email, newUser.password).catch((authErr) => {
+        console.warn('Firebase Auth user creation notice:', authErr.message);
+      });
+    }
+
+    // Sync to Firestore without plaintext password
     try {
       await saveDocumentWithId(COLLECTIONS.USERS, userRecord.id, userRecord);
     } catch (err) {
@@ -438,32 +633,42 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Complete First-Time Setup
+   * Updates credentials in Firebase Authentication and updates profile flag in Firestore
    */
   const completeFirstTimeSetup = async (userId, currentPassword, newPassword) => {
     setAuthError(null);
     setLoading(true);
 
-    const targetUser = users.find((u) => u.id === userId);
-    if (!targetUser) {
-      setLoading(false);
-      const msg = 'User record not located.';
-      setAuthError(msg);
-      return { success: false, error: msg };
+    // 1. Update password in Firebase Auth if active session exists
+    try {
+      if (auth.currentUser) {
+        await updatePassword(auth.currentUser, newPassword);
+      }
+    } catch (authErr) {
+      console.warn('Firebase Auth updatePassword notice:', authErr.message);
     }
 
+    const targetUser = users.find((u) => u.id === userId || u.employeeId === userId);
     const updatedUser = {
-      ...targetUser,
-      password: newPassword,
+      ...(targetUser || user || {}),
       mustChangePassword: false,
       passwordChangedAt: new Date().toISOString(),
     };
+    // Strictly strip plaintext password
+    delete updatedUser.password;
 
     // Update in Firestore
-    saveDocumentWithId(COLLECTIONS.USERS, userId, updatedUser).catch(() => {});
+    if (auth.currentUser?.uid) {
+      saveDocumentWithId(COLLECTIONS.USERS, auth.currentUser.uid, updatedUser).catch(() => {});
+    }
+    if (userId) {
+      saveDocumentWithId(COLLECTIONS.USERS, userId, updatedUser).catch(() => {});
+    }
 
     setUsers((prev) => prev.map((u) => (u.id === userId ? updatedUser : u)));
     setPendingFirstLoginUser(null);
     setUser(updatedUser);
+    sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(updatedUser));
     setLoading(false);
 
     return {
@@ -475,33 +680,66 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Request password reset
+   * Request password reset via Firebase Authentication
    */
   const requestPasswordReset = async (identifier) => {
     setAuthError(null);
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setLoading(false);
 
-    return {
-      success: true,
-      message: 'Password reset instructions sent to verified address.',
-    };
+    const workforceEmployees = getWorkforceEmployees();
+    const resolved = resolveLoginIdentity(identifier, workforceEmployees, users);
+    const targetEmail = resolved?.email || (identifier.includes('@') ? identifier.trim() : null);
+
+    if (!targetEmail) {
+      setLoading(false);
+      const errorMsg = 'Could not find a registered email for this account. Please contact Admin.';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, targetEmail);
+      setLoading(false);
+      return {
+        success: true,
+        message: `Password reset link has been dispatched to ${targetEmail}. Please check your inbox.`,
+        user: { employeeId: resolved?.user?.employeeId || identifier, email: targetEmail },
+      };
+    } catch (err) {
+      console.warn('Firebase sendPasswordResetEmail notice:', err.code, err.message);
+      setLoading(false);
+      let errorMsg = 'Failed to dispatch password reset email. Please verify identifier.';
+      if (err.code === 'auth/user-not-found') {
+        errorMsg = 'No account found with this email in the plant identity system.';
+      }
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
   };
 
   /**
-   * Reset password
+   * Reset password for authenticated user session
    */
   const resetPassword = async (identifier, newPassword) => {
     setAuthError(null);
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setLoading(false);
 
-    return {
-      success: true,
-      message: 'Password updated successfully.',
-    };
+    try {
+      if (auth.currentUser) {
+        await updatePassword(auth.currentUser, newPassword);
+      }
+      setLoading(false);
+      return {
+        success: true,
+        message: 'Password updated successfully in Firebase Authentication.',
+      };
+    } catch (err) {
+      setLoading(false);
+      return {
+        success: false,
+        error: err.message || 'Failed to update password with identity server.',
+      };
+    }
   };
 
   /**
