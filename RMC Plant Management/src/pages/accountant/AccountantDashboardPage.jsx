@@ -18,10 +18,14 @@ import {
   Plus,
   FileText,
   AlertCircle,
-  Download
+  Download,
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import { MOCK_ACCOUNTANT_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { useAuth } from '../../context/AuthContext';
+import { formatToIndian12Hr } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
 import PayrollPreparationView from '../../components/workforce/PayrollPreparationView';
@@ -29,8 +33,10 @@ import AdvanceManagementView from '../../components/workforce/AdvanceManagementV
 import LoanManagementView from '../../components/workforce/LoanManagementView';
 import HrReportsView from '../../components/workforce/HrReportsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
+import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
 
 export default function AccountantDashboardPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [toastMessage, setToastMessage] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -41,8 +47,19 @@ export default function AccountantDashboardPage() {
     payrollRecords,
     advances,
     loans,
-    employees
+    employees,
+    attendance
   } = useWorkforce();
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const accountantTodayAttendance = (attendance || []).find(
+    (a) => a.date === todayStr &&
+      ((a.employeeId && a.employeeId.toUpperCase() === 'ACC-001') ||
+       (a.employeeId && user?.employeeId && a.employeeId.toUpperCase() === user.employeeId.toUpperCase()) ||
+       (a.employeeId && user?.id && a.employeeId.toUpperCase() === user.id.toUpperCase()))
+  );
+  const isAccountantClockedIn = Boolean(accountantTodayAttendance?.punchIn);
+  const isAccountantShiftEnded = Boolean(accountantTodayAttendance?.punchOut);
 
   // Phase 1 Payroll & Advances stats
   const pendingPayrollCount = payrollRecords.filter((p) => p.status === 'Calculated' || p.status === 'Draft').length;
@@ -111,6 +128,19 @@ export default function AccountantDashboardPage() {
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            onClick={() => setActiveTab('attendance')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
+              isAccountantClockedIn && !isAccountantShiftEnded
+                ? 'bg-emerald-50 text-emerald-900 border border-emerald-300'
+                : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
+            }`}
+            title="Mark or View Daily Attendance"
+          >
+            <Clock className={`w-3.5 h-3.5 ${isAccountantClockedIn && !isAccountantShiftEnded ? 'text-emerald-600 animate-pulse' : 'text-[#1D5FA7]'}`} />
+            <span>{isAccountantClockedIn && !isAccountantShiftEnded ? 'On Duty' : 'Daily Attendance'}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('billing')}
             className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
@@ -128,6 +158,14 @@ export default function AccountantDashboardPage() {
         </div>
       }
     >
+      {activeTab === 'attendance' && (
+        <RolePersonalAttendanceView
+          defaultRole="Accountant"
+          defaultEmpId="ACC-001"
+          defaultDepartment="Finance & Accounts"
+          onPunched={() => setToastMessage('Accountant daily attendance synced successfully!')}
+        />
+      )}
       {activeTab === 'billing' && <BillingManagementView defaultSection="cash_memos" />}
       {activeTab === 'purchases' && <BillingManagementView defaultSection="purchases" />}
       {activeTab === 'otp_audit' && <BillingManagementView defaultSection="otp_audit" />}
@@ -137,7 +175,48 @@ export default function AccountantDashboardPage() {
       {activeTab === 'reports' && <HrReportsView />}
 
       {activeTab === 'dashboard' && (
-        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
+        <div className="w-full flex-1 flex flex-col space-y-4 pb-6 min-w-0">
+          
+          {/* Accountant Daily Duty & Attendance Quick Card */}
+          <section className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#D4E4F7] shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center font-bold shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-bold text-black uppercase tracking-wide">
+                    Accountant Daily Attendance
+                  </h3>
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7]">
+                    ACC-001
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-700">
+                  {isAccountantClockedIn && !isAccountantShiftEnded
+                    ? `Clocked In at ${formatToIndian12Hr(accountantTodayAttendance?.punchIn)} • Biometric & GPS verified`
+                    : isAccountantShiftEnded
+                    ? `Shift Concluded at ${formatToIndian12Hr(accountantTodayAttendance?.punchOut)} (${accountantTodayAttendance?.workingHours || 8}h worked)`
+                    : 'Awaiting Today\'s Attendance Punch-In • Shift: 09:00 AM - 06:00 PM'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('attendance')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                  isAccountantClockedIn && !isAccountantShiftEnded
+                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                    : 'bg-[#1D5FA7] hover:bg-[#123B6D] text-white'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>{isAccountantClockedIn && !isAccountantShiftEnded ? 'Punch Out / End Shift →' : 'Punch In for Today →'}</span>
+              </button>
+            </div>
+          </section>
           {/* Phase 1 Payroll & Advances Financial Telemetry Strip */}
           <section className="p-4.5 rounded-3xl bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/90 border border-emerald-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-3">

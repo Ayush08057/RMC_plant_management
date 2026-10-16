@@ -71,6 +71,7 @@ export default function AppLayout({
         isOpen={sidebarOpen}
         isCollapsed={!sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onToggle={() => setSidebarOpen((prev) => !prev)}
         activeTab={activeTab}
         onSelectTab={onSelectTab}
       />
@@ -95,15 +96,15 @@ export default function AppLayout({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-black bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
+                  <span className="text-[11px] font-mono uppercase tracking-wider font-semibold text-black bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
                     AUTHENTICATED
                   </span>
-                  <span className="text-[10px] text-slate-600 font-mono">Just Now</span>
+                  <span className="text-[11px] text-slate-600 font-mono">Just Now</span>
                 </div>
-                <div className="text-xs font-bold text-black mt-1">
+                <div className="text-xs sm:text-sm font-bold text-black mt-1">
                   {loginToast.title || 'User login successfully'}
                 </div>
-                <p className="text-[11px] font-medium text-slate-700 truncate mt-0.5">
+                <p className="text-xs font-medium text-slate-700 truncate mt-0.5">
                   Welcome, {loginToast.userName || user?.name || 'Authorized User'} {loginToast.role ? `(${loginToast.role})` : ''}
                 </p>
               </div>
@@ -113,7 +114,7 @@ export default function AppLayout({
                 className="text-slate-500 hover:text-black p-1 rounded-lg hover:bg-[#EAF3FF] transition-colors cursor-pointer"
                 title="Dismiss"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -122,10 +123,10 @@ export default function AppLayout({
         {/* Admin Master Mode Inspection Indicator Banner */}
         {Boolean(user?.isMasterAdmin || user?.originalAdminUser) && user?.role !== ROLES.ADMIN && (
           <div className="px-3 sm:px-4 pt-2 shrink-0 animate-fadeIn">
-            <div className="bg-[#EAF3FF] border border-[#D4E4F7] text-black px-3.5 py-1.5 rounded-xl flex items-center justify-between shadow-2xs text-xs">
+            <div className="bg-[#EAF3FF] border border-[#D4E4F7] text-black px-3.5 py-1.5 rounded-xl flex items-center justify-between shadow-2xs text-xs sm:text-sm">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-[#246BCE] shrink-0" />
-                <span className="text-[11px] font-medium text-black truncate">
+                <span className="text-xs sm:text-sm font-medium text-black truncate">
                   Master Admin Clearance Active • Viewing <strong className="font-semibold text-black">{user?.role}</strong> Portal
                 </span>
               </div>
@@ -135,9 +136,9 @@ export default function AppLayout({
                   const returnPath = switchRole(ROLES.ADMIN);
                   if (returnPath) navigate(returnPath);
                 }}
-                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
               >
-                <ArrowLeft className="w-3 h-3" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Return to Admin Console</span>
               </button>
             </div>
@@ -146,14 +147,14 @@ export default function AppLayout({
 
         {/* Professional Enterprise Page Title Bar - Ultra-Slim & Compact */}
         {(title || actions) && (
-          <div className="px-3 sm:px-4 pt-1 pb-0.5 shrink-0">
-            <div className="bg-white border border-[#D4E4F7] rounded-lg px-2.5 sm:px-3 py-1 shadow-2xs flex items-center justify-between gap-2 min-w-0">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <h1 className="text-xs sm:text-[13px] font-bold text-black tracking-tight truncate leading-tight">
+          <div className="px-3 sm:px-4 pt-1.5 pb-1 shrink-0">
+            <div className="bg-white border border-[#D4E4F7] rounded-xl px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <h1 className="text-xs sm:text-sm md:text-base font-bold text-black tracking-tight truncate leading-tight">
                   {title}
                 </h1>
                 {badge && (
-                  <span className="text-[9px] font-mono font-medium px-1.5 py-0.2 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
+                  <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
                     {badge}
                   </span>
                 )}
@@ -174,31 +175,31 @@ export default function AppLayout({
         </main>
 
         {/* Pinned Operational Footer - Display Active Logged In Session Below */}
-        <footer className="border-t border-[#D4E4F7] py-1.5 px-3 sm:px-4 bg-white text-center text-[10px] text-slate-700 w-full max-w-full shrink-0 shadow-2xs">
+        <footer className="border-t border-[#D4E4F7] py-2 px-3 sm:px-4 bg-white text-center text-xs text-slate-700 w-full max-w-full shrink-0 shadow-2xs">
           <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-1.5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#246BCE] shrink-0" />
-              <div className="text-black font-medium truncate text-[11px] flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#246BCE] shrink-0" />
+              <div className="text-black font-medium truncate text-xs flex items-center gap-1.5">
                 <span className="text-slate-600 hidden sm:inline">Active Session:</span>
                 <strong className="text-black font-semibold truncate">{user?.name || 'Administrator'}</strong>
                 {user?.role && (
-                  <span className="px-1.5 py-0.2 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[10px] font-mono font-medium shrink-0">
+                  <span className="px-2 py-0.5 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[11px] font-mono font-semibold shrink-0">
                     {user.role}
                   </span>
                 )}
                 {user?.employeeId && (
-                  <span className="text-slate-600 font-mono text-[10px] hidden md:inline">
+                  <span className="text-slate-600 font-mono text-[11px] hidden md:inline">
                     [{user.employeeId}]
                   </span>
                 )}
                 <span className="text-[#D4E4F7] hidden lg:inline">•</span>
-                <span className="text-slate-700 text-[10px] hidden lg:inline">
+                <span className="text-slate-700 text-[11px] hidden lg:inline">
                   Plant: {user?.plant || user?.plantLocation || 'Main Plant Unit #01'}
                 </span>
               </div>
             </div>
-            <div className="font-mono text-[10px] text-slate-700 font-medium truncate flex items-center gap-2">
-              <span className="hidden sm:inline text-black font-medium">● SCADA Connected</span>
+            <div className="font-mono text-[11px] text-slate-700 font-medium truncate flex items-center gap-2">
+              <span className="hidden sm:inline text-black font-semibold">● SCADA Connected</span>
               <span>SM CONCRETECH Enterprise v2.4</span>
             </div>
           </div>

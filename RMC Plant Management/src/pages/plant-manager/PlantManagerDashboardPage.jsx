@@ -32,6 +32,7 @@ import ShiftManagementView from '../../components/workforce/ShiftManagementView'
 import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
 import HrReportsView from '../../components/workforce/HrReportsView';
+import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
 
 const CURRENT_PLANT_NAME = 'Main Plant Unit #01';
 const CURRENT_PLANT_ID = 'PLANT-001';
@@ -321,6 +322,15 @@ export default function PlantManagerDashboardPage() {
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            onClick={() => setActiveTab('attendance')}
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Mark or View Daily Attendance"
+          >
+            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
+            <span>Daily Attendance</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setShowPlanModal(true)}
             className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
           >
@@ -339,7 +349,16 @@ export default function PlantManagerDashboardPage() {
       }
     >
       {activeTab === 'employees' && <EmployeeManagementView defaultPlant="Main Plant Unit #01" />}
-      {activeTab === 'attendance' && <AttendanceManagementView defaultPlant="Main Plant Unit #01" />}
+      {activeTab === 'attendance' && (
+        <RolePersonalAttendanceView
+          defaultRole="Plant Manager"
+          defaultEmpId="PM-001"
+          defaultDepartment="Operations Management"
+          canSwitchToTeamView={true}
+          teamViewComponent={<AttendanceManagementView defaultPlant="Main Plant Unit #01" />}
+          onPunched={() => setToastMessage('Plant Manager attendance verified and recorded!')}
+        />
+      )}
       {activeTab === 'shifts' && <ShiftManagementView />}
       {activeTab === 'daily-work' && <DailyWorkView />}
       {activeTab === 'leaves' && <LeaveManagementView />}

@@ -27,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import AttendanceManagementView from '../../components/workforce/AttendanceManagementView';
 import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
+import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
 
 export default function SiteSupervisorDashboardPage() {
   const { user } = useAuth();
@@ -125,6 +126,15 @@ export default function SiteSupervisorDashboardPage() {
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            onClick={() => setActiveTab('attendance')}
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Mark or View Daily Attendance"
+          >
+            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
+            <span>Daily Attendance</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setShowConfirmModal(true)}
             className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
@@ -142,7 +152,16 @@ export default function SiteSupervisorDashboardPage() {
         </div>
       }
     >
-      {activeTab === 'attendance' && <AttendanceManagementView />}
+      {activeTab === 'attendance' && (
+        <RolePersonalAttendanceView
+          defaultRole="Site Supervisor"
+          defaultEmpId="SS-001"
+          defaultDepartment="Site Operations"
+          canSwitchToTeamView={true}
+          teamViewComponent={<AttendanceManagementView />}
+          onPunched={() => setToastMessage('Site Supervisor attendance verified and recorded!')}
+        />
+      )}
       {activeTab === 'daily-work' && <DailyWorkView />}
       {activeTab === 'leaves' && <LeaveManagementView />}
 

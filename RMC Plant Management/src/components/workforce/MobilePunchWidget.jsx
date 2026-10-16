@@ -16,6 +16,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, getNowIndian12Hr } from '../../utils/shiftUtils';
+import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import StatusBadge from '../dashboard/StatusBadge';
 
 export default function MobilePunchWidget({ 
@@ -50,10 +51,31 @@ export default function MobilePunchWidget({
     return () => clearInterval(timer);
   }, []);
 
-  // Master list of real workforce employees (scoped)
+  // Master list of real workforce employees (scoped + includes official role accounts)
   const allEmployeesList = useMemo(() => {
-    let list = employees || [];
-    if (!isAdmin) {
+    let list = employees && employees.length > 0 ? [...employees] : [];
+
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
+      const id = (official.employeeId || official.id || '').toUpperCase();
+      const exists = list.some((e) => {
+        const eId = (e.employeeId || e.id || '').toUpperCase();
+        return eId === id;
+      });
+      if (!exists) {
+        list.push({
+          id: official.employeeId || official.id,
+          employeeId: official.employeeId || official.id,
+          name: official.name,
+          role: official.role,
+          department: official.department,
+          plant: official.plantLocation || 'Main Plant HQ',
+          email: official.email,
+          mobile: official.phone,
+        });
+      }
+    });
+
+    if (!isAdmin && !lockedEmployeeId) {
       list = list.filter((e) => {
         const empRole = (e.role || '').toLowerCase();
         const empId = (e.employeeId || e.id || '').toUpperCase();
@@ -61,7 +83,7 @@ export default function MobilePunchWidget({
       });
     }
     return list;
-  }, [employees, isAdmin]);
+  }, [employees, isAdmin, lockedEmployeeId]);
 
   const effectiveLockedId = lockedEmployeeId || (!isAdmin ? (user?.employeeId || user?.id) : null);
   const isLocked = Boolean(effectiveLockedId) || roleLocked || user?.role === 'Driver';

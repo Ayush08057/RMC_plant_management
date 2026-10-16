@@ -26,13 +26,28 @@ import {
   Clock, 
   ChevronDown, 
   ChevronRight,
+  ChevronLeft,
+  MapPin,
+  Monitor,
+  Store,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { ROLES, ROLE_ROUTES } from '../../data/mockUsers';
 
-export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTab, onSelectTab }) {
+const PORTAL_LINKS = [
+  { role: ROLES.ADMIN, label: 'System Admin Console', path: '/admin', icon: Monitor, colorClass: 'bg-[#136dec]' },
+  { role: ROLES.PLANT_MANAGER, label: 'Plant Manager Portal', path: '/plant-manager', icon: Building2, colorClass: 'bg-[#059669]' },
+  { role: ROLES.ACCOUNTANT, label: 'Accounts & Billing', path: '/accountant', icon: Store, colorClass: 'bg-[#f97316]' },
+  { role: ROLES.DISPATCHER, label: 'Dispatch Operations', path: '/dispatcher', icon: Truck, colorClass: 'bg-[#6366f1]' },
+  { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
+  { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervisor', path: '/site-supervisor', icon: HardHat, colorClass: 'bg-[#0d9488]' },
+  { role: ROLES.DRIVER, label: 'Driver Portal', path: '/driver', icon: Truck, colorClass: 'bg-[#f43f5e]' },
+  { role: ROLES.OWNER_DIRECTOR, label: 'Owner / Director', path: '/owner', icon: Users, colorClass: 'bg-[#4f46e5]' },
+];
+
+export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle, activeTab, onSelectTab }) {
   const { user, logout, switchRole } = useAuth();
   const workforce = useWorkforce();
   const activeCompany = workforce?.activeCompany;
@@ -52,6 +67,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
             id: 'employees_group', 
             label: 'Employees', 
             icon: Users,
+            badge: 4,
             children: [
               { id: 'employees', label: 'Directory Records', icon: Users },
               { id: 'attendance', label: 'Attendance System', icon: Clock },
@@ -90,6 +106,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
       case ROLES.ACCOUNTANT:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'attendance', label: 'Daily Attendance', icon: Clock },
           { id: 'billing', label: 'Cash Memo & Invoicing', icon: Receipt },
           { id: 'purchases', label: 'Plant Material Purchase', icon: Layers },
           { 
@@ -126,7 +143,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
       case ROLES.SITE_SUPERVISOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'attendance', label: 'Team Attendance', icon: Clock },
+          { id: 'attendance', label: 'Team & My Attendance', icon: Clock },
           { id: 'daily-work', label: 'Daily Site Pouring', icon: Gauge },
           { id: 'leaves', label: 'Team Leave Requests', icon: Calendar },
         ];
@@ -142,6 +159,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
       case ROLES.OWNER_DIRECTOR:
         return [
           { id: 'dashboard', label: 'Executive Cockpit', icon: Building2 },
+          { id: 'attendance', label: 'Executive Attendance', icon: Clock },
           { id: 'billing', label: 'Revenue & Cash Flow', icon: IndianRupee },
           { id: 'payroll', label: 'Workforce & Payroll Costs', icon: Users },
           { id: 'approvals', label: 'High-Value Authorizations', icon: FileCheck2 },
@@ -176,7 +194,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
       ...info,
       top: rect.top,
       centerY: rect.top + rect.height / 2,
-      left: rect.right + 8,
+      left: rect.right + 10,
     });
   };
 
@@ -201,6 +219,16 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
     if (window.innerWidth < 768 && onClose) onClose();
   };
 
+  const toggleCollapse = () => {
+    if (onToggle) {
+      onToggle();
+    } else if (onClose) {
+      onClose();
+    }
+  };
+
+  const userInitials = user?.avatar || (user?.name ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'SA');
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -208,7 +236,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
         <div 
           className="fixed inset-0 z-40 md:hidden"
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
           }}
@@ -218,28 +246,39 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
 
       {/* Sidebar Container */}
       <aside
-        className={`app-sidebar fixed top-0 bottom-0 left-0 z-50 h-[100dvh] max-h-[100dvh] bg-[#123B6D] text-white border-r border-[#1D5FA7]/40 shadow-xl flex flex-col transition-all duration-300 ease-in-out ${
+        className={`app-sidebar fixed top-0 bottom-0 left-0 z-50 h-[100dvh] max-h-[100dvh] bg-[#0c2340] text-white border-r border-[#153458] shadow-2xl flex flex-col transition-all duration-300 ease-in-out ${
           isCollapsed
             ? '-translate-x-full md:translate-x-0 w-72 max-w-[85vw] sm:w-64 md:w-[68px]'
             : (isOpen ? 'translate-x-0 w-72 max-w-[85vw] sm:w-64' : '-translate-x-full md:translate-x-0 w-72 max-w-[85vw] sm:w-64')
         }`}
       >
         {isCollapsed ? (
-          /* COLLAPSED MODE: STRICTLY ICONS */
+          /* ======================================================== */
+          /* COLLAPSED MODE: CLEAN SLIM RAIL MATCHING REFERENCE IMAGE */
+          /* ======================================================== */
           <>
-            {/* Top: Logo Icon Only */}
-            <div className="py-3 px-2 border-b border-[#1D5FA7]/30 flex items-center justify-center bg-[#123B6D] shrink-0">
+            {/* Top: Expand Button & Logo */}
+            <div className="pt-3 pb-2.5 px-2 border-b border-[#153458]/70 flex flex-col items-center gap-2.5 bg-[#0c2340] shrink-0">
+              <button
+                type="button"
+                onClick={toggleCollapse}
+                className="w-9 h-9 rounded-xl bg-blue-950/60 hover:bg-blue-900/80 border border-blue-800/40 text-blue-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+                title="Expand Sidebar"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
               <Link 
                 to={ROLE_ROUTES[user?.role] || '/'} 
                 onMouseEnter={(e) => handleMouseEnter({ type: 'logo' }, e)}
                 onMouseLeave={handleMouseLeave}
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 hover:scale-105 transition-transform cursor-pointer overflow-hidden shadow-xs"
+                className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/10 hover:scale-105 transition-transform"
                 title={activeCompany?.name || "SM CONCRETECH"}
               >
                 <img 
                   src={activeCompany?.logo || "/logo.png"} 
                   alt={activeCompany?.name || "SM ConcreTech"} 
-                  className="w-full h-full object-cover scale-[1.04]" 
+                  className="w-full h-full object-contain" 
                 />
               </Link>
             </div>
@@ -247,30 +286,33 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
             {/* Navigation Icons Only */}
             <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar py-3 px-2 flex flex-col items-center gap-1.5 w-full">
               {navItems.map((item) => {
+                const count = item.children ? item.children.length : (item.badge || null);
+
                 if (item.children && item.children.length > 0) {
                   const isChildActive = item.children.some((child) => child.id === activeTab);
                   const Icon = item.icon;
 
                   return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectTab(item.children[0].id)}
-                      onMouseEnter={(e) => handleMouseEnter({ type: 'group', item }, e)}
-                      onMouseLeave={handleMouseLeave}
-                      title={item.label}
-                      className={`w-10 h-10 min-w-10 min-h-10 shrink-0 aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
-                        isChildActive
-                          ? 'bg-[#246BCE] text-white shadow-md ring-1 ring-white/20'
-                          : 'text-[#EAF3FF]/80 hover:text-white hover:bg-[#1D5FA7]/40 active:scale-95'
-                      }`}
-                    >
-                      {isChildActive && (
-                        <span className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full shadow-xs" />
+                    <div key={item.id} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => selectTab(item.children[0].id)}
+                        onMouseEnter={(e) => handleMouseEnter({ type: 'group', item }, e)}
+                        onMouseLeave={handleMouseLeave}
+                        className={`w-10 h-10 min-w-10 min-h-10 shrink-0 aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+                          isChildActive
+                            ? 'bg-[#136dec] text-white shadow-md'
+                            : 'text-slate-300 hover:text-white hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 shrink-0 stroke-[1.8]" />
+                      </button>
+                      {count && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center border-2 border-[#0c2340] pointer-events-none font-mono">
+                          {count}
+                        </span>
                       )}
-                      <Icon className="w-5 h-5 shrink-0 stroke-[1.8]" />
-                      <span className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#EAF3FF] ring-1 ring-[#123B6D]" />
-                    </button>
+                    </div>
                   );
                 }
 
@@ -284,16 +326,12 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                     onClick={() => selectTab(item.id)}
                     onMouseEnter={(e) => handleMouseEnter({ type: 'item', item }, e)}
                     onMouseLeave={handleMouseLeave}
-                    title={item.label}
                     className={`w-10 h-10 min-w-10 min-h-10 shrink-0 aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
                       isActive
-                        ? 'bg-[#246BCE] text-white shadow-md ring-1 ring-white/20'
-                        : 'text-[#EAF3FF]/80 hover:text-white hover:bg-[#1D5FA7]/40 active:scale-95'
+                        ? 'bg-[#136dec] text-white shadow-md'
+                        : 'text-slate-300 hover:text-white hover:bg-white/[0.08]'
                     }`}
                   >
-                    {isActive && (
-                      <span className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full shadow-xs" />
-                    )}
                     <Icon className="w-5 h-5 shrink-0 stroke-[1.8]" />
                   </button>
                 );
@@ -302,18 +340,9 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               {/* Master Admin Portals - Icons Only */}
               {Boolean(user?.isMasterAdmin || user?.role === ROLES.ADMIN || user?.originalAdminUser) && (
                 <>
-                  <div className="w-7 h-[1px] bg-[#1D5FA7]/50 my-1.5 shrink-0 rounded-full" />
+                  <div className="w-7 h-[1px] bg-[#153458] my-2 shrink-0 rounded-full" />
                   <div className="w-full flex flex-col items-center gap-1.5 shrink-0">
-                    {[
-                      { role: ROLES.ADMIN, label: 'System Admin Console', path: '/admin', icon: ShieldCheck },
-                      { role: ROLES.PLANT_MANAGER, label: 'Plant Manager Portal', path: '/plant-manager', icon: LayoutDashboard },
-                      { role: ROLES.ACCOUNTANT, label: 'Accounts & Billing', path: '/accountant', icon: Receipt },
-                      { role: ROLES.DISPATCHER, label: 'Logistics & Dispatch', path: '/dispatcher', icon: Navigation },
-                      { role: ROLES.QC_ENGINEER, label: 'Concrete QC Lab', path: '/qc', icon: FlaskConical },
-                      { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervision', path: '/site-supervisor', icon: Gauge },
-                      { role: ROLES.DRIVER, label: 'Driver Personal Portal', path: '/driver', icon: Truck },
-                      { role: ROLES.OWNER_DIRECTOR, label: 'Executive Cockpit', path: '/owner', icon: Building2 },
-                    ].map((portal) => {
+                    {PORTAL_LINKS.map((portal) => {
                       const isCurrentRole = user?.role === portal.role || location.pathname === portal.path;
                       const PortalIcon = portal.icon;
                       return (
@@ -327,17 +356,15 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                           }}
                           onMouseEnter={(e) => handleMouseEnter({ type: 'portal', label: portal.label, isCurrent: isCurrentRole }, e)}
                           onMouseLeave={handleMouseLeave}
-                          title={portal.label}
                           className={`w-10 h-10 min-w-10 min-h-10 shrink-0 aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
                             isCurrentRole
-                              ? 'bg-[#246BCE] text-white shadow-md ring-1 ring-white/20'
-                              : 'text-[#EAF3FF]/80 hover:text-white hover:bg-[#1D5FA7]/40 active:scale-95'
+                              ? 'bg-[#136dec] text-white shadow-md ring-2 ring-blue-400/40'
+                              : 'hover:bg-white/[0.08]'
                           }`}
                         >
-                          {isCurrentRole && (
-                            <span className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full shadow-xs" />
-                          )}
-                          <PortalIcon className="w-5 h-5 shrink-0 stroke-[1.8]" />
+                          <div className={`w-7 h-7 rounded-lg ${portal.colorClass} flex items-center justify-center shrink-0 shadow-xs`}>
+                            <PortalIcon className="w-4 h-4 text-white stroke-[2]" />
+                          </div>
                         </button>
                       );
                     })}
@@ -346,70 +373,77 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               )}
             </div>
 
-            {/* Bottom Footer - Icons Only */}
-            <div className="py-2.5 px-2 border-t border-[#1D5FA7]/30 bg-[#0d2e57] shrink-0 flex flex-col items-center gap-2 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
+            {/* Bottom Footer - Avatar & Logout */}
+            <div className="py-3 px-2 border-t border-[#153458]/70 bg-[#0c2340] shrink-0 flex flex-col items-center gap-2 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
               <div 
                 onMouseEnter={(e) => handleMouseEnter({ type: 'user' }, e)}
                 onMouseLeave={handleMouseLeave}
-                className="w-10 h-10 min-w-10 min-h-10 rounded-xl bg-[#1D5FA7] text-white text-xs font-bold flex items-center justify-center shadow-xs cursor-pointer border border-[#D4E4F7]/30 shrink-0 hover:ring-2 hover:ring-[#246BCE] transition-all"
-                title={`${user?.name || 'User'} (${user?.role || ''})`}
+                className="w-10 h-10 min-w-10 min-h-10 rounded-full bg-[#136dec] text-white text-xs font-bold flex items-center justify-center shadow-xs cursor-pointer relative shrink-0"
               >
-                {user?.avatar || 'US'}
+                <span>{userInitials}</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0c2340] absolute bottom-0 right-0 shadow-xs" />
               </div>
+
               <button
                 type="button"
                 onClick={logout}
                 onMouseEnter={(e) => handleMouseEnter({ type: 'logout' }, e)}
                 onMouseLeave={handleMouseLeave}
-                className="w-10 h-10 min-w-10 min-h-10 rounded-xl flex items-center justify-center bg-[#123B6D] hover:bg-[#1D5FA7] text-[#EAF3FF] hover:text-white border border-[#1D5FA7]/50 transition-all cursor-pointer shadow-xs shrink-0 active:scale-95"
+                className="w-10 h-10 min-w-10 min-h-10 rounded-xl flex items-center justify-center bg-blue-950/60 hover:bg-blue-900/60 text-slate-300 hover:text-white border border-blue-800/40 transition-all cursor-pointer shadow-xs shrink-0"
                 title="Sign Out Session"
               >
-                <LogOut className="w-5 h-5 shrink-0 stroke-[1.8]" />
+                <LogOut className="w-4 h-4 stroke-[2]" />
               </button>
             </div>
           </>
         ) : (
-          /* EXPANDED MODE: FULL SIDEBAR */
+          /* ======================================================== */
+          /* EXPANDED MODE: FULL SIDEBAR MATCHING REFERENCE IMAGE     */
+          /* ======================================================== */
           <>
             {/* Top: Logo & System Identity */}
-            <div className="py-3 px-3.5 border-b border-[#1D5FA7]/30 flex items-center justify-between bg-[#123B6D] shrink-0">
-              <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-2.5 min-w-0 flex-1">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
+            <div className="p-3.5 border-b border-[#153458]/70 flex items-center justify-between gap-2 bg-[#0c2340] shrink-0">
+              <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 min-w-0 flex-1 group">
+                <div className="w-12 h-12 rounded-2xl bg-white p-1 flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/10 group-hover:scale-105 transition-transform">
                   <img 
                     src={activeCompany?.logo || "/logo.png"} 
                     alt={activeCompany?.name || "SM ConcreTech"} 
-                    className="w-full h-full object-cover scale-[1.04]" 
+                    className="w-full h-full object-contain" 
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="sidebar-label text-xs font-bold tracking-wider text-white truncate">
-                      {activeCompany?.name || "SM CONCRETECH"}
-                    </span>
+                  <div className="text-xs sm:text-sm font-bold tracking-wide text-white truncate uppercase">
+                    {activeCompany?.name || "SM CONCRETE TECH"}
                   </div>
-                  <div className="text-[10px] font-semibold text-[#D4E4F7]/90 font-mono tracking-wider truncate">
-                    {activeCompany?.location || "READY MIX CONCRETE"}
+                  <div className="flex items-center gap-1 text-xs font-medium text-blue-200/90 truncate mt-0.5">
+                    <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
+                    <span className="truncate">{activeCompany?.location || "Tanang, Sangli"}</span>
                   </div>
-                  <div className="sidebar-label text-[10px] font-semibold truncate text-[#EAF3FF] mt-0.5">
-                    {user?.role || 'Portal'}
+                  <div className="text-[11px] font-medium text-blue-200/80 truncate mt-0.5">
+                    {user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin')}
                   </div>
                 </div>
               </Link>
 
-              {/* Mobile Close Button */}
+              {/* Collapse Button / Close Mobile */}
               <button
                 type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white md:hidden transition-colors cursor-pointer shrink-0 ml-2"
-                title="Close Sidebar"
+                onClick={toggleCollapse}
+                className="w-8 h-8 rounded-xl bg-blue-950/60 hover:bg-blue-900/80 border border-blue-800/40 text-blue-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 shadow-xs"
+                title="Collapse Sidebar"
               >
-                <X className="w-5 h-5 text-white" />
+                <span className="hidden md:block">
+                  <ChevronLeft className="w-4 h-4" />
+                </span>
+                <span className="md:hidden">
+                  <X className="w-4 h-4" />
+                </span>
               </button>
             </div>
 
-            {/* Navigation Items */}
-            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2 space-y-0.5">
-              <div className="sidebar-label px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider text-[#D4E4F7]/80">
+            {/* Navigation Section */}
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2.5 space-y-1">
+              <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono">
                 Navigation
               </div>
 
@@ -419,39 +453,40 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                   const isExpanded = Boolean(expandedGroups[item.id]);
                   const isChildActive = item.children.some((child) => child.id === activeTab);
                   const Icon = item.icon;
+                  const count = item.children.length;
 
                   return (
-                    <div key={item.id} className="space-y-0.5">
+                    <div key={item.id} className="space-y-1">
                       <button
                         type="button"
                         onClick={() => toggleGroup(item.id)}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer group ${
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm transition-all cursor-pointer group ${
                           isChildActive
-                            ? 'bg-[#246BCE] text-white font-semibold shadow-xs'
-                            : 'text-[#EAF3FF]/90 hover:text-white hover:bg-[#1D5FA7]/40'
+                            ? 'bg-[#136dec] text-white font-semibold shadow-md'
+                            : 'text-slate-200 hover:text-white hover:bg-white/[0.06] font-medium'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Icon className={`w-[18px] h-[18px] shrink-0 ${
-                            isChildActive ? 'text-white' : 'text-[#D4E4F7] group-hover:text-white'
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Icon className={`w-4 h-4 shrink-0 stroke-[1.9] ${
+                            isChildActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
                           }`} />
-                          <span className="sidebar-label truncate text-[11px]">{item.label}</span>
+                          <span className="truncate text-xs sm:text-sm font-medium">{item.label}</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#1D5FA7]/60 text-[#EAF3FF] border border-[#D4E4F7]/20 font-semibold">
-                            {item.children.length}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                            isChildActive ? 'bg-white/20 text-white' : 'bg-blue-600 text-white'
+                          }`}>
+                            {count}
                           </span>
-                          {isExpanded ? (
-                            <ChevronDown className="w-3.5 h-3.5 text-[#D4E4F7] group-hover:text-white transition-transform" />
-                          ) : (
-                            <ChevronRight className="w-3.5 h-3.5 text-[#D4E4F7] group-hover:text-white transition-transform" />
-                          )}
+                          <ChevronRight className={`w-4 h-4 transition-transform ${
+                            isExpanded ? 'rotate-90 text-white' : (isChildActive ? 'text-white/80' : 'text-slate-400/40 group-hover:text-slate-300')
+                          }`} />
                         </div>
                       </button>
 
                       {/* Collapsible Children List */}
                       {isExpanded && (
-                        <div className="pl-3 space-y-0.5 border-l border-[#1D5FA7]/40 ml-3 py-0.5 animate-fadeIn">
+                        <div className="pl-3.5 space-y-1 ml-4 border-l border-blue-800/40 py-1">
                           {item.children.map((child) => {
                             const ChildIcon = child.icon;
                             const isChildSelected = activeTab === child.id;
@@ -461,16 +496,17 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                                 key={child.id}
                                 type="button"
                                 onClick={() => selectTab(child.id)}
-                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
                                   isChildSelected
-                                    ? 'bg-[#1D5FA7] text-white font-semibold border border-[#D4E4F7]/30 shadow-2xs'
-                                    : 'text-[#EAF3FF]/80 hover:text-white hover:bg-[#1D5FA7]/30 font-medium'
+                                    ? 'bg-blue-600/30 text-white font-semibold border border-blue-500/40'
+                                    : 'text-slate-300 hover:text-white hover:bg-white/[0.05]'
                                 }`}
                               >
-                                <ChildIcon className={`w-4 h-4 shrink-0 ${
-                                  isChildSelected ? 'text-white' : 'text-[#D4E4F7]/70'
-                                }`} />
-                                <span className="sidebar-label truncate text-[11px]">{child.label}</span>
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-blue-300' : 'text-slate-400'}`} />
+                                  <span className="truncate text-xs sm:text-sm font-medium">{child.label}</span>
+                                </div>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
                               </button>
                             );
                           })}
@@ -489,45 +525,41 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                     key={item.id}
                     type="button"
                     onClick={() => selectTab(item.id)}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer group ${
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm transition-all cursor-pointer group ${
                       isActive
-                        ? 'bg-[#246BCE] text-white font-semibold shadow-xs'
-                        : 'text-[#EAF3FF]/90 hover:text-white hover:bg-[#1D5FA7]/40 font-medium'
+                        ? 'bg-[#136dec] text-white font-semibold shadow-md'
+                        : 'text-slate-200 hover:text-white hover:bg-white/[0.06] font-medium'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Icon className={`w-[18px] h-[18px] shrink-0 ${
-                        isActive ? 'text-white' : 'text-[#D4E4F7] group-hover:text-white'
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 stroke-[1.9] ${
+                        isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
                       }`} />
-                      <span className="sidebar-label truncate text-[11px]">{item.label}</span>
+                      <span className="truncate text-xs sm:text-sm font-medium">{item.label}</span>
                     </div>
-                    {item.badge && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-md bg-[#1D5FA7]/60 text-[#EAF3FF] border border-[#D4E4F7]/20 font-semibold">
-                        {item.badge}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {item.badge && (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white font-mono">
+                          {item.badge}
+                        </span>
+                      )}
+                      <ChevronRight className={`w-4 h-4 transition-colors ${
+                        isActive ? 'text-white/80' : 'text-slate-400/40 group-hover:text-slate-300'
+                      }`} />
+                    </div>
                   </button>
                 );
               })}
 
-              {/* Master Admin Cross-Role Operational Portals Hub */}
+              {/* Master Admin Portals Section */}
               {Boolean(user?.isMasterAdmin || user?.role === ROLES.ADMIN || user?.originalAdminUser) && (
-                <div className="pt-2.5 mt-2.5 border-t border-[#1D5FA7]/30 space-y-1">
-                  <div className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider text-[#D4E4F7]/80 flex items-center justify-between">
+                <div className="pt-3 mt-3 border-t border-[#153458]/70 space-y-1">
+                  <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center justify-between">
                     <span>Admin Portals</span>
-                    <span className="px-1.5 py-0.2 rounded bg-[#1D5FA7]/60 text-[#EAF3FF] border border-[#D4E4F7]/20 text-[8px] font-semibold">ALL ACCESS</span>
+                    <span className="px-2 py-0.5 rounded-md bg-blue-950/70 border border-blue-800/50 text-blue-300 text-[10px] font-bold tracking-wider">ALL ACCESS</span>
                   </div>
                   <div className="space-y-0.5">
-                    {[
-                      { role: ROLES.ADMIN, label: 'System Admin Console', path: '/admin', icon: ShieldCheck },
-                      { role: ROLES.PLANT_MANAGER, label: 'Plant Manager Portal', path: '/plant-manager', icon: LayoutDashboard },
-                      { role: ROLES.ACCOUNTANT, label: 'Accounts & Billing', path: '/accountant', icon: Receipt },
-                      { role: ROLES.DISPATCHER, label: 'Logistics & Dispatch', path: '/dispatcher', icon: Navigation },
-                      { role: ROLES.QC_ENGINEER, label: 'Concrete QC Lab', path: '/qc', icon: FlaskConical },
-                      { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervision', path: '/site-supervisor', icon: Gauge },
-                      { role: ROLES.DRIVER, label: 'Driver Personal Portal', path: '/driver', icon: Truck },
-                      { role: ROLES.OWNER_DIRECTOR, label: 'Executive Cockpit', path: '/owner', icon: Building2 },
-                    ].map((portal) => {
+                    {PORTAL_LINKS.map((portal) => {
                       const isCurrentRole = user?.role === portal.role || location.pathname === portal.path;
                       const PortalIcon = portal.icon;
                       return (
@@ -539,19 +571,26 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                             if (nextPath) navigate(nextPath);
                             if (window.innerWidth < 768 && onClose) onClose();
                           }}
-                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm transition-all cursor-pointer group ${
                             isCurrentRole
-                              ? 'bg-[#246BCE] text-white font-semibold shadow-xs'
-                              : 'text-[#EAF3FF]/80 hover:text-white hover:bg-[#1D5FA7]/40'
+                              ? 'bg-[#136dec] text-white font-semibold shadow-md'
+                              : 'text-slate-200 hover:text-white hover:bg-white/[0.06] font-medium'
                           }`}
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <PortalIcon className={`w-4 h-4 shrink-0 ${isCurrentRole ? 'text-white' : 'text-[#D4E4F7]'}`} />
-                            <span className="truncate text-[11px]">{portal.label}</span>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-7 h-7 rounded-lg ${portal.colorClass} flex items-center justify-center shrink-0 shadow-xs`}>
+                              <PortalIcon className="w-4 h-4 text-white stroke-[2]" />
+                            </div>
+                            <span className="truncate text-xs sm:text-sm font-medium">{portal.label}</span>
                           </div>
-                          {isCurrentRole && (
-                            <span className="text-[8px] font-mono px-1 py-0.2 rounded bg-white/20 text-white font-semibold">Active</span>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isCurrentRole && (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white">Active</span>
+                            )}
+                            <ChevronRight className={`w-4 h-4 transition-colors ${
+                              isCurrentRole ? 'text-white/80' : 'text-slate-400/40 group-hover:text-slate-300'
+                            }`} />
+                          </div>
                         </button>
                       );
                     })}
@@ -560,35 +599,35 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               )}
             </div>
 
-            {/* Bottom Profile & Logout Footer */}
-            <div className="p-3 sm:p-2.5 border-t border-[#1D5FA7]/40 bg-[#0d2e57] shrink-0 space-y-2 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.625rem))]">
-              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[#123B6D] border border-[#1D5FA7]/70 shadow-xs">
-                <div className="w-9 h-9 rounded-xl bg-[#1D5FA7] text-white text-xs font-bold flex items-center justify-center shrink-0 border border-[#D4E4F7]/40 shadow-xs">
-                  {user?.avatar || 'US'}
+            {/* Bottom Profile & Logout Section */}
+            <div className="p-3 border-t border-[#153458]/70 bg-[#0c2340] shrink-0 space-y-2 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-[#091b31]/90 border border-blue-900/40 shadow-sm">
+                <div className="w-10 h-10 rounded-full bg-[#136dec] text-white text-xs font-bold flex items-center justify-center shrink-0 relative shadow-xs">
+                  <span>{userInitials}</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#091b31] absolute bottom-0 right-0 shadow-xs" />
                 </div>
                 <div className="min-w-0 flex-1 text-left">
-                  <div className="sidebar-label text-xs font-bold truncate leading-tight text-white flex items-center justify-between gap-1.5">
-                    <span className="truncate">{user?.name || 'User'}</span>
-                    {user?.role && (
-                      <span className="px-1.5 py-0.5 rounded-md bg-[#246BCE] text-white border border-[#D4E4F7]/40 text-[10px] font-mono font-semibold shrink-0">
-                        {user.role}
-                      </span>
-                    )}
+                  <div className="text-xs font-bold text-white truncate leading-tight">
+                    {user?.name || 'System Administrator'}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-[#D4E4F7] font-mono truncate mt-1">
-                    <span className="text-[#EAF3FF] font-bold truncate">{user?.employeeId || 'ADM-001'}</span>
-                    <span className="text-[#D4E4F7]/60">•</span>
-                    <span className="truncate text-[#D4E4F7] font-medium">{user?.plant || user?.plantLocation || 'Main Plant HQ'}</span>
+                  <div className="text-[10px] text-slate-400 font-mono truncate mt-0.5">
+                    {user?.employeeId || 'ADM-001'} • {user?.plant || user?.plantLocation || 'Main Plant HQ'}
                   </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="px-2 py-0.5 rounded-md bg-blue-950/80 border border-blue-800/50 text-blue-200 text-[10px] font-semibold">
+                    {user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin')}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-slate-400/60" />
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={logout}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-[#1D5FA7] hover:bg-[#246BCE] active:bg-[#246BCE] active:scale-[0.99] text-white border border-[#D4E4F7]/40 transition-all cursor-pointer shadow-sm"
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-950/40 hover:bg-blue-900/40 border border-blue-800/50 hover:border-blue-700/70 text-slate-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
               >
-                <LogOut className="w-4 h-4 shrink-0 stroke-[2]" />
+                <LogOut className="w-4 h-4 text-slate-300 stroke-[2]" />
                 <span className="tracking-wide">Sign Out Session</span>
               </button>
             </div>
@@ -596,20 +635,20 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
         )}
       </aside>
 
-      {/* Floating Hover Tooltips / Flyout Menus for Collapsed Icon Rail */}
+      {/* Floating Hover Tooltips for Collapsed Icon Rail */}
       {isCollapsed && hoveredFlyout && (
         <>
-          {/* Single Item Tooltip */}
+          {/* Nav Item Tooltip */}
           {hoveredFlyout.type === 'item' && (
             <div
               style={{ top: `${hoveredFlyout.centerY}px`, left: `${hoveredFlyout.left}px` }}
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
-              <div className="bg-[#123B6D] text-white text-xs font-medium px-2.5 py-1 rounded-md shadow-lg border border-[#1D5FA7] whitespace-nowrap flex items-center gap-2">
+              <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap flex items-center gap-2">
                 <span>{hoveredFlyout.item.label}</span>
                 {hoveredFlyout.item.badge && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1D5FA7] text-white border border-[#D4E4F7]/40 font-semibold">
-                    {hoveredFlyout.item.badge}
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-600 text-white font-bold">
+                    ({hoveredFlyout.item.badge})
                   </span>
                 )}
               </div>
@@ -627,10 +666,10 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               onMouseLeave={handleFlyoutMouseLeave}
               className="fixed z-[9999] animate-fadeIn"
             >
-              <div className="bg-white rounded-xl shadow-xl border border-[#D4E4F7] p-2 min-w-[200px] space-y-1">
-                <div className="px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[#123B6D] border-b border-[#D4E4F7] mb-1 flex items-center justify-between">
+              <div className="bg-[#0c2340] rounded-xl shadow-2xl border border-[#153458] p-2 min-w-[200px] space-y-1">
+                <div className="px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300 border-b border-[#153458] mb-1 flex items-center justify-between">
                   <span>{hoveredFlyout.item.label}</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] font-semibold">
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-600 text-white font-bold">
                     {hoveredFlyout.item.children.length}
                   </span>
                 </div>
@@ -646,13 +685,13 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
                           selectTab(child.id);
                           setHoveredFlyout(null);
                         }}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                           isChildSelected
-                            ? 'bg-[#EAF3FF] text-[#123B6D] font-semibold border border-[#D4E4F7]'
-                            : 'text-[#123B6D]/80 hover:text-[#123B6D] hover:bg-[#F5F9FF]'
+                            ? 'bg-[#136dec] text-white font-semibold'
+                            : 'text-slate-300 hover:text-white hover:bg-white/[0.08]'
                         }`}
                       >
-                        <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-[#1D5FA7]' : 'text-[#1D5FA7]/60'}`} />
+                        <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-white' : 'text-blue-300'}`} />
                         <span className="truncate">{child.label}</span>
                       </button>
                     );
@@ -668,10 +707,10 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               style={{ top: `${hoveredFlyout.centerY}px`, left: `${hoveredFlyout.left}px` }}
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
-              <div className="bg-[#123B6D] text-white text-xs font-medium px-2.5 py-1 rounded-md shadow-lg border border-[#1D5FA7] whitespace-nowrap flex items-center gap-2">
+              <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap flex items-center gap-2">
                 <span>{hoveredFlyout.label}</span>
                 {hoveredFlyout.isCurrent && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#246BCE] text-white border border-[#D4E4F7]/40 font-semibold">
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#136dec] text-white font-semibold">
                     Active
                   </span>
                 )}
@@ -679,7 +718,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
             </div>
           )}
 
-          {/* User Profile Card */}
+          {/* User Profile Tooltip */}
           {hoveredFlyout.type === 'user' && (
             <div
               style={{
@@ -688,19 +727,17 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               }}
               className="fixed z-[9999] pointer-events-none animate-fadeIn"
             >
-              <div className="bg-slate-900 text-white text-xs p-2.5 rounded-xl shadow-xl border border-slate-800 min-w-[180px] space-y-1">
+              <div className="bg-[#091b31] text-white text-xs p-2.5 rounded-xl shadow-xl border border-blue-900/60 min-w-[180px] space-y-1">
                 <div className="font-semibold flex items-center justify-between gap-2">
-                  <span className="truncate">{user?.name || 'User'}</span>
-                  {user?.role && (
-                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
-                      {user.role}
-                    </span>
-                  )}
+                  <span className="truncate">{user?.name || 'System Administrator'}</span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-950 border border-blue-800 text-blue-200 font-semibold">
+                    {user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin')}
+                  </span>
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
-                  <span className="text-blue-400 font-semibold">{user?.employeeId || 'EMP-01'}</span>
+                  <span className="text-blue-400 font-semibold">{user?.employeeId || 'ADM-001'}</span>
                   <span>•</span>
-                  <span>{user?.plant || user?.plantLocation || 'Main Plant'}</span>
+                  <span>{user?.plant || user?.plantLocation || 'Main Plant HQ'}</span>
                 </div>
               </div>
             </div>
@@ -712,7 +749,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               style={{ top: `${hoveredFlyout.centerY}px`, left: `${hoveredFlyout.left}px` }}
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
-              <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1 rounded-md shadow-lg border border-slate-800 whitespace-nowrap">
+              <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap">
                 <span>Sign Out Session</span>
               </div>
             </div>
@@ -724,9 +761,9 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, activeTa
               style={{ top: `${hoveredFlyout.centerY}px`, left: `${hoveredFlyout.left}px` }}
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
-              <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1 rounded-md shadow-lg border border-slate-800 whitespace-nowrap flex items-center gap-1.5">
-                <span className="font-semibold text-white">SM CONCRETECH</span>
-                <span className="text-slate-400">— Ready Mix Concrete</span>
+              <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap flex items-center gap-1.5">
+                <span className="font-semibold text-white">{activeCompany?.name || "SM CONCRETE TECH"}</span>
+                <span className="text-blue-300">— Ready Mix Concrete</span>
               </div>
             </div>
           )}

@@ -134,14 +134,14 @@ export default function Modal({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-lg font-bold text-black tracking-tight truncate">{title}</h3>
+                <h3 className="text-base sm:text-lg md:text-xl font-bold text-black tracking-tight truncate">{title}</h3>
                 {isFullscreen && (
-                  <span className="hidden sm:inline-flex items-center text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0 font-mono">
+                  <span className="hidden sm:inline-flex items-center text-[10px] sm:text-[11px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0 font-mono">
                     Full Screen Mode
                   </span>
                 )}
               </div>
-              {subtitle && <p className="text-[11px] text-slate-800 truncate font-medium">{subtitle}</p>}
+              {subtitle && <p className="text-xs sm:text-sm text-slate-700 truncate font-medium mt-0.5">{subtitle}</p>}
             </div>
           </div>
 

@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 @layer base {
+  html {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
   html, body, #root {
     width: 100%;
     height: 100%;
@@ -19,16 +33,25 @@
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: #F5F9FF;
     color: #000000;
     overflow: hidden !important;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
+    line-height: 1.5;
   }
 
-  code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+  code, pre, .font-mono, [class*="font-mono"] {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-feature-settings: 'tnum', 'zero';
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.025em;
+  }
+
+  .tabular-nums, [class*="tabular-nums"] {
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -238,8 +261,11 @@ td,
 }
 
 /* White text rule preservation for navy sidebar, dark badges, table headers & blue buttons */
-.app-sidebar,
-.app-sidebar *,
+.app-sidebar {
+  color: #FFFFFF;
+}
+.app-sidebar .sidebar-label,
+.app-sidebar [class*="text-white"],
 thead[class*="bg-[#123B6D]"],
 thead[class*="bg-[#123B6D]"] *,
 .text-white,
@@ -250,6 +276,15 @@ span[class*="bg-"][class*="text-white"],
 span[class*="bg-"][class*="text-white"] * {
   color: #FFFFFF !important;
 }
+
+/* Sidebar specific subtle text color overrides */
+.app-sidebar [class*="text-slate-200"] { color: #e2e8f0 !important; }
+.app-sidebar [class*="text-slate-300"] { color: #cbd5e1 !important; }
+.app-sidebar [class*="text-slate-400"] { color: #94a3b8 !important; }
+.app-sidebar [class*="text-slate-500"] { color: #64748b !important; }
+.app-sidebar [class*="text-blue-200"] { color: #bfdbfe !important; }
+.app-sidebar [class*="text-blue-300"] { color: #93c5fd !important; }
+.app-sidebar [class*="text-blue-400"] { color: #60a5fa !important; }
 
 /* Border color transformations to approved Blue Border */
 [class*="border-emerald-"], [class*="border-green-"], [class*="border-amber-"], [class*="border-orange-"],
@@ -264,6 +299,62 @@ input:focus, select:focus, textarea:focus {
   border-color: #246BCE !important;
   outline: none !important;
   box-shadow: 0 0 0 2px rgba(36, 107, 206, 0.15) !important;
+}
+
+/* ========================================================
+   RESPONSIVE & MOBILE-FRIENDLY PROFESSIONAL TYPOGRAPHY
+   Ensures optimal readability, crisp hierarchy, and touch ergonomics
+   ======================================================== */
+
+/* Prevent iOS Safari automatic screen zooming upon input focus on mobile viewports */
+@media screen and (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Elevate sub-11px micro-text to legible mobile standards across all cards, tags, and tables */
+@media screen and (max-width: 640px) {
+  [class*="text-[8px]"],
+  [class*="text-[8.5px]"],
+  [class*="text-[9px]"],
+  [class*="text-[9.5px]"] {
+    font-size: 11px !important;
+    line-height: 1.2rem !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  [class*="text-[10px]"],
+  [class*="text-[10.5px]"] {
+    font-size: 11.5px !important;
+    line-height: 1.25rem !important;
+  }
+
+  [class*="text-[11px]"] {
+    font-size: 12px !important;
+    line-height: 1.25rem !important;
+  }
+}
+
+/* Tablet & Mobile typography refinement */
+@media screen and (max-width: 768px) {
+  /* Enhance readability and optical spacing of uppercase tags, codes, and badges */
+  .uppercase {
+    letter-spacing: 0.04em;
+  }
+
+  /* Table headers readability */
+  table th {
+    font-size: 11px !important;
+    letter-spacing: 0.035em !important;
+  }
+}
+
+/* Global button and touch target readability */
+button, input, select, textarea {
+  font-family: inherit;
 }
 
 /* ========================================================

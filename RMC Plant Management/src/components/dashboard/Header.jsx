@@ -228,18 +228,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
       <header className="sticky top-0 z-40 h-14 w-full bg-white border-b border-[#D4E4F7] shadow-2xs flex items-center justify-between px-3 sm:px-4 lg:px-6 gap-2 sm:gap-4 shrink-0">
         {/* Left: Sidebar Toggle & Workspace Selector */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+          {/* Mobile-only menu toggle (hidden on desktop) */}
           <button
             type="button"
             onClick={() => (onToggleSidebar ? onToggleSidebar() : onOpenSidebar())}
-            aria-label="Toggle sidebar menu"
-            className="p-1.5 sm:p-2 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-[#1D5FA7] hover:text-[#123B6D] hover:bg-[#EAF3FF] transition-colors cursor-pointer shrink-0"
-            title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+            aria-label="Open sidebar menu"
+            className="md:hidden p-1.5 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-[#1D5FA7] hover:text-[#123B6D] hover:bg-[#EAF3FF] transition-colors cursor-pointer shrink-0"
+            title="Open Menu"
           >
-            {isSidebarOpen ? (
-              <PanelLeftClose className="w-4 h-4 text-[#1D5FA7]" />
-            ) : (
-              <PanelLeftOpen className="w-4 h-4 text-[#1D5FA7]" />
-            )}
+            <Menu className="w-4 h-4 text-[#1D5FA7]" />
           </button>
 
           {/* Plant / Company Selector */}
@@ -266,10 +263,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 )}
               </div>
               <div className="text-left min-w-0 max-w-[120px] xs:max-w-[150px] sm:max-w-[200px] md:max-w-none">
-                <span className="text-xs font-bold text-black block leading-tight truncate">
+                <span className="text-xs sm:text-sm font-bold text-black block leading-tight truncate">
                   {selectedCompany.name}
                 </span>
-                <span className="text-[10px] text-slate-700 font-normal hidden sm:flex items-center gap-1">
+                <span className="text-[11px] text-slate-700 font-normal hidden sm:flex items-center gap-1">
                   <MapPin className="w-2.5 h-2.5 shrink-0 text-[#1D5FA7]" />
                   <span className="truncate max-w-[120px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
                 </span>
@@ -288,17 +285,17 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 <div className="flex items-center justify-between pb-2 border-b border-[#D4E4F7] mb-2 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Building2 className="w-4 h-4 text-[#1D5FA7] shrink-0" />
-                    <span className="font-bold text-black uppercase tracking-wide text-[11px] truncate">Company Workspaces</span>
+                    <span className="font-bold text-black uppercase tracking-wide text-xs truncate">Company Workspaces</span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-black font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
+                    <span className="text-[11px] text-black font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
                       {companies.length} {companies.length === 1 ? 'Company' : 'Companies'}
                     </span>
                     {canManageCompanies && (
                       <button
                         type="button"
                         onClick={openAddPlantModal}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-[10px] font-bold transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-[11px] font-bold transition-colors cursor-pointer"
                         title="Add New Company"
                       >
                         <Plus className="w-3 h-3" />
@@ -341,16 +338,16 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                           </div>
                           <div className="min-w-0 flex-1 pr-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="block font-bold text-xs truncate text-black">{company.name}</span>
+                              <span className="block font-bold text-xs sm:text-sm truncate text-black">{company.name}</span>
                               {isActive && <Check className="w-3.5 h-3.5 text-[#1D5FA7] shrink-0" />}
                             </div>
-                            <span className="text-[10px] text-slate-700 flex items-center gap-1 truncate">
+                            <span className="text-[11px] text-slate-700 flex items-center gap-1 truncate">
                               <MapPin className="w-2.5 h-2.5 shrink-0 text-[#1D5FA7]" />
                               <span className="truncate">{company.location || 'Company workspace'}</span>
                               {company.type && (
                                 <>
                                   <span>•</span>
-                                  <span className="text-[9.5px] font-mono text-black font-bold">{company.type}</span>
+                                  <span className="text-[10px] font-mono text-black font-bold">{company.type}</span>
                                 </>
                               )}
                             </span>
@@ -430,12 +427,12 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               >
                 <div className="flex items-center justify-between pb-2 border-b border-[#D4E4F7] mb-2 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-xs font-bold text-black truncate">Notifications</span>
-                    <span className="text-[10px] text-[#1D5FA7] font-mono font-bold bg-[#EAF3FF] px-1.5 py-0.5 rounded border border-[#D4E4F7]">
+                    <span className="text-xs sm:text-sm font-bold text-black truncate">Notifications</span>
+                    <span className="text-[11px] text-[#1D5FA7] font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
                       {(notifications || []).length}
                     </span>
                     {unreadCount > 0 && (
-                      <span className="text-[10px] font-mono font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-800">
+                      <span className="text-[11px] font-mono font-bold bg-blue-100 px-2 py-0.5 rounded text-blue-800">
                         {unreadCount} new
                       </span>
                     )}
@@ -445,7 +442,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       <button
                         type="button"
                         onClick={() => (notifications || []).filter((n) => !n.read).forEach((n) => markNotificationRead(n.id))}
-                        className="text-[10px] text-[#1D5FA7] hover:underline font-bold cursor-pointer"
+                        className="text-[11px] text-[#1D5FA7] hover:underline font-bold cursor-pointer"
                       >
                         Mark all read
                       </button>
@@ -454,7 +451,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       <button
                         type="button"
                         onClick={clearNotifications}
-                        className="text-[10px] text-slate-700 hover:text-black hover:underline font-mono font-bold cursor-pointer"
+                        className="text-[11px] text-slate-700 hover:text-black hover:underline font-mono font-bold cursor-pointer"
                       >
                         Clear All
                       </button>
@@ -468,8 +465,8 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       <div className="w-9 h-9 mx-auto rounded-full bg-[#F5F9FF] border border-[#D4E4F7] flex items-center justify-center text-[#1D5FA7] mb-2">
                         <Bell className="w-4 h-4 opacity-60" />
                       </div>
-                      <p className="text-xs font-bold text-black">No notifications</p>
-                      <p className="text-[10.5px] text-slate-600 mt-0.5">You're all caught up with current updates.</p>
+                      <p className="text-sm font-bold text-black">No notifications</p>
+                      <p className="text-xs text-slate-600 mt-0.5">You're all caught up with current updates.</p>
                     </div>
                   ) : (
                     notifications.map((n) => (
@@ -486,13 +483,13 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {!n.read && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#1D5FA7] shrink-0" />
+                              <span className="w-2 h-2 rounded-full bg-[#1D5FA7] shrink-0" />
                             )}
-                            <span className="text-xs font-bold text-black truncate">{n.title}</span>
+                            <span className="text-xs sm:text-sm font-bold text-black truncate">{n.title}</span>
                           </div>
-                          <span className="text-[10px] text-slate-600 font-mono shrink-0">{n.time}</span>
+                          <span className="text-[11px] text-slate-600 font-mono shrink-0">{n.time}</span>
                         </div>
-                        <p className="text-[11px] text-slate-800 mt-0.5 leading-relaxed break-words">{n.desc}</p>
+                        <p className="text-xs text-slate-800 mt-0.5 leading-relaxed break-words">{n.desc}</p>
                       </div>
                     ))
                   )}
