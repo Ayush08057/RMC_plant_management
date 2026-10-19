@@ -307,11 +307,13 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
     const accEmail = (acc.email || '').toLowerCase();
     const accSecEmail = (acc.secondaryEmail || '').toLowerCase();
     const accUsername = accEmail.split('@')[0];
+    const accPhone = normalizePhone(acc.phone);
     return (
       accId === cleanId.toUpperCase() ||
       accEmail === lowerId ||
       accSecEmail === lowerId ||
-      accUsername === lowerId
+      accUsername === lowerId ||
+      (digitsOnly && accPhone && (digitsOnly === accPhone || accPhone.endsWith(digitsOnly)))
     );
   });
 

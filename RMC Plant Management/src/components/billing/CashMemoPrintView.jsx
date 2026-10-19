@@ -2,8 +2,8 @@ import React, { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, X, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { numberToIndianWords } from '../../utils/numberToWords';
-import stampImage from '../../assets/sm_concretech_stamp.png';
-import commonSealImage from '../../assets/sm_concretech_common_seal.png';
+import { STAMP_IMAGE_BASE64, COMMON_SEAL_IMAGE_BASE64 } from './billingAssets';
+import { normalizeBill } from '../../utils/billingPayments';
 
 export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   const printRef = useRef(null);
@@ -81,6 +81,14 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   if (!amountInWords.toLowerCase().includes('rupees')) {
     amountInWords = numberToIndianWords(finalAmount);
   }
+
+  // Payment Tracking Calculations (Normalized across Cash vs Online History)
+  const normBill = normalizeBill(bill);
+  const payments = normBill.payments || [];
+  const paidAmount = normBill.paidAmount || 0;
+  const cashPaidAmount = normBill.cashPaidAmount || 0;
+  const onlinePaidAmount = normBill.onlinePaidAmount || 0;
+  const balanceAmount = normBill.balanceAmount !== undefined ? normBill.balanceAmount : Math.max(0, finalAmount - paidAmount);
 
   // Calculate table filler height to maintain the authentic pre-printed memo look
   const fillerHeight = Math.max(140, 280 - (items.length * 30));
@@ -277,41 +285,77 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
             {/* Summary & Amount in Words Section */}
             <div className="flex border-b border-black text-sm">
               {/* Left Column: Total Amount in Words */}
+              {/* Left Column: Total Amount in Words & Payment Settlement Status */}
               <div className="w-[74%] border-r border-black flex flex-col justify-between">
                 <div className="py-0.5 px-2 border-b border-black font-normal text-center bg-white">
                   Total amount in words
                 </div>
-                <div className="py-2.5 px-3 font-bold text-center text-black flex items-center justify-center flex-1">
+                <div className="py-2 px-3 font-bold text-center text-black flex items-center justify-center flex-1">
                   {amountInWords}
+                </div>
+                <div className="border-t border-black py-1 px-2 text-center text-xs">
+                  {balanceAmount <= 0 ? (
+                    <span className="font-bold text-emerald-800 uppercase tracking-wide">
+                      ✓ PAID IN FULL {cashPaidAmount > 0 && `(Cash: ₹${formatAmount(cashPaidAmount)})`} {onlinePaidAmount > 0 && `(Online: ₹${formatAmount(onlinePaidAmount)})`}
+                    </span>
+                  ) : paidAmount > 0 ? (
+                    <span className="font-bold text-amber-900 uppercase tracking-wide">
+                      PARTIALLY PAID: ₹{formatAmount(paidAmount)} ({cashPaidAmount > 0 ? `Cash: ₹${formatAmount(cashPaidAmount)}` : ''}{onlinePaidAmount > 0 ? ` | Online: ₹${formatAmount(onlinePaidAmount)}` : ''}) • BALANCE DUE: ₹{formatAmount(balanceAmount)}
+                    </span>
+                  ) : (
+                    <span className="font-bold text-slate-700 uppercase tracking-wide">
+                      PAYMENT STATUS: UNPAID / CREDIT (FULL DUE: ₹{formatAmount(balanceAmount)})
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Right Column: Breakdown Totals */}
-              <div className="w-[26%] flex flex-col">
-                <div className="flex border-b border-black">
-                  <div className="w-[46%] py-1 px-1.5 border-r border-black font-normal text-left text-xs sm:text-sm">
-                    Total Amount
+              <div className="w-[26%] flex flex-col justify-between">
+                <div>
+                  <div className="flex border-b border-black">
+                    <div className="w-[48%] py-1 px-1.5 border-r border-black font-normal text-left text-xs">
+                      Total Amount
+                    </div>
+                    <div className="w-[52%] py-1 px-1.5 text-right font-bold text-xs">
+                      {formatAmount(totalAmount)}
+                    </div>
                   </div>
-                  <div className="w-[54%] py-1 px-1.5 text-right font-bold text-xs sm:text-sm">
-                    {formatAmount(totalAmount)}
+
+                  <div className="flex border-b border-black">
+                    <div className="w-[48%] py-1 px-1.5 border-r border-black font-normal text-left text-xs">
+                      Transportation
+                    </div>
+                    <div className="w-[52%] py-1 px-1.5 text-right font-normal text-xs">
+                      {transportation}
+                    </div>
+                  </div>
+
+                  <div className="flex border-b border-black font-bold bg-slate-50">
+                    <div className="w-[48%] py-1 px-1.5 border-r border-black text-left text-xs">
+                      Final Amount
+                    </div>
+                    <div className="w-[52%] py-1 px-1.5 text-right text-xs font-bold">
+                      {formatAmount(finalAmount)}
+                    </div>
+                  </div>
+
+                  <div className="flex border-b border-black font-medium">
+                    <div className="w-[48%] py-1 px-1.5 border-r border-black text-left text-xs text-emerald-800">
+                      Paid Amount
+                    </div>
+                    <div className="w-[52%] py-1 px-1.5 text-right text-xs font-bold text-emerald-800">
+                      ₹ {formatAmount(paidAmount)}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex border-b border-black">
-                  <div className="w-[46%] py-1 px-1.5 border-r border-black font-normal text-left text-xs sm:text-sm">
-                    Transportation
+                <div className={`flex font-black border-t border-black ${balanceAmount > 0 ? 'bg-amber-100 text-amber-950' : 'bg-emerald-100 text-emerald-950'}`}>
+                  <div className="w-[48%] py-1 px-1.5 border-r border-black text-left text-xs uppercase">
+                    Balance Due
                   </div>
-                  <div className="w-[54%] py-1 px-1.5 text-right font-normal text-xs sm:text-sm">
-                    {transportation}
-                  </div>
-                </div>
-
-                <div className="flex font-bold">
-                  <div className="w-[46%] py-1 px-1.5 border-r border-black text-left text-xs sm:text-sm">
-                    Final Amount
-                  </div>
-                  <div className="w-[54%] py-1 px-1.5 text-right text-xs sm:text-sm font-bold">
-                    {formatAmount(finalAmount)}
+                  <div className="w-[52%] py-1 px-1.5 text-right text-xs font-mono font-black">
+                    ₹ {formatAmount(balanceAmount)}
                   </div>
                 </div>
               </div>
@@ -336,10 +380,18 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
 
               {/* Center Column: Common Seal */}
               <div className="w-[30%] border-r border-black flex flex-col justify-between items-center">
-                <div className="flex-1 flex items-center justify-center p-1 select-none pointer-events-none">
+                <div className="flex-1 flex items-center justify-center p-1 select-none pointer-events-none min-h-[90px] w-full">
                   <img
-                    src={commonSealImage}
-                    alt="SM CONCRETECH Common Seal"
+                    src={COMMON_SEAL_IMAGE_BASE64 || '/sm_concretech_common_seal.png'}
+                    alt=""
+                    onError={(e) => {
+                      if (!e.currentTarget.dataset.fallbackTried) {
+                        e.currentTarget.dataset.fallbackTried = 'true';
+                        e.currentTarget.src = '/sm_concretech_common_seal.png';
+                      } else {
+                        e.currentTarget.style.display = 'none';
+                      }
+                    }}
                     className="w-[90px] sm:w-[105px] h-auto object-contain my-auto"
                     style={{
                       WebkitPrintColorAdjust: 'exact',
@@ -367,10 +419,18 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
                 </div>
 
                 {/* Real Authentic Rubber Stamp & Proprietor Signature */}
-                <div className="flex flex-col items-center justify-center py-0.5 select-none pointer-events-none">
+                <div className="flex flex-col items-center justify-center py-0.5 select-none pointer-events-none min-h-[50px] w-full">
                   <img
-                    src={stampImage}
-                    alt="SM CONCRETECH Prop. Shahesh D. Mane Signature Stamp"
+                    src={STAMP_IMAGE_BASE64 || '/sm_concretech_stamp.png'}
+                    alt=""
+                    onError={(e) => {
+                      if (!e.currentTarget.dataset.fallbackTried) {
+                        e.currentTarget.dataset.fallbackTried = 'true';
+                        e.currentTarget.src = '/sm_concretech_stamp.png';
+                      } else {
+                        e.currentTarget.style.display = 'none';
+                      }
+                    }}
                     className="w-[130px] sm:w-[145px] h-auto object-contain my-0.5"
                     style={{
                       WebkitPrintColorAdjust: 'exact',

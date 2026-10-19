@@ -170,10 +170,15 @@ export default function AdvanceManagementView({ employeeFilter = null }) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (window.confirm(`Delete advance record for ${row.employeeName}?`)) {
-                    deleteAdvance(row.id);
-                    setToastMessage(`Advance record ${row.id} deleted.`);
+                    try {
+                      await deleteAdvance(row.id);
+                      setToastMessage(`Advance record ${row.id} deleted.`);
+                    } catch (err) {
+                      console.error('Failed to delete advance record:', err);
+                      setToastMessage(`Failed to delete advance record: ${err.message}`);
+                    }
                   }
                 }}
                 className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors"

@@ -39,7 +39,15 @@ import {
   Loader2,
   IndianRupee,
   Hash,
-  UserCheck
+  UserCheck,
+  CreditCard,
+  Wallet,
+  Banknote,
+  QrCode,
+  History,
+  CheckCheck,
+  TrendingUp,
+  CircleDollarSign
 } from 'lucide-react';
 import CashMemoPrintView from './CashMemoPrintView';
 import { useExclusiveModal } from '../dashboard/Modal';
@@ -47,6 +55,9 @@ import { numberToIndianWords } from '../../utils/numberToWords';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { sendOwnerOtpApi, verifyOwnerOtpApi } from '../../services/otpService';
+import { normalizeBill } from '../../utils/billingPayments';
+
+export { normalizeBill };
 
 const BILLING_STORAGE_KEY = 'rmc_billing_records_v3';
 const PURCHASES_STORAGE_KEY = 'rmc_plant_purchases_v3';
@@ -74,11 +85,16 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   // Active sub-tab: 'cash_memos' | 'purchases' | 'otp_audit'
   const [activeSection, setActiveSection] = useState(defaultSection);
 
-  // Persistent Bills State
+  // Persistent Bills State with payment tracking normalization
   const [bills, setBills] = useState(() => {
     try {
       const saved = localStorage.getItem(BILLING_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map(normalizeBill);
+        }
+      }
     } catch (e) {
       console.warn('Failed to load saved bills:', e);
     }
@@ -187,10 +203,24 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const [isTableFullScreen, setIsTableFullScreen] = useState(false);
   const [notification, setNotification] = useState(null);
 
+  // Payment Collection & History Modal State
+  const [paymentModalBill, setPaymentModalBill] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    mode: 'Cash', // 'Cash' | 'Online UPI' | 'Bank Transfer' | 'Cheque'
+    referenceNo: '',
+    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    receivedBy: '',
+    remarks: '',
+  });
+  const [paymentError, setPaymentError] = useState(null);
+
   useExclusiveModal(otpModalOpen, () => setOtpModalOpen(false));
   useExclusiveModal(showBillFormModal, () => setShowBillFormModal(false));
   useExclusiveModal(showPurchaseFormModal, () => setShowPurchaseFormModal(false));
   useExclusiveModal(isTableFullScreen, () => setIsTableFullScreen(false));
+  useExclusiveModal(!!paymentModalBill, () => setPaymentModalBill(null));
 
   const showToast = (msg) => {
     setNotification(msg);
@@ -240,6 +270,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     bankAccountType: 'Current',
     bankBranch: 'Miraj / Sangli',
     bankIfsc: 'SBIN0001234',
+    initialPaymentOption: 'unpaid', // 'unpaid' | 'partial' | 'full'
+    initialPaymentAmount: 0,
+    initialPaymentMode: 'Cash',
+    initialPaymentRef: '',
+    initialPaymentRemarks: '',
   });
 
   const [billMobileError, setBillMobileError] = useState(null);
@@ -316,6 +351,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       bankAccountType: 'Current',
       bankBranch: 'Miraj / Sangli',
       bankIfsc: 'SBIN0001234',
+      initialPaymentOption: 'unpaid', // 'unpaid' | 'partial' | 'full'
+      initialPaymentAmount: 0,
+      initialPaymentMode: 'Cash',
+      initialPaymentRef: '',
+      initialPaymentRemarks: '',
     });
     setShowBillFormModal(true);
   };
@@ -514,6 +554,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       bankAccountType: bill.bankAccountType || 'Current',
       bankBranch: bill.bankBranch || 'Miraj / Sangli',
       bankIfsc: bill.bankIfsc || 'SBIN0001234',
+      initialPaymentOption: 'unpaid',
+      initialPaymentAmount: 0,
+      initialPaymentMode: 'Cash',
+      initialPaymentRef: '',
+      initialPaymentRemarks: '',
     });
     setShowBillFormModal(true);
   };
@@ -617,10 +662,17 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     const billPlace = (billForm.place || '').trim() || 'Aaudumbar';
 
     if (editingBill) {
-      // Update existing bill
+      // Update existing bill while preserving payments history and recalculating balance
       const updatedList = bills.map((b) => {
         if (b.id === editingBill.id) {
-          return {
+          const payments = Array.isArray(b.payments) ? b.payments : [];
+          const paidAmount = payments.length > 0 
+            ? payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+            : Number(b.paidAmount || 0);
+          const balanceAmount = Math.max(0, finalAmount - paidAmount);
+          const paymentStatus = balanceAmount <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partially Paid' : 'Unpaid');
+
+          return normalizeBill({
             ...b,
             ...billForm,
             billNo: billNumber,
@@ -633,9 +685,12 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             totalAmount,
             transportation: trans,
             finalAmount,
+            paidAmount,
+            balanceAmount,
+            paymentStatus,
             amountInWords,
             updatedAt: new Date().toISOString(),
-          };
+          });
         }
         return b;
       });
@@ -653,8 +708,47 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         setPrintingBill(updatedItem);
       }
     } else {
-      // Create new bill
-      const newBill = {
+      // Create new bill with optional initial payment (Cash or Online)
+      let initialPayments = [];
+      let initialPaid = 0;
+      let initialStatus = 'Unpaid';
+
+      if (billForm.initialPaymentOption === 'full') {
+        initialPaid = finalAmount;
+        initialStatus = 'Paid';
+        initialPayments.push({
+          id: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          date: billDate,
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          amount: initialPaid,
+          mode: billForm.initialPaymentMode || 'Cash',
+          referenceNo: (billForm.initialPaymentRef || 'Full payment at billing').trim(),
+          receivedBy: user?.name || 'Cashier / Supervisor',
+          remarks: (billForm.initialPaymentRemarks || 'Paid in full on generation').trim(),
+          createdAt: new Date().toISOString(),
+        });
+      } else if (billForm.initialPaymentOption === 'partial') {
+        const enteredAmt = Math.min(finalAmount, Math.max(0, Number(billForm.initialPaymentAmount) || 0));
+        if (enteredAmt > 0) {
+          initialPaid = enteredAmt;
+          initialStatus = initialPaid >= finalAmount ? 'Paid' : 'Partially Paid';
+          initialPayments.push({
+            id: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            date: billDate,
+            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            amount: initialPaid,
+            mode: billForm.initialPaymentMode || 'Cash',
+            referenceNo: (billForm.initialPaymentRef || 'Advance payment at billing').trim(),
+            receivedBy: user?.name || 'Cashier / Supervisor',
+            remarks: (billForm.initialPaymentRemarks || 'Advance manual cash/online payment on site').trim(),
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      const initialBalance = Math.max(0, finalAmount - initialPaid);
+
+      const newBill = normalizeBill({
         id: `BILL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         ...billForm,
         billNo: billNumber,
@@ -668,10 +762,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         totalAmount,
         transportation: trans,
         finalAmount,
+        paidAmount: initialPaid,
+        balanceAmount: initialBalance,
+        paymentStatus: initialStatus,
+        payments: initialPayments,
         amountInWords,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };
+      });
+
       const updatedList = [newBill, ...bills];
       setBills(updatedList);
       try {
@@ -679,6 +778,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       } catch (err) {
         console.error('Storage error:', err);
       }
+
+      if (initialPaid > 0 && addAuditLog) {
+        addAuditLog(
+          `Initial Payment Logged (${newBill.billNo})`,
+          'Billing',
+          `₹${initialPaid.toLocaleString('en-IN')} (${billForm.initialPaymentMode}) recorded at memo generation`
+        );
+      }
+
       showToast(`✓ Cash Memo #${newBill.billNo} generated successfully!`);
       setShowBillFormModal(false);
       setEditingBill(null);
@@ -736,15 +844,172 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   // Delete Bill
   const handleDeleteBill = (id, billNo) => {
     if (confirm(`Are you sure you want to delete Cash Memo #${billNo}?`)) {
-      setBills(bills.filter((b) => b.id !== id));
+      const nextBills = bills.filter((b) => b.id !== id);
+      setBills(nextBills);
+      try {
+        localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(nextBills));
+      } catch (e) {
+        console.error('Storage error:', e);
+      }
       showToast(`Bill #${billNo} removed.`);
     }
+  };
+
+  // Open Payment Collection & History Modal
+  const handleOpenPaymentModal = (bill) => {
+    const norm = normalizeBill(bill);
+    setPaymentModalBill(norm);
+    setPaymentForm({
+      amount: norm.balanceAmount > 0 ? norm.balanceAmount : '',
+      mode: 'Cash',
+      referenceNo: '',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      receivedBy: user?.name || 'Cashier / Supervisor',
+      remarks: norm.balanceAmount > 0 ? (norm.paidAmount > 0 ? 'Balance settlement payment' : 'Advance received on site') : '',
+    });
+    setPaymentError(null);
+  };
+
+  // Record a payment (Cash, Online UPI, Bank Transfer, Cheque)
+  const handleRecordPayment = (e) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (!paymentModalBill) return;
+
+    const payAmt = Number(paymentForm.amount);
+    if (!payAmt || isNaN(payAmt) || payAmt <= 0) {
+      setPaymentError('Please enter a valid payment amount greater than ₹0.');
+      return;
+    }
+
+    const currentBalance = Number(paymentModalBill.balanceAmount || 0);
+    if (payAmt > currentBalance && currentBalance > 0) {
+      if (!confirm(`Entered payment (₹${payAmt.toLocaleString('en-IN')}) exceeds the pending balance (₹${currentBalance.toLocaleString('en-IN')}). Do you want to proceed with this payment?`)) {
+        return;
+      }
+    }
+
+    const newPayment = {
+      id: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      date: paymentForm.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: paymentForm.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      amount: payAmt,
+      mode: paymentForm.mode || 'Cash',
+      referenceNo: (paymentForm.referenceNo || '').trim(),
+      receivedBy: (paymentForm.receivedBy || user?.name || 'Cashier / Supervisor').trim(),
+      remarks: (paymentForm.remarks || '').trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedBills = bills.map((b) => {
+      if (b.id === paymentModalBill.id) {
+        const existingPayments = Array.isArray(b.payments) ? b.payments : [];
+        const updatedPayments = [newPayment, ...existingPayments];
+        const newPaid = updatedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        const newBalance = Math.max(0, (Number(b.finalAmount) || 0) - newPaid);
+        const newStatus = newBalance <= 0 ? 'Paid' : 'Partially Paid';
+
+        return normalizeBill({
+          ...b,
+          payments: updatedPayments,
+          paidAmount: newPaid,
+          balanceAmount: newBalance,
+          paymentStatus: newStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return b;
+    });
+
+    setBills(updatedBills);
+    try {
+      localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedBills));
+    } catch (err) {
+      console.error('Storage error:', err);
+    }
+
+    if (addAuditLog) {
+      addAuditLog(
+        `Payment Recorded (${paymentModalBill.billNo})`,
+        'Billing',
+        `₹${payAmt.toLocaleString('en-IN')} via ${paymentForm.mode} received by ${paymentForm.receivedBy || user?.name || 'Cashier'}`
+      );
+    }
+
+    const refreshedBill = updatedBills.find((b) => b.id === paymentModalBill.id);
+    setPaymentModalBill(refreshedBill);
+    setPaymentForm((prev) => ({
+      ...prev,
+      amount: refreshedBill.balanceAmount > 0 ? refreshedBill.balanceAmount : '',
+      referenceNo: '',
+      remarks: '',
+    }));
+    setPaymentError(null);
+    showToast(`✓ Payment of ₹${payAmt.toLocaleString('en-IN')} (${paymentForm.mode}) recorded for Bill #${paymentModalBill.billNo}!`);
+  };
+
+  // Delete / Revert an incorrect payment record
+  const handleDeletePayment = (paymentId) => {
+    if (!paymentModalBill) return;
+    const targetPayment = (paymentModalBill.payments || []).find((p) => p.id === paymentId);
+    if (!targetPayment) return;
+
+    if (!confirm(`Are you sure you want to void/delete this payment record of ₹${Number(targetPayment.amount).toLocaleString('en-IN')} (${targetPayment.mode})? The bill balance will be restored.`)) {
+      return;
+    }
+
+    const updatedBills = bills.map((b) => {
+      if (b.id === paymentModalBill.id) {
+        const updatedPayments = (b.payments || []).filter((p) => p.id !== paymentId);
+        const newPaid = updatedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        const newBalance = Math.max(0, (Number(b.finalAmount) || 0) - newPaid);
+        const newStatus = newBalance <= 0 ? 'Paid' : (newPaid > 0 ? 'Partially Paid' : 'Unpaid');
+
+        return normalizeBill({
+          ...b,
+          payments: updatedPayments,
+          paidAmount: newPaid,
+          balanceAmount: newBalance,
+          paymentStatus: newStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return b;
+    });
+
+    setBills(updatedBills);
+    try {
+      localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedBills));
+    } catch (err) {
+      console.error('Storage error:', err);
+    }
+
+    if (addAuditLog) {
+      addAuditLog(
+        `Payment Voided (${paymentModalBill.billNo})`,
+        'Billing',
+        `Reverted ₹${Number(targetPayment.amount).toLocaleString('en-IN')} (${targetPayment.mode})`
+      );
+    }
+
+    const refreshedBill = updatedBills.find((b) => b.id === paymentModalBill.id);
+    setPaymentModalBill(refreshedBill);
+    showToast(`Payment of ₹${Number(targetPayment.amount).toLocaleString('en-IN')} reversed.`);
   };
 
   // Delete Purchase
   const handleDeletePurchase = (id, voucherNo) => {
     if (confirm(`Are you sure you want to delete Purchase Voucher #${voucherNo}?`)) {
-      setPurchases(purchases.filter((p) => p.id !== id));
+      const nextPurchases = purchases.filter((p) => p.id !== id);
+      setPurchases(nextPurchases);
+      try {
+        localStorage.setItem(PURCHASES_STORAGE_KEY, JSON.stringify(nextPurchases));
+      } catch (e) {
+        console.error('Storage error:', e);
+      }
       showToast(`Voucher #${voucherNo} removed.`);
     }
   };
@@ -828,6 +1093,13 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {activeSection === 'cash_memos' && (
         <div className="w-full">
           {(() => {
+            const totalInvoiced = bills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
+            const totalCash = bills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0);
+            const totalOnline = bills.reduce((s, b) => s + (Number(b.onlinePaidAmount) || 0), 0);
+            const totalBalance = bills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0);
+            const paidBillsCount = bills.filter((b) => b.paymentStatus === 'Paid').length;
+            const pendingBillsCount = bills.filter((b) => b.paymentStatus !== 'Paid').length;
+
             const filteredBills = bills.filter((b) => {
               const q = searchQuery.toLowerCase();
               return (
@@ -839,250 +1111,404 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             });
 
             const tableElement = (
-              <div className={`w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden ${isTableFullScreen ? 'fixed inset-0 z-[999999] w-screen h-screen bg-white rounded-none p-0 m-0 border-none overflow-auto flex flex-col' : ''}`}>
-                {isTableFullScreen && (
-                  <div className="flex items-center justify-between p-3.5 px-5 bg-slate-900 text-white shrink-0">
-                    <div className="flex items-center gap-2">
-                      <Table className="w-4 h-4 text-amber-400" />
-                      <h3 className="font-black text-sm">Cash Memos Register (Full Screen View)</h3>
+              <div className="space-y-3.5">
+                {/* 4 Financial & Payment KPI Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                  {/* 1. Total Invoiced */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Total Invoiced</span>
+                      <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <ReceiptText className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsTableFullScreen(false)}
-                      className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white cursor-pointer transition-colors"
-                      title="Exit Full Screen"
-                    >
-                      <Minimize2 className="w-4 h-4" />
-                    </button>
+                    <div>
+                      <div className="font-mono font-black text-slate-900 text-base sm:text-lg">
+                        ₹ {totalInvoiced.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                        {bills.length} Total Cash Memos
+                      </div>
+                    </div>
                   </div>
-                )}
 
-                {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
-                <div className="hidden md:block w-full max-w-full overflow-x-auto">
-                  <table className="w-full min-w-[850px] text-left text-xs text-slate-700 border-collapse table-fixed">
-                    <thead>
-                      <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
-                        <th className="py-3 px-3.5 w-[15%]">Bill No & Date</th>
-                        <th className="py-3 px-3.5 w-[24%]">Party / Customer & Site</th>
-                        <th className="py-3 px-3.5 w-[14%]">Transit Vehicle</th>
-                        <th className="py-3 px-3.5 w-[17%]">Material Items</th>
-                        <th className="py-3 px-3.5 w-[13%] text-right">Final Amount</th>
-                        <th className="py-3 px-3.5 w-[11%] text-center">Policy Status</th>
-                        <th className="py-3 px-3.5 w-[10%] text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200/80">
-                      {filteredBills.length > 0 ? (
-                        filteredBills.map((bill) => {
-                          const timing = getTimingStatus(bill.createdAt);
-                          return (
-                            <tr key={bill.id} className="hover:bg-amber-50/40 transition-colors group">
-                              <td className="py-3 px-3">
-                                <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
-                                  <ReceiptText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                  <span>#{bill.billNo}</span>
-                                </div>
-                                <div className="text-[10px] font-mono text-slate-500 mt-0.5">{bill.date}</div>
-                              </td>
+                  {/* 2. Total Cash Received */}
+                  <div className="bg-white rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/30 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-emerald-800 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Cash Received</span>
+                      <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                        <Banknote className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-mono font-black text-emerald-700 text-base sm:text-lg">
+                        ₹ {totalCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                        Manual On-Site & Counter Cash
+                      </div>
+                    </div>
+                  </div>
 
-                              <td className="py-3 px-3">
-                                <div className="font-bold text-slate-900 text-xs leading-snug truncate">{bill.customerName}</div>
-                                <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                                  <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
-                                  <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
-                                </div>
-                              </td>
+                  {/* 3. Total Online / Bank Received */}
+                  <div className="bg-white rounded-2xl border border-blue-200/80 bg-gradient-to-br from-white to-blue-50/30 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-blue-800 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Online / UPI</span>
+                      <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                        <QrCode className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-mono font-black text-blue-700 text-base sm:text-lg">
+                        ₹ {totalOnline.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[10px] text-blue-700 font-medium mt-0.5">
+                        UPI, NEFT & Cheques
+                      </div>
+                    </div>
+                  </div>
 
-                              <td className="py-3 px-3">
-                                <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg text-[11px] font-mono text-slate-800 font-semibold truncate">
-                                  <Truck className="w-3 h-3 text-slate-500 shrink-0" />
-                                  <span className="truncate">{bill.vehicle || 'Direct'}</span>
-                                </div>
-                              </td>
-
-                              <td className="py-3 px-3">
-                                <div className="font-medium text-slate-800 text-[11px] line-clamp-2 leading-tight">
-                                  {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
-                                </div>
-                              </td>
-
-                              <td className="py-3 px-3 text-right">
-                                <div className="font-mono font-black text-emerald-700 text-xs sm:text-sm">
-                                  ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </div>
-                              </td>
-
-                              <td className="py-3 px-3 text-center">
-                                {timing.isWithin10Mins ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
-                                    <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
-                                    <span>EDIT ({timing.formattedRemaining})</span>
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-mono font-bold">
-                                    <Lock className="w-2.5 h-2.5 text-rose-600 shrink-0" />
-                                    <span>LOCKED (OTP)</span>
-                                  </span>
-                                )}
-                              </td>
-
-                              <td className="py-3 px-3 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => setPrintingBill(bill)}
-                                    className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer"
-                                    title="Print Cash Memo"
-                                  >
-                                    <Printer className="w-3.5 h-3.5" />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRequestEditBill(bill)}
-                                    className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs ${
-                                      timing.isWithin10Mins
-                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
-                                    }`}
-                                    title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
-                                  >
-                                    {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteBill(bill.id, bill.billNo)}
-                                    className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer"
-                                    title="Delete Memo"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={7} className="py-12 text-center text-slate-400">
-                            No cash memos found matching search query.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                  {/* 4. Total Outstanding Balance */}
+                  <div className="bg-white rounded-2xl border border-amber-200 bg-gradient-to-br from-white to-amber-50/40 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-amber-900 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Balance Due</span>
+                      <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center">
+                        <Wallet className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-mono font-black text-amber-900 text-base sm:text-lg">
+                        ₹ {totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[10px] text-amber-800 font-medium mt-0.5">
+                        {pendingBillsCount} Pending • {paidBillsCount} Paid in Full
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* MOBILE RESPONSIVE CARDS (< md screens) */}
-                <div className="block md:hidden p-2.5 sm:p-3 space-y-2.5 bg-slate-50/50">
-                  {filteredBills.length > 0 ? (
-                    filteredBills.map((bill) => {
-                      const timing = getTimingStatus(bill.createdAt);
-                      return (
-                        <div
-                          key={bill.id}
-                          className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5 transition-all"
-                        >
-                          {/* Card Top: Bill No & Policy Status */}
-                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <ReceiptText className="w-4 h-4 text-amber-600 shrink-0" />
-                              <span className="font-mono font-black text-slate-900 text-xs truncate">
-                                #{bill.billNo}
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400">
-                                • {bill.date}
-                              </span>
-                            </div>
-
-                            <div className="shrink-0">
-                              {timing.isWithin10Mins ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
-                                  <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
-                                  <span>EDIT ({timing.formattedRemaining})</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-mono font-bold">
-                                  <Lock className="w-2.5 h-2.5 text-rose-600 shrink-0" />
-                                  <span>LOCKED (OTP)</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Customer Name & Site Location */}
-                          <div>
-                            <div className="font-black text-slate-900 text-xs leading-snug">
-                              {bill.customerName}
-                            </div>
-                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
-                              <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
-                            </div>
-                          </div>
-
-                          {/* Transit Vehicle & Material Items Summary */}
-                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] pt-1 border-t border-slate-100">
-                            <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono text-slate-800 font-bold text-[10px]">
-                              <Truck className="w-3 h-3 text-slate-500 shrink-0" />
-                              <span>{bill.vehicle || 'Direct Mixer'}</span>
-                            </span>
-                            <div className="font-medium text-slate-700 text-[11px] truncate flex-1 min-w-[140px]">
-                              {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
-                            </div>
-                          </div>
-
-                          {/* Card Bottom: Final Amount & Clean Actions Bar */}
-                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                            <div>
-                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Final Total:</span>
-                              <span className="font-mono font-black text-emerald-700 text-sm">
-                                ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setPrintingBill(bill)}
-                                className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer active:scale-95"
-                                title="Print Cash Memo"
-                              >
-                                <Printer className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleRequestEditBill(bill)}
-                                className={`p-2 rounded-xl font-bold transition-all cursor-pointer shadow-2xs active:scale-95 ${
-                                  timing.isWithin10Mins
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
-                                }`}
-                                title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
-                              >
-                                {timing.isWithin10Mins ? <Edit3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-rose-600" />}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteBill(bill.id, bill.billNo)}
-                                className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
-                                title="Delete Memo"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
-                      No cash memos match your search.
+                {/* Table Container */}
+                <div className={`w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden ${isTableFullScreen ? 'fixed inset-0 z-[999999] w-screen h-screen bg-white rounded-none p-0 m-0 border-none overflow-auto flex flex-col' : ''}`}>
+                  {isTableFullScreen && (
+                    <div className="flex items-center justify-between p-3.5 px-5 bg-slate-900 text-white shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Table className="w-4 h-4 text-amber-400" />
+                        <h3 className="font-black text-sm">Cash Memos Register (Full Screen View)</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsTableFullScreen(false)}
+                        className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white cursor-pointer transition-colors"
+                        title="Exit Full Screen"
+                      >
+                        <Minimize2 className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
+
+                  {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
+                  <div className="hidden md:block w-full overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700 border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
+                          <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Bill No & Date</th>
+                          <th className="py-2.5 px-2 sm:px-2.5">Party & Site</th>
+                          <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Vehicle</th>
+                          <th className="py-2.5 px-2 sm:px-2.5">Material Items</th>
+                          <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Bill Total</th>
+                          <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Paid vs Balance</th>
+                          <th className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">Status</th>
+                          <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200/80">
+                        {filteredBills.length > 0 ? (
+                          filteredBills.map((bill) => {
+                            const timing = getTimingStatus(bill.createdAt);
+                            const hasBalance = Number(bill.balanceAmount || 0) > 0;
+                            return (
+                              <tr key={bill.id} className="hover:bg-amber-50/40 transition-colors group">
+                                <td className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">
+                                  <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
+                                    <ReceiptText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>#{bill.billNo}</span>
+                                  </div>
+                                  <div className="text-[10px] font-mono text-slate-500 mt-0.5">{bill.date}</div>
+                                </td>
+
+                                <td className="py-2.5 px-2 sm:px-2.5 min-w-0">
+                                  <div className="font-bold text-slate-900 text-xs leading-snug truncate max-w-[130px] lg:max-w-[180px]">{bill.customerName}</div>
+                                  <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate max-w-[130px] lg:max-w-[180px]">
+                                    <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
+                                    <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded-md text-[10px] font-mono text-slate-800 font-bold shadow-2xs">
+                                    <Truck className="w-3 h-3 text-slate-500 shrink-0" />
+                                    <span>{bill.vehicle || 'Direct'}</span>
+                                  </span>
+                                </td>
+
+                                <td className="py-2.5 px-2 sm:px-2.5">
+                                  <div className="space-y-0.5">
+                                    {bill.items && bill.items.length > 0 ? (
+                                      bill.items.map((it, idx) => (
+                                        <div key={idx} className="text-[11px] leading-tight whitespace-nowrap">
+                                          <span className="font-bold text-slate-900">{it.material}</span>{' '}
+                                          <span className="font-mono text-slate-500 text-[10px]">({it.qty} {it.unit})</span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <span className="text-slate-400 text-xs italic">No items</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
+                                  <div className="font-mono font-black text-slate-900 text-xs">
+                                    ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </div>
+                                </td>
+
+                                {/* Paid Amount vs Outstanding Balance */}
+                                <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
+                                  <div className="text-[10px] font-mono font-bold text-emerald-700">
+                                    Paid: ₹ {Number(bill.paidAmount || 0).toLocaleString('en-IN')}
+                                  </div>
+                                  <div className={`text-[10px] font-mono mt-0.5 ${hasBalance ? 'text-amber-800 font-black' : 'text-emerald-600 font-medium'}`}>
+                                    {hasBalance ? `Due: ₹ ${Number(bill.balanceAmount).toLocaleString('en-IN')}` : 'Cleared ✓'}
+                                  </div>
+                                </td>
+
+                                {/* Payment Status Badge */}
+                                <td className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">
+                                  {bill.paymentStatus === 'Paid' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
+                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                      <span>Paid</span>
+                                    </span>
+                                  ) : bill.paymentStatus === 'Partially Paid' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                                      <Clock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                                      <span>Partial</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-bold">
+                                      <AlertCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                      <span>Unpaid</span>
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Actions */}
+                                <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
+                                  <div className="inline-flex items-center justify-end gap-1 shrink-0">
+                                    {/* 1-Click Collect / Record Payment Modal */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPaymentModal(bill)}
+                                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1 active:scale-95 shrink-0 ${
+                                        hasBalance
+                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-900/10'
+                                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                                      }`}
+                                      title={hasBalance ? 'Collect / Record Payment' : 'View Payment History'}
+                                    >
+                                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setPrintingBill(bill)}
+                                      className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                      title="Print Cash Memo"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 shrink-0" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRequestEditBill(bill)}
+                                      className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
+                                        timing.isWithin10Mins
+                                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                      }`}
+                                      title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                                    >
+                                      {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteBill(bill.id, bill.billNo)}
+                                      className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95 shrink-0"
+                                      title="Delete Memo"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={8} className="py-12 text-center text-slate-400">
+                              No cash memos found matching search query.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* MOBILE RESPONSIVE CARDS (< md screens) */}
+                  <div className="block md:hidden p-2.5 sm:p-3 space-y-2.5 bg-slate-50/50">
+                    {filteredBills.length > 0 ? (
+                      filteredBills.map((bill) => {
+                        const timing = getTimingStatus(bill.createdAt);
+                        const hasBalance = Number(bill.balanceAmount || 0) > 0;
+                        return (
+                          <div
+                            key={bill.id}
+                            className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5 transition-all"
+                          >
+                            {/* Card Top: Bill No & Status Pill */}
+                            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <ReceiptText className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span className="font-mono font-black text-slate-900 text-xs truncate">
+                                  #{bill.billNo}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  • {bill.date}
+                                </span>
+                              </div>
+
+                              <div className="shrink-0 flex items-center gap-1.5">
+                                {bill.paymentStatus === 'Paid' ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                    <span>Paid</span>
+                                  </span>
+                                ) : bill.paymentStatus === 'Partially Paid' ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                                    <Clock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                                    <span>Partial</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-bold">
+                                    <AlertCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                    <span>Unpaid</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Customer Name & Site Location */}
+                            <div>
+                              <div className="font-black text-slate-900 text-xs leading-snug">
+                                {bill.customerName}
+                              </div>
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
+                                <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
+                              </div>
+                            </div>
+
+                            {/* Transit Vehicle & Material Items Summary */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] pt-1 border-t border-slate-100">
+                              <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono text-slate-800 font-bold text-[10px]">
+                                <Truck className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>{bill.vehicle || 'Direct Mixer'}</span>
+                              </span>
+                              <div className="font-medium text-slate-700 text-[11px] truncate flex-1 min-w-[140px]">
+                                {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
+                              </div>
+                            </div>
+
+                            {/* Mobile Financial Breakdown: Total / Paid / Due */}
+                            <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-xl border border-slate-100">
+                              <div>
+                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Total Bill</span>
+                                <span className="font-mono font-black text-slate-900 text-xs">
+                                  ₹ {Number(bill.finalAmount).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider block">Paid</span>
+                                <span className="font-mono font-black text-emerald-700 text-xs">
+                                  ₹ {Number(bill.paidAmount || 0).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-amber-800 font-bold uppercase tracking-wider block">Balance Due</span>
+                                <span className={`font-mono font-black text-xs ${hasBalance ? 'text-amber-800' : 'text-emerald-600'}`}>
+                                  {hasBalance ? `₹ ${Number(bill.balanceAmount).toLocaleString('en-IN')}` : '₹ 0'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Card Bottom: Clean Actions Bar & 1-Tap Payment Button */}
+                            <div className="pt-1 flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPaymentModal(bill)}
+                                className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95 ${
+                                  hasBalance
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+                                }`}
+                              >
+                                <CreditCard className="w-3.5 h-3.5" />
+                                <span>{hasBalance ? `Collect (Due ₹${Number(bill.balanceAmount).toLocaleString('en-IN')})` : 'Payment History'}</span>
+                              </button>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setPrintingBill(bill)}
+                                  className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer active:scale-95"
+                                  title="Print Cash Memo"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRequestEditBill(bill)}
+                                  className={`p-2 rounded-xl font-bold transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                    timing.isWithin10Mins
+                                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                  }`}
+                                  title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                                >
+                                  {timing.isWithin10Mins ? <Edit3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-rose-600" />}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBill(bill.id, bill.billNo)}
+                                  className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
+                                  title="Delete Memo"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+                        No cash memos match your search.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -1132,17 +1558,17 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 </div>
 
                 {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
-                <div className="hidden md:block w-full max-w-full overflow-x-auto">
-                  <table className="w-full min-w-[850px] text-left text-xs text-slate-700 border-collapse table-fixed">
+                <div className="hidden md:block w-full overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700 border-collapse">
                     <thead>
                       <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
-                        <th className="py-3 px-3 w-[15%]">Voucher No & Date</th>
-                        <th className="py-3 px-3 w-[24%]">Supplier & Plant Location</th>
-                        <th className="py-3 px-3 w-[20%]">Inward Material & Qty</th>
-                        <th className="py-3 px-3 w-[13%]">Truck & Slip No</th>
-                        <th className="py-3 px-3 w-[12%] text-right">Voucher Total</th>
-                        <th className="py-3 px-3 w-[10%] text-center">Policy Status</th>
-                        <th className="py-3 px-3 w-[6%] text-right">Actions</th>
+                        <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Voucher No & Date</th>
+                        <th className="py-2.5 px-2 sm:px-2.5">Supplier & Plant Location</th>
+                        <th className="py-2.5 px-2 sm:px-2.5">Inward Material & Qty</th>
+                        <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Truck & Slip No</th>
+                        <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Voucher Total</th>
+                        <th className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">Policy Status</th>
+                        <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/70">
@@ -1151,7 +1577,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                           const timing = getTimingStatus(purchase.createdAt);
                           return (
                             <tr key={purchase.id} className="hover:bg-cyan-50/40 transition-colors group">
-                              <td className="py-3 px-3">
+                              <td className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">
                                 <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
                                   <Truck className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
                                   <span>#{purchase.voucherNo}</span>
@@ -1159,22 +1585,22 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                 <div className="text-[10px] font-mono text-slate-500 mt-0.5">{purchase.date || 'Today'}</div>
                               </td>
 
-                              <td className="py-3 px-3">
-                                <div className="font-bold text-slate-900 text-xs leading-snug truncate">{purchase.supplierName}</div>
-                                <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                              <td className="py-2.5 px-2 sm:px-2.5 min-w-0">
+                                <div className="font-bold text-slate-900 text-xs leading-snug truncate max-w-[130px] lg:max-w-[180px]">{purchase.supplierName}</div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate max-w-[130px] lg:max-w-[180px]">
                                   <Building2 className="w-3 h-3 text-cyan-600 shrink-0" />
                                   <span className="truncate">{purchase.plantLocation || 'Main Plant Silo'}</span>
                                 </div>
                               </td>
 
-                              <td className="py-3 px-3">
-                                <div className="font-bold text-cyan-900 text-xs truncate">{purchase.material}</div>
+                              <td className="py-2.5 px-2 sm:px-2.5">
+                                <div className="font-bold text-cyan-900 text-xs truncate max-w-[140px] lg:max-w-[180px]">{purchase.material}</div>
                                 <div className="text-[10px] text-slate-600 font-mono truncate">
                                   {purchase.qty} {purchase.unit} @ ₹{purchase.rate}/{purchase.unit}
                                 </div>
                               </td>
 
-                              <td className="py-3 px-3">
+                              <td className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">
                                 <div className="font-mono text-xs font-bold text-slate-800 truncate">
                                   {purchase.vehicleNo || 'Inward Truck'}
                                 </div>
@@ -1184,14 +1610,14 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                 </div>
                               </td>
 
-                              <td className="py-3 px-3 text-right">
-                                <div className="font-mono font-black text-cyan-900 text-xs sm:text-sm">
+                              <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
+                                <div className="font-mono font-black text-cyan-900 text-xs">
                                   ₹ {Number(purchase.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </div>
                                 <div className="text-[9px] text-slate-500 font-mono font-semibold truncate">{purchase.paymentStatus}</div>
                               </td>
 
-                              <td className="py-3 px-3 text-center">
+                              <td className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">
                                 {timing.isWithin10Mins ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[9px] font-mono font-bold">
                                     <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0 animate-pulse" />
@@ -1205,28 +1631,28 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                 )}
                               </td>
 
-                              <td className="py-3 px-3 text-right">
-                                <div className="flex items-center justify-end gap-1">
+                              <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
+                                <div className="inline-flex items-center justify-end gap-1 shrink-0">
                                   <button
                                     type="button"
                                     onClick={() => handleRequestEditPurchase(purchase)}
-                                    className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                    className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
                                       timing.isWithin10Mins
                                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                         : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
                                     }`}
                                     title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
                                   >
-                                    {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
+                                    {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
                                   </button>
 
                                   <button
                                     type="button"
                                     onClick={() => handleDeletePurchase(purchase.id, purchase.voucherNo)}
-                                    className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
+                                    className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95 shrink-0"
                                     title="Delete Voucher"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
                                   </button>
                                 </div>
                               </td>
@@ -2096,6 +2522,194 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 </div>
               </div>
 
+              {/* Section 5: Payment Collection & Advance (Optional) */}
+              {!editingBill && (
+                <div className="bg-white rounded-2xl border border-[#D4E4F7] p-4 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center">
+                        <CreditCard className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-xs text-slate-900 block">Payment Collection & Advance (On Site)</span>
+                        <span className="text-[10px] text-slate-500 block">Track initial cash or online payment received from customer</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                      Optional
+                    </span>
+                  </div>
+
+                  {/* 3 Payment Options: Unpaid / Advance / Full */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBillForm({ ...billForm, initialPaymentOption: 'unpaid', initialPaymentAmount: 0 })}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                        billForm.initialPaymentOption === 'unpaid'
+                          ? 'border-blue-500 bg-blue-50/60 text-blue-950 font-bold ring-2 ring-blue-500/15'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        billForm.initialPaymentOption === 'unpaid' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'
+                      }`}>
+                        {billForm.initialPaymentOption === 'unpaid' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold">Unpaid / Full Credit</div>
+                        <div className="text-[10px] text-slate-500">₹0 paid • Entire bill pending</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const compTotal = billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) + (Number(billForm.transportation) || 0);
+                        setBillForm({ 
+                          ...billForm, 
+                          initialPaymentOption: 'partial', 
+                          initialPaymentAmount: billForm.initialPaymentAmount || Math.round(compTotal / 2) 
+                        });
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                        billForm.initialPaymentOption === 'partial'
+                          ? 'border-amber-500 bg-amber-50/60 text-amber-950 font-bold ring-2 ring-amber-500/15'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        billForm.initialPaymentOption === 'partial' ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300'
+                      }`}>
+                        {billForm.initialPaymentOption === 'partial' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-amber-950">Partial Advance Paid</div>
+                        <div className="text-[10px] text-amber-800">e.g. ₹25,000 cash on site</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const compTotal = billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) + (Number(billForm.transportation) || 0);
+                        setBillForm({ ...billForm, initialPaymentOption: 'full', initialPaymentAmount: compTotal });
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                        billForm.initialPaymentOption === 'full'
+                          ? 'border-emerald-500 bg-emerald-50/60 text-emerald-950 font-bold ring-2 ring-emerald-500/15'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        billForm.initialPaymentOption === 'full' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
+                      }`}>
+                        {billForm.initialPaymentOption === 'full' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-emerald-950">Paid in Full</div>
+                        <div className="text-[10px] text-emerald-700">100% Settled Upfront</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Advance Amount & Mode Fields (Shown when partial or full is chosen) */}
+                  {billForm.initialPaymentOption !== 'unpaid' && (
+                    <div className="pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Amount */}
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                            Amount Received Now (₹) <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-600 text-xs">₹</span>
+                            <input
+                              type="number"
+                              value={billForm.initialPaymentAmount}
+                              onChange={(e) => setBillForm({ ...billForm, initialPaymentAmount: Number(e.target.value) })}
+                              className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                              placeholder="e.g. 25000"
+                              disabled={billForm.initialPaymentOption === 'full'}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Mode Selector */}
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                            Payment Mode
+                          </label>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {['Cash', 'Online UPI', 'Bank Transfer', 'Cheque'].map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setBillForm({ ...billForm, initialPaymentMode: mode })}
+                                className={`py-2 px-1 text-center rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
+                                  billForm.initialPaymentMode === mode
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                }`}
+                              >
+                                {mode === 'Cash' ? '💵 Cash' : mode === 'Online UPI' ? '📱 UPI' : mode === 'Bank Transfer' ? '🏦 Bank' : '📑 Cheque'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Reference No & Remarks */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                            Receipt / UTR / Reference No <span className="text-slate-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={billForm.initialPaymentRef}
+                            onChange={(e) => setBillForm({ ...billForm, initialPaymentRef: e.target.value })}
+                            placeholder={billForm.initialPaymentMode === 'Cash' ? 'e.g. Cash Receipt #101' : 'e.g. UPI Ref / UTR / Cheque #'}
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-mono text-slate-900 focus:bg-white focus:border-[#1D5FA7] transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                            Remarks / Notes <span className="text-slate-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={billForm.initialPaymentRemarks}
+                            onChange={(e) => setBillForm({ ...billForm, initialPaymentRemarks: e.target.value })}
+                            placeholder="e.g. Paid in cash on site to mixer driver"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:bg-white focus:border-[#1D5FA7] transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Live Math Calculation Summary */}
+                      {(() => {
+                        const compTotal = billForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0) + (Number(billForm.transportation) || 0);
+                        const paidNow = Number(billForm.initialPaymentAmount) || 0;
+                        const balDue = Math.max(0, compTotal - paidNow);
+                        return (
+                          <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs">
+                            <span className="font-semibold text-emerald-950 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Bill Total: ₹{compTotal.toLocaleString('en-IN')} • Paying: ₹{paidNow.toLocaleString('en-IN')} ({billForm.initialPaymentMode})</span>
+                            </span>
+                            <span className="font-mono font-black text-amber-900">
+                              Balance Due: ₹{balDue.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Sticky Submit Bar */}
               <div className="flex flex-col gap-2.5 pt-3 border-t border-slate-200 bg-white -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-4 sm:p-5 shrink-0 rounded-b-3xl">
                 {/* Form Errors Banner */}
@@ -2290,6 +2904,371 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================
+          MODAL: PAYMENT COLLECTION & TRANSACTION HISTORY
+          ======================================================== */}
+      {paymentModalBill && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] app-modal-backdrop flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-pop-in"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-2xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] flex flex-col my-auto overflow-hidden text-slate-900 text-xs">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white p-3.5 sm:px-5 flex items-center justify-between border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalBill(null)}
+                  className="p-1.5 rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2 truncate">
+                    <span>Cash Memo #{paymentModalBill.billNo}</span>
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-white/10 text-slate-200">
+                      Payment Register
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-300 truncate">
+                    Party: <span className="font-bold text-white">{paymentModalBill.customerName}</span> • Site: {paymentModalBill.site || paymentModalBill.place || 'Tanang'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPaymentModalBill(null)}
+                className="p-1.5 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable */}
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-slate-50/50">
+              
+              {/* 3 High-Impact Financial Overview Cards */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Memo Total</span>
+                  <div className="font-mono font-black text-slate-900 text-sm sm:text-base mt-0.5">
+                    ₹ {Number(paymentModalBill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-emerald-200 bg-emerald-50/20 p-3 shadow-2xs">
+                  <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block">Total Paid</span>
+                  <div className="font-mono font-black text-emerald-700 text-sm sm:text-base mt-0.5">
+                    ₹ {Number(paymentModalBill.paidAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-[9px] text-emerald-800 font-medium truncate mt-0.5">
+                    💵 ₹{Number(paymentModalBill.cashPaidAmount || 0).toLocaleString('en-IN')} Cash • 📱 ₹{Number(paymentModalBill.onlinePaidAmount || 0).toLocaleString('en-IN')} Online
+                  </div>
+                </div>
+
+                <div className={`rounded-2xl border p-3 shadow-2xs ${
+                  Number(paymentModalBill.balanceAmount || 0) > 0 
+                    ? 'bg-amber-50/60 border-amber-300 text-amber-950' 
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                }`}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">
+                    {Number(paymentModalBill.balanceAmount || 0) > 0 ? 'Balance Due' : 'Status'}
+                  </span>
+                  <div className="font-mono font-black text-sm sm:text-base mt-0.5">
+                    {Number(paymentModalBill.balanceAmount || 0) > 0 
+                      ? `₹ ${Number(paymentModalBill.balanceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+                      : 'PAID IN FULL ✓'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Record Payment Form (If balance is due or additional payment needed) */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                      <Banknote className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-slate-900">Record New Payment Entry</span>
+                  </div>
+                  {Number(paymentModalBill.balanceAmount || 0) > 0 ? (
+                    <span className="text-[10px] text-amber-800 font-mono font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                      Balance Due: ₹{Number(paymentModalBill.balanceAmount).toLocaleString('en-IN')}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                      Settled
+                    </span>
+                  )}
+                </div>
+
+                {paymentError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 animate-shake">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{paymentError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleRecordPayment} className="space-y-3">
+                  {/* Quick Shortcut Buttons for Fast Entry */}
+                  {Number(paymentModalBill.balanceAmount || 0) > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="text-slate-500 font-medium">Quick Amount:</span>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentForm({ ...paymentForm, amount: paymentModalBill.balanceAmount })}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold border border-emerald-300 transition-colors cursor-pointer text-[10px]"
+                      >
+                        Full Balance (₹{Number(paymentModalBill.balanceAmount).toLocaleString('en-IN')})
+                      </button>
+                      {paymentModalBill.balanceAmount > 10000 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentForm({ ...paymentForm, amount: 10000 })}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold border border-slate-300 transition-colors cursor-pointer text-[10px]"
+                        >
+                          ₹10,000
+                        </button>
+                      )}
+                      {paymentModalBill.balanceAmount > 25000 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentForm({ ...paymentForm, amount: 25000 })}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold border border-slate-300 transition-colors cursor-pointer text-[10px]"
+                        >
+                          ₹25,000
+                        </button>
+                      )}
+                      {paymentModalBill.balanceAmount > 5000 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentForm({ ...paymentForm, amount: 5000 })}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold border border-slate-300 transition-colors cursor-pointer text-[10px]"
+                        >
+                          ₹5,000
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Amount Input */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Amount Received (₹) <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-600 text-xs">₹</span>
+                        <input
+                          type="number"
+                          value={paymentForm.amount}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                          placeholder="e.g. 25000"
+                          className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/15 transition-all text-xs"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Payment Mode Pills */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Payment Mode <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-4 gap-1">
+                        {['Cash', 'Online UPI', 'Bank Transfer', 'Cheque'].map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setPaymentForm({ ...paymentForm, mode })}
+                            className={`py-2 px-1 text-center rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
+                              paymentForm.mode === mode
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            {mode === 'Cash' ? '💵 Cash' : mode === 'Online UPI' ? '📱 UPI' : mode === 'Bank Transfer' ? '🏦 Bank' : '📑 Cheque'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Reference / UTR No */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Receipt / UTR / Cheque #
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.referenceNo}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, referenceNo: e.target.value })}
+                        placeholder={paymentForm.mode === 'Cash' ? 'e.g. Cash Receipt #101' : 'e.g. 12-digit UPI Ref / UTR'}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 font-mono text-xs text-slate-900 focus:bg-white focus:border-emerald-600 transition-all"
+                      />
+                    </div>
+
+                    {/* Received By */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Received By
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.receivedBy}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, receivedBy: e.target.value })}
+                        placeholder="e.g. Sunil More / Ramesh"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:bg-white focus:border-emerald-600 transition-all"
+                      />
+                    </div>
+
+                    {/* Remarks */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Remarks / Note
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.remarks}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, remarks: e.target.value })}
+                        placeholder="e.g. Advance paid at site"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:bg-white focus:border-emerald-600 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-1 flex items-center justify-end">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-900/10 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Record Payment ({paymentForm.mode} ₹{Number(paymentForm.amount || 0).toLocaleString('en-IN')})</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Payment History & Timeline */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center">
+                      <History className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-slate-900">
+                      Payment History & Transaction Log ({paymentModalBill.payments?.length || 0})
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    All Cash & Online Records Maintained
+                  </span>
+                </div>
+
+                {paymentModalBill.payments && paymentModalBill.payments.length > 0 ? (
+                  <div className="space-y-2">
+                    {paymentModalBill.payments.map((p, pIdx) => {
+                      const isCash = (p.mode || '').toLowerCase().includes('cash');
+                      return (
+                        <div
+                          key={p.id || pIdx}
+                          className="p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                              isCash ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {isCash ? <Banknote className="w-4 h-4" /> : <QrCode className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-black text-slate-900 text-sm">
+                                  ₹ {Number(p.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                  isCash 
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
+                                    : 'bg-blue-50 text-blue-800 border-blue-300'
+                                }`}>
+                                  {p.mode || 'Cash'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span>{p.date} • {p.time}</span>
+                                {p.referenceNo && <span>• Ref: <strong className="font-mono text-slate-700">{p.referenceNo}</strong></span>}
+                                {p.receivedBy && <span>• Recvd by: {p.receivedBy}</span>}
+                                {p.remarks && <span>• "{p.remarks}"</span>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePayment(p.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                              title="Revert / Void this payment entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <CreditCard className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                    <p className="font-medium text-xs">No payment records logged yet for this memo.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Use the form above to record cash or online transactions.</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:px-5 bg-white border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setPaymentModalBill(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrintingBill(paymentModalBill);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Updated Memo</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>,
         document.body

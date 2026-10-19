@@ -758,10 +758,15 @@ export default function AttendanceManagementView({
     setToastMessage(`Attendance for ${editingRecord.employeeName} updated.`);
   };
 
-  const handleDeleteRecord = (id, name) => {
+  const handleDeleteRecord = async (id, name) => {
     if (window.confirm(`Delete attendance record for ${name}?`)) {
-      deleteAttendanceRecord(id);
-      setToastMessage('Attendance record deleted.');
+      try {
+        await deleteAttendanceRecord(id);
+        setToastMessage('Attendance record deleted.');
+      } catch (err) {
+        console.error('Failed to delete attendance record:', err);
+        setToastMessage(`Failed to delete attendance record: ${err.message}`);
+      }
     }
   };
 

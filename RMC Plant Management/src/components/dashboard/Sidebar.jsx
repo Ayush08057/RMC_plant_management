@@ -105,7 +105,7 @@ const ALL_PLANT_OPERATIONS_ITEMS = [
 ];
 
 const getPlantOperationsForRole = (role) => {
-  return ALL_PLANT_OPERATIONS_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  return ALL_PLANT_OPERATIONS_ITEMS.filter((item) => !item.roles || item.roles.includes(role) || role === ROLES.ADMIN);
 };
 
 const PORTAL_LINKS = [
@@ -144,6 +144,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ADMIN:
         return [
           { id: 'dashboard', label: 'System Administration', icon: ShieldCheck },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { 
             id: 'employees_group', 
             label: 'Employees', 

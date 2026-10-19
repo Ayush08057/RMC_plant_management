@@ -205,10 +205,15 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
     setToastMessage(`Salary record updated for ${editingRecord.employeeName}.`);
   };
 
-  const handleDeleteRecord = (id, name) => {
+  const handleDeleteRecord = async (id, name) => {
     if (window.confirm(`Permanently remove payroll slip for ${name}?`)) {
-      deletePayrollRecord(id);
-      setToastMessage(`Payroll record deleted.`);
+      try {
+        await deletePayrollRecord(id);
+        setToastMessage(`Payroll record deleted.`);
+      } catch (err) {
+        console.error('Failed to delete payroll record:', err);
+        setToastMessage(`Failed to delete payroll record: ${err.message}`);
+      }
     }
   };
 

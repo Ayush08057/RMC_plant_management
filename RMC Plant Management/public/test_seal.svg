@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <path id="sealTopArc" d="M 25 118 A 76 76 0 1 1 175 118" />
+    <path id="sealBottomArc" d="M 175 102 A 76 76 0 0 1 25 102" />
+  </defs>
+  <!-- Outer double ring -->
+  <circle cx="100" cy="100" r="96" fill="none" stroke="#1d3782" stroke-width="3.5" />
+  <circle cx="100" cy="100" r="91" fill="none" stroke="#1d3782" stroke-width="1.5" />
+  
+  <!-- Text along top arc -->
+  <text fill="#1d3782" font-size="12.5" font-family="Arial, sans-serif" font-weight="900" letter-spacing="1">
+    <textPath href="#sealTopArc" startOffset="50%" text-anchor="middle">
+      SM CONCRETECH, TANANG/SANGLI
+    </textPath>
+  </text>
+  
+  <!-- Side dots -->
+  <circle cx="24" cy="108" r="4.5" fill="#1d3782" />
+  <circle cx="176" cy="108" r="4.5" fill="#1d3782" />
+  
+  <!-- Text along bottom arc -->
+  <text fill="#1d3782" font-size="12.5" font-family="Arial, sans-serif" font-weight="900" letter-spacing="1">
+    <textPath href="#sealBottomArc" startOffset="50%" text-anchor="middle">
+      SHANESH DNYANDEV MANE
+    </textPath>
+  </text>
+  
+  <!-- Inner double ring -->
+  <circle cx="100" cy="100" r="64" fill="none" stroke="#1d3782" stroke-width="1.5" />
+  <circle cx="100" cy="100" r="59" fill="none" stroke="#1d3782" stroke-width="3" />
+  
+  <!-- Center No. text -->
+  <text x="96" y="88" text-anchor="middle" fill="#1d3782" font-size="20" font-family="Arial, sans-serif" font-weight="bold" transform="rotate(-14 96 88)">
+    No.
+  </text>
+</svg>

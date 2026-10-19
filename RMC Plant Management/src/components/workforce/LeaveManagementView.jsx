@@ -176,10 +176,15 @@ export default function LeaveManagementView({ employeeFilter = null }) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (window.confirm(`Delete leave application for ${row.employeeName}?`)) {
-                    deleteLeave(row.id);
-                    setToastMessage(`Leave application ${row.id} deleted.`);
+                    try {
+                      await deleteLeave(row.id);
+                      setToastMessage(`Leave application ${row.id} deleted.`);
+                    } catch (err) {
+                      console.error('Failed to delete leave application:', err);
+                      setToastMessage(`Failed to delete leave application: ${err.message}`);
+                    }
                   }
                 }}
                 className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"

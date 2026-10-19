@@ -597,10 +597,15 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
     setToastMessage(`Shift "${shiftForm.name}" updated successfully.`);
   };
 
-  const handleDeleteShift = (id, name) => {
+  const handleDeleteShift = async (id, name) => {
     if (window.confirm(`Permanently remove operational shift "${name}"? Employees on this shift will be unassigned.`)) {
-      deleteShift(id);
-      setToastMessage(`Shift "${name}" deleted.`);
+      try {
+        await deleteShift(id);
+        setToastMessage(`Shift "${name}" deleted.`);
+      } catch (err) {
+        console.error('Failed to delete shift:', err);
+        setToastMessage(`Failed to delete shift: ${err.message}`);
+      }
     }
   };
 

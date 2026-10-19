@@ -278,10 +278,15 @@ export default function AdminDashboardPage() {
     setToastMessage(`Employee ${editingEmp.id} profile updated.`);
   };
 
-  const handleDeleteEmployee = (id) => {
+  const handleDeleteEmployee = async (id) => {
     if (window.confirm(`Permanently remove employee ${id} from enterprise directory?`)) {
-      deleteEmployee(id);
-      setToastMessage(`Employee ${id} deleted permanently.`);
+      try {
+        await deleteEmployee(id);
+        setToastMessage(`Employee ${id} deleted permanently.`);
+      } catch (err) {
+        console.error('Failed to delete employee:', err);
+        setToastMessage(`Failed to delete employee: ${err.message}`);
+      }
     }
   };
 
@@ -361,10 +366,15 @@ export default function AdminDashboardPage() {
     setToastMessage(`Plant "${plantForm.name}" updated successfully.`);
   };
 
-  const handleDeletePlant = (id, name) => {
+  const handleDeletePlant = async (id, name) => {
     if (window.confirm(`De-register concrete plant "${name}"?`)) {
-      deletePlant(id);
-      setToastMessage(`Plant "${name}" de-registered.`);
+      try {
+        await deletePlant(id);
+        setToastMessage(`Plant "${name}" de-registered.`);
+      } catch (err) {
+        console.error('Failed to delete plant:', err);
+        setToastMessage(`Failed to delete plant: ${err.message}`);
+      }
     }
   };
 

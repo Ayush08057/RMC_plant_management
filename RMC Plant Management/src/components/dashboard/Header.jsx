@@ -79,10 +79,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
     reader.readAsDataURL(file);
   };
 
-  const handleConfirmDeletePlant = (companyId) => {
+  const handleConfirmDeletePlant = async (companyId) => {
     if (!companyId) return;
     try {
-      removeCompany(companyId);
+      await removeCompany(companyId);
       setPlantToDelete(null);
     } catch (err) {
       alert(err.message || 'Failed to remove plant.');

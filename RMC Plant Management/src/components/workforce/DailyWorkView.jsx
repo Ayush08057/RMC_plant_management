@@ -482,11 +482,16 @@ export default function DailyWorkView({ employeeFilter = null }) {
               </button>
               <button
                 type="button"
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
                   if (window.confirm(`Delete work log for ${getEmployeeDisplayName(row)}?`)) {
-                    deleteDailyWork(row.id);
-                    setToastMessage(`Daily work entry ${row.id} deleted.`);
+                    try {
+                      await deleteDailyWork(row.id);
+                      setToastMessage(`Daily work entry ${row.id} deleted.`);
+                    } catch (err) {
+                      console.error('Failed to delete daily work:', err);
+                      setToastMessage(`Failed to delete daily work: ${err.message}`);
+                    }
                   }
                 }}
                 className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"

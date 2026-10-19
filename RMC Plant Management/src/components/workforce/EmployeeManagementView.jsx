@@ -312,13 +312,19 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     setShowDeleteModal(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!employeeToDelete) return;
     const { id, name } = employeeToDelete;
-    deleteEmployee(id);
-    setShowDeleteModal(false);
-    setEmployeeToDelete(null);
-    setToastMessage(`Employee ${name || id} (${id}) has been permanently deleted from workforce records.`);
+    try {
+      await deleteEmployee(id);
+      setToastMessage(`Employee ${name || id} (${id}) has been permanently deleted from workforce records.`);
+    } catch (err) {
+      console.error('Failed to delete employee:', err);
+      setToastMessage(`Failed to delete employee: ${err.message}`);
+    } finally {
+      setShowDeleteModal(false);
+      setEmployeeToDelete(null);
+    }
   };
 
   const handleCancelDelete = () => {

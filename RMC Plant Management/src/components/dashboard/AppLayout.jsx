@@ -6,6 +6,7 @@ import Header from './Header';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../data/mockUsers';
 import NotImplementedView, { PLANT_OPERATIONS_TABS } from '../common/NotImplementedView';
+import PlantOperationsView, { OPERATIONS_MODULES } from '../operations/PlantOperationsView';
 
 export default function AppLayout({ 
   children, 
@@ -147,16 +148,16 @@ export default function AppLayout({
         )}
 
         {/* Professional Enterprise Page Title Bar - Ultra-Slim & Compact */}
-        {(title || actions) && (
+        {(title || actions || (activeTab && PLANT_OPERATIONS_TABS[activeTab])) && (
           <div className="px-3 sm:px-4 pt-1.5 pb-1 shrink-0">
             <div className="bg-white border border-[#D4E4F7] rounded-xl px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <h1 className="text-xs sm:text-sm md:text-base font-bold text-black tracking-tight truncate leading-tight">
-                  {title}
+                  {activeTab && PLANT_OPERATIONS_TABS[activeTab] ? PLANT_OPERATIONS_TABS[activeTab].label : title}
                 </h1>
-                {badge && (
+                {(badge || (activeTab && PLANT_OPERATIONS_TABS[activeTab])) && (
                   <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
-                    {badge}
+                    {activeTab && PLANT_OPERATIONS_TABS[activeTab] ? 'PLANT OPS' : badge}
                   </span>
                 )}
               </div>
@@ -173,16 +174,17 @@ export default function AppLayout({
         {/* Page Inner Content - Only this area scrolls vertically */}
         <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-4 py-1.5 sm:py-2 overflow-y-auto overflow-x-hidden flex flex-col text-black">
           {(() => {
-            const validChildren = React.Children.toArray(children).filter(Boolean);
-            if (validChildren.length > 0) {
-              return children;
-            }
-            if (activeTab && PLANT_OPERATIONS_TABS[activeTab]) {
+            const isPlantOps = activeTab && (PLANT_OPERATIONS_TABS[activeTab] || OPERATIONS_MODULES.some((m) => m.id === activeTab));
+            if (isPlantOps) {
               return (
-                <NotImplementedView
-                  module={PLANT_OPERATIONS_TABS[activeTab]}
-                  onBack={() => onSelectTab && onSelectTab('dashboard')}
-                />
+                <>
+                  <PlantOperationsView
+                    activeTab={activeTab}
+                    onSelectTab={onSelectTab}
+                    onBack={() => onSelectTab && onSelectTab('dashboard')}
+                  />
+                  {children}
+                </>
               );
             }
             return children;

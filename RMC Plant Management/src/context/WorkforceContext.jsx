@@ -52,37 +52,17 @@ function getInitialCompanies() {
 }
 
 function createEmptyCompanyData(companyId) {
-  if (companyId !== DEFAULT_COMPANY_ID) {
-    return {
-      employees: [],
-      shifts: [],
-      plants: [],
-      attendance: [],
-      dailyWork: [],
-      leaves: [],
-      advances: [],
-      loans: [],
-      documents: [],
-      auditLogs: [],
-      hrSettings: INITIAL_HR_SETTINGS,
-      payrollRecords: [],
-      notifications: [],
-      trips: [],
-      orders: [],
-    };
-  }
-
   return {
     employees: [],
-    shifts: INITIAL_SHIFTS,
-    plants: MOCK_PLANTS,
+    shifts: companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : [],
+    plants: companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : [],
     attendance: [],
-    dailyWork: INITIAL_DAILY_WORK,
-    leaves: INITIAL_LEAVES,
-    advances: INITIAL_ADVANCES,
-    loans: INITIAL_LOANS,
-    documents: INITIAL_DOCUMENTS,
-    auditLogs: INITIAL_AUDIT_LOGS,
+    dailyWork: [],
+    leaves: [],
+    advances: [],
+    loans: [],
+    documents: [],
+    auditLogs: [],
     hrSettings: INITIAL_HR_SETTINGS,
     payrollRecords: [],
     notifications: [],
@@ -94,11 +74,22 @@ function createEmptyCompanyData(companyId) {
 function loadCompanyData(companyId) {
   try {
     const saved = localStorage.getItem(`${STORAGE_WORKFORCE_KEY}_${companyId}`);
-    if (saved) return { ...createEmptyCompanyData(companyId), ...JSON.parse(saved) };
-
-    if (companyId === DEFAULT_COMPANY_ID) {
-      const legacy = localStorage.getItem(STORAGE_WORKFORCE_KEY);
-      if (legacy) return { ...createEmptyCompanyData(companyId), ...JSON.parse(legacy) };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...createEmptyCompanyData(companyId),
+        ...parsed,
+        shifts: Array.isArray(parsed.shifts) ? parsed.shifts : (companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : []),
+        plants: Array.isArray(parsed.plants) ? parsed.plants : (companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : []),
+        employees: Array.isArray(parsed.employees) ? parsed.employees : [],
+        attendance: Array.isArray(parsed.attendance) ? parsed.attendance : [],
+        leaves: Array.isArray(parsed.leaves) ? parsed.leaves : [],
+        advances: Array.isArray(parsed.advances) ? parsed.advances : [],
+        loans: Array.isArray(parsed.loans) ? parsed.loans : [],
+        documents: Array.isArray(parsed.documents) ? parsed.documents : [],
+        dailyWork: Array.isArray(parsed.dailyWork) ? parsed.dailyWork : [],
+        payrollRecords: Array.isArray(parsed.payrollRecords) ? parsed.payrollRecords : [],
+      };
     }
   } catch (error) {
     console.error(`Failed to load workforce data for company ${companyId}:`, error);
@@ -133,8 +124,13 @@ export const WorkforceProvider = ({ children }) => {
     saveRawDocumentWithId(scopeCollection(collectionName), docId, documentData);
   const updateDocument = (collectionName, docId, fields) =>
     updateRawDocument(scopeCollection(collectionName), docId, fields);
-  const removeDocument = (collectionName, docId) =>
-    removeRawDocument(scopeCollection(collectionName), docId);
+  const removeDocument = async (collectionName, docId) => {
+    const scopedCol = scopeCollection(collectionName);
+    await removeRawDocument(scopedCol, docId);
+    if (activeCompanyId === DEFAULT_COMPANY_ID && scopedCol !== collectionName) {
+      await removeRawDocument(collectionName, docId).catch(() => {});
+    }
+  };
 
   useEffect(() => {
     try {
@@ -167,24 +163,32 @@ export const WorkforceProvider = ({ children }) => {
 
     const syncCollection = (collectionName, stateKey) => {
       const scopedCollectionName = companyCollection(collectionName, activeCompanyId);
-      const mergeWithDefaults = (items) => {
-        return items || [];
-      };
 
       fetchCollection(scopedCollectionName)
         .then(async (scopedItems) => {
           let cloudItems = scopedItems;
           if (activeCompanyId === DEFAULT_COMPANY_ID && scopedItems.length === 0) {
-            const legacyItems = await fetchCollection(collectionName);
-            if (legacyItems.length > 0) {
-              cloudItems = legacyItems;
-              await batchSaveDocuments(scopedCollectionName, legacyItems);
+            const hasInitializedKey = `rmc_initialized_${scopedCollectionName}`;
+            const alreadyInitialized = localStorage.getItem(hasInitializedKey);
+            if (!alreadyInitialized) {
+              const legacyItems = await fetchCollection(collectionName);
+              if (legacyItems.length > 0) {
+                cloudItems = legacyItems;
+                await batchSaveDocuments(scopedCollectionName, legacyItems);
+              } else if (stateKey === 'shifts') {
+                cloudItems = INITIAL_SHIFTS;
+                await batchSaveDocuments(scopedCollectionName, INITIAL_SHIFTS);
+              } else if (stateKey === 'plants') {
+                cloudItems = MOCK_PLANTS;
+                await batchSaveDocuments(scopedCollectionName, MOCK_PLANTS);
+              }
+              localStorage.setItem(hasInitializedKey, 'true');
             }
           }
-          if (isCurrentCompany && cloudItems && cloudItems.length > 0) {
+          if (isCurrentCompany && Array.isArray(cloudItems)) {
             setData((prev) => ({
               ...prev,
-              [stateKey]: mergeWithDefaults(cloudItems, stateKey),
+              [stateKey]: cloudItems,
             }));
           }
         })
@@ -193,10 +197,10 @@ export const WorkforceProvider = ({ children }) => {
         });
 
       const unsub = subscribeToCollection(scopedCollectionName, (cloudItems) => {
-        if (isCurrentCompany && cloudItems && cloudItems.length > 0) {
+        if (isCurrentCompany && Array.isArray(cloudItems)) {
           setData((prev) => ({
             ...prev,
-            [stateKey]: mergeWithDefaults(cloudItems, stateKey),
+            [stateKey]: cloudItems,
           }));
         }
       });
@@ -213,6 +217,7 @@ export const WorkforceProvider = ({ children }) => {
     syncCollection(COLLECTIONS.DAILY_WORK, 'dailyWork');
     syncCollection(COLLECTIONS.DOCUMENTS, 'documents');
     syncCollection(COLLECTIONS.ORDERS, 'orders');
+    syncCollection(COLLECTIONS.PAYROLL, 'payrollRecords');
 
     return () => {
       isCurrentCompany = false;
@@ -329,13 +334,19 @@ export const WorkforceProvider = ({ children }) => {
     return company;
   };
 
-  const removeCompany = (companyId) => {
+  const removeCompany = async (companyId) => {
     if (!companyId) return;
     if (companies.length <= 1) {
       throw new Error('At least one plant or company must remain active.');
     }
     const targetCompany = companies.find((c) => c.id === companyId);
     if (!targetCompany) return;
+
+    try {
+      await removeRawDocument(COLLECTIONS.COMPANIES, companyId);
+    } catch (error) {
+      console.warn('Company removed locally but cloud delete notice:', error.message);
+    }
 
     const remainingCompanies = companies.filter((c) => c.id !== companyId);
     setCompanies(remainingCompanies);
@@ -357,10 +368,6 @@ export const WorkforceProvider = ({ children }) => {
     } catch (err) {
       console.error('Failed to persist company deletion:', err);
     }
-
-    removeRawDocument(COLLECTIONS.COMPANIES, companyId).catch((error) => {
-      console.warn('Company removed locally but cloud delete notice:', error.message);
-    });
 
     addAuditLog(`Removed Plant (${targetCompany.name})`, 'Plant Management', `Plant workspace removed: ${targetCompany.name}`);
     return targetCompany;
@@ -937,26 +944,40 @@ export const WorkforceProvider = ({ children }) => {
     });
   };
 
-  const deleteEmployee = (id) => {
+  const deleteEmployee = async (id) => {
     const empToDelete = data.employees.find((e) => e.id === id);
     const empName = empToDelete?.name || id;
+    const cleanId = (id || '').toUpperCase();
 
-    // Remove from Cloud Firestore
-    removeDocument(COLLECTIONS.EMPLOYEES, id).catch(() => {});
+    // 1. Remove employee from Cloud Firestore (scoped AND legacy collections)
+    await removeDocument(COLLECTIONS.EMPLOYEES, id);
 
-    setData((prev) => ({
-      ...prev,
-      employees: prev.employees.filter((e) => e.id !== id),
-      attendance: prev.attendance.filter((a) => a.employeeId !== id),
-      leaves: prev.leaves.filter((l) => l.employeeId !== id),
-      advances: prev.advances.filter((a) => a.employeeId !== id),
-      loans: prev.loans.filter((l) => l.employeeId !== id),
-      dailyWork: prev.dailyWork.filter((w) => w.employeeId !== id),
-      documents: prev.documents.filter((d) => d.employeeId !== id),
-    }));
+    // 2. Cascade delete all related attendance records from Firestore
+    const relatedAtt = (data.attendance || []).filter((a) => (a.employeeId || '').toUpperCase() === cleanId);
+    for (const att of relatedAtt) {
+      await removeDocument(COLLECTIONS.ATTENDANCE, att.id).catch(() => {});
+    }
 
+    // 3. Cascade delete related leaves, advances, loans, dailyWork from Firestore
+    const relatedLeaves = (data.leaves || []).filter((l) => (l.employeeId || '').toUpperCase() === cleanId);
+    for (const lev of relatedLeaves) {
+      await removeDocument(COLLECTIONS.LEAVES, lev.id).catch(() => {});
+    }
+    const relatedAdvances = (data.advances || []).filter((a) => (a.employeeId || '').toUpperCase() === cleanId);
+    for (const adv of relatedAdvances) {
+      await removeDocument(COLLECTIONS.ADVANCES, adv.id).catch(() => {});
+    }
+    const relatedLoans = (data.loans || []).filter((l) => (l.employeeId || '').toUpperCase() === cleanId);
+    for (const lon of relatedLoans) {
+      await removeDocument(COLLECTIONS.LOANS, lon.id).catch(() => {});
+    }
+    const relatedWork = (data.dailyWork || []).filter((w) => (w.employeeId || '').toUpperCase() === cleanId);
+    for (const wrk of relatedWork) {
+      await removeDocument(COLLECTIONS.DAILY_WORK, wrk.id).catch(() => {});
+    }
+
+    // 4. Remove associated user credentials from users collection & localStorage
     try {
-      const cleanId = (id || '').toUpperCase();
       const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
       if (storedUsersRaw) {
         const currentUsers = JSON.parse(storedUsersRaw);
@@ -965,24 +986,44 @@ export const WorkforceProvider = ({ children }) => {
         );
         localStorage.setItem('rmc_users_db_v2', JSON.stringify(filtered));
       }
-      removeDocument(COLLECTIONS.USERS, `USR-${cleanId}`).catch(() => {});
+      await removeDocument(COLLECTIONS.USERS, `USR-${cleanId}`).catch(() => {});
+      await removeDocument(COLLECTIONS.USERS, cleanId).catch(() => {});
     } catch {
       // ignore
+    }
+
+    // 5. Update state and localStorage immediately
+    const nextState = {
+      ...data,
+      employees: data.employees.filter((e) => (e.id || '').toUpperCase() !== cleanId),
+      attendance: data.attendance.filter((a) => (a.employeeId || '').toUpperCase() !== cleanId),
+      leaves: data.leaves.filter((l) => (l.employeeId || '').toUpperCase() !== cleanId),
+      advances: data.advances.filter((a) => (a.employeeId || '').toUpperCase() !== cleanId),
+      loans: data.loans.filter((l) => (l.employeeId || '').toUpperCase() !== cleanId),
+      dailyWork: data.dailyWork.filter((w) => (w.employeeId || '').toUpperCase() !== cleanId),
+      documents: data.documents.filter((d) => (d.employeeId || '').toUpperCase() !== cleanId),
+    };
+    setData(nextState);
+
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
     }
 
     addAuditLog(`Deleted Employee (${id})`, 'Employee Management', `Permanently removed ${empName} from workforce records`);
     addNotification({
       title: 'Employee Removed',
-      desc: `Employee ${empName} (${id}) has been removed from the directory.`,
+      desc: `Employee ${empName} (${id}) has been removed from active workforce.`,
       type: 'warning',
-      category: 'employee',
+      category: 'workforce',
     });
   };
 
   /* -------------------------------------------------------------
    * 2. SHIFT MANAGEMENT & PLANT INFRASTRUCTURE
    * ------------------------------------------------------------- */
-  const createShift = (shiftData) => {
+  const createShift = async (shiftData) => {
     const newShift = {
       ...shiftData,
       id: shiftData.id || `SFT-${Date.now().toString().slice(-4)}`,
@@ -992,84 +1033,128 @@ export const WorkforceProvider = ({ children }) => {
       otRatePerHour: Number(shiftData.otRatePerHour) || 200,
     };
 
-    saveDocumentWithId(COLLECTIONS.SHIFTS, newShift.id, newShift).catch(() => {});
+    await saveDocumentWithId(COLLECTIONS.SHIFTS, newShift.id, newShift);
 
-    setData((prev) => ({
-      ...prev,
-      shifts: [...prev.shifts, newShift],
-    }));
+    const nextState = {
+      ...data,
+      shifts: [...data.shifts, newShift],
+    };
+    setData(nextState);
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
+
     addAuditLog(`Created Shift (${newShift.name})`, 'Shift Management', `${newShift.startTime} - ${newShift.endTime}`);
     return newShift;
   };
 
-  const updateShift = (id, fields) => {
-    updateDocument(COLLECTIONS.SHIFTS, id, fields).catch(() => {});
+  const updateShift = async (id, fields) => {
+    await updateDocument(COLLECTIONS.SHIFTS, id, fields);
 
-    setData((prev) => ({
-      ...prev,
-      shifts: prev.shifts.map((s) => (s.id === id ? { ...s, ...fields } : s)),
-    }));
+    const nextState = {
+      ...data,
+      shifts: data.shifts.map((s) => (s.id === id ? { ...s, ...fields } : s)),
+    };
+    setData(nextState);
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
     addAuditLog(`Updated Shift (${id})`, 'Shift Management', `Shift parameters updated.`);
   };
 
-  const deleteShift = (id) => {
+  const deleteShift = async (id) => {
     const shift = data.shifts.find((s) => s.id === id);
-    removeDocument(COLLECTIONS.SHIFTS, id).catch(() => {});
+    await removeDocument(COLLECTIONS.SHIFTS, id);
 
-    setData((prev) => ({
-      ...prev,
-      shifts: prev.shifts.filter((s) => s.id !== id),
-      employees: prev.employees.map((e) => (e.shiftId === id ? { ...e, shiftId: null } : e)),
-    }));
+    const nextState = {
+      ...data,
+      shifts: data.shifts.filter((s) => s.id !== id),
+      employees: data.employees.map((e) => (e.shiftId === id ? { ...e, shiftId: null } : e)),
+    };
+    setData(nextState);
+
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
     addAuditLog(`Deleted Shift (${shift?.name || id})`, 'Shift Management', `Shift removed from rosters.`);
   };
 
-  const assignShift = (employeeId, shiftId) => {
-    updateDocument(COLLECTIONS.EMPLOYEES, employeeId, { shiftId }).catch(() => {});
+  const assignShift = async (employeeId, shiftId) => {
+    await updateDocument(COLLECTIONS.EMPLOYEES, employeeId, { shiftId });
 
-    setData((prev) => ({
-      ...prev,
-      employees: prev.employees.map((e) => (e.id === employeeId ? { ...e, shiftId } : e)),
-    }));
+    const nextState = {
+      ...data,
+      employees: data.employees.map((e) => (e.id === employeeId ? { ...e, shiftId } : e)),
+    };
+    setData(nextState);
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
     const shift = data.shifts.find((s) => s.id === shiftId);
     addAuditLog(`Assigned Shift to ${employeeId}`, 'Shift Management', `Assigned to ${shift?.name || shiftId}`);
   };
 
   // Plant Node Management
-  const addPlant = (plantData) => {
+  const addPlant = async (plantData) => {
     const newPlant = {
       ...plantData,
       id: plantData.id || `PLT-${Date.now().toString().slice(-4)}`,
       status: plantData.status || 'Online',
     };
 
-    saveDocumentWithId(COLLECTIONS.PLANTS, newPlant.id, newPlant).catch(() => {});
+    await saveDocumentWithId(COLLECTIONS.PLANTS, newPlant.id, newPlant);
 
-    setData((prev) => ({
-      ...prev,
-      plants: [...(prev.plants || []), newPlant],
-    }));
+    const nextState = {
+      ...data,
+      plants: [...(data.plants || []), newPlant],
+    };
+    setData(nextState);
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
     addAuditLog(`Registered Concrete Plant (${newPlant.name})`, 'Plant Infrastructure', `Capacity: ${newPlant.capacity}`);
     return newPlant;
   };
 
-  const updatePlant = (id, fields) => {
-    updateDocument(COLLECTIONS.PLANTS, id, fields).catch(() => {});
+  const updatePlant = async (id, fields) => {
+    await updateDocument(COLLECTIONS.PLANTS, id, fields);
 
-    setData((prev) => ({
-      ...prev,
-      plants: (prev.plants || []).map((p) => (p.id === id ? { ...p, ...fields } : p)),
-    }));
+    const nextState = {
+      ...data,
+      plants: (data.plants || []).map((p) => (p.id === id ? { ...p, ...fields } : p)),
+    };
+    setData(nextState);
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
     addAuditLog(`Updated Plant Node (${id})`, 'Plant Infrastructure', `Parameters adjusted.`);
   };
 
-  const deletePlant = (id) => {
-    removeDocument(COLLECTIONS.PLANTS, id).catch(() => {});
+  const deletePlant = async (id) => {
+    await removeDocument(COLLECTIONS.PLANTS, id);
 
-    setData((prev) => ({
-      ...prev,
-      plants: (prev.plants || []).filter((p) => p.id !== id),
-    }));
+    const nextState = {
+      ...data,
+      plants: (data.plants || []).filter((p) => p.id !== id),
+    };
+    setData(nextState);
+    try {
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(nextState));
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err);
+    }
     addAuditLog(`De-registered Plant Node (${id})`, 'Plant Infrastructure', `Node removed from plant grid.`);
   };
 
@@ -1145,27 +1230,9 @@ export const WorkforceProvider = ({ children }) => {
       saveDocumentWithId(COLLECTIONS.EMPLOYEES, emp.id, emp).catch(() => {});
     }
 
-    // 4. Dynamic provision for any employee ID so attendance never breaks
+    // 4. If employee record is not found in workforce, do NOT auto-create a ghost employee in Firestore
     if (!emp) {
-      emp = {
-        id: targetId,
-        employeeId: targetId,
-        name: options.name || `Staff (${targetId})`,
-        role: options.role || 'Staff',
-        department: 'Operations',
-        plant: (data.plants && data.plants[0]?.name) || 'Main Plant HQ',
-        status: 'Active',
-        salary: 35000,
-        mobile: '+91 98200 00000',
-        email: `${targetId.toLowerCase()}@smconcretech.com`,
-        joiningDate: today,
-        shiftId: data.shifts[0]?.id || 'SFT-01',
-      };
-      setData((prev) => ({
-        ...prev,
-        employees: [emp, ...prev.employees],
-      }));
-      saveDocumentWithId(COLLECTIONS.EMPLOYEES, emp.id, emp).catch(() => {});
+      throw new Error(`Employee record "${targetId}" is not registered in active workforce. Please contact Administrator.`);
     }
 
     const shift = data.shifts.find((s) => s.id === emp.shiftId) || data.shifts[0];
@@ -1238,7 +1305,7 @@ export const WorkforceProvider = ({ children }) => {
     return newRecord;
   };
 
-  const resetTodayAttendance = (employeeId) => {
+  const resetTodayAttendance = async (employeeId) => {
     const today = new Date().toISOString().split('T')[0];
     const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
     const targetId = employeeId || defaultId;
@@ -1252,11 +1319,26 @@ export const WorkforceProvider = ({ children }) => {
 
     if (recordIndex >= 0) {
       const recId = data.attendance[recordIndex].id;
-      removeDocument(COLLECTIONS.ATTENDANCE, recId).catch(() => {});
-      setData((prev) => ({
-        ...prev,
-        attendance: prev.attendance.filter((_, idx) => idx !== recordIndex),
-      }));
+      try {
+        await removeDocument(COLLECTIONS.ATTENDANCE, recId);
+      } catch (err) {
+        console.error(`Error deleting attendance record ${recId}:`, err);
+      }
+      setData((prev) => {
+        const nextAttendance = prev.attendance.filter((_, idx) => idx !== recordIndex);
+        try {
+          const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+          const stored = JSON.parse(localStorage.getItem(key) || '{}');
+          stored.attendance = nextAttendance;
+          localStorage.setItem(key, JSON.stringify(stored));
+        } catch (err) {
+          console.error('Failed to update local storage on attendance reset:', err);
+        }
+        return {
+          ...prev,
+          attendance: nextAttendance,
+        };
+      });
       addAuditLog(`Reset Attendance (${targetId})`, 'Attendance', `Cleared today's attendance record for fresh live clock-in`);
       return true;
     }
@@ -1412,13 +1494,28 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Updated Attendance (${id})`, 'Attendance', `Record parameters updated`);
   };
 
-  const deleteAttendanceRecord = (id) => {
-    removeDocument(COLLECTIONS.ATTENDANCE, id).catch(() => {});
+  const deleteAttendanceRecord = async (id) => {
+    try {
+      await removeDocument(COLLECTIONS.ATTENDANCE, id);
+    } catch (err) {
+      console.error(`Error deleting attendance record ${id}:`, err);
+    }
 
-    setData((prev) => ({
-      ...prev,
-      attendance: prev.attendance.filter((a) => a.id !== id),
-    }));
+    setData((prev) => {
+      const nextAttendance = prev.attendance.filter((a) => a.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.attendance = nextAttendance;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on attendance delete:', err);
+      }
+      return {
+        ...prev,
+        attendance: nextAttendance,
+      };
+    });
     addAuditLog(`Deleted Attendance (${id})`, 'Attendance', `Record removed`);
   };
 
@@ -1510,13 +1607,28 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Updated Daily Work (${id})`, 'Daily Work', `Parameters modified.`);
   };
 
-  const deleteDailyWork = (id) => {
-    removeDocument(COLLECTIONS.DAILY_WORK, id).catch(() => {});
+  const deleteDailyWork = async (id) => {
+    try {
+      await removeDocument(COLLECTIONS.DAILY_WORK, id);
+    } catch (err) {
+      console.error(`Error deleting daily work ${id}:`, err);
+    }
 
-    setData((prev) => ({
-      ...prev,
-      dailyWork: prev.dailyWork.filter((w) => w.id !== id),
-    }));
+    setData((prev) => {
+      const nextWork = prev.dailyWork.filter((w) => w.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.dailyWork = nextWork;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on daily work delete:', err);
+      }
+      return {
+        ...prev,
+        dailyWork: nextWork,
+      };
+    });
     addAuditLog(`Deleted Daily Work (${id})`, 'Daily Work', `Record removed.`);
   };
 
@@ -1632,13 +1744,28 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Updated Leave (${id})`, 'Leave Management', `Parameters updated.`);
   };
 
-  const deleteLeave = (id) => {
-    removeDocument(COLLECTIONS.LEAVES, id).catch(() => {});
+  const deleteLeave = async (id) => {
+    try {
+      await removeDocument(COLLECTIONS.LEAVES, id);
+    } catch (err) {
+      console.error(`Error deleting leave ${id}:`, err);
+    }
 
-    setData((prev) => ({
-      ...prev,
-      leaves: prev.leaves.filter((l) => l.id !== id),
-    }));
+    setData((prev) => {
+      const nextLeaves = prev.leaves.filter((l) => l.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.leaves = nextLeaves;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on leave delete:', err);
+      }
+      return {
+        ...prev,
+        leaves: nextLeaves,
+      };
+    });
     addAuditLog(`Deleted Leave (${id})`, 'Leave Management', `Record removed.`);
   };
 
@@ -1733,13 +1860,28 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Updated Advance (${id})`, 'Advance Management', `Parameters updated.`);
   };
 
-  const deleteAdvance = (id) => {
-    removeDocument(COLLECTIONS.ADVANCES, id).catch(() => {});
+  const deleteAdvance = async (id) => {
+    try {
+      await removeDocument(COLLECTIONS.ADVANCES, id);
+    } catch (err) {
+      console.error(`Error deleting advance ${id}:`, err);
+    }
 
-    setData((prev) => ({
-      ...prev,
-      advances: prev.advances.filter((a) => a.id !== id),
-    }));
+    setData((prev) => {
+      const nextAdvances = prev.advances.filter((a) => a.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.advances = nextAdvances;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on advance delete:', err);
+      }
+      return {
+        ...prev,
+        advances: nextAdvances,
+      };
+    });
     addAuditLog(`Deleted Advance (${id})`, 'Advance Management', `Record removed.`);
   };
 
@@ -1813,13 +1955,28 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Updated Loan (${id})`, 'Loan Management', `Parameters updated.`);
   };
 
-  const deleteLoan = (id) => {
-    removeDocument(COLLECTIONS.LOANS, id).catch(() => {});
+  const deleteLoan = async (id) => {
+    try {
+      await removeDocument(COLLECTIONS.LOANS, id);
+    } catch (err) {
+      console.error(`Error deleting loan ${id}:`, err);
+    }
 
-    setData((prev) => ({
-      ...prev,
-      loans: prev.loans.filter((l) => l.id !== id),
-    }));
+    setData((prev) => {
+      const nextLoans = prev.loans.filter((l) => l.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.loans = nextLoans;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on loan delete:', err);
+      }
+      return {
+        ...prev,
+        loans: nextLoans,
+      };
+    });
     addAuditLog(`Deleted Loan (${id})`, 'Loan Management', `Record removed.`);
   };
 
@@ -2026,11 +2183,28 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Updated Payroll Record (${id})`, 'Payroll Preparation', `Record parameters updated`);
   };
 
-  const deletePayrollRecord = (id) => {
-    setData((prev) => ({
-      ...prev,
-      payrollRecords: prev.payrollRecords.filter((p) => p.id !== id),
-    }));
+  const deletePayrollRecord = async (id) => {
+    try {
+      await removeDocument(COLLECTIONS.PAYROLL, id);
+    } catch (err) {
+      console.warn(`Firestore payroll record delete notice:`, err.message);
+    }
+
+    setData((prev) => {
+      const nextPayroll = prev.payrollRecords.filter((p) => p.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.payrollRecords = nextPayroll;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on payroll delete:', err);
+      }
+      return {
+        ...prev,
+        payrollRecords: nextPayroll,
+      };
+    });
     addAuditLog(`Deleted Payroll Record (${id})`, 'Payroll Preparation', `Record removed.`);
   };
 
@@ -2291,10 +2465,21 @@ export const WorkforceProvider = ({ children }) => {
     }
 
     // 3. Update local state ONLY after backend operations succeed
-    setData((prev) => ({
-      ...prev,
-      documents: prev.documents.filter((d) => d.id !== id),
-    }));
+    setData((prev) => {
+      const nextDocs = prev.documents.filter((d) => d.id !== id);
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.documents = nextDocs;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on document delete:', err);
+      }
+      return {
+        ...prev,
+        documents: nextDocs,
+      };
+    });
 
     // 4. Record audit log on verified success
     addAuditLog(`Deleted Document (${id})`, 'Employee Documents', `Record "${targetDoc.documentType}" (${targetDoc.employeeName || targetDoc.employeeId}) removed.`);

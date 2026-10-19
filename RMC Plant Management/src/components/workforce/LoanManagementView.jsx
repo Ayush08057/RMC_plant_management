@@ -179,10 +179,15 @@ export default function LoanManagementView({ employeeFilter = null }) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (window.confirm(`Delete loan record for ${row.employeeName}?`)) {
-                    deleteLoan(row.id);
-                    setToastMessage(`Loan record ${row.id} deleted.`);
+                    try {
+                      await deleteLoan(row.id);
+                      setToastMessage(`Loan record ${row.id} deleted.`);
+                    } catch (err) {
+                      console.error('Failed to delete loan record:', err);
+                      setToastMessage(`Failed to delete loan record: ${err.message}`);
+                    }
                   }
                 }}
                 className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors"
