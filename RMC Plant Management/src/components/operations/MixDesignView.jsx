@@ -79,30 +79,36 @@ export default function MixDesignView() {
               <div>Admixture: <strong>{d.admixture} kg/m³</strong></div>
             </div>
 
-            <div className="space-y-1 text-[11px] border-t border-slate-100 pt-2 font-mono">
-              <div className="flex justify-between text-slate-600">
-                <span>Cement (OPC 53):</span>
-                <strong className="text-slate-900">{d.cement} kg/m³</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Fly Ash:</span>
-                <strong className="text-slate-900">{d.flyash} kg/m³</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>20mm Aggregate:</span>
-                <strong className="text-slate-900">{d.agg20} kg/m³</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>10mm Aggregate:</span>
-                <strong className="text-slate-900">{d.agg10} kg/m³</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Crushed M-Sand:</span>
-                <strong className="text-slate-900">{d.sand} kg/m³</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Water:</span>
-                <strong className="text-slate-900">{d.water} L/m³</strong>
+            {/* Professional Compact Recipe Formulation Grid */}
+            <div className="pt-2 border-t border-slate-100">
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">
+                SCADA Proportions per m³ (All Ingredients)
+              </span>
+              <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200/80">
+                  <span className="font-sans text-[9px] text-slate-500 font-bold block">Cement</span>
+                  <span className="font-bold text-slate-900">{d.cement}</span> <span className="text-[8px] text-slate-400">kg</span>
+                </div>
+                <div className="bg-purple-50/60 p-1.5 rounded-lg border border-purple-200/80">
+                  <span className="font-sans text-[9px] text-purple-700 font-bold block">Fly Ash</span>
+                  <span className="font-bold text-purple-900">{d.flyash}</span> <span className="text-[8px] text-purple-400">kg</span>
+                </div>
+                <div className="bg-stone-50 p-1.5 rounded-lg border border-stone-200/80">
+                  <span className="font-sans text-[9px] text-stone-600 font-bold block">20mm Agg</span>
+                  <span className="font-bold text-stone-900">{d.agg20}</span> <span className="text-[8px] text-stone-400">kg</span>
+                </div>
+                <div className="bg-stone-50 p-1.5 rounded-lg border border-stone-200/80">
+                  <span className="font-sans text-[9px] text-stone-600 font-bold block">10mm Agg</span>
+                  <span className="font-bold text-stone-900">{d.agg10}</span> <span className="text-[8px] text-stone-400">kg</span>
+                </div>
+                <div className="bg-amber-50/60 p-1.5 rounded-lg border border-amber-200/80">
+                  <span className="font-sans text-[9px] text-amber-700 font-bold block">M-Sand</span>
+                  <span className="font-bold text-amber-900">{d.sand}</span> <span className="text-[8px] text-amber-400">kg</span>
+                </div>
+                <div className="bg-cyan-50/60 p-1.5 rounded-lg border border-cyan-200/80">
+                  <span className="font-sans text-[9px] text-cyan-700 font-bold block">Water</span>
+                  <span className="font-bold text-cyan-900">{d.water}</span> <span className="text-[8px] text-cyan-400">L</span>
+                </div>
               </div>
             </div>
           </div>

@@ -182,8 +182,12 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
                   <span className="font-normal text-black">{bill.billNo || '25-26/114'}</span>
                 </div>
                 <div>
-                  <span className="font-normal text-black">Date: </span>
+                  <span className="font-normal text-black">Bill Date: </span>
                   <span className="font-normal text-black">{formatDate(bill.date)}</span>
+                </div>
+                <div>
+                  <span className="font-normal text-black">Const. Date: </span>
+                  <span className="font-bold text-black">{formatDate(bill.constructionDate || bill.date)}</span>
                 </div>
               </div>
 
@@ -193,7 +197,7 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
                   <span className="font-normal text-black">{bill.vehicle || ''}</span>
                 </div>
                 <div>
-                  <span className="font-normal text-black">Place:</span>
+                  <span className="font-normal text-black">Place: </span>
                   <span className="font-normal text-black">{bill.place || 'Aaudumbar'}</span>
                 </div>
               </div>

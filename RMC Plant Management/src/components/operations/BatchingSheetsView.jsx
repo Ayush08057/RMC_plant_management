@@ -379,16 +379,15 @@ export default function BatchingSheetsView() {
       {/* Batching Sheets Register Table */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left text-xs text-slate-700 border-collapse table-fixed">
+          <table className="w-full min-w-[980px] text-left text-xs text-slate-700 border-collapse table-fixed">
             <thead>
               <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
-                <th className="py-3 px-3 w-[15%]">Sheet # & Time</th>
-                <th className="py-3 px-3 w-[22%]">Customer & Project Site</th>
-                <th className="py-3 px-3 w-[12%]">Mix Grade</th>
-                <th className="py-3 px-3 w-[13%]">Transit Mixer</th>
-                <th className="py-3 px-3 w-[12%] text-right">Volume (m³)</th>
-                <th className="py-3 px-2 w-[12%] text-center">QC Status</th>
-                <th className="py-3 px-3 w-[14%] text-right">Actions</th>
+                <th className="py-3 px-3 w-[13%]">Sheet # & Time</th>
+                <th className="py-3 px-3 w-[18%]">Customer & Project Site</th>
+                <th className="py-3 px-3 w-[11%]">Grade & Volume</th>
+                <th className="py-3 px-3 w-[36%]">Batched Materials (SCADA Actuals)</th>
+                <th className="py-3 px-3 w-[12%]">Mixer & Driver</th>
+                <th className="py-3 px-3 w-[10%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80">
@@ -414,35 +413,66 @@ export default function BatchingSheetsView() {
                     </td>
 
                     <td className="py-3 px-3">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 font-mono font-bold text-[11px] border border-blue-200">
-                        {s.mixGrade} Concrete
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 font-mono font-bold text-[11px] border border-blue-200">
+                        {s.mixGrade}
                       </span>
+                      <div className="font-mono font-black text-slate-900 text-xs mt-1">
+                        {Number(s.volume).toFixed(1)} m³
+                      </div>
+                    </td>
+
+                    {/* All Materials - Compact, Professional Telemetry Chips */}
+                    <td className="py-2.5 px-3">
+                      <div className="flex flex-wrap items-center gap-1 max-w-lg">
+                        {s.materials?.map((m) => {
+                          let short = 'Mat';
+                          let pillStyle = 'bg-slate-50 text-slate-800 border-slate-200';
+                          if (m.name.includes('Cement')) {
+                            short = 'Cement';
+                            pillStyle = 'bg-slate-100 text-slate-900 border-slate-300 font-bold';
+                          } else if (m.name.includes('Fly Ash')) {
+                            short = 'FlyAsh';
+                            pillStyle = 'bg-purple-50 text-purple-900 border-purple-200';
+                          } else if (m.name.includes('20mm')) {
+                            short = '20mm';
+                            pillStyle = 'bg-stone-50 text-stone-800 border-stone-200';
+                          } else if (m.name.includes('10mm')) {
+                            short = '10mm';
+                            pillStyle = 'bg-stone-50 text-stone-800 border-stone-200';
+                          } else if (m.name.includes('Sand')) {
+                            short = 'Sand';
+                            pillStyle = 'bg-amber-50 text-amber-900 border-amber-200';
+                          } else if (m.name.includes('Water')) {
+                            short = 'Water';
+                            pillStyle = 'bg-cyan-50 text-cyan-900 border-cyan-200';
+                          } else if (m.name.includes('Admixture')) {
+                            short = 'Admix';
+                            pillStyle = 'bg-orange-50 text-orange-900 border-orange-200';
+                          }
+
+                          return (
+                            <span
+                              key={m.name}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border shadow-2xs ${pillStyle}`}
+                              title={`${m.name}: Actual ${Number(m.actual).toLocaleString()} ${m.unit} (Target: ${Number(m.target).toLocaleString()} ${m.unit})`}
+                            >
+                              <span className="font-sans font-semibold text-[9px] opacity-75">{short}:</span>
+                              <span className="font-bold">{Number(m.actual).toLocaleString()}</span>
+                              <span className="text-[8px] opacity-60 font-sans">{m.unit}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
                     </td>
 
                     <td className="py-3 px-3">
-                      <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold text-slate-800">
+                      <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-slate-800">
                         <Truck className="w-3 h-3 text-slate-500" />
                         <span>{s.vehicleNo}</span>
                       </div>
                       <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                        Driver: {s.driverName}
+                        {s.driverName}
                       </div>
-                    </td>
-
-                    <td className="py-3 px-3 text-right">
-                      <div className="font-mono font-black text-slate-900 text-sm">
-                        {Number(s.volume).toFixed(1)} m³
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        {s.batchesCount || 1} Batch{(s.batchesCount || 1) > 1 ? 'es' : ''}
-                      </div>
-                    </td>
-
-                    <td className="py-3 px-2 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>{s.qcStatus || 'Approved'}</span>
-                      </span>
                     </td>
 
                     <td className="py-3 px-3 text-right">

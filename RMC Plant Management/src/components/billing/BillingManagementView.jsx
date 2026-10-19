@@ -47,9 +47,11 @@ import {
   History,
   CheckCheck,
   TrendingUp,
-  CircleDollarSign
+  CircleDollarSign,
+  ChevronDown
 } from 'lucide-react';
 import CashMemoPrintView from './CashMemoPrintView';
+import CustomerStatementModal from './CustomerStatementModal';
 import { useExclusiveModal } from '../dashboard/Modal';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { useAuth } from '../../context/AuthContext';
@@ -178,6 +180,17 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const [editingBill, setEditingBill] = useState(null);
   const [editingPurchase, setEditingPurchase] = useState(null);
 
+  // Customer Filter & Statement Modal State
+  const [selectedCustomer, setSelectedCustomer] = useState('ALL');
+  const [customerStatementModal, setCustomerStatementModal] = useState(null);
+
+  // Derived Unique Customer Names
+  const uniqueCustomers = useMemo(() => {
+    return Array.from(
+      new Set(bills.map((b) => (b.customerName || 'Cash Customer').trim()).filter(Boolean))
+    ).sort();
+  }, [bills]);
+
   // OTP Security Authorization Modal State
   const [otpModalOpen, setOtpModalOpen] = useState(false);
   const [targetItemForOtp, setTargetItemForOtp] = useState(null); // { item, type: 'bill' | 'purchase' }
@@ -255,6 +268,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const [billForm, setBillForm] = useState({
     billNo: `25-26/${bills.length + 115}`,
     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    constructionDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     vehicle: 'MH-10-CR-1212',
     place: 'Aaudumbar',
     customerName: '',
@@ -336,9 +350,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setBillForm({
       billNo: `25-26/${bills.length + 115}`,
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      constructionDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       vehicle: '',
       place: 'Aaudumbar',
-      customerName: '',
+      customerName: selectedCustomer !== 'ALL' ? selectedCustomer : '',
       site: '',
       customerMobile: '',
       refName: '',
@@ -541,6 +556,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setBillForm({
       billNo: bill.billNo,
       date: bill.date,
+      constructionDate: bill.constructionDate || bill.date || '',
       vehicle: bill.vehicle || '',
       place: bill.place || '',
       customerName: bill.customerName || '',
@@ -658,6 +674,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
     const billNumber = (billForm.billNo || '').trim() || `25-26/${bills.length + 115}`;
     const billDate = (billForm.date || '').trim() || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const billConstructionDate = (billForm.constructionDate || '').trim() || billDate;
     const billVehicle = (billForm.vehicle || '').trim() || 'MH-10-CR-1212';
     const billPlace = (billForm.place || '').trim() || 'Aaudumbar';
 
@@ -677,6 +694,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             ...billForm,
             billNo: billNumber,
             date: billDate,
+            constructionDate: billConstructionDate,
             vehicle: billVehicle,
             place: billPlace,
             customerName: partyName,
@@ -753,6 +771,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         ...billForm,
         billNo: billNumber,
         date: billDate,
+        constructionDate: billConstructionDate,
         vehicle: billVehicle,
         place: billPlace,
         customerName: partyName,
@@ -1032,13 +1051,13 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
       {/* Navigation Tabs & Action Toolbar - Responsive Grid on Mobile */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200 pb-3 mb-3">
-        {/* Left: Navigation Tabs & Search Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 w-full sm:w-auto">
+        {/* Left: Navigation Tabs, Search Bar, and Customer Selector */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto flex-1">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 shrink-0">
             <button
               type="button"
               onClick={() => setActiveSection('cash_memos')}
-              className={`flex-1 sm:flex-none py-2 px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeSection === 'cash_memos'
                   ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
@@ -1052,8 +1071,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             </button>
           </div>
 
-          {/* Search Bar (Full width on mobile, compact on tablet/desktop) */}
-          <div className="relative w-full sm:w-60 lg:w-72">
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-[170px] sm:max-w-xs">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -1063,10 +1082,45 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-amber-500 shadow-2xs font-medium"
             />
           </div>
+
+          {/* Customer Filter Dropdown */}
+          <div className="relative shrink-0">
+            <select
+              value={selectedCustomer}
+              onChange={(e) => setSelectedCustomer(e.target.value)}
+              className="pl-8 pr-8 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 font-bold focus:outline-none focus:border-amber-500 shadow-2xs appearance-none cursor-pointer"
+            >
+              <option value="ALL">All Customers ({bills.length})</option>
+              {uniqueCustomers.map((c) => {
+                const count = bills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === c.trim().toLowerCase()).length;
+                return (
+                  <option key={c} value={c}>
+                    {c} ({count})
+                  </option>
+                );
+              })}
+            </select>
+            <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          {/* Fetch Statement Quick Button */}
+          <button
+            type="button"
+            onClick={() => {
+              const targetCust = selectedCustomer !== 'ALL' ? selectedCustomer : (uniqueCustomers[0] || 'Cash Customer');
+              setCustomerStatementModal(targetCust);
+            }}
+            className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+            title="Fetch Customer Statement of Account"
+          >
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>Customer Statement</span>
+          </button>
         </div>
 
-        {/* Right: Action Buttons - Evenly distributed on Mobile */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        {/* Right: Action Buttons */}
+        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
           <button
             type="button"
             onClick={() => setIsTableFullScreen(!isTableFullScreen)}
@@ -1093,14 +1147,18 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {activeSection === 'cash_memos' && (
         <div className="w-full">
           {(() => {
-            const totalInvoiced = bills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
-            const totalCash = bills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0);
-            const totalOnline = bills.reduce((s, b) => s + (Number(b.onlinePaidAmount) || 0), 0);
-            const totalBalance = bills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0);
-            const paidBillsCount = bills.filter((b) => b.paymentStatus === 'Paid').length;
-            const pendingBillsCount = bills.filter((b) => b.paymentStatus !== 'Paid').length;
+            const customerBills = selectedCustomer === 'ALL'
+              ? bills
+              : bills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === selectedCustomer.trim().toLowerCase());
 
-            const filteredBills = bills.filter((b) => {
+            const totalInvoiced = customerBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
+            const totalCash = customerBills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0);
+            const totalOnline = customerBills.reduce((s, b) => s + (Number(b.onlinePaidAmount) || 0), 0);
+            const totalBalance = customerBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0);
+            const paidBillsCount = customerBills.filter((b) => b.paymentStatus === 'Paid').length;
+            const pendingBillsCount = customerBills.filter((b) => b.paymentStatus !== 'Paid').length;
+
+            const filteredBills = customerBills.filter((b) => {
               const q = searchQuery.toLowerCase();
               return (
                 b.billNo.toLowerCase().includes(q) ||
@@ -1112,12 +1170,55 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
             const tableElement = (
               <div className="space-y-3.5">
+                {/* Active Customer Filter Banner */}
+                {selectedCustomer !== 'ALL' && (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50/40 border border-blue-200/90 p-3 px-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">{selectedCustomer}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                            {customerBills.length} {customerBills.length === 1 ? 'Cash Memo' : 'Cash Memos'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-2 mt-0.5 font-mono">
+                          <span>Invoiced: <strong className="text-slate-900">₹{totalInvoiced.toLocaleString('en-IN')}</strong></span>
+                          <span>• Paid: <strong className="text-emerald-700">₹{(totalCash + totalOnline).toLocaleString('en-IN')}</strong></span>
+                          <span>• Due: <strong className={totalBalance > 0 ? 'text-amber-800 font-black' : 'text-emerald-600'}>₹{totalBalance.toLocaleString('en-IN')}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setCustomerStatementModal(selectedCustomer)}
+                        className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-900/10 transition-all cursor-pointer active:scale-95"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Fetch Statement of Account</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCustomer('ALL')}
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-xs transition-colors cursor-pointer"
+                      >
+                        View All
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* 4 Financial & Payment KPI Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                   {/* 1. Total Invoiced */}
                   <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
                     <div className="flex items-center justify-between text-slate-500 mb-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider">Total Invoiced</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider">
+                        {selectedCustomer !== 'ALL' ? 'Customer Invoiced' : 'Total Invoiced'}
+                      </span>
                       <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                         <ReceiptText className="w-3.5 h-3.5" />
                       </div>
@@ -1126,8 +1227,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       <div className="font-mono font-black text-slate-900 text-base sm:text-lg">
                         ₹ {totalInvoiced.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-                        {bills.length} Total Cash Memos
+                      <div className="text-[10px] text-slate-500 font-medium mt-0.5 truncate">
+                        {selectedCustomer !== 'ALL' ? `${selectedCustomer} (${customerBills.length} Memos)` : `${bills.length} Total Cash Memos`}
                       </div>
                     </div>
                   </div>
@@ -1144,8 +1245,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       <div className="font-mono font-black text-emerald-700 text-base sm:text-lg">
                         ₹ {totalCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
-                        Manual On-Site & Counter Cash
+                      <div className="text-[10px] text-emerald-700 font-medium mt-0.5 truncate">
+                        {selectedCustomer !== 'ALL' ? `${selectedCustomer} Cash Paid` : 'Manual On-Site & Counter Cash'}
                       </div>
                     </div>
                   </div>
@@ -1162,8 +1263,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       <div className="font-mono font-black text-blue-700 text-base sm:text-lg">
                         ₹ {totalOnline.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[10px] text-blue-700 font-medium mt-0.5">
-                        UPI, NEFT & Cheques
+                      <div className="text-[10px] text-blue-700 font-medium mt-0.5 truncate">
+                        {selectedCustomer !== 'ALL' ? `${selectedCustomer} Online Receipts` : 'UPI, NEFT & Cheques'}
                       </div>
                     </div>
                   </div>
@@ -1233,11 +1334,29 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                     <ReceiptText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                                     <span>#{bill.billNo}</span>
                                   </div>
-                                  <div className="text-[10px] font-mono text-slate-500 mt-0.5">{bill.date}</div>
+                                  <div className="text-[10px] font-mono text-slate-500 mt-0.5 space-y-0.5">
+                                    <div>Bill: {bill.date}</div>
+                                    <div className="text-amber-800 font-bold">Const: {bill.constructionDate || bill.date}</div>
+                                  </div>
                                 </td>
 
                                 <td className="py-2.5 px-2 sm:px-2.5 min-w-0">
-                                  <div className="font-bold text-slate-900 text-xs leading-snug truncate max-w-[130px] lg:max-w-[180px]">{bill.customerName}</div>
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold text-slate-900 text-xs leading-snug truncate max-w-[110px] lg:max-w-[160px]" title={bill.customerName}>
+                                      {bill.customerName}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedCustomer(bill.customerName || 'Cash Customer');
+                                        setCustomerStatementModal(bill.customerName || 'Cash Customer');
+                                      }}
+                                      className="text-[9px] font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-1.5 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
+                                      title="Fetch Statement for this customer"
+                                    >
+                                      Statement
+                                    </button>
+                                  </div>
                                   <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate max-w-[130px] lg:max-w-[180px]">
                                     <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
                                     <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
@@ -1383,8 +1502,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                 <span className="font-mono font-black text-slate-900 text-xs truncate">
                                   #{bill.billNo}
                                 </span>
-                                <span className="text-[10px] font-mono text-slate-400">
-                                  • {bill.date}
+                                <span className="text-[10px] font-mono text-slate-500 truncate">
+                                  • Bill: {bill.date} • <strong className="text-amber-800">Const: {bill.constructionDate || bill.date}</strong>
                                 </span>
                               </div>
 
@@ -1410,8 +1529,20 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                             {/* Customer Name & Site Location */}
                             <div>
-                              <div className="font-black text-slate-900 text-xs leading-snug">
-                                {bill.customerName}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="font-black text-slate-900 text-xs leading-snug">
+                                  {bill.customerName}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCustomer(bill.customerName || 'Cash Customer');
+                                    setCustomerStatementModal(bill.customerName || 'Cash Customer');
+                                  }}
+                                  className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md cursor-pointer hover:bg-blue-100 transition-colors"
+                                >
+                                  Fetch Statement
+                                </button>
                               </div>
                               <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
                                 <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
@@ -2119,7 +2250,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   <span className="text-[10px] text-slate-600 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md">Step 1 of 3</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
                       Bill No <span className="text-rose-500">*</span>
@@ -2137,7 +2268,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                   <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                      Date <span className="text-rose-500">*</span>
+                      Bill Date <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
                       <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -2146,6 +2277,22 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         value={billForm.date}
                         onChange={(e) => setBillForm({ ...billForm, date: e.target.value })}
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-amber-900 block mb-1">
+                      Construction Date <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-amber-600" />
+                      <input
+                        type="text"
+                        value={billForm.constructionDate}
+                        onChange={(e) => setBillForm({ ...billForm, constructionDate: e.target.value })}
+                        placeholder="e.g. 19 Oct 2026"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-amber-50/40 border border-amber-300 font-bold text-slate-900 focus:bg-white focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 transition-all text-xs"
                       />
                     </div>
                   </div>
@@ -3281,6 +3428,22 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         <CashMemoPrintView
           bill={printingBill}
           onClose={() => setPrintingBill(null)}
+        />
+      )}
+
+      {/* ========================================================
+          CUSTOMER STATEMENT OF ACCOUNT (LEDGER MODAL)
+          ======================================================== */}
+      {customerStatementModal && (
+        <CustomerStatementModal
+          customerName={customerStatementModal}
+          allBills={bills}
+          uniqueCustomers={uniqueCustomers}
+          onSelectCustomer={(cust) => {
+            setSelectedCustomer(cust);
+            setCustomerStatementModal(cust);
+          }}
+          onClose={() => setCustomerStatementModal(null)}
         />
       )}
 
