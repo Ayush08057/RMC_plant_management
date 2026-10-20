@@ -1340,7 +1340,26 @@ export default function AdminDashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="p-8 text-center text-xs text-slate-400">No employees registered yet.</div>
+                <div className="py-12 px-6 text-center flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-500 mb-3 shadow-xs">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 mb-1">No Workforce Personnel Enrolled</h4>
+                  <p className="text-[11px] text-slate-500 max-w-xs mb-4">
+                    The enterprise employee directory is clean. Add your operational staff, batching plant engineers, or drivers to begin managing workforce.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveKpiModal(null);
+                      handleOpenAddEmp();
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Enroll First Employee</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1906,7 +1925,15 @@ export default function AdminDashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="p-8 text-center text-xs text-slate-400">No payroll records to display.</div>
+                <div className="py-12 px-6 text-center flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 mb-3 shadow-xs">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 mb-1">No Active Wage Records</h4>
+                  <p className="text-[11px] text-slate-500 max-w-xs">
+                    Payroll wage projections will calculate dynamically once employees and salary profiles are registered.
+                  </p>
+                </div>
               )}
             </div>
           </div>

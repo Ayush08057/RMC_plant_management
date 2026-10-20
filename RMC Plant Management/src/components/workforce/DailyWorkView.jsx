@@ -534,64 +534,72 @@ export default function DailyWorkView({ employeeFilter = null }) {
         </button>
       </div>
 
-      {/* Industrial Operational KPI Ribbon */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="p-3.5 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-            <span>Total Logged</span>
-            <FileText className="w-4 h-4 text-[#1D5FA7]" />
+      {/* Industrial Operational KPI Ribbon (Ultra-Compact) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block truncate">Total Logged</span>
+            <div className="text-xs sm:text-sm font-mono font-black text-slate-900 mt-0.5">
+              {stats.total}
+            </div>
+            <div className="text-[9px] text-slate-400 font-medium truncate mt-0.5">Duty entries</div>
           </div>
-          <div className="text-xl font-mono font-black text-slate-900 mt-1">
-            {stats.total}
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#1D5FA7] flex items-center justify-center shrink-0">
+            <FileText className="w-3.5 h-3.5" />
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">Duty entries recorded</div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-            <span>Total Hours Executed</span>
-            <Clock className="w-4 h-4 text-[#246BCE]" />
+        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block truncate">Hours Executed</span>
+            <div className="text-xs sm:text-sm font-mono font-black text-slate-900 mt-0.5">
+              {stats.totalHours.toFixed(1)} <span className="text-[10px] font-sans font-bold text-slate-500">hrs</span>
+            </div>
+            <div className="text-[9px] text-slate-400 font-medium truncate mt-0.5">Operational shift</div>
           </div>
-          <div className="text-xl font-mono font-black text-slate-900 mt-1">
-            {stats.totalHours.toFixed(1)} <span className="text-xs font-sans font-bold text-slate-500">hrs</span>
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#246BCE] flex items-center justify-center shrink-0">
+            <Clock className="w-3.5 h-3.5" />
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">Shift operational duration</div>
         </div>
 
         <div
           onClick={() => setStatusFilter('SUBMITTED')}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
+          className={`p-2 sm:px-2.5 sm:py-1.5 rounded-xl border transition-all cursor-pointer shadow-2xs flex items-center justify-between gap-2 ${
             statusFilter === 'SUBMITTED'
               ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/20'
               : 'bg-white border-[#D4E4F7] hover:border-amber-300'
           }`}
         >
-          <div className="flex items-center justify-between text-xs text-amber-800 font-bold">
-            <span>Pending Signoff</span>
-            <AlertCircle className="w-4 h-4 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-amber-800 uppercase font-bold tracking-wider block truncate">Pending Signoff</span>
+            <div className="text-xs sm:text-sm font-mono font-black text-amber-900 mt-0.5">
+              {stats.submitted}
+            </div>
+            <div className="text-[9px] text-amber-700/80 font-medium truncate mt-0.5">Awaiting review</div>
           </div>
-          <div className="text-xl font-mono font-black text-amber-900 mt-1">
-            {stats.submitted}
+          <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-3.5 h-3.5" />
           </div>
-          <div className="text-[11px] text-amber-700/80 mt-0.5">Awaiting supervisor review</div>
         </div>
 
         <div
           onClick={() => setStatusFilter('APPROVED')}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
+          className={`p-2 sm:px-2.5 sm:py-1.5 rounded-xl border transition-all cursor-pointer shadow-2xs flex items-center justify-between gap-2 ${
             statusFilter === 'APPROVED'
               ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-400/20'
               : 'bg-white border-[#D4E4F7] hover:border-emerald-300'
           }`}
         >
-          <div className="flex items-center justify-between text-xs text-emerald-800 font-bold">
-            <span>Approved & Verified</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-emerald-800 uppercase font-bold tracking-wider block truncate">Approved & Verified</span>
+            <div className="text-xs sm:text-sm font-mono font-black text-emerald-900 mt-0.5">
+              {stats.approved}
+            </div>
+            <div className="text-[9px] text-emerald-700/80 font-medium truncate mt-0.5">Matched telemetry</div>
           </div>
-          <div className="text-xl font-mono font-black text-emerald-900 mt-1">
-            {stats.approved}
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-3.5 h-3.5" />
           </div>
-          <div className="text-[11px] text-emerald-700/80 mt-0.5">Matched with plant telemetry</div>
         </div>
       </div>
 

@@ -48,7 +48,9 @@ import {
   CheckCheck,
   TrendingUp,
   CircleDollarSign,
-  ChevronDown
+  ChevronDown,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import CashMemoPrintView from './CashMemoPrintView';
 import CustomerStatementModal from './CustomerStatementModal';
@@ -58,6 +60,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { sendOwnerOtpApi, verifyOwnerOtpApi } from '../../services/otpService';
 import { normalizeBill } from '../../utils/billingPayments';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 
 export { normalizeBill };
 
@@ -75,6 +78,100 @@ export const OWNER_SECURITY_PROFILE = {
   location: 'A/P Tanang, Sangli - 416410',
 };
 
+// Plant Mixer & Pump Fleet Suggestions for Vehicle Registration
+export const PLANT_VEHICLE_SUGGESTIONS = [
+  'MH-10-CR-1212',
+  'MH-10-CR-1313',
+  'MH-10-CR-1414',
+  'MH-10-CR-9090',
+  'MH-10-CR-9091',
+  'MH-12-RN-4401',
+  'MH-12-RN-8822',
+];
+
+// Returns today's date formatted as DD-MM-YYYY
+export const getTodayFormatted = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+// Progressive formatter for typed date input: DD-MM-YYYY
+export const formatTypedDate = (val, prevVal = '') => {
+  if (!val) return '';
+  if (prevVal && val.length < prevVal.length) return val; // allow free backspacing
+  if (/[a-zA-Z]/.test(val)) return val; // keep textual date if present
+
+  const digits = val.replace(/\D/g, '').slice(0, 8);
+  if (!digits) return '';
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+};
+
+// Progressive formatter for Indian Vehicle registration: SS-DD-XX-NNNN (e.g. MH-10-CR-1212)
+export const formatVehicleNumber = (val, prevVal = '') => {
+  if (!val) return '';
+  const upper = val.toUpperCase();
+  if (prevVal && upper.length < prevVal.length) return upper; // allow free backspacing
+
+  const clean = upper.replace(/[^A-Z0-9]/g, '');
+  if (!clean) return '';
+
+  // Standard Indian RTO format: State (2 letters) + District (2 digits) + Series (up to 3 letters) + Number (up to 4 digits)
+  if (/^[A-Z]{2}\d/.test(clean)) {
+    const state = clean.slice(0, 2);
+    if (clean.length <= 2) return state;
+    if (clean.length <= 4) return `${state}-${clean.slice(2)}`;
+
+    const district = clean.slice(2, 4);
+    const remainder = clean.slice(4);
+    const match = remainder.match(/^([A-Z]{1,3})([0-9]{0,4})/);
+    if (match) {
+      const series = match[1];
+      const num = match[2];
+      return num ? `${state}-${district}-${series}-${num}` : `${state}-${district}-${series}`;
+    }
+    return `${state}-${district}-${remainder}`;
+  }
+
+  // BH series: 22-BH-1234-AA
+  if (/^\d{2}BH/i.test(clean)) {
+    const yr = clean.slice(0, 2);
+    if (clean.length <= 4) return `${yr}-${clean.slice(2)}`;
+    const match = clean.slice(4).match(/^([0-9]{1,4})([A-Z]{0,2})/);
+    if (match) {
+      return `${yr}-BH-${match[1]}${match[2] ? '-' + match[2] : ''}`;
+    }
+  }
+
+  return upper;
+};
+
+export const convertIsoToDdMmYyyy = (iso) => {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return iso;
+};
+
+export const convertDdMmYyyyToIso = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.includes('-') ? dateStr.split('-') : (dateStr.includes('/') ? dateStr.split('/') : null);
+  if (parts && parts.length === 3 && parts[0].length <= 2 && parts[2].length === 4) {
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  return '';
+};
+
 // Initial Cash Memos & Material Purchases (All dummy data removed)
 const INITIAL_BILLS = [];
 const INITIAL_PURCHASES = [];
@@ -86,6 +183,16 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
   // Active sub-tab: 'cash_memos' | 'purchases' | 'otp_audit'
   const [activeSection, setActiveSection] = useState(defaultSection);
+
+  // Sync with prop when tab changes from external navigation (e.g., Accountant Portal)
+  useEffect(() => {
+    if (defaultSection) {
+      setActiveSection(defaultSection);
+    }
+  }, [defaultSection]);
+
+  // Payment Status Quick Filter: 'ALL' | 'PENDING' | 'PAID'
+  const [paymentFilter, setPaymentFilter] = useState('ALL');
 
   // Persistent Bills State with payment tracking normalization
   const [bills, setBills] = useState(() => {
@@ -139,29 +246,42 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     }
   }, []);
 
-  // Save changes to localStorage
+  // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
-    try {
-      localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(bills));
-    } catch (e) {
-      console.error('Storage error:', e);
-    }
+    const unsubBills = subscribeCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, INITIAL_BILLS, (cloudBills) => {
+      if (Array.isArray(cloudBills) && cloudBills.length > 0) {
+        setBills(cloudBills.map(normalizeBill));
+      }
+    });
+    const unsubPurchases = subscribeCloudStore('cloud_plant_purchases', PURCHASES_STORAGE_KEY, INITIAL_PURCHASES, (cloudPurchases) => {
+      if (Array.isArray(cloudPurchases) && cloudPurchases.length > 0) {
+        setPurchases(cloudPurchases);
+      }
+    });
+    const unsubOtp = subscribeCloudStore('cloud_billing_otp', OTP_LOGS_STORAGE_KEY, INITIAL_OTP_LOGS, (cloudOtp) => {
+      if (Array.isArray(cloudOtp) && cloudOtp.length > 0) {
+        setOtpLogs(cloudOtp);
+      }
+    });
+
+    return () => {
+      unsubBills();
+      unsubPurchases();
+      unsubOtp();
+    };
+  }, []);
+
+  // Save changes to localStorage & Cloud Firestore
+  useEffect(() => {
+    pushCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, bills);
   }, [bills]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(PURCHASES_STORAGE_KEY, JSON.stringify(purchases));
-    } catch (e) {
-      console.error('Storage error:', e);
-    }
+    pushCloudStore('cloud_plant_purchases', PURCHASES_STORAGE_KEY, purchases);
   }, [purchases]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(OTP_LOGS_STORAGE_KEY, JSON.stringify(otpLogs));
-    } catch (e) {
-      console.error('Storage error:', e);
-    }
+    pushCloudStore('cloud_billing_otp', OTP_LOGS_STORAGE_KEY, otpLogs);
   }, [otpLogs]);
 
   // Live Timer Heartbeat for 10-Minute Countdown
@@ -267,8 +387,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   // Bill Form State
   const [billForm, setBillForm] = useState({
     billNo: `25-26/${bills.length + 115}`,
-    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-    constructionDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    date: getTodayFormatted(),
+    constructionDate: getTodayFormatted(),
     vehicle: 'MH-10-CR-1212',
     place: 'Aaudumbar',
     customerName: '',
@@ -294,6 +414,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const [billMobileError, setBillMobileError] = useState(null);
   const [billFormErrors, setBillFormErrors] = useState({});
   const customerNameInputRef = useRef(null);
+  const billDateInputRef = useRef(null);
+  const constructionDateInputRef = useRef(null);
 
   // Strict 10-Digit Mobile Handler
   const handleMobileChange = (e) => {
@@ -349,8 +471,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setBillFormErrors({});
     setBillForm({
       billNo: `25-26/${bills.length + 115}`,
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      constructionDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      date: getTodayFormatted(),
+      constructionDate: getTodayFormatted(),
       vehicle: '',
       place: 'Aaudumbar',
       customerName: selectedCustomer !== 'ALL' ? selectedCustomer : '',
@@ -631,6 +753,35 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setBillForm({ ...billForm, items: updated });
   };
 
+  // 1-Click Fast Grade Selector for Bill Creation
+  const handleQuickSelectGrade = (grade, defaultRate, unit = 'm³', defaultQty = null) => {
+    setBillForm((prev) => {
+      const items = [...prev.items];
+      if (items.length === 1 && (!items[0].material || items[0].material === 'M25 Concrete' || items[0].material === 'Pump')) {
+        const qty = defaultQty !== null ? defaultQty : (Number(items[0].qty) || 6);
+        items[0] = {
+          ...items[0],
+          material: grade,
+          qty,
+          unit,
+          rate: defaultRate,
+          total: qty * defaultRate,
+        };
+      } else {
+        const qty = defaultQty !== null ? defaultQty : 6;
+        items.push({
+          sn: items.length + 1,
+          material: grade,
+          qty,
+          unit,
+          rate: defaultRate,
+          total: qty * defaultRate,
+        });
+      }
+      return { ...prev, items };
+    });
+  };
+
   // Save / Update Bill
   const handleSaveBill = (e) => {
     if (e) {
@@ -673,9 +824,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     const amountInWords = numberToIndianWords(finalAmount);
 
     const billNumber = (billForm.billNo || '').trim() || `25-26/${bills.length + 115}`;
-    const billDate = (billForm.date || '').trim() || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const billDate = (billForm.date || '').trim() || getTodayFormatted();
     const billConstructionDate = (billForm.constructionDate || '').trim() || billDate;
-    const billVehicle = (billForm.vehicle || '').trim() || 'MH-10-CR-1212';
+    const billVehicle = formatVehicleNumber((billForm.vehicle || '').trim()) || 'MH-10-CR-1212';
     const billPlace = (billForm.place || '').trim() || 'Aaudumbar';
 
     if (editingBill) {
@@ -1034,7 +1185,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   };
 
   return (
-    <div className="space-y-5 text-xs text-slate-800">
+    <div className="space-y-2.5 sm:space-y-3 text-xs text-slate-800">
       
       {/* Toast Notification Banner (Rendered via Portal so it is always on top) */}
       {notification && typeof document !== 'undefined' && createPortal(
@@ -1049,95 +1200,90 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         document.body
       )}
 
-      {/* Navigation Tabs & Action Toolbar - Responsive Grid on Mobile */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200 pb-3 mb-3">
-        {/* Left: Navigation Tabs, Search Bar, and Customer Selector */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto flex-1">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveSection('cash_memos')}
-              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                activeSection === 'cash_memos'
-                  ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ReceiptText className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Cash Memos (Sales Bills)</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-900 font-mono font-bold">
-                {bills.length}
-              </span>
-            </button>
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative flex-1 min-w-[170px] sm:max-w-xs">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search bill no, vehicle, site..."
-              className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-amber-500 shadow-2xs font-medium"
-            />
-          </div>
-
-          {/* Customer Filter Dropdown */}
-          <div className="relative shrink-0">
-            <select
-              value={selectedCustomer}
-              onChange={(e) => setSelectedCustomer(e.target.value)}
-              className="pl-8 pr-8 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 font-bold focus:outline-none focus:border-amber-500 shadow-2xs appearance-none cursor-pointer"
-            >
-              <option value="ALL">All Customers ({bills.length})</option>
-              {uniqueCustomers.map((c) => {
-                const count = bills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === c.trim().toLowerCase()).length;
-                return (
-                  <option key={c} value={c}>
-                    {c} ({count})
-                  </option>
-                );
-              })}
-            </select>
-            <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          {/* Fetch Statement Quick Button */}
+      {/* 1. Systematic Top-Level Navigation Switcher (3 Tabs) & Primary Action */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-0.5">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200/90 shadow-2xs">
           <button
             type="button"
-            onClick={() => {
-              const targetCust = selectedCustomer !== 'ALL' ? selectedCustomer : (uniqueCustomers[0] || 'Cash Customer');
-              setCustomerStatementModal(targetCust);
-            }}
-            className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
-            title="Fetch Customer Statement of Account"
+            onClick={() => { setActiveSection('cash_memos'); setSearchQuery(''); }}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeSection === 'cash_memos'
+                ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
           >
-            <FileText className="w-3.5 h-3.5 text-blue-600" />
-            <span>Customer Statement</span>
+            <ReceiptText className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Cash Memos</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-900 font-mono font-bold">
+              {bills.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveSection('purchases'); setSearchQuery(''); }}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeSection === 'purchases'
+                ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Truck className="w-4 h-4 text-cyan-600 shrink-0" />
+            <span>Material Purchases</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-cyan-100 text-cyan-900 font-mono font-bold">
+              {purchases.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveSection('otp_audit'); setSearchQuery(''); }}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeSection === 'otp_audit'
+                ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>Security & OTP Logs</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-900 font-mono font-bold">
+              {otpLogs.length}
+            </span>
           </button>
         </div>
 
-        {/* Right: Action Buttons */}
-        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+        {/* Global Primary Action & Fullscreen Button */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setIsTableFullScreen(!isTableFullScreen)}
             className="p-2 sm:p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0"
-            title={isTableFullScreen ? 'Exit Full Screen' : 'Full Screen Table'}
+            title={isTableFullScreen ? 'Exit Full Screen' : 'Full Screen View'}
           >
-            {isTableFullScreen ? <Minimize2 className="w-4 h-4 text-slate-700" /> : <Maximize2 className="w-4 h-4 text-amber-600" />}
+            {isTableFullScreen ? <Minimize2 className="w-4 h-4 text-slate-700" /> : <Maximize2 className="w-4 h-4 text-slate-700" />}
           </button>
 
-          <button
-            type="button"
-            onClick={handleOpenCreateBill}
-            className="flex-1 sm:flex-none justify-center px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>Generate Cash Memo</span>
-          </button>
+          {activeSection === 'cash_memos' && (
+            <button
+              type="button"
+              onClick={handleOpenCreateBill}
+              className="px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>Generate Cash Memo</span>
+            </button>
+          )}
+
+          {activeSection === 'purchases' && (
+            <button
+              type="button"
+              onClick={handleOpenCreatePurchase}
+              className="px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>Record Material Inward</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1145,7 +1291,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           TAB 1: CASH MEMOS (SALES BILLS) LIST
           ======================================================== */}
       {activeSection === 'cash_memos' && (
-        <div className="w-full">
+        <div className="w-full space-y-3.5">
           {(() => {
             const customerBills = selectedCustomer === 'ALL'
               ? bills
@@ -1159,131 +1305,349 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             const pendingBillsCount = customerBills.filter((b) => b.paymentStatus !== 'Paid').length;
 
             const filteredBills = customerBills.filter((b) => {
-              const q = searchQuery.toLowerCase();
-              return (
+              const q = searchQuery.toLowerCase().trim();
+              const matchesSearch = !q || (
                 b.billNo.toLowerCase().includes(q) ||
                 (b.customerName || '').toLowerCase().includes(q) ||
                 (b.site || '').toLowerCase().includes(q) ||
-                (b.vehicle || '').toLowerCase().includes(q)
+                (b.place || '').toLowerCase().includes(q) ||
+                (b.vehicle || '').toLowerCase().includes(q) ||
+                (b.constructionDate || '').toLowerCase().includes(q) ||
+                (b.date || '').toLowerCase().includes(q) ||
+                (b.items && b.items.some(it => (it.material || '').toLowerCase().includes(q)))
               );
+
+              const matchesPayment = 
+                paymentFilter === 'PENDING' ? Number(b.balanceAmount || 0) > 0 :
+                paymentFilter === 'PAID' ? Number(b.balanceAmount || 0) <= 0 : true;
+
+              return matchesSearch && matchesPayment;
             });
 
+            // 1-Click Export to Microsoft Excel / CSV Ledger
+            const handleExportToExcel = () => {
+              if (!filteredBills || filteredBills.length === 0) {
+                showToast('⚠️ No records to export based on current search/filter.');
+                return;
+              }
+
+              const headers = [
+                'SN',
+                'Bill No',
+                'Bill Date',
+                'Construction Date',
+                'Customer / Party Name',
+                'Mobile Number',
+                'Site Destination',
+                'Vehicle',
+                'Material Items & Quantities',
+                'Bill Total (INR)',
+                'Cash Paid (INR)',
+                'Online Paid (INR)',
+                'Total Paid (INR)',
+                'Balance Due (INR)',
+                'Payment Status'
+              ];
+
+              const rows = filteredBills.map((b, idx) => {
+                const itemsStr = (b.items || []).map((it) => `${it.material} (${it.qty} ${it.unit})`).join('; ');
+                const totalPaid = Number(b.paidAmount || (Number(b.cashPaidAmount || 0) + Number(b.onlinePaidAmount || 0)));
+                return [
+                  idx + 1,
+                  `"${(b.billNo || '').replace(/"/g, '""')}"`,
+                  `"${b.date || ''}"`,
+                  `"${b.constructionDate || b.date || ''}"`,
+                  `"${(b.customerName || 'Cash Customer').replace(/"/g, '""')}"`,
+                  `"${(b.customerMobile || '').replace(/"/g, '""')}"`,
+                  `"${(b.site || b.place || '').replace(/"/g, '""')}"`,
+                  `"${(b.vehicle || 'Direct').replace(/"/g, '""')}"`,
+                  `"${itemsStr.replace(/"/g, '""')}"`,
+                  Number(b.finalAmount || 0).toFixed(2),
+                  Number(b.cashPaidAmount || 0).toFixed(2),
+                  Number(b.onlinePaidAmount || 0).toFixed(2),
+                  totalPaid.toFixed(2),
+                  Number(b.balanceAmount || 0).toFixed(2),
+                  `"${b.paymentStatus || 'Unpaid'}"`
+                ].join(',');
+              });
+
+              // Add UTF-8 BOM so Excel opens currency and symbols without formatting artifacts
+              const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\n');
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement('a');
+              link.setAttribute('href', encodedUri);
+              const dateStr = new Date().toISOString().slice(0, 10);
+              link.setAttribute('download', `RMC_Cash_Memos_Register_${dateStr}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              showToast(`✓ Exported ${filteredBills.length} records to Excel spreadsheet!`);
+            };
+
             const tableElement = (
-              <div className="space-y-3.5">
-                {/* Active Customer Filter Banner */}
+              <div className="space-y-2">
+                {/* Secondary Systematic Filter & Search Toolbar */}
+                <div className="bg-white rounded-xl border border-slate-200/90 p-1.5 sm:p-2 shadow-2xs flex flex-wrap items-center justify-between gap-2">
+                  {/* Search Box */}
+                  <div className="relative flex-1 min-w-[180px] sm:max-w-xs">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search bill #, party, vehicle, site..."
+                      className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 shadow-2xs font-medium transition-all"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Quick Payment Status Filters (All / Pending Due / Paid) */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200/80 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('ALL')}
+                      className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                        paymentFilter === 'ALL'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All ({customerBills.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('PENDING')}
+                      className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        paymentFilter === 'PENDING'
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : 'text-amber-800 hover:bg-amber-100/60'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0" />
+                      <span>Pending Due ({pendingBillsCount})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('PAID')}
+                      className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        paymentFilter === 'PAID'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-emerald-800 hover:bg-emerald-100/60'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      <span>Paid ({paidBillsCount})</span>
+                    </button>
+                  </div>
+
+                  {/* Customer Filter & Statement of Account */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="relative">
+                      <select
+                        value={selectedCustomer}
+                        onChange={(e) => setSelectedCustomer(e.target.value)}
+                        className="pl-7 pr-7 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-amber-500 shadow-2xs appearance-none cursor-pointer"
+                      >
+                        <option value="ALL">All Customers ({bills.length})</option>
+                        {uniqueCustomers.map((c) => {
+                          const count = bills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === c.trim().toLowerCase()).length;
+                          return (
+                            <option key={c} value={c}>
+                              {c} ({count})
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <User className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetCust = selectedCustomer !== 'ALL' ? selectedCustomer : (uniqueCustomers[0] || 'Cash Customer');
+                        setCustomerStatementModal(targetCust);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                      title="Open Statement of Account"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Statement</span>
+                    </button>
+
+                    {/* Excel Spreadsheet Export Button */}
+                    <button
+                      type="button"
+                      onClick={handleExportToExcel}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                      title="Export records to Microsoft Excel / CSV spreadsheet"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="hidden sm:inline">Export Excel</span>
+                      <span className="sm:hidden">Excel</span>
+                    </button>
+
+                    {/* 1-Click New Cash Memo Shortcut */}
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateBill}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                      title="Create / Add New Cash Memo Record"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-slate-950" />
+                      <span className="hidden sm:inline">+ New Memo</span>
+                      <span className="sm:hidden">+ New</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Customer Filter Banner (Compact) */}
                 {selectedCustomer !== 'ALL' && (
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50/40 border border-blue-200/90 p-3 px-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <User className="w-4 h-4" />
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50/40 border border-blue-200/90 py-1.5 px-3 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <User className="w-3.5 h-3.5" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm">{selectedCustomer}</span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                            {customerBills.length} {customerBills.length === 1 ? 'Cash Memo' : 'Cash Memos'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-2 mt-0.5 font-mono">
-                          <span>Invoiced: <strong className="text-slate-900">₹{totalInvoiced.toLocaleString('en-IN')}</strong></span>
-                          <span>• Paid: <strong className="text-emerald-700">₹{(totalCash + totalOnline).toLocaleString('en-IN')}</strong></span>
-                          <span>• Due: <strong className={totalBalance > 0 ? 'text-amber-800 font-black' : 'text-emerald-600'}>₹{totalBalance.toLocaleString('en-IN')}</strong></span>
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="font-bold text-slate-900 text-xs truncate">{selectedCustomer}</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          {customerBills.length} Memos
+                        </span>
+                        <span className="text-[10px] text-slate-600 font-mono hidden sm:inline">
+                          Invoiced: <strong className="text-slate-900">₹{totalInvoiced.toLocaleString('en-IN')}</strong> • Paid: <strong className="text-emerald-700">₹{(totalCash + totalOnline).toLocaleString('en-IN')}</strong> • Due: <strong className={totalBalance > 0 ? 'text-amber-800 font-black' : 'text-emerald-600'}>₹{totalBalance.toLocaleString('en-IN')}</strong>
+                        </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => setCustomerStatementModal(selectedCustomer)}
-                        className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-900/10 transition-all cursor-pointer active:scale-95"
+                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs transition-all cursor-pointer active:scale-95"
                       >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>Fetch Statement of Account</span>
+                        <FileText className="w-3 h-3" />
+                        <span>Statement</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedCustomer('ALL')}
-                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-xs transition-colors cursor-pointer"
+                        className="px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-[11px] transition-colors cursor-pointer"
                       >
-                        View All
+                        Show All
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* 4 Financial & Payment KPI Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                {/* 4 Ultra-Compact Financial & Payment KPI Tiles (Max Space for Table) */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                   {/* 1. Total Invoiced */}
-                  <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-slate-500 mb-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider">
-                        {selectedCustomer !== 'ALL' ? 'Customer Invoiced' : 'Total Invoiced'}
-                      </span>
-                      <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                        <ReceiptText className="w-3.5 h-3.5" />
+                  <div 
+                    onClick={() => setPaymentFilter('ALL')}
+                    className={`bg-white rounded-xl border p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                      paymentFilter === 'ALL' ? 'border-slate-300 ring-1 ring-slate-200' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                    title="Click to view all bills"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                        <span>{selectedCustomer !== 'ALL' ? 'Invoiced' : 'Total Billed'}</span>
+                        <span className="text-[9px] text-slate-400 font-normal">({customerBills.length})</span>
                       </div>
-                    </div>
-                    <div>
-                      <div className="font-mono font-black text-slate-900 text-base sm:text-lg">
+                      <div className="font-mono font-black text-slate-900 text-xs sm:text-sm tracking-tight truncate leading-tight mt-0.5">
                         ₹ {totalInvoiced.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[10px] text-slate-500 font-medium mt-0.5 truncate">
-                        {selectedCustomer !== 'ALL' ? `${selectedCustomer} (${customerBills.length} Memos)` : `${bills.length} Total Cash Memos`}
-                      </div>
+                    </div>
+                    <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <ReceiptText className="w-3.5 h-3.5" />
                     </div>
                   </div>
 
-                  {/* 2. Total Cash Received */}
-                  <div className="bg-white rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/30 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-emerald-800 mb-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider">Cash Received</span>
-                      <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <Banknote className="w-3.5 h-3.5" />
+                  {/* 2. Total Cash + Online Received */}
+                  <div className="bg-white rounded-xl border border-emerald-200/90 bg-gradient-to-r from-white to-emerald-50/20 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider truncate">
+                        Received
+                      </div>
+                      <div className="font-mono font-black text-emerald-700 text-xs sm:text-sm tracking-tight truncate leading-tight mt-0.5">
+                        ₹ {(totalCash + totalOnline).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[9px] text-emerald-700/80 font-mono truncate leading-none mt-0.5">
+                        ₹{totalCash.toLocaleString('en-IN')} Cash • ₹{totalOnline.toLocaleString('en-IN')} UPI
                       </div>
                     </div>
-                    <div>
-                      <div className="font-mono font-black text-emerald-700 text-base sm:text-lg">
-                        ₹ {totalCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-0.5 truncate">
-                        {selectedCustomer !== 'ALL' ? `${selectedCustomer} Cash Paid` : 'Manual On-Site & Counter Cash'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. Total Online / Bank Received */}
-                  <div className="bg-white rounded-2xl border border-blue-200/80 bg-gradient-to-br from-white to-blue-50/30 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-blue-800 mb-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider">Online / UPI</span>
-                      <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-                        <QrCode className="w-3.5 h-3.5" />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-mono font-black text-blue-700 text-base sm:text-lg">
-                        ₹ {totalOnline.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[10px] text-blue-700 font-medium mt-0.5 truncate">
-                        {selectedCustomer !== 'ALL' ? `${selectedCustomer} Online Receipts` : 'UPI, NEFT & Cheques'}
-                      </div>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Banknote className="w-3.5 h-3.5" />
                     </div>
                   </div>
 
-                  {/* 4. Total Outstanding Balance */}
-                  <div className="bg-white rounded-2xl border border-amber-200 bg-gradient-to-br from-white to-amber-50/40 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-amber-900 mb-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider">Balance Due</span>
-                      <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center">
-                        <Wallet className="w-3.5 h-3.5" />
+                  {/* 3. Total Outstanding Balance */}
+                  <div 
+                    onClick={() => setPaymentFilter(paymentFilter === 'PENDING' ? 'ALL' : 'PENDING')}
+                    className={`rounded-xl border p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                      paymentFilter === 'PENDING' 
+                        ? 'border-amber-500 bg-amber-50/80 ring-2 ring-amber-400/20' 
+                        : 'bg-white border-amber-200 hover:border-amber-300'
+                    }`}
+                    title="Click to filter bills with pending balance"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-amber-900 uppercase tracking-wider truncate">
+                        <span>Balance Due</span>
+                        {totalBalance > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                        <span className="text-[9px] text-amber-800 font-normal">({pendingBillsCount} due)</span>
                       </div>
-                    </div>
-                    <div>
-                      <div className="font-mono font-black text-amber-900 text-base sm:text-lg">
+                      <div className="font-mono font-black text-amber-900 text-xs sm:text-sm tracking-tight truncate leading-tight mt-0.5">
                         ₹ {totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[10px] text-amber-800 font-medium mt-0.5">
-                        {pendingBillsCount} Pending • {paidBillsCount} Paid in Full
+                      <div className="text-[9px] text-amber-700 font-semibold truncate leading-none mt-0.5">
+                        {paymentFilter === 'PENDING' ? 'Filtering Due' : 'Click to filter'}
                       </div>
+                    </div>
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                      <Wallet className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+
+                  {/* 4. Settlement Health & Rate */}
+                  <div 
+                    onClick={() => setPaymentFilter(paymentFilter === 'PAID' ? 'ALL' : 'PAID')}
+                    className={`rounded-xl border p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                      paymentFilter === 'PAID'
+                        ? 'border-blue-500 bg-blue-50/80 ring-2 ring-blue-400/20'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                    title="Click to filter fully paid bills"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span>Settlement</span>
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                          {paidBillsCount} Paid
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono font-black text-slate-900 text-xs sm:text-sm">
+                          {totalInvoiced > 0 ? Math.round(((totalCash + totalOnline) / totalInvoiced) * 100) : 100}%
+                        </span>
+                        <div className="flex-1 bg-slate-100 rounded-full h-1 overflow-hidden">
+                          <div 
+                            className="bg-emerald-500 h-1 rounded-full transition-all duration-500" 
+                            style={{ width: `${totalInvoiced > 0 ? Math.min(100, Math.round(((totalCash + totalOnline) / totalInvoiced) * 100)) : 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-3.5 h-3.5" />
                     </div>
                   </div>
                 </div>
@@ -1307,42 +1671,70 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                     </div>
                   )}
 
-                  {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
+                  {/* DESKTOP EXCEL SPREADSHEET REGISTER VIEW (Visible on >= md screens) - Fitted 100% without horizontal scroll */}
                   <div className="hidden md:block w-full overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-700 border-collapse">
+                    {/* Excel Ledger Top Sub-bar */}
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 border-b border-slate-200 text-xs select-none">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                        <span className="font-bold text-slate-800 text-xs">Excel Sales & Cash Register</span>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-white border border-slate-300 text-slate-700">
+                          {filteredBills.length} rows
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        💡 Click <strong className="text-emerald-700 font-bold">+ Pay</strong> to record cash/UPI receipt • Click <strong className="text-amber-800 font-bold">Print</strong> for thermal memo
+                      </div>
+                    </div>
+
+                    <table className="w-full text-left text-xs text-slate-800 border-collapse border-b border-slate-200">
                       <thead>
-                        <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
-                          <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Bill No & Date</th>
-                          <th className="py-2.5 px-2 sm:px-2.5">Party & Site</th>
-                          <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Vehicle</th>
-                          <th className="py-2.5 px-2 sm:px-2.5">Material Items</th>
-                          <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Bill Total</th>
-                          <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Paid vs Balance</th>
-                          <th className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">Status</th>
-                          <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Actions</th>
+                        <tr className="bg-slate-50 text-slate-800 font-bold text-[11px] border-b border-slate-300 select-none">
+                          <th className="py-2.5 px-1 text-center w-7 font-mono text-slate-500 border-r border-slate-200">#</th>
+                          <th className="py-2.5 px-2 whitespace-nowrap border-r border-slate-200 w-[80px]">Date</th>
+                          <th className="py-2.5 px-2 whitespace-nowrap border-r border-slate-200 w-[85px]">Bill #</th>
+                          <th className="py-2.5 px-2.5 border-r border-slate-200 min-w-[140px]">Customer / Party</th>
+                          <th className="py-2.5 px-2.5 border-r border-slate-200 min-w-[120px]">Site Destination</th>
+                          <th className="py-2.5 px-2 text-center whitespace-nowrap border-r border-slate-200 w-[95px]">Vehicle</th>
+                          <th className="py-2.5 px-2 text-right whitespace-nowrap border-r border-slate-200 w-[95px]">Bill Total (₹)</th>
+                          <th className="py-2.5 px-2 text-right whitespace-nowrap text-emerald-800 bg-emerald-50/50 border-r border-slate-200 w-[90px]">Paid (₹)</th>
+                          <th className="py-2.5 px-2 text-right whitespace-nowrap text-amber-900 bg-amber-50/50 border-r border-slate-200 w-[100px]">Balance Due (₹)</th>
+                          <th className="py-2.5 px-1.5 text-center whitespace-nowrap border-r border-slate-200 w-[75px]">Status</th>
+                          <th className="py-2.5 px-2 text-center whitespace-nowrap w-[170px] bg-slate-100/60">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200/80">
+                      <tbody className="divide-y divide-slate-200">
                         {filteredBills.length > 0 ? (
-                          filteredBills.map((bill) => {
+                          filteredBills.map((bill, idx) => {
                             const timing = getTimingStatus(bill.createdAt);
                             const hasBalance = Number(bill.balanceAmount || 0) > 0;
+                            const materialsTooltip = bill.items && bill.items.length > 0 
+                              ? bill.items.map(it => `${it.material} (${it.qty}${it.unit})`).join(', ')
+                              : 'Cash Memo';
                             return (
-                              <tr key={bill.id} className="hover:bg-amber-50/40 transition-colors group">
-                                <td className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">
-                                  <div className="font-mono font-black text-slate-900 text-xs flex items-center gap-1">
-                                    <ReceiptText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                    <span>#{bill.billNo}</span>
-                                  </div>
-                                  <div className="text-[10px] font-mono text-slate-500 mt-0.5 space-y-0.5">
-                                    <div>Bill: {bill.date}</div>
-                                    <div className="text-amber-800 font-bold">Const: {bill.constructionDate || bill.date}</div>
-                                  </div>
+                              <tr key={bill.id} className="even:bg-slate-50/40 odd:bg-white hover:bg-amber-50/60 transition-colors">
+                                {/* 1. Row Index (#) */}
+                                <td className="py-2.5 px-1 text-center font-mono text-[10px] text-slate-400 font-semibold border-r border-slate-200/80">
+                                  {idx + 1}
                                 </td>
 
-                                <td className="py-2.5 px-2 sm:px-2.5 min-w-0">
-                                  <div className="flex items-center justify-between gap-1">
-                                    <span className="font-bold text-slate-900 text-xs leading-snug truncate max-w-[110px] lg:max-w-[160px]" title={bill.customerName}>
+                                {/* 2. Bill Date */}
+                                <td className="py-2.5 px-2 whitespace-nowrap font-mono text-xs text-slate-800 border-r border-slate-200/80 leading-tight">
+                                  <div>{bill.date}</div>
+                                  {bill.constructionDate && bill.constructionDate !== bill.date && (
+                                    <div className="text-[9.5px] text-amber-800 font-medium">Const: {bill.constructionDate}</div>
+                                  )}
+                                </td>
+
+                                {/* 3. Bill Number */}
+                                <td className="py-2.5 px-2 whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200/80 text-xs">
+                                  <span title={materialsTooltip}>#{bill.billNo}</span>
+                                </td>
+
+                                {/* 4. Customer / Party */}
+                                <td className="py-2.5 px-2.5 border-r border-slate-200/80 min-w-0">
+                                  <div className="flex items-center justify-between gap-1.5 min-w-0">
+                                    <span className="font-bold text-slate-900 text-xs truncate" title={bill.customerName}>
                                       {bill.customerName}
                                     </span>
                                     <button
@@ -1351,122 +1743,118 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                         setSelectedCustomer(bill.customerName || 'Cash Customer');
                                         setCustomerStatementModal(bill.customerName || 'Cash Customer');
                                       }}
-                                      className="text-[9px] font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-1.5 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
-                                      title="Fetch Statement for this customer"
+                                      className="text-[9px] font-semibold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-1.5 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
+                                      title="Open Ledger Statement"
                                     >
                                       Statement
                                     </button>
                                   </div>
-                                  <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate max-w-[130px] lg:max-w-[180px]">
-                                    <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
-                                    <span className="truncate">{bill.site || bill.place || 'Tanang Site Zone'}</span>
-                                  </div>
                                 </td>
 
-                                <td className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">
-                                  <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded-md text-[10px] font-mono text-slate-800 font-bold shadow-2xs">
-                                    <Truck className="w-3 h-3 text-slate-500 shrink-0" />
-                                    <span>{bill.vehicle || 'Direct'}</span>
+                                {/* 5. Site Destination */}
+                                <td className="py-2.5 px-2.5 border-r border-slate-200/80 text-slate-700 min-w-0">
+                                  <span className="truncate block text-xs" title={bill.site || bill.place}>
+                                    {bill.site || bill.place || 'Tanang Site Zone'}
                                   </span>
                                 </td>
 
-                                <td className="py-2.5 px-2 sm:px-2.5">
-                                  <div className="space-y-0.5">
-                                    {bill.items && bill.items.length > 0 ? (
-                                      bill.items.map((it, idx) => (
-                                        <div key={idx} className="text-[11px] leading-tight whitespace-nowrap">
-                                          <span className="font-bold text-slate-900">{it.material}</span>{' '}
-                                          <span className="font-mono text-slate-500 text-[10px]">({it.qty} {it.unit})</span>
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <span className="text-slate-400 text-xs italic">No items</span>
-                                    )}
-                                  </div>
+                                {/* 6. Vehicle */}
+                                <td className="py-2.5 px-2 text-center whitespace-nowrap font-mono text-xs text-slate-700 border-r border-slate-200/80">
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-bold text-[10.5px] text-slate-800 truncate block max-w-[85px] mx-auto" title={bill.vehicle || 'Direct'}>
+                                    {bill.vehicle || 'Direct'}
+                                  </span>
                                 </td>
 
-                                <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
-                                  <div className="font-mono font-black text-slate-900 text-xs">
-                                    ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                  </div>
+                                {/* 7. Bill Total (₹) */}
+                                <td className="py-2.5 px-2 text-right whitespace-nowrap font-mono font-bold text-slate-950 text-xs border-r border-slate-200/80">
+                                  ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </td>
 
-                                {/* Paid Amount vs Outstanding Balance */}
-                                <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
-                                  <div className="text-[10px] font-mono font-bold text-emerald-700">
-                                    Paid: ₹ {Number(bill.paidAmount || 0).toLocaleString('en-IN')}
-                                  </div>
-                                  <div className={`text-[10px] font-mono mt-0.5 ${hasBalance ? 'text-amber-800 font-black' : 'text-emerald-600 font-medium'}`}>
-                                    {hasBalance ? `Due: ₹ ${Number(bill.balanceAmount).toLocaleString('en-IN')}` : 'Cleared ✓'}
-                                  </div>
+                                {/* 8. Paid Amount (₹) */}
+                                <td className="py-2.5 px-2 text-right whitespace-nowrap font-mono font-bold text-emerald-700 text-xs bg-emerald-50/20 border-r border-slate-200/80">
+                                  ₹ {Number(bill.paidAmount || (Number(bill.cashPaidAmount || 0) + Number(bill.onlinePaidAmount || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </td>
 
-                                {/* Payment Status Badge */}
-                                <td className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">
+                                {/* 9. Balance Due (₹) */}
+                                <td className={`py-2.5 px-2 text-right whitespace-nowrap font-mono text-xs border-r border-slate-200/80 ${hasBalance ? 'bg-amber-50/30 font-black text-amber-900' : 'text-emerald-600 font-semibold'}`}>
+                                  {hasBalance ? (
+                                    <span>₹ {Number(bill.balanceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-emerald-600">₹ 0 (Cleared ✓)</span>
+                                  )}
+                                </td>
+
+                                {/* 10. Payment Status Badge */}
+                                <td className="py-2.5 px-1.5 text-center whitespace-nowrap border-r border-slate-200/80">
                                   {bill.paymentStatus === 'Paid' ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[9.5px] font-bold">
                                       <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
                                       <span>Paid</span>
                                     </span>
                                   ) : bill.paymentStatus === 'Partially Paid' ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-bold">
                                       <Clock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
                                       <span>Partial</span>
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-bold">
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[9.5px] font-bold">
                                       <AlertCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
                                       <span>Unpaid</span>
                                     </span>
                                   )}
                                 </td>
 
-                                {/* Actions */}
-                                <td className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">
-                                  <div className="inline-flex items-center justify-end gap-1 shrink-0">
-                                    {/* 1-Click Collect / Record Payment Modal */}
+                                {/* 11. Actions: Clearly Formatted Options (Pay, Print, Edit, Delete) - Always 100% visible */}
+                                <td className="py-2.5 px-2 text-center whitespace-nowrap bg-slate-50/30">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    {/* + Pay Button */}
                                     <button
                                       type="button"
                                       onClick={() => handleOpenPaymentModal(bill)}
-                                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1 active:scale-95 shrink-0 ${
+                                      className={`px-2 py-1 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs ${
                                         hasBalance
-                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-900/10'
-                                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
                                       }`}
-                                      title={hasBalance ? 'Collect / Record Payment' : 'View Payment History'}
+                                      title={hasBalance ? 'Record Cash / UPI Payment' : 'Payment Settled - View History'}
                                     >
-                                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                                      <CreditCard className="w-3 h-3 shrink-0" />
+                                      <span>{hasBalance ? '+ Pay' : 'Paid'}</span>
                                     </button>
 
+                                    {/* Print Button */}
                                     <button
                                       type="button"
                                       onClick={() => setPrintingBill(bill)}
-                                      className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                      className="px-2 py-1 rounded-md text-[10.5px] font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-2xs"
                                       title="Print Cash Memo"
                                     >
-                                      <Printer className="w-3.5 h-3.5 shrink-0" />
+                                      <Printer className="w-3 h-3 shrink-0" />
+                                      <span>Print</span>
                                     </button>
 
+                                    {/* Edit Button */}
                                     <button
                                       type="button"
                                       onClick={() => handleRequestEditBill(bill)}
-                                      className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
+                                      className={`p-1 rounded-md border transition-all cursor-pointer ${
                                         timing.isWithin10Mins
-                                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                                          ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'
+                                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                                       }`}
-                                      title={timing.isWithin10Mins ? 'Direct Edit' : 'Owner OTP Edit'}
+                                      title={timing.isWithin10Mins ? 'Direct Edit Bill' : 'Owner OTP Edit'}
                                     >
-                                      {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                                      {timing.isWithin10Mins ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-rose-600" />}
                                     </button>
 
+                                    {/* Delete Button */}
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteBill(bill.id, bill.billNo)}
-                                      className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95 shrink-0"
+                                      className="p-1 rounded-md border border-slate-200 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all cursor-pointer"
                                       title="Delete Memo"
                                     >
-                                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </td>
@@ -1475,14 +1863,38 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                           })
                         ) : (
                           <tr>
-                            <td colSpan={8} className="py-12 text-center text-slate-400">
+                            <td colSpan={11} className="py-12 text-center text-slate-400">
                               No cash memos found matching search query.
                             </td>
                           </tr>
                         )}
                       </tbody>
+
+                      {/* Excel Spreadsheet Footer Totals Row */}
+                      {filteredBills.length > 0 && (
+                        <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 select-none">
+                          <tr>
+                            <td colSpan={6} className="py-2.5 px-2 text-right uppercase text-[10px] tracking-wider text-slate-600 border-r border-slate-200">
+                              Total ({filteredBills.length} Memos Displayed):
+                            </td>
+                            <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-slate-200 text-slate-950 font-black">
+                              ₹ {filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-slate-200 text-emerald-800 font-black bg-emerald-50/50">
+                              ₹ {filteredBills.reduce((s, b) => s + (Number(b.paidAmount || (Number(b.cashPaidAmount || 0) + Number(b.onlinePaidAmount || 0))) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-slate-200 text-amber-900 font-black bg-amber-50/50">
+                              ₹ {filteredBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td colSpan={2} className="py-2.5 px-1.5 text-center text-[10px] text-slate-500 font-normal">
+                              Excel Register View
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
+
 
                   {/* MOBILE RESPONSIVE CARDS (< md screens) */}
                   <div className="block md:hidden p-2.5 sm:p-3 space-y-2.5 bg-slate-50/50">
@@ -1677,6 +2089,35 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <div className="relative min-w-[160px] sm:min-w-[220px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search voucher, supplier, item..."
+                        className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-cyan-500 shadow-2xs font-medium"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenCreatePurchase}
+                      className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Record Inward</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setIsTableFullScreen(!isTableFullScreen)}
@@ -1688,8 +2129,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   </div>
                 </div>
 
-                {/* DESKTOP TABLE VIEW (Visible on >= md screens) */}
-                <div className="hidden md:block w-full overflow-x-auto">
+                {/* DESKTOP TABLE VIEW (Visible on >= md screens) - Fitted 100% without horizontal scroll */}
+                <div className="hidden md:block w-full overflow-hidden">
                   <table className="w-full text-left text-xs text-slate-700 border-collapse">
                     <thead>
                       <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
@@ -1931,8 +2372,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[650px] text-left text-xs border-collapse">
+          <div className="overflow-hidden">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50">
                   <th className="py-2.5 px-3">Timestamp</th>
@@ -2250,9 +2691,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   <span className="text-[10px] text-slate-600 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md">Step 1 of 3</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-12 gap-3">
+                  <div className="lg:col-span-2">
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1 whitespace-nowrap">
                       Bill No <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
@@ -2261,60 +2702,134 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         type="text"
                         value={billForm.billNo}
                         onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#136dec] focus:ring-2 focus:ring-[#136dec]/15 transition-all text-xs"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                      Bill Date <span className="text-rose-500">*</span>
-                    </label>
+                  <div className="lg:col-span-2">
+                    <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+                      <label className="text-[11px] font-bold text-slate-700 whitespace-nowrap flex items-center gap-0.5">
+                        <span>Bill Date</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBillForm((prev) => ({ ...prev, date: getTodayFormatted() }));
+                        }}
+                        className="text-[10px] font-semibold text-[#136dec] hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 cursor-pointer active:scale-95 whitespace-nowrap shrink-0 transition-colors"
+                      >
+                        Today
+                      </button>
+                    </div>
                     <div className="relative">
-                      <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <button
+                        type="button"
+                        onClick={() => (billDateInputRef.current?.showPicker ? billDateInputRef.current.showPicker() : billDateInputRef.current?.click())}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#136dec] p-0.5 rounded cursor-pointer transition-colors"
+                        title="Pick from calendar"
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="date"
+                        ref={billDateInputRef}
+                        value={convertDdMmYyyyToIso(billForm.date)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setBillForm((prev) => ({ ...prev, date: convertIsoToDdMmYyyy(e.target.value) }));
+                          }
+                        }}
+                        className="sr-only"
+                        tabIndex={-1}
+                      />
                       <input
                         type="text"
                         value={billForm.date}
-                        onChange={(e) => setBillForm({ ...billForm, date: e.target.value })}
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-bold text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        onChange={(e) => setBillForm((prev) => ({ ...prev, date: formatTypedDate(e.target.value, prev.date) }))}
+                        placeholder="DD-MM-YYYY"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-bold text-slate-900 focus:bg-white focus:border-[#136dec] focus:ring-2 focus:ring-[#136dec]/15 transition-all text-xs"
                       />
                     </div>
+                    <div className="text-[9.5px] text-slate-400 font-medium mt-0.5 truncate">Format: DD-MM-YYYY</div>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-amber-900 block mb-1">
-                      Construction Date <span className="text-rose-500">*</span>
-                    </label>
+                  <div className="lg:col-span-3">
+                    <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+                      <label className="text-[11px] font-bold text-slate-700 whitespace-nowrap flex items-center gap-0.5">
+                        <span>Construction Date</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setBillForm((prev) => ({ ...prev, constructionDate: prev.date }))}
+                        className="text-[10px] font-semibold text-[#136dec] hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 cursor-pointer active:scale-95 whitespace-nowrap shrink-0 transition-colors"
+                        title="Copy Bill Date"
+                      >
+                        = Bill Date
+                      </button>
+                    </div>
                     <div className="relative">
-                      <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-amber-600" />
+                      <button
+                        type="button"
+                        onClick={() => (constructionDateInputRef.current?.showPicker ? constructionDateInputRef.current.showPicker() : constructionDateInputRef.current?.click())}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#136dec] p-0.5 rounded cursor-pointer transition-colors"
+                        title="Pick from calendar"
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="date"
+                        ref={constructionDateInputRef}
+                        value={convertDdMmYyyyToIso(billForm.constructionDate)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setBillForm((prev) => ({ ...prev, constructionDate: convertIsoToDdMmYyyy(e.target.value) }));
+                          }
+                        }}
+                        className="sr-only"
+                        tabIndex={-1}
+                      />
                       <input
                         type="text"
                         value={billForm.constructionDate}
-                        onChange={(e) => setBillForm({ ...billForm, constructionDate: e.target.value })}
-                        placeholder="e.g. 19 Oct 2026"
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-amber-50/40 border border-amber-300 font-bold text-slate-900 focus:bg-white focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 transition-all text-xs"
+                        onChange={(e) => setBillForm((prev) => ({ ...prev, constructionDate: formatTypedDate(e.target.value, prev.constructionDate) }))}
+                        placeholder="DD-MM-YYYY (e.g. 20-10-2026)"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-bold text-slate-900 focus:bg-white focus:border-[#136dec] focus:ring-2 focus:ring-[#136dec]/15 transition-all text-xs"
                       />
                     </div>
+                    <div className="text-[9.5px] text-slate-400 font-medium mt-0.5 truncate">Format: DD-MM-YYYY</div>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                      Transit Vehicle
-                    </label>
+                  <div className="lg:col-span-3">
+                    <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+                      <label className="text-[11px] font-bold text-slate-700 block whitespace-nowrap">
+                        Transit Vehicle
+                      </label>
+                      <span className="text-[9.5px] text-slate-400 font-mono hidden sm:inline">MH-10-CR-1212</span>
+                    </div>
                     <div className="relative">
                       <Truck className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
+                        list="transit-vehicle-suggestions"
                         value={billForm.vehicle}
-                        onChange={(e) => setBillForm({ ...billForm, vehicle: e.target.value })}
+                        onChange={(e) => setBillForm((prev) => ({ ...prev, vehicle: formatVehicleNumber(e.target.value, prev.vehicle) }))}
                         placeholder="e.g. MH-10-CR-1212"
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono uppercase text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono uppercase font-bold text-slate-900 focus:bg-white focus:border-[#136dec] focus:ring-2 focus:ring-[#136dec]/15 transition-all text-xs"
                       />
+                      <datalist id="transit-vehicle-suggestions">
+                        {PLANT_VEHICLE_SUGGESTIONS.map((v) => (
+                          <option key={v} value={v} />
+                        ))}
+                      </datalist>
                     </div>
+                    <div className="text-[9.5px] text-slate-400 font-medium mt-0.5 truncate">Format: MH-10-CR-1212</div>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  <div className="lg:col-span-2">
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1 whitespace-nowrap">
                       Place of Delivery <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
@@ -2324,9 +2839,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         value={billForm.place}
                         onChange={(e) => setBillForm({ ...billForm, place: e.target.value })}
                         placeholder="e.g. Aaudumbar"
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-medium text-slate-900 focus:bg-white focus:border-[#1D5FA7] focus:ring-2 focus:ring-[#1D5FA7]/15 transition-all text-xs"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-medium text-slate-900 focus:bg-white focus:border-[#136dec] focus:ring-2 focus:ring-[#136dec]/15 transition-all text-xs"
                       />
                     </div>
+                    <div className="text-[9.5px] text-slate-400 font-medium mt-0.5 truncate">Destination Site</div>
                   </div>
                 </div>
               </div>
@@ -2527,8 +3043,33 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   </button>
                 </div>
 
-                <div className="border border-[#D4E4F7] rounded-xl overflow-x-auto shadow-2xs">
-                  <table className="w-full min-w-[620px] text-left text-xs border-collapse">
+                {/* 1-Click Quick Fill Grade Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 p-2 bg-blue-50/60 rounded-xl border border-blue-200/70">
+                  <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider mr-1">Quick Grade Fill:</span>
+                  {[
+                    { label: 'M15', grade: 'M15 Concrete', rate: 3800 },
+                    { label: 'M20', grade: 'M20 Concrete', rate: 4000 },
+                    { label: 'M25', grade: 'M25 Concrete', rate: 4200 },
+                    { label: 'M30', grade: 'M30 Concrete', rate: 4500 },
+                    { label: 'M35', grade: 'M35 Concrete', rate: 4800 },
+                    { label: 'M40', grade: 'M40 Concrete', rate: 5100 },
+                    { label: '+ Pump', grade: 'Concrete Pump', rate: 6000, unit: 'Unit', qty: 1 },
+                  ].map((g) => (
+                    <button
+                      key={g.label}
+                      type="button"
+                      onClick={() => handleQuickSelectGrade(g.grade, g.rate, g.unit || 'm³', g.qty)}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-blue-100 text-blue-900 border border-blue-200 shadow-2xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                      title={`Click to fill ${g.grade}`}
+                    >
+                      <span>{g.label}</span>
+                      <span className="font-mono text-[9px] text-blue-600 font-normal">₹{g.rate}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="border border-[#D4E4F7] rounded-xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left text-xs border-collapse">
                     <thead className="bg-[#F5F9FF] font-mono font-bold text-[#123B6D] border-b border-[#D4E4F7] text-[10px] uppercase tracking-wider">
                       <tr>
                         <th className="py-2.5 px-3 w-12 text-center">SN.</th>

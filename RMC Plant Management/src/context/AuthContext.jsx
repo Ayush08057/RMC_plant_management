@@ -113,6 +113,25 @@ export const AuthProvider = ({ children }) => {
       .catch((err) => {
         console.warn('Firebase role accounts sync notice:', err.message);
       });
+
+    // Real-time synchronization of users from Firebase Cloud Firestore across all devices
+    const unsubUsers = subscribeToCollection(COLLECTIONS.USERS, (cloudUsers) => {
+      if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+        setUsers((prev) => {
+          const mergedMap = new Map();
+          OFFICIAL_ROLE_ACCOUNTS.forEach((acc) => mergedMap.set(acc.id, acc));
+          prev.forEach((u) => mergedMap.set(u.id || u.employeeId || u.email, u));
+          cloudUsers.forEach((u) => mergedMap.set(u.id || u.employeeId || u.email, { ...mergedMap.get(u.id || u.employeeId || u.email), ...u }));
+          const sanitized = sanitizeUsersList(Array.from(mergedMap.values()));
+          try {
+            localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(sanitized));
+          } catch {}
+          return sanitized;
+        });
+      }
+    });
+
+    return () => typeof unsubUsers === 'function' && unsubUsers();
   }, []);
 
   // Real-time Firebase Authentication listener for session restoration & verification
@@ -272,6 +291,12 @@ export const AuthProvider = ({ children }) => {
         }
       }
       if (allFound.length > 0) return allFound;
+
+      // Fallback 2: check cloud-synced users with employeeId
+      if (Array.isArray(users) && users.length > 0) {
+        const empUsers = users.filter(u => u.employeeId);
+        if (empUsers.length > 0) return empUsers;
+      }
     } catch {
       // ignore
     }

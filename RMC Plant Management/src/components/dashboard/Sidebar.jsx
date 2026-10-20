@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { ROLES, ROLE_ROUTES } from '../../data/mockUsers';
 
 const ALL_PLANT_OPERATIONS_ITEMS = [
@@ -109,8 +110,8 @@ const getPlantOperationsForRole = (role) => {
 };
 
 const PORTAL_LINKS = [
-  { role: ROLES.ADMIN, label: 'System Admin Console', path: '/admin', icon: Monitor, colorClass: 'bg-[#136dec]' },
-  { role: ROLES.PLANT_MANAGER, label: 'Plant Manager Portal', path: '/plant-manager', icon: Building2, colorClass: 'bg-[#059669]' },
+  { role: ROLES.ADMIN, label: 'System Admin', path: '/admin', icon: Monitor, colorClass: 'bg-[#136dec]' },
+  { role: ROLES.PLANT_MANAGER, label: 'Plant Manager', path: '/plant-manager', icon: Building2, colorClass: 'bg-[#059669]' },
   { role: ROLES.ACCOUNTANT, label: 'Accounts & Billing', path: '/accountant', icon: Store, colorClass: 'bg-[#f97316]' },
   { role: ROLES.DISPATCHER, label: 'Dispatch Operations', path: '/dispatcher', icon: Truck, colorClass: 'bg-[#6366f1]' },
   { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
@@ -125,6 +126,18 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
   const activeCompany = workforce?.activeCompany;
   const location = useLocation();
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
+
+  // Exactly one active portal determined strictly by current route or user role
+  const activePortal = useMemo(() => {
+    return (
+      PORTAL_LINKS.find(
+        (p) => location.pathname === p.path || (p.path !== '/' && location.pathname.startsWith(p.path))
+      ) ||
+      PORTAL_LINKS.find((p) => p.role === user?.role) ||
+      PORTAL_LINKS[0]
+    );
+  }, [location.pathname, user?.role]);
 
   const [expandedGroups, setExpandedGroups] = useState({});
   const [hoveredFlyout, setHoveredFlyout] = useState(null);
@@ -144,7 +157,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ADMIN:
         return [
           { id: 'dashboard', label: 'System Administration', icon: ShieldCheck },
-          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { 
             id: 'employees_group', 
             label: 'Employees', 
@@ -337,8 +349,8 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       <aside
         className={`app-sidebar fixed top-0 bottom-0 left-0 z-50 h-[100dvh] max-h-[100dvh] bg-[#0c2340] text-white border-r border-[#153458] shadow-2xl flex flex-col transition-all duration-300 ease-in-out ${
           isCollapsed
-            ? '-translate-x-full md:translate-x-0 w-72 max-w-[85vw] sm:w-64 md:w-[68px]'
-            : (isOpen ? 'translate-x-0 w-72 max-w-[85vw] sm:w-64' : '-translate-x-full md:translate-x-0 w-72 max-w-[85vw] sm:w-64')
+            ? '-translate-x-full md:translate-x-0 w-72 max-w-[85vw] md:w-[68px]'
+            : (isOpen ? 'translate-x-0 w-72 max-w-[85vw]' : '-translate-x-full md:translate-x-0 w-72 max-w-[85vw]')
         }`}
       >
         {isCollapsed ? (
@@ -432,14 +444,15 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                   <div className="w-7 h-[1px] bg-[#153458] my-2 shrink-0 rounded-full" />
                   <div className="w-full flex flex-col items-center gap-1.5 shrink-0">
                     {PORTAL_LINKS.map((portal) => {
-                      const isCurrentRole = user?.role === portal.role || location.pathname === portal.path;
+                      const isCurrentRole = activePortal.path === portal.path;
                       const PortalIcon = portal.icon;
                       return (
                         <button
                           key={portal.path}
                           type="button"
                           onClick={() => {
-                            const nextPath = switchRole(portal.role);
+                            if (isCurrentRole) return;
+                            const nextPath = switchRole(portal.role) || portal.path;
                             if (nextPath) navigate(nextPath);
                             if (window.innerWidth < 768 && onClose) onClose();
                           }}
@@ -509,7 +522,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                     <span className="truncate">{activeCompany?.location || "Tanang, Sangli"}</span>
                   </div>
                   <div className="text-[11px] font-medium text-blue-200/80 truncate mt-0.5">
-                    {user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin')}
+                    {t(user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin'))}
                   </div>
                 </div>
               </Link>
@@ -533,7 +546,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             {/* Navigation Section */}
             <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2.5 space-y-1">
               <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono">
-                Navigation
+                {t('Navigation')}
               </div>
 
               {navItems.map((item) => {
@@ -559,7 +572,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                           <Icon className={`w-4 h-4 shrink-0 stroke-[1.9] ${
                             isChildActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
                           }`} />
-                          <span className="truncate text-xs sm:text-sm font-medium">{item.label}</span>
+                          <span className="truncate text-xs sm:text-sm font-medium">{t(item.label)}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${
@@ -593,7 +606,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-blue-300' : 'text-slate-400'}`} />
-                                  <span className="truncate text-xs sm:text-sm font-medium">{child.label}</span>
+                                  <span className="truncate text-xs sm:text-sm font-medium">{t(child.label)}</span>
                                 </div>
                                 <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
                               </button>
@@ -624,7 +637,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                       <Icon className={`w-4 h-4 shrink-0 stroke-[1.9] ${
                         isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
                       }`} />
-                      <span className="truncate text-xs sm:text-sm font-medium">{item.label}</span>
+                      <span className="truncate text-xs sm:text-sm font-medium">{t(item.label)}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {item.badge && (
@@ -644,37 +657,38 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               {Boolean(user?.isMasterAdmin || user?.role === ROLES.ADMIN || user?.originalAdminUser) && (
                 <div className="pt-3 mt-3 border-t border-[#153458]/70 space-y-1">
                   <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center justify-between">
-                    <span>Admin Portals</span>
-                    <span className="px-2 py-0.5 rounded-md bg-blue-950/70 border border-blue-800/50 text-blue-300 text-[10px] font-bold tracking-wider">ALL ACCESS</span>
+                    <span>{t('Admin Portals')}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-blue-950/70 border border-blue-800/50 text-blue-300 text-[10px] font-bold tracking-wider">{t('ALL ACCESS')}</span>
                   </div>
                   <div className="space-y-0.5">
                     {PORTAL_LINKS.map((portal) => {
-                      const isCurrentRole = user?.role === portal.role || location.pathname === portal.path;
+                      const isCurrentRole = activePortal.path === portal.path;
                       const PortalIcon = portal.icon;
                       return (
                         <button
                           key={portal.path}
                           type="button"
                           onClick={() => {
-                            const nextPath = switchRole(portal.role);
+                            if (isCurrentRole) return;
+                            const nextPath = switchRole(portal.role) || portal.path;
                             if (nextPath) navigate(nextPath);
                             if (window.innerWidth < 768 && onClose) onClose();
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm transition-all cursor-pointer group ${
                             isCurrentRole
-                              ? 'bg-[#136dec] text-white font-semibold shadow-md'
+                              ? 'bg-[#136dec] text-white font-semibold shadow-md ring-1 ring-blue-400/30'
                               : 'text-slate-200 hover:text-white hover:bg-white/[0.06] font-medium'
                           }`}
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0">
                             <div className={`w-7 h-7 rounded-lg ${portal.colorClass} flex items-center justify-center shrink-0 shadow-xs`}>
                               <PortalIcon className="w-4 h-4 text-white stroke-[2]" />
                             </div>
-                            <span className="truncate text-xs sm:text-sm font-medium">{portal.label}</span>
+                            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">{t(portal.label)}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
                             {isCurrentRole && (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white">Active</span>
+                              <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-white/20 text-white tracking-wide">{t('Active')}</span>
                             )}
                             <ChevronRight className={`w-4 h-4 transition-colors ${
                               isCurrentRole ? 'text-white/80' : 'text-slate-400/40 group-hover:text-slate-300'
@@ -705,7 +719,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="px-2 py-0.5 rounded-md bg-blue-950/80 border border-blue-800/50 text-blue-200 text-[10px] font-semibold">
-                    {user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin')}
+                    {t(user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin'))}
                   </span>
                   <ChevronRight className="w-4 h-4 text-slate-400/60" />
                 </div>
@@ -717,7 +731,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                 className="w-full py-2.5 px-3 rounded-xl bg-blue-950/40 hover:bg-blue-900/40 border border-blue-800/50 hover:border-blue-700/70 text-slate-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
               >
                 <LogOut className="w-4 h-4 text-slate-300 stroke-[2]" />
-                <span className="tracking-wide">Sign Out Session</span>
+                <span className="tracking-wide">{t('Sign Out Session')}</span>
               </button>
             </div>
           </>
@@ -734,7 +748,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
               <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap flex items-center gap-2">
-                <span>{hoveredFlyout.item.label}</span>
+                <span>{t(hoveredFlyout.item.label)}</span>
                 {hoveredFlyout.item.badge && (
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-600 text-white font-bold">
                     ({hoveredFlyout.item.badge})
@@ -757,7 +771,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             >
               <div className="bg-[#0c2340] rounded-xl shadow-2xl border border-[#153458] p-2 min-w-[200px] space-y-1">
                 <div className="px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300 border-b border-[#153458] mb-1 flex items-center justify-between">
-                  <span>{hoveredFlyout.item.label}</span>
+                  <span>{t(hoveredFlyout.item.label)}</span>
                   <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-600 text-white font-bold">
                     {hoveredFlyout.item.children.length}
                   </span>
@@ -781,7 +795,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                         }`}
                       >
                         <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-white' : 'text-blue-300'}`} />
-                        <span className="truncate">{child.label}</span>
+                        <span className="truncate">{t(child.label)}</span>
                       </button>
                     );
                   })}
@@ -797,10 +811,10 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
               <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap flex items-center gap-2">
-                <span>{hoveredFlyout.label}</span>
+                <span>{t(hoveredFlyout.label)}</span>
                 {hoveredFlyout.isCurrent && (
                   <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#136dec] text-white font-semibold">
-                    Active
+                    {t('Active')}
                   </span>
                 )}
               </div>
@@ -820,7 +834,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                 <div className="font-semibold flex items-center justify-between gap-2">
                   <span className="truncate">{user?.name || 'System Administrator'}</span>
                   <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-950 border border-blue-800 text-blue-200 font-semibold">
-                    {user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin')}
+                    {t(user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin'))}
                   </span>
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
@@ -839,7 +853,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               className="fixed -translate-y-1/2 z-[9999] pointer-events-none animate-fadeIn"
             >
               <div className="bg-[#091b31] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl border border-blue-900/60 whitespace-nowrap">
-                <span>Sign Out Session</span>
+                <span>{t('Sign Out Session')}</span>
               </div>
             </div>
           )}

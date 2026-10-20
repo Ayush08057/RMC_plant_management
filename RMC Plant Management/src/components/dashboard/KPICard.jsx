@@ -35,11 +35,11 @@ export default function KPICard({
             handleCardClick(e);
           }
         }}
-        className="p-2.5 sm:p-3 rounded-xl bg-white border border-[#D4E4F7] hover:border-[#1D5FA7] hover:shadow-xs transition-all duration-150 flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer shadow-2xs"
+        className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:border-[#1D5FA7] hover:shadow-xs transition-all duration-150 flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer shadow-2xs"
       >
         <div>
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[10px] sm:text-[11px] font-bold text-black uppercase tracking-wider leading-tight block truncate font-sans">
+            <span className="text-[10px] font-bold text-black uppercase tracking-wider leading-tight block truncate font-sans">
               {title}
             </span>
             {Icon && (
@@ -48,20 +48,20 @@ export default function KPICard({
               </div>
             )}
           </div>
-          <div className="text-base sm:text-lg lg:text-xl font-bold text-black tracking-tight font-sans tabular-nums my-1 leading-tight">
+          <div className="text-xs sm:text-sm font-black text-black tracking-tight font-sans tabular-nums my-0.5 leading-tight">
             {value}
           </div>
         </div>
 
         {(subtext || trend) && (
-          <div className="mt-1 pt-1.5 border-t border-[#D4E4F7] flex items-center justify-between text-xs text-slate-700 gap-1.5 min-w-0">
+          <div className="mt-0.5 pt-1 border-t border-[#D4E4F7]/60 flex items-center justify-between text-[10px] text-slate-700 gap-1 min-w-0">
             {subtext && (
-              <span className="text-slate-600 text-[11px] font-medium leading-tight truncate flex-1 min-w-0" title={subtext}>
+              <span className="text-slate-600 text-[10px] font-medium leading-tight truncate flex-1 min-w-0" title={subtext}>
                 {subtext}
               </span>
             )}
             {trend && (
-              <span className={`inline-flex items-center gap-1 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+              <span className={`inline-flex items-center gap-1 shrink-0 text-[9px] font-bold px-1 py-0.2 rounded border ${
                 trendType === 'up' 
                   ? 'text-black bg-[#EAF3FF] border-[#D4E4F7]' 
                   : trendType === 'down' 

@@ -8,7 +8,7 @@ let nextModalId = 0;
 
 const syncBodyScrollLock = () => {
   if (typeof document !== 'undefined') {
-    document.body.style.overflow = openModals.size > 0 ? 'hidden' : 'unset';
+    document.body.style.overflow = 'hidden';
   }
 };
 

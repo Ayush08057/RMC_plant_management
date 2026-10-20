@@ -51,6 +51,34 @@ function getInitialCompanies() {
   return DEFAULT_COMPANIES;
 }
 
+export const isDummyEmployee = (e) => {
+  if (!e) return true;
+  const nameLower = (e.name || '').toLowerCase().trim();
+  const emailLower = (e.email || '').toLowerCase().trim();
+  const idUpper = (e.id || e.employeeId || '').toUpperCase().trim();
+  return (
+    nameLower.includes('mukta') ||
+    nameLower.includes('aayush') ||
+    nameLower.includes('ayush') ||
+    nameLower.includes('pranav') ||
+    nameLower === 'accountant' ||
+    nameLower === 'system administrator' ||
+    emailLower.includes('mukta@') ||
+    emailLower.includes('ayush@') ||
+    emailLower.includes('pranav@') ||
+    emailLower.includes('abc@gmail.com') ||
+    idUpper === 'ADM-001' ||
+    idUpper === 'USR-ADMIN-001' ||
+    idUpper === 'ACC-001' ||
+    idUpper === 'USR-ACC-001'
+  );
+};
+
+export const sanitizeEmployees = (empList) => {
+  if (!Array.isArray(empList)) return [];
+  return empList.filter((e) => !isDummyEmployee(e));
+};
+
 function createEmptyCompanyData(companyId) {
   return {
     employees: [],
@@ -81,7 +109,7 @@ function loadCompanyData(companyId) {
         ...parsed,
         shifts: Array.isArray(parsed.shifts) ? parsed.shifts : (companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : []),
         plants: Array.isArray(parsed.plants) ? parsed.plants : (companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : []),
-        employees: Array.isArray(parsed.employees) ? parsed.employees : [],
+        employees: Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [],
         attendance: Array.isArray(parsed.attendance) ? parsed.attendance : [],
         leaves: Array.isArray(parsed.leaves) ? parsed.leaves : [],
         advances: Array.isArray(parsed.advances) ? parsed.advances : [],
@@ -151,7 +179,35 @@ export const WorkforceProvider = ({ children }) => {
 
   useEffect(() => {
     try {
-      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(data));
+      // Purge any stored dummy employees across all localStorage keys on load
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('rmc_workforce_state_')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed && Array.isArray(parsed.employees)) {
+                const cleaned = sanitizeEmployees(parsed.employees);
+                if (cleaned.length !== parsed.employees.length) {
+                  parsed.employees = cleaned;
+                  localStorage.setItem(key, JSON.stringify(parsed));
+                }
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      const sanitizedData = {
+        ...data,
+        employees: sanitizeEmployees(data.employees),
+      };
+      localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(sanitizedData));
     } catch (err) {
       console.error('Workforce storage sync error:', err);
     }
@@ -185,6 +241,19 @@ export const WorkforceProvider = ({ children }) => {
               localStorage.setItem(hasInitializedKey, 'true');
             }
           }
+          if (stateKey === 'employees' && Array.isArray(cloudItems)) {
+            // Auto-clean dummy accounts from Firestore
+            const dummyItems = cloudItems.filter(isDummyEmployee);
+            if (dummyItems.length > 0) {
+              dummyItems.forEach((d) => {
+                if (d.id) {
+                  removeRawDocument(scopedCollectionName, d.id).catch(() => {});
+                  removeRawDocument(collectionName, d.id).catch(() => {});
+                }
+              });
+            }
+            cloudItems = sanitizeEmployees(cloudItems);
+          }
           if (isCurrentCompany && Array.isArray(cloudItems)) {
             setData((prev) => ({
               ...prev,
@@ -197,10 +266,14 @@ export const WorkforceProvider = ({ children }) => {
         });
 
       const unsub = subscribeToCollection(scopedCollectionName, (cloudItems) => {
-        if (isCurrentCompany && Array.isArray(cloudItems)) {
+        let finalItems = cloudItems;
+        if (stateKey === 'employees' && Array.isArray(cloudItems)) {
+          finalItems = sanitizeEmployees(cloudItems);
+        }
+        if (isCurrentCompany && Array.isArray(finalItems)) {
           setData((prev) => ({
             ...prev,
-            [stateKey]: cloudItems,
+            [stateKey]: finalItems,
           }));
         }
       });
@@ -2510,7 +2583,7 @@ export const WorkforceProvider = ({ children }) => {
     updateCompany,
     updateCompanyLogo,
     removeCompany,
-    employees: data.employees,
+    employees: sanitizeEmployees(data.employees),
     shifts: data.shifts,
     plants: data.plants || MOCK_PLANTS,
     attendance: data.attendance,

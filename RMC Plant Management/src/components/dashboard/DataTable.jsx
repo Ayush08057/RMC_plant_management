@@ -14,18 +14,20 @@ export default function DataTable({
   itemsPerPage = 6,
   renderMobileCard = null,
   emptyMessage = 'No records located',
-  noMatchesMessage = 'No matching orders found.',
+  emptySubtext = null,
+  noMatchesMessage = 'No matching records found.',
   isLoading = false,
   error = null,
   onRetry = null,
   actions = null,
+  toolbar = null,
   onRowClick = null,
   allowFullscreen = true,
   initialFullscreen = false,
   compact = false,
   tableMinWidth = null,
   tableFixed = false,
-  noScroll = false,
+  noScroll = true,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,13 +78,13 @@ export default function DataTable({
     if (isFullscreen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = 'hidden';
     }
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.body.style.overflow = 'hidden';
     };
   }, [isFullscreen]);
 
@@ -192,9 +194,16 @@ export default function DataTable({
           </div>
         </div>
 
+        {/* Optional Secondary Filter / Toolbar Strip */}
+        {toolbar && (
+          <div className="px-3 py-1.5 bg-[#FAFCFF] border-b border-[#D4E4F7] flex items-center justify-between gap-2 flex-wrap shrink-0 text-xs">
+            {toolbar}
+          </div>
+        )}
+
         {/* DESKTOP TABLE VIEW - STRICT 100% CONTAINER FIT WITH PROPER ALIGNMENT */}
         <div className={`hidden md:block w-full max-w-full ${noScroll ? 'overflow-x-hidden' : 'overflow-x-auto'}`}>
-          <table className={`w-full ${tableMinWidth ? tableMinWidth : (tableFixed || noScroll) ? 'w-full' : 'min-w-[760px]'} text-left text-xs sm:text-sm text-black border-collapse ${tableFixed ? 'table-fixed' : 'table-auto'}`}>
+          <table className={`w-full ${tableMinWidth ? tableMinWidth : 'w-full'} text-left text-xs sm:text-sm text-black border-collapse ${tableFixed || noScroll ? 'table-fixed' : 'table-auto'}`}>
             <thead className="bg-[#123B6D] text-white font-mono font-bold uppercase text-[11px] sm:text-xs tracking-wider border-b border-[#123B6D] select-none">
               <tr>
                 {columns.map((col, idx) => {
@@ -211,8 +220,8 @@ export default function DataTable({
                     <th
                       key={idx}
                       style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                      className={`${compact ? 'py-2 px-2.5 text-[10px] sm:text-[11px]' : 'py-2.5 px-3 text-[11px] sm:text-xs'} font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] overflow-hidden ${isFirst ? 'pl-3.5 sm:pl-4' : ''
-                        } ${isLast ? 'pr-3.5 sm:pr-4' : ''
+                      className={`${compact ? 'py-1.5 px-2 text-[10px] sm:text-[11px]' : 'py-2.5 px-3 text-[11px] sm:text-xs'} font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] overflow-hidden ${isFirst ? (compact ? 'pl-2.5 sm:pl-3' : 'pl-3.5 sm:pl-4') : ''
+                        } ${isLast ? (compact ? 'pr-2.5 sm:pr-3' : 'pr-3.5 sm:pr-4') : ''
                         } ${alignClass} ${col.headerClassName || ''}`}
                     >
                       <span className="font-mono font-bold text-white block truncate" title={typeof col.header === 'string' ? col.header : undefined}>
@@ -275,8 +284,8 @@ export default function DataTable({
                         <td
                           key={cIdx}
                           style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                          className={`${compact ? 'py-1 px-2.5' : 'py-1.5 px-3'} align-middle min-w-0 ${isFirst ? 'pl-3.5 sm:pl-4' : ''
-                            } ${isLast ? 'pr-3.5 sm:pr-4' : ''
+                          className={`${compact ? 'py-1 px-2 text-xs' : 'py-1.5 px-3'} align-middle min-w-0 ${isFirst ? (compact ? 'pl-2.5 sm:pl-3' : 'pl-3.5 sm:pl-4') : ''
+                            } ${isLast ? (compact ? 'pr-2.5 sm:pr-3' : 'pr-3.5 sm:pr-4') : ''
                             } ${col.className || ''}`}
                         >
                           <div className={`w-full min-w-0 flex items-center ${alignClass}`}>
@@ -307,7 +316,7 @@ export default function DataTable({
                     {searchQuery.trim() ? (
                       <p className="text-xs text-slate-600 mt-1 font-medium">Try refining search terms or clearing the search box</p>
                     ) : (
-                      <p className="text-xs text-slate-500 mt-1 font-medium">New orders will appear as soon as they are scheduled</p>
+                      <p className="text-xs text-slate-500 mt-1 font-medium">{emptySubtext || 'Click "+ Add" to create your first record'}</p>
                     )}
                   </td>
                 </tr>
@@ -425,7 +434,7 @@ export default function DataTable({
         </div>
 
         {/* Pagination Footer */}
-        <div className="p-2.5 sm:p-3 border-t border-[#D4E4F7] flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs sm:text-sm text-slate-700 w-full overflow-hidden bg-[#F5F9FF] shrink-0">
+        <div className={`border-t border-[#D4E4F7] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-700 w-full overflow-hidden bg-[#F5F9FF] shrink-0 ${compact ? 'py-1 px-2.5 sm:px-3 text-xs' : 'p-2.5 sm:p-3 sm:text-sm'}`}>
           <div className="flex items-center gap-4 text-xs sm:text-sm font-semibold">
             <div>
               Showing <span className="font-mono font-bold text-black">{filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{' '}

@@ -13,75 +13,11 @@ import {
   Activity,
   FileSpreadsheet
 } from 'lucide-react';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 
 const STORAGE_KEY = 'rmc_diesel_management_v2';
 
-const INITIAL_LOGS = [
-  {
-    id: 'DSL-2026-061',
-    date: '2026-10-19',
-    time: '07:30 AM',
-    equipmentType: 'Transit Mixer',
-    vehicleNo: 'MH-12-RN-4401 (TM-01)',
-    liters: 65,
-    ratePerLiter: 92.5,
-    totalCost: 6012.5,
-    currentOdo: 84320,
-    previousOdo: 84080,
-    kmDriven: 240,
-    mileageKmPerL: 3.69,
-    operator: 'Ramesh Pawar',
-    dispensedBy: 'Bapu Patil (Plant Tech)'
-  },
-  {
-    id: 'DSL-2026-062',
-    date: '2026-10-19',
-    time: '08:15 AM',
-    equipmentType: 'Transit Mixer',
-    vehicleNo: 'MH-12-RN-8822 (TM-02)',
-    liters: 70,
-    ratePerLiter: 92.5,
-    totalCost: 6475.0,
-    currentOdo: 62110,
-    previousOdo: 61860,
-    kmDriven: 250,
-    mileageKmPerL: 3.57,
-    operator: 'Sanjay Kumar Yadav',
-    dispensedBy: 'Bapu Patil (Plant Tech)'
-  },
-  {
-    id: 'DSL-2026-063',
-    date: '2026-10-19',
-    time: '09:00 AM',
-    equipmentType: 'Wheel Loader',
-    vehicleNo: 'CAT 930K Loader',
-    liters: 50,
-    ratePerLiter: 92.5,
-    totalCost: 4625.0,
-    currentOdo: 4890,
-    previousOdo: 4850,
-    kmDriven: 40, // hours
-    mileageKmPerL: 1.25, // L/hr
-    operator: 'Vikram Salve',
-    dispensedBy: 'Bapu Patil (Plant Tech)'
-  },
-  {
-    id: 'DSL-2026-064',
-    date: '2026-10-18',
-    time: '06:00 PM',
-    equipmentType: 'DG Set Generator',
-    vehicleNo: 'Cummins 250 kVA DG',
-    liters: 80,
-    ratePerLiter: 92.5,
-    totalCost: 7400.0,
-    currentOdo: 1240,
-    previousOdo: 1210,
-    kmDriven: 30, // hours run
-    mileageKmPerL: 2.67, // L/hr
-    operator: 'Ganesh (Electrician)',
-    dispensedBy: 'Bapu Patil (Plant Tech)'
-  }
-];
+const INITIAL_LOGS = [];
 
 export default function DieselManagementView() {
   const [logs, setLogs] = useState(() => {
@@ -103,21 +39,28 @@ export default function DieselManagementView() {
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     equipmentType: 'Transit Mixer',
-    vehicleNo: 'MH-12-RN-4401 (TM-01)',
-    liters: 60,
+    vehicleNo: '',
+    liters: 0,
     ratePerLiter: 92.5,
-    currentOdo: 84500,
-    previousOdo: 84320,
-    operator: 'Ramesh Pawar',
-    dispensedBy: 'Bapu Patil (Plant Tech)'
+    currentOdo: 0,
+    previousOdo: 0,
+    operator: '',
+    dispensedBy: 'Plant Supervisor'
   });
 
+  // Subscribe to real-time Cloud Sync for cross-device updates
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
-    } catch (err) {
-      console.error('Failed to save diesel logs:', err);
-    }
+    const unsub = subscribeCloudStore('cloud_diesel_management', STORAGE_KEY, INITIAL_LOGS, (cloudLogs) => {
+      if (Array.isArray(cloudLogs) && cloudLogs.length > 0) {
+        setLogs(cloudLogs);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Save changes to localStorage & Cloud Firestore
+  useEffect(() => {
+    pushCloudStore('cloud_diesel_management', STORAGE_KEY, logs);
   }, [logs]);
 
   const handleCreateEntry = (e) => {
@@ -161,53 +104,53 @@ export default function DieselManagementView() {
   const tankPercentage = Math.round((currentTankStock / tankCapacity) * 100);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-amber-800 via-orange-900 to-slate-900 text-white rounded-xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-amber-600/60 text-amber-200 text-xs px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider">
-              Fuel & Energy Management
-            </span>
+    <div className="space-y-3 max-w-7xl mx-auto pb-8">
+      {/* Compact Slim Top Header Bar */}
+      <div className="bg-white rounded-xl border border-slate-200 px-3.5 py-2.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center font-bold shrink-0">
+            <Fuel size={16} />
           </div>
-          <h1 className="text-2xl font-black tracking-tight mt-1">Diesel & Fuel Dispensation (डिझेल व्यवस्थापन)</h1>
-          <p className="text-sm text-amber-200/80 mt-1">
-            Track underground HSD storage tank, pump dispensing, mixer mileage, and DG set power generator consumption.
-          </p>
+          <div>
+            <h1 className="text-sm font-black text-slate-900 leading-tight">Diesel & Fuel Dispensation</h1>
+            <p className="text-[11px] text-slate-500 hidden sm:block">
+              Underground HSD storage tank, pump dispensing, mixer mileage, and DG set generator logs
+            </p>
+          </div>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2.5 rounded-lg shadow transition active:scale-95"
+          className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs shadow-2xs transition active:scale-95 cursor-pointer shrink-0"
         >
-          <Plus size={18} />
-          <span>Record Fuel Dispense</span>
+          <Plus size={14} />
+          <span>+ Record Fuel Dispense</span>
         </button>
       </div>
 
       {/* Fuel Tank Stock Gauge & KPI summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Main Tank Level Visualizer */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-200 shadow-2xs flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center gap-1.5">
-                <Fuel size={16} className="text-amber-600" />
-                HSD Main Storage Tank (10 KL)
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-[11px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1.5">
+                <Fuel size={14} className="text-amber-600" />
+                HSD Storage Tank (10 KL)
               </span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
                 Safe Level
               </span>
             </div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl font-black text-gray-900">{currentTankStock.toLocaleString()} L</span>
-              <span className="text-sm text-gray-500">/ {tankCapacity.toLocaleString()} L</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-gray-900">{currentTankStock.toLocaleString()} L</span>
+              <span className="text-xs text-gray-500">/ {tankCapacity.toLocaleString()} L</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Underground Diesel Storage Tank (PESO Compliant)</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Underground Diesel Storage Tank (PESO Compliant)</p>
           </div>
 
-          <div className="mt-4">
-            <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
+          <div className="mt-3">
+            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   tankPercentage > 30 ? 'bg-amber-500' : 'bg-red-500'
@@ -215,52 +158,52 @@ export default function DieselManagementView() {
                 style={{ width: `${tankPercentage}%` }}
               ></div>
             </div>
-            <div className="flex justify-between items-center text-xs text-gray-500 mt-2 font-semibold">
+            <div className="flex justify-between items-center text-[10px] text-gray-500 mt-1.5 font-semibold">
               <span>{tankPercentage}% Remaining</span>
-              <span>Reorder Alert: &lt; 2,000 L</span>
+              <span>Reorder: &lt; 2,000 L</span>
             </div>
           </div>
         </div>
 
         {/* Total Cost Dispensed */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-200 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 text-blue-700 rounded-lg">
-              <Droplet size={24} />
+            <div className="p-2.5 bg-blue-100 text-blue-700 rounded-lg">
+              <Droplet size={20} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 font-semibold uppercase">Total Fuel Dispensed</p>
-              <p className="text-2xl font-black text-gray-900">{totalFuelDispensed.toLocaleString()} <span className="text-sm font-normal text-gray-500">Liters</span></p>
+              <p className="text-[10px] text-gray-500 font-semibold uppercase">Total Fuel Dispensed</p>
+              <p className="text-xl font-black text-gray-900">{totalFuelDispensed.toLocaleString()} <span className="text-xs font-normal text-gray-500">L</span></p>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t flex justify-between items-center text-sm">
+          <div className="mt-3 pt-2 border-t flex justify-between items-center text-xs">
             <span className="text-gray-500 font-medium">Total Cost Value:</span>
-            <span className="font-black text-emerald-700 text-lg">₹{totalCostDispensed.toLocaleString()}</span>
+            <span className="font-black text-emerald-700 text-sm">₹{totalCostDispensed.toLocaleString()}</span>
           </div>
         </div>
 
         {/* Average Fleet Economy */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-200 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-purple-100 text-purple-700 rounded-lg">
-              <TrendingUp size={24} />
+            <div className="p-2.5 bg-purple-100 text-purple-700 rounded-lg">
+              <TrendingUp size={20} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 font-semibold uppercase">Transit Mixer Mileage</p>
-              <p className="text-2xl font-black text-gray-900">3.65 <span className="text-sm font-normal text-gray-500">km / Liter</span></p>
+              <p className="text-[10px] text-gray-500 font-semibold uppercase">Transit Mixer Mileage</p>
+              <p className="text-xl font-black text-gray-900">3.65 <span className="text-xs font-normal text-gray-500">km / L</span></p>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t flex justify-between items-center text-sm">
-            <span className="text-gray-500 font-medium">DG Set Fuel Consumption:</span>
-            <span className="font-bold text-amber-700">~2.7 L / hr (Avg)</span>
+          <div className="mt-3 pt-2 border-t flex justify-between items-center text-xs">
+            <span className="text-gray-500 font-medium">DG Set Consumption:</span>
+            <span className="font-bold text-amber-700">~2.7 L / hr</span>
           </div>
         </div>
       </div>
 
       {/* Search & Filter */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
+      <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-gray-200 shadow-2xs flex flex-col md:flex-row gap-2.5 justify-between items-center">
         <div className="relative w-full md:w-80">
           <Search size={18} className="absolute left-3 top-2.5 text-gray-400" />
           <input
@@ -294,7 +237,7 @@ export default function DieselManagementView() {
         <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
           <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
             <Activity size={16} className="text-amber-600" />
-            Diesel Dispensation Register (डिझेल वितरण नोंदवही)
+            Diesel Dispensation Register
           </h3>
           <span className="text-xs text-gray-500 font-medium">{filteredLogs.length} Records</span>
         </div>
@@ -369,7 +312,7 @@ export default function DieselManagementView() {
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
                 <Fuel className="text-amber-600" size={20} />
-                Record Diesel Dispensing (डिझेल वितरण नोंद)
+                Record Diesel Dispensing
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}

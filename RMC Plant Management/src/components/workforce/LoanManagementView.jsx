@@ -203,86 +203,62 @@ export default function LoanManagementView({ employeeFilter = null }) {
   ];
 
   return (
-    <div className="space-y-5">
-      {/* Metrics Banner: Clean Light Theme Cards with Generous Spacing */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+    <div className="space-y-3">
+      {/* Metrics Banner: Ultra-Compact Tiles for Max Table View Space */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {/* Card 1: Active Loans */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-600 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-blue-700 uppercase font-bold tracking-wider">Active Loans</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shadow-2xs">
-              <CreditCard className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight block">
+        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-blue-700 uppercase font-bold tracking-wider block truncate">Active Loans</span>
+            <div className="text-xs sm:text-sm font-black text-slate-900 font-mono tracking-tight mt-0.5">
               {activeLoans.length}
-            </span>
+            </div>
+            <div className="text-[9px] text-slate-400 font-medium truncate mt-0.5">Company assisted</div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 pt-1 border-t border-slate-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            <span>Company assisted</span>
+          <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+            <CreditCard className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* Card 2: Total Principal */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-emerald-700 uppercase font-bold tracking-wider">Total Principal</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-2xs">
-              <IndianRupee className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-800 font-mono tracking-tight block">
+        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-emerald-700 uppercase font-bold tracking-wider block truncate">Total Principal</span>
+            <div className="text-xs sm:text-sm font-black text-emerald-800 font-mono tracking-tight mt-0.5">
               ₹ {totalPrincipal.toLocaleString('en-IN')}
-            </span>
+            </div>
+            <div className="text-[9px] text-emerald-700 font-medium truncate mt-0.5">Disbursed funds</div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 pt-1 border-t border-emerald-50">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Disbursed funds</span>
+          <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+            <IndianRupee className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* Card 3: Outstanding Loan Book */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-amber-700 uppercase font-bold tracking-wider">Outstanding Loan Book</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shadow-2xs">
-              <Percent className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-amber-800 font-mono tracking-tight block">
+        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-amber-700 uppercase font-bold tracking-wider block truncate">Outstanding Book</span>
+            <div className="text-xs sm:text-sm font-black text-amber-800 font-mono tracking-tight mt-0.5">
               ₹ {totalOutstanding.toLocaleString('en-IN')}
-            </span>
+            </div>
+            <div className="text-[9px] text-amber-700 font-medium truncate mt-0.5">To recover</div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 pt-1 border-t border-amber-50">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>Principal to recover</span>
+          <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+            <Percent className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* Card 4: Monthly EMI Recovery */}
-        <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-sm transition-all relative overflow-hidden flex flex-col justify-between group">
-          <div className="h-1 bg-gradient-to-r from-teal-400 to-cyan-500 absolute top-0 left-0 right-0" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-teal-700 uppercase font-bold tracking-wider">Monthly EMI Recovery</span>
-            <div className="w-8.5 h-8.5 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700 shadow-2xs">
-              <Calendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="my-2.5">
-            <span className="text-2xl sm:text-3xl font-black text-teal-800 font-mono tracking-tight block">
+        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-teal-700 uppercase font-bold tracking-wider block truncate">Monthly EMI</span>
+            <div className="text-xs sm:text-sm font-black text-teal-800 font-mono tracking-tight mt-0.5">
               ₹ {monthlyEmiRunRate.toLocaleString('en-IN')}
-            </span>
+            </div>
+            <div className="text-[9px] text-teal-700 font-medium truncate mt-0.5">Payroll run</div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-teal-700 pt-1 border-t border-teal-50">
-            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-            <span>Automated payroll run</span>
+          <div className="w-7 h-7 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700 shrink-0">
+            <Calendar className="w-3.5 h-3.5" />
           </div>
         </div>
       </div>

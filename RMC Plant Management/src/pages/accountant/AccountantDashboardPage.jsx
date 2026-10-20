@@ -96,12 +96,12 @@ export default function AccountantDashboardPage() {
   };
 
   const columns = [
-    { header: 'Invoice #', accessor: 'invoice', render: (row) => <span className="font-mono text-emerald-400 font-bold">{row.invoice}</span> },
-    { header: 'Client Account', accessor: 'client', render: (row) => <span className="font-semibold text-white">{row.client}</span> },
-    { header: 'Mix Grade', accessor: 'grade', render: (row) => <span className="px-2 py-0.5 rounded bg-amber-100/80 text-amber-900 border border-amber-300/80 font-mono text-[10px]">{row.grade}</span> },
-    { header: 'Billed Volume', accessor: 'volume', className: 'font-mono text-slate-300' },
-    { header: 'Amount (INR)', accessor: 'amount', render: (row) => <span className="font-bold text-white font-mono">{row.amount}</span> },
-    { header: 'Due Date', accessor: 'dueDate', className: 'font-mono text-slate-400' },
+    { header: 'Invoice #', accessor: 'invoice', render: (row) => <span className="font-mono text-[#136dec] font-semibold text-xs">{row.invoice}</span> },
+    { header: 'Client Account', accessor: 'client', render: (row) => <span className="font-semibold text-slate-900 text-xs">{row.client}</span> },
+    { header: 'Mix Grade', accessor: 'grade', render: (row) => <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[11px]">{row.grade}</span> },
+    { header: 'Billed Volume', accessor: 'volume', className: 'font-mono text-slate-700 text-xs' },
+    { header: 'Amount (INR)', accessor: 'amount', render: (row) => <span className="font-bold text-slate-900 font-mono text-xs">{row.amount}</span> },
+    { header: 'Due Date', accessor: 'dueDate', className: 'font-mono text-slate-600 text-xs' },
     { header: 'Payment Status', accessor: 'status', type: 'status' },
     {
       header: 'Actions',
@@ -110,7 +110,7 @@ export default function AccountantDashboardPage() {
         <button
           type="button"
           onClick={() => setToastMessage(`Challan & GST e-Invoice ${row.invoice} downloaded`)}
-          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs transition-colors"
+          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
         >
           View PDF
         </button>
@@ -132,18 +132,18 @@ export default function AccountantDashboardPage() {
               onClick={() => setActiveTab('attendance')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
                 isAccountantClockedIn && !isAccountantShiftEnded
-                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-300'
-                  : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                  : 'bg-white hover:bg-[#EAF3FF] text-slate-700 border border-[#D4E4F7]'
               }`}
               title="Mark or View Daily Attendance"
             >
-              <Clock className={`w-3.5 h-3.5 ${isAccountantClockedIn && !isAccountantShiftEnded ? 'text-emerald-600 animate-pulse' : 'text-[#1D5FA7]'}`} />
+              <Clock className={`w-3.5 h-3.5 ${isAccountantClockedIn && !isAccountantShiftEnded ? 'text-emerald-600' : 'text-[#1D5FA7]'}`} />
               <span>{isAccountantClockedIn && !isAccountantShiftEnded ? 'On Duty' : 'Daily Attendance'}</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('billing')}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#136dec] hover:bg-[#115ec9] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
             >
               <ReceiptText className="w-3.5 h-3.5" />
               <span>Cash Memo / Billing</span>
@@ -151,7 +151,7 @@ export default function AccountantDashboardPage() {
             <button
               type="button"
               onClick={() => setShowPaymentModal(true)}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-slate-700 border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <CreditCard className="w-3.5 h-3.5 text-[#1D5FA7]" />
               <span>Record Payment</span>
@@ -180,21 +180,21 @@ export default function AccountantDashboardPage() {
         <div className="w-full flex-1 flex flex-col space-y-4 pb-6 min-w-0">
           
           {/* Accountant Daily Duty & Attendance Quick Card */}
-          <section className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#D4E4F7] shadow-2xs flex flex-wrap items-center justify-between gap-3">
+          <section className="p-3 sm:p-3.5 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center font-bold shrink-0">
-                <Clock className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-lg bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center font-bold shrink-0">
+                <Clock className="w-4 h-4" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs sm:text-sm font-bold text-black uppercase tracking-wide">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wide">
                     Accountant Daily Attendance
                   </h3>
-                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7]">
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7]">
                     ACC-001
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-700">
+                <p className="text-[11px] text-slate-600">
                   {isAccountantClockedIn && !isAccountantShiftEnded
                     ? `Clocked In at ${formatToIndian12Hr(accountantTodayAttendance?.punchIn)} • Biometric & GPS verified`
                     : isAccountantShiftEnded
@@ -208,10 +208,10 @@ export default function AccountantDashboardPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab('attendance')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
                   isAccountantClockedIn && !isAccountantShiftEnded
-                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-                    : 'bg-[#1D5FA7] hover:bg-[#123B6D] text-white'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                    : 'bg-[#136dec] hover:bg-[#115ec9] text-white'
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
@@ -219,34 +219,35 @@ export default function AccountantDashboardPage() {
               </button>
             </div>
           </section>
+
           {/* Phase 1 Payroll & Advances Financial Telemetry Strip */}
-          <section className="p-4.5 rounded-3xl bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/90 border border-emerald-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+          <section className="p-3 sm:p-3.5 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
               <div>
-                <span className="text-[10px] font-mono uppercase text-emerald-800 font-bold block tracking-wider">
+                <span className="text-[10px] font-mono uppercase text-slate-500 font-bold block tracking-wider">
                   WORKFORCE PAYROLL & RECOVERY TELEMETRY
                 </span>
-                <span className="text-xs font-bold text-slate-900">
-                  {employees.length} Staff Enrolled • Monthly Gross Wages: <span className="font-mono font-black text-emerald-700">₹ {totalGrossSalaries.toLocaleString('en-IN')}</span>
+                <span className="text-xs font-semibold text-slate-800">
+                  {employees.length} Staff Enrolled • Monthly Gross Wages: <span className="font-mono font-bold text-emerald-700">₹ {totalGrossSalaries.toLocaleString('en-IN')}</span>
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
-                Pending Payroll: <strong className="text-amber-700 font-bold">{pendingPayrollCount}</strong>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-slate-700 font-medium">
+                Pending Payroll: <strong className="text-amber-700 font-bold font-mono">{pendingPayrollCount}</strong>
               </span>
-              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
-                Advance Book: <strong className="text-rose-700 font-bold">₹ {advanceOutstanding.toLocaleString('en-IN')}</strong>
+              <span className="px-2.5 py-1 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-slate-700 font-medium">
+                Advance Book: <strong className="text-rose-700 font-bold font-mono">₹ {advanceOutstanding.toLocaleString('en-IN')}</strong>
               </span>
-              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
-                Loan Book: <strong className="text-cyan-700 font-bold">₹ {loanOutstanding.toLocaleString('en-IN')}</strong>
+              <span className="px-2.5 py-1 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-slate-700 font-medium">
+                Loan Book: <strong className="text-cyan-700 font-bold font-mono">₹ {loanOutstanding.toLocaleString('en-IN')}</strong>
               </span>
               <button
                 type="button"
                 onClick={() => setActiveTab('payroll')}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold font-sans cursor-pointer shadow-xs transition-all active:scale-[0.98]"
+                className="px-3 py-1.5 rounded-lg bg-[#136dec] hover:bg-[#115ec9] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
               >
                 Open Payroll Prep →
               </button>
@@ -302,6 +303,7 @@ export default function AccountantDashboardPage() {
               columns={columns}
               data={ledgers}
               searchPlaceholder="Search client, invoice number, mix grade..."
+              noScroll={true}
               renderMobileCard={(inv) => (
                 <div className="w-full max-w-full overflow-hidden min-w-0">
                   <div className="flex items-start justify-between gap-2">
@@ -330,7 +332,7 @@ export default function AccountantDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setToastMessage(`Downloading Invoice ${inv.invoice}`)}
-                      className="px-3.5 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl cursor-pointer transition-colors"
+                      className="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
                     >
                       Download Challan PDF
                     </button>
@@ -343,41 +345,41 @@ export default function AccountantDashboardPage() {
           {/* Invoice Status Distribution & Revenue Trend Chart */}
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 sm:gap-3">
             {/* Invoice Status Snapshot Card */}
-            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+            <div className="p-3 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2.5">
                   <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <ReceiptText className="w-3.5 h-3.5 text-blue-600" />
+                    <ReceiptText className="w-3.5 h-3.5 text-[#136dec]" />
                     <span>Invoice Pipeline</span>
                   </h3>
-                  <span className="text-[9px] font-mono text-slate-500 font-semibold px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-600 font-semibold px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
                     {invoiceBreakdown.paid + invoiceBreakdown.pending + invoiceBreakdown.overdue} TOTAL
                   </span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="p-2 rounded-md bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between">
+                  <div className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-semibold text-emerald-900 block">Paid & Reconciled</span>
-                      <span className="text-[9.5px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
+                      <span className="text-xs font-semibold text-emerald-950 block">Paid & Reconciled</span>
+                      <span className="text-[10px] text-slate-500">Direct NEFT/RTGS bank settlements</span>
                     </div>
-                    <span className="text-base font-bold text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
+                    <span className="text-sm sm:text-base font-bold text-emerald-700 font-mono">{invoiceBreakdown.paid}</span>
                   </div>
 
-                  <div className="p-2 rounded-md bg-amber-50/80 border border-amber-200/80 flex items-center justify-between">
+                  <div className="p-2 rounded-lg bg-amber-50/60 border border-amber-100 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-semibold text-amber-900 block">Pending Clearance</span>
-                      <span className="text-[9.5px] text-slate-500">Awaiting credit period maturity</span>
+                      <span className="text-xs font-semibold text-amber-950 block">Pending Clearance</span>
+                      <span className="text-[10px] text-slate-500">Awaiting credit period maturity</span>
                     </div>
-                    <span className="text-base font-bold text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
+                    <span className="text-sm sm:text-base font-bold text-amber-700 font-mono">{invoiceBreakdown.pending}</span>
                   </div>
 
-                  <div className="p-2 rounded-md bg-rose-50/80 border border-rose-200/80 flex items-center justify-between">
+                  <div className="p-2 rounded-lg bg-rose-50/60 border border-rose-100 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-semibold text-rose-900 block">Overdue (&gt; 30 Days)</span>
-                      <span className="text-[9.5px] text-slate-500">Follow-up reminders issued</span>
+                      <span className="text-xs font-semibold text-rose-950 block">Overdue (&gt; 30 Days)</span>
+                      <span className="text-[10px] text-slate-500">Follow-up reminders issued</span>
                     </div>
-                    <span className="text-base font-bold text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
+                    <span className="text-sm sm:text-base font-bold text-rose-700 font-mono">{invoiceBreakdown.overdue}</span>
                   </div>
                 </div>
               </div>
@@ -406,12 +408,12 @@ export default function AccountantDashboardPage() {
           </section>
 
           {/* Quick Actions & Cost Breakdown */}
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 space-y-3">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Finance Operations Quick Commands
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <QuickAction
                   icon={ReceiptText}
                   title="Create Invoice"
@@ -455,9 +457,9 @@ export default function AccountantDashboardPage() {
             </div>
 
             {/* Expense Summary Breakdown Card */}
-            <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-slate-200/90 shadow-2xs">
+            <div className="p-3 rounded-xl bg-white border border-[#D4E4F7] shadow-2xs">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                <Layers className="w-3.5 h-3.5 text-[#136dec]" />
                 <span>Monthly Raw Material Costings</span>
               </h3>
 
@@ -471,7 +473,7 @@ export default function AccountantDashboardPage() {
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full shadow-2xs"
+                          className="h-full bg-[#136dec] rounded-full"
                           style={{ width: `${exp.percent}%` }}
                         />
                       </div>
@@ -496,9 +498,9 @@ export default function AccountantDashboardPage() {
         subtitle="Generate B2B tax invoice against verified batching tickets."
         icon={ReceiptText}
       >
-        <form onSubmit={handleCreateInvoice} className="space-y-4">
+        <form onSubmit={handleCreateInvoice} className="space-y-3.5">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
               Client Account *
             </label>
             <input
@@ -506,38 +508,38 @@ export default function AccountantDashboardPage() {
               required
               value={invForm.client}
               onChange={(e) => setInvForm({ ...invForm, client: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-cyan-500"
+              className="w-full px-3 py-1.5 bg-white border border-[#D4E4F7] rounded-lg text-xs text-slate-900 focus:outline-none focus:border-[#136dec] focus:ring-1 focus:ring-[#136dec]"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Concrete Mix
               </label>
               <input
                 type="text"
                 value={invForm.grade}
                 onChange={(e) => setInvForm({ ...invForm, grade: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-cyan-500"
+                className="w-full px-3 py-1.5 bg-white border border-[#D4E4F7] rounded-lg text-xs text-slate-900 focus:outline-none focus:border-[#136dec] focus:ring-1 focus:ring-[#136dec]"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Billed Volume
               </label>
               <input
                 type="text"
                 value={invForm.volume}
                 onChange={(e) => setInvForm({ ...invForm, volume: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-cyan-500"
+                className="w-full px-3 py-1.5 bg-white border border-[#D4E4F7] rounded-lg text-xs text-slate-900 focus:outline-none focus:border-[#136dec] focus:ring-1 focus:ring-[#136dec]"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Total Amount (INR) *
               </label>
               <input
@@ -545,18 +547,18 @@ export default function AccountantDashboardPage() {
                 required
                 value={invForm.amount}
                 onChange={(e) => setInvForm({ ...invForm, amount: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:bg-white focus:border-cyan-500"
+                className="w-full px-3 py-1.5 bg-white border border-[#D4E4F7] rounded-lg text-xs text-slate-900 font-mono focus:outline-none focus:border-[#136dec] focus:ring-1 focus:ring-[#136dec]"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Due Date
               </label>
               <input
                 type="text"
                 value={invForm.dueDate}
                 onChange={(e) => setInvForm({ ...invForm, dueDate: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:bg-white focus:border-cyan-500"
+                className="w-full px-3 py-1.5 bg-white border border-[#D4E4F7] rounded-lg text-xs text-slate-900 font-mono focus:outline-none focus:border-[#136dec] focus:ring-1 focus:ring-[#136dec]"
               />
             </div>
           </div>
@@ -565,13 +567,13 @@ export default function AccountantDashboardPage() {
             <button
               type="button"
               onClick={() => setShowInvoiceModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950"
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#136dec] hover:bg-[#115ec9] text-white shadow-2xs transition-colors cursor-pointer"
             >
               Generate Invoice
             </button>
@@ -586,11 +588,11 @@ export default function AccountantDashboardPage() {
         subtitle="Match NEFT / RTGS / UTR number with outstanding tax invoices."
         icon={CreditCard}
       >
-        <div className="space-y-3 text-xs text-slate-300">
-          <p className="text-slate-400">
+        <div className="space-y-3 text-xs text-slate-600">
+          <p className="text-slate-600">
             Payment gateway hook is enabled. Invoices marked as 'Paid' will automatically update client ledger limits in real time.
           </p>
-          <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/90 font-mono text-emerald-800">
+          <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200 font-mono text-emerald-800 text-xs">
             Auto-reconciliation active via virtual bank account numbers.
           </div>
           <div className="flex justify-end pt-2">
@@ -600,7 +602,7 @@ export default function AccountantDashboardPage() {
                 setShowPaymentModal(false);
                 setToastMessage('Payment recorded and synced with tally ledger.');
               }}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950"
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#136dec] hover:bg-[#115ec9] text-white shadow-2xs transition-colors cursor-pointer"
             >
               Record Payment
             </button>

@@ -1,14 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scale, Plus, Search, Printer, CheckCircle2 } from 'lucide-react';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 
-const INITIAL_WEIGHBRIDGE = [
-  { id: 'WB-7822', slipNo: 'WB-7822', date: '19-Oct-2026', time: '10:10 AM', vehicleNo: 'MH-10-AQ-9911', partyName: 'Mahalaxmi Stone Crushers', material: '20mm Aggregate', grossKg: 38000, tareKg: 12000, netKg: 26000, operator: 'Prakash K.' },
-  { id: 'WB-7821', slipNo: 'WB-7821', date: '19-Oct-2026', time: '09:20 AM', vehicleNo: 'MH-12-RN-4545', partyName: 'UltraTech Cement Ltd', material: 'OPC 53 Cement', grossKg: 42500, tareKg: 14200, netKg: 28300, operator: 'Prakash K.' },
-  { id: 'WB-7820', slipNo: 'WB-7820', date: '19-Oct-2026', time: '08:40 AM', vehicleNo: 'MH-10-CR-1212', partyName: 'SM CONCRETECH Mixer #01', material: 'Transit Mixer Tare', grossKg: 28400, tareKg: 14000, netKg: 14400, operator: 'Prakash K.' },
-];
+const INITIAL_WEIGHBRIDGE = [];
 
 export default function WeighbridgeView() {
-  const [slips, setSlips] = useState(INITIAL_WEIGHBRIDGE);
+  const [slips, setSlips] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rmc_weighbridge_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_WEIGHBRIDGE;
+  });
+
+  useEffect(() => {
+    const unsub = subscribeCloudStore('cloud_weighbridge', 'rmc_weighbridge_v2', INITIAL_WEIGHBRIDGE, (cloudSlips) => {
+      if (Array.isArray(cloudSlips) && cloudSlips.length > 0) {
+        setSlips(cloudSlips);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    pushCloudStore('cloud_weighbridge', 'rmc_weighbridge_v2', slips);
+  }, [slips]);
   const [search, setSearch] = useState('');
 
   const filtered = slips.filter(s => 
@@ -53,17 +69,25 @@ export default function WeighbridgeView() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-mono">
-            {filtered.map(s => (
-              <tr key={s.id} className="hover:bg-slate-50">
-                <td className="py-2.5 px-3 font-bold text-slate-900">#{s.slipNo}<div className="text-[10px] text-slate-500 font-normal">{s.date} {s.time}</div></td>
-                <td className="py-2.5 px-3 font-bold">{s.vehicleNo}</td>
-                <td className="py-2.5 px-3 font-sans font-medium">{s.partyName}</td>
-                <td className="py-2.5 px-3 font-sans text-blue-700">{s.material}</td>
-                <td className="py-2.5 px-3 text-right text-slate-600">{s.grossKg.toLocaleString('en-IN')}</td>
-                <td className="py-2.5 px-3 text-right text-slate-600">{s.tareKg.toLocaleString('en-IN')}</td>
-                <td className="py-2.5 px-3 text-right font-black text-emerald-700">{(s.netKg / 1000).toFixed(2)} Tons</td>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan="7" className="py-8 text-center text-slate-400 font-sans">
+                  No weighbridge tickets recorded. Use "+ New Weighment" to log material gross/tare weight.
+                </td>
               </tr>
-            ))}
+            ) : (
+              filtered.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50">
+                  <td className="py-2.5 px-3 font-bold text-slate-900">#{s.slipNo}<div className="text-[10px] text-slate-500 font-normal">{s.date} {s.time}</div></td>
+                  <td className="py-2.5 px-3 font-bold">{s.vehicleNo}</td>
+                  <td className="py-2.5 px-3 font-sans font-medium">{s.partyName}</td>
+                  <td className="py-2.5 px-3 font-sans text-blue-700">{s.material}</td>
+                  <td className="py-2.5 px-3 text-right text-slate-600">{Number(s.grossKg || 0).toLocaleString('en-IN')}</td>
+                  <td className="py-2.5 px-3 text-right text-slate-600">{Number(s.tareKg || 0).toLocaleString('en-IN')}</td>
+                  <td className="py-2.5 px-3 text-right font-black text-emerald-700">{((s.netKg || 0) / 1000).toFixed(2)} Tons</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

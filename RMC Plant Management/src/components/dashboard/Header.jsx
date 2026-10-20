@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import Modal from './Modal';
 
 export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen = true }) {
@@ -36,6 +37,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
     addPlant,
   } = useWorkforce();
   const { user, logout } = useAuth();
+  const { language, setLanguage, toggleLanguage } = useLanguage();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddPlantModal, setShowAddPlantModal] = useState(false);
@@ -394,8 +396,34 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </div>
 
-        {/* Right: Notifications & Sign Out */}
+        {/* Right: Language Switcher, Notifications & Sign Out */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+
+          {/* Distinct Language Options (English & Marathi Separate) */}
+          <div className="flex items-center bg-[#F5F9FF] p-0.5 rounded-lg border border-[#D4E4F7] text-xs font-bold shrink-0">
+            <button
+              type="button"
+              onClick={() => setLanguage('en')}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                language === 'en'
+                  ? 'bg-[#1D5FA7] text-white shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              English
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage('mr')}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                language === 'mr'
+                  ? 'bg-[#1D5FA7] text-white shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              मराठी
+            </button>
+          </div>
 
           {/* Notifications Button & Popover */}
           <div className="relative shrink-0" ref={notificationsRef}>

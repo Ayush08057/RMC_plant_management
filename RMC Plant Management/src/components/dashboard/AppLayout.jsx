@@ -4,6 +4,7 @@ import { ShieldCheck, ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { ROLES } from '../../data/mockUsers';
 import NotImplementedView, { PLANT_OPERATIONS_TABS } from '../common/NotImplementedView';
 import PlantOperationsView, { OPERATIONS_MODULES } from '../operations/PlantOperationsView';
@@ -18,6 +19,7 @@ export default function AppLayout({
   actions = null,
 }) {
   const { user, switchRole } = useAuth();
+  const { language, t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
@@ -67,7 +69,7 @@ export default function AppLayout({
   }, []);
 
   return (
-    <div className="app-shell relative h-[100dvh] max-h-[100dvh] w-screen max-w-full overflow-hidden bg-[#F5F9FF] text-black flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
+    <div className="app-shell relative h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden bg-[#F5F9FF] text-black flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
       {/* Sidebar Navigation */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -79,8 +81,8 @@ export default function AppLayout({
       />
 
       {/* Main Content Layout - Header strictly pinned at the top */}
-      <div className={`relative z-10 flex-1 h-[100dvh] max-h-[100dvh] flex flex-col transition-all duration-300 w-full max-w-full min-w-0 overflow-hidden ${
-        sidebarOpen ? 'md:pl-64' : 'md:pl-[68px]'
+      <div className={`relative z-10 flex-1 h-[100dvh] max-h-[100dvh] flex flex-col transition-[padding-left] duration-200 ease-out w-full max-w-full min-w-0 overflow-hidden ${
+        sidebarOpen ? 'md:pl-72' : 'md:pl-[68px]'
       }`}>
         {/* Top Header Bar - Fixed strictly to the upper part */}
         <Header 
@@ -141,50 +143,62 @@ export default function AppLayout({
                 className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Return to Admin Console</span>
+                <span>{t('Return to Admin Console')}</span>
               </button>
             </div>
           </div>
         )}
 
         {/* Professional Enterprise Page Title Bar - Ultra-Slim & Compact */}
-        {(title || actions || (activeTab && PLANT_OPERATIONS_TABS[activeTab])) && (
-          <div className="px-3 sm:px-4 pt-1.5 pb-1 shrink-0">
-            <div className="bg-white border border-[#D4E4F7] rounded-xl px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 min-w-0">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <h1 className="text-xs sm:text-sm md:text-base font-bold text-black tracking-tight truncate leading-tight">
-                  {activeTab && PLANT_OPERATIONS_TABS[activeTab] ? PLANT_OPERATIONS_TABS[activeTab].label : title}
-                </h1>
-                {(badge || (activeTab && PLANT_OPERATIONS_TABS[activeTab])) && (
-                  <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
-                    {activeTab && PLANT_OPERATIONS_TABS[activeTab] ? 'PLANT OPS' : badge}
-                  </span>
+        {(() => {
+          const isPlantOps = activeTab && (activeTab === 'plant-operations' || PLANT_OPERATIONS_TABS[activeTab] || OPERATIONS_MODULES.some((m) => m.id === activeTab));
+          if (!title && !actions && !isPlantOps) return null;
+
+          const isAccountant = user?.role === ROLES.ACCOUNTANT || (location?.pathname && location.pathname.startsWith('/accountant'));
+          const defaultPlantOp = isAccountant ? 'material-inward' : 'plant-dashboard';
+          const plantModule = isPlantOps ? OPERATIONS_MODULES.find(m => m.id === (activeTab === 'plant-operations' ? defaultPlantOp : activeTab)) : null;
+          const displayTitle = plantModule ? plantModule.label : (activeTab && PLANT_OPERATIONS_TABS[activeTab] ? PLANT_OPERATIONS_TABS[activeTab].label : title);
+          const displayBadge = isPlantOps ? 'PLANT OPS' : badge;
+
+          return (
+            <div className="px-3 sm:px-4 pt-1.5 pb-1 shrink-0">
+              <div className="bg-white border border-[#D4E4F7] rounded-xl px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <h1 className="text-xs sm:text-sm md:text-base font-bold text-black tracking-tight truncate leading-tight">
+                    {t(displayTitle)}
+                  </h1>
+                  {displayBadge && (
+                    <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
+                      {t(displayBadge)}
+                    </span>
+                  )}
+                </div>
+
+                {actions && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {actions}
+                  </div>
                 )}
               </div>
-
-              {actions && (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {actions}
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Page Inner Content - Only this area scrolls vertically */}
         <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-4 py-1.5 sm:py-2 overflow-y-auto overflow-x-hidden flex flex-col text-black">
           {(() => {
-            const isPlantOps = activeTab && (PLANT_OPERATIONS_TABS[activeTab] || OPERATIONS_MODULES.some((m) => m.id === activeTab));
+            const isPlantOps = activeTab && (
+              activeTab === 'plant-operations' ||
+              PLANT_OPERATIONS_TABS[activeTab] ||
+              OPERATIONS_MODULES.some((m) => m.id === activeTab)
+            );
             if (isPlantOps) {
               return (
-                <>
-                  <PlantOperationsView
-                    activeTab={activeTab}
-                    onSelectTab={onSelectTab}
-                    onBack={() => onSelectTab && onSelectTab('dashboard')}
-                  />
-                  {children}
-                </>
+                <PlantOperationsView
+                  activeTab={activeTab === 'plant-operations' ? defaultPlantOp : activeTab}
+                  onSelectTab={onSelectTab}
+                  onBack={() => onSelectTab && onSelectTab('dashboard')}
+                />
               );
             }
             return children;
@@ -197,11 +211,11 @@ export default function AppLayout({
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-[#246BCE] shrink-0" />
               <div className="text-black font-medium truncate text-xs flex items-center gap-1.5">
-                <span className="text-slate-600 hidden sm:inline">Active Session:</span>
+                <span className="text-slate-600 hidden sm:inline">{t('Active Session:', 'Active Session:')}</span>
                 <strong className="text-black font-semibold truncate">{user?.name || 'Administrator'}</strong>
                 {user?.role && (
                   <span className="px-2 py-0.5 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[11px] font-mono font-semibold shrink-0">
-                    {user.role}
+                    {t(user.role)}
                   </span>
                 )}
                 {user?.employeeId && (

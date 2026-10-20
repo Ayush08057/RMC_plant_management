@@ -51,9 +51,9 @@ export default function AuditLogsView() {
     {
       header: 'Timestamp',
       accessor: 'timestamp',
-      width: '140px',
+      width: '125px',
       render: (row) => (
-        <div className="inline-flex items-center gap-1 font-mono text-[10.5px] text-slate-700 font-bold bg-slate-100/90 border border-slate-200 px-2 py-0.5 rounded whitespace-nowrap">
+        <div className="inline-flex items-center gap-1 font-mono text-[10px] text-slate-700 font-bold bg-slate-100/90 border border-slate-200 px-1.5 py-0.5 rounded whitespace-nowrap">
           <Clock className="w-3 h-3 text-cyan-600 shrink-0" />
           <span>{row.timestamp}</span>
         </div>
@@ -62,15 +62,15 @@ export default function AuditLogsView() {
     {
       header: 'User & Role',
       accessor: 'user',
-      width: '160px',
+      width: '17%',
       render: (row) => (
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 text-white font-black text-[10px] flex items-center justify-center shrink-0 shadow-xs border border-cyan-400/30">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 text-white font-black text-[9.5px] flex items-center justify-center shrink-0 shadow-xs border border-cyan-400/30">
             {row.user ? row.user[0].toUpperCase() : 'U'}
           </div>
           <div className="min-w-0 flex-1 truncate">
-            <span className="font-bold text-slate-900 text-xs block leading-tight truncate">{row.user}</span>
-            <span className="text-[9px] text-slate-500 font-mono block truncate">{row.role}</span>
+            <span className="font-bold text-slate-900 text-[11px] block leading-tight truncate" title={row.user}>{row.user}</span>
+            <span className="text-[9px] text-slate-500 font-mono block truncate" title={row.role}>{row.role}</span>
           </div>
         </div>
       ),
@@ -78,9 +78,9 @@ export default function AuditLogsView() {
     {
       header: 'System Module',
       accessor: 'module',
-      width: '140px',
+      width: '120px',
       render: (row) => (
-        <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold border whitespace-nowrap shadow-2xs ${getModuleBadgeStyle(row.module)}`}>
+        <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold border truncate block text-center shadow-2xs ${getModuleBadgeStyle(row.module)}`} title={row.module}>
           {row.module}
         </span>
       ),
@@ -88,11 +88,11 @@ export default function AuditLogsView() {
     { 
       header: 'Action Performed', 
       accessor: 'action', 
-      width: '170px',
+      width: '21%',
       render: (row) => (
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
-          <span className="text-xs font-bold text-slate-900 truncate block">
+          <span className="text-[11px] font-bold text-slate-900 truncate block" title={row.action}>
             {row.action}
           </span>
         </div>
@@ -101,17 +101,23 @@ export default function AuditLogsView() {
     {
       header: 'Affected Record Details',
       accessor: 'record',
-      width: '230px',
+      className: 'min-w-0 flex-1',
       render: (row) => (
         <span 
           title={row.record}
-          className="text-[10px] text-slate-700 font-mono inline-block truncate max-w-[220px] bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/80 shadow-2xs cursor-help"
+          className="text-[9.5px] text-slate-700 font-mono block truncate w-full bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/80 shadow-2xs cursor-help"
         >
           {row.record}
         </span>
       ),
     },
-    { header: 'Status', accessor: 'status', type: 'status', width: '90px' },
+    { 
+      header: 'Status', 
+      accessor: 'status', 
+      type: 'status', 
+      width: '80px',
+      align: 'right' 
+    },
   ];
 
   const headerActions = (
@@ -129,7 +135,7 @@ export default function AuditLogsView() {
         </select>
       </div>
 
-      <div className="relative w-48 sm:w-56">
+      <div className="relative w-44 sm:w-52">
         <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
@@ -143,7 +149,7 @@ export default function AuditLogsView() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-full overflow-hidden">
       {/* Connected Audit Logs Table */}
       <DataTable
         title="Enterprise System Audit Trail"
@@ -153,6 +159,8 @@ export default function AuditLogsView() {
         data={filteredLogs}
         searchable={false}
         actions={headerActions}
+        noScroll={true}
+        tableFixed={true}
         renderMobileCard={(row) => (
           <div className="w-full max-w-full overflow-hidden min-w-0 space-y-1.5">
             <div className="flex items-start justify-between gap-2 min-w-0">

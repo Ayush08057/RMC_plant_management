@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { MOCK_PLANT_MANAGER_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatToIndian12Hr, parseTimeToMinutes } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
@@ -33,6 +34,7 @@ import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
 import HrReportsView from '../../components/workforce/HrReportsView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
+import SimplePlantManagerHome from '../../components/operations/guided/SimplePlantManagerHome';
 
 const CURRENT_PLANT_NAME = 'Main Plant Unit #01';
 const CURRENT_PLANT_ID = 'PLANT-001';
@@ -80,7 +82,9 @@ function normalizeOrderDate(dateVal) {
 }
 
 export default function PlantManagerDashboardPage() {
+  const { language, t } = useLanguage();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [viewMode, setViewMode] = useState('simple'); // 'simple' | 'advanced'
   const [toastMessage, setToastMessage] = useState(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showInventoryModal, setShowInventoryModal] = useState(false);
@@ -314,8 +318,8 @@ export default function PlantManagerDashboardPage() {
 
   return (
     <AppLayout
-      title="Plant Manager"
-      badge="MAIN PLANT #01"
+      title={t('Plant Manager')}
+      badge={t('MAIN PLANT #01')}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
@@ -327,7 +331,7 @@ export default function PlantManagerDashboardPage() {
             title="Mark or View Daily Attendance"
           >
             <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Daily Attendance</span>
+            <span>{t('Daily Attendance')}</span>
           </button>
           <button
             type="button"
@@ -335,7 +339,7 @@ export default function PlantManagerDashboardPage() {
             className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
           >
             <Gauge className="w-3.5 h-3.5 text-white" />
-            <span>Shift Plan</span>
+            <span>{t('Shift Plan')}</span>
           </button>
           <button
             type="button"
@@ -343,7 +347,7 @@ export default function PlantManagerDashboardPage() {
             className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Layers className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Silo Stock</span>
+            <span>{t('Silo Stock')}</span>
           </button>
         </div>
       }
@@ -364,8 +368,30 @@ export default function PlantManagerDashboardPage() {
       {activeTab === 'leaves' && <LeaveManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
 
-      {activeTab === 'dashboard' && (
+      {activeTab === 'dashboard' && viewMode === 'simple' && (
+        <SimplePlantManagerHome
+          onNavigateTab={setActiveTab}
+          onSwitchToAdvanced={() => setViewMode('advanced')}
+        />
+      )}
+
+      {activeTab === 'dashboard' && viewMode === 'advanced' && (
         <div className="space-y-4 sm:space-y-5">
+          {/* Header Switcher back to Simple Mode */}
+          <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+            <div>
+              <span className="text-xs font-bold text-slate-900 block">Advanced Technical Dashboard & SCADA Telematics</span>
+              <span className="text-[11px] text-slate-500">Full telemetry, production queue, and fleet metrics</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewMode('simple')}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+            >
+              <span>← Switch to Simple Guided Mode</span>
+            </button>
+          </div>
+
           {/* 4 Primary Operational KPI Cards - Connected to Real Database & Operational Telemetry */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
             <KPICard

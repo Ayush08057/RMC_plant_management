@@ -19,11 +19,14 @@ import {
   FileText,
   TrendingUp,
   Scale,
-  Sparkles,
   ShieldCheck,
   Building2,
   Calendar
 } from 'lucide-react';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import HelpModal from './guided/HelpModal';
+import MakeConcreteWizard from './guided/MakeConcreteWizard';
+import { useLanguage } from '../../context/LanguageContext';
 
 const BATCHING_STORAGE_KEY = 'rmc_batching_sheets_v2';
 
@@ -37,69 +40,13 @@ export const MIX_DESIGN_PRESETS = {
   'M40': { grade: 'M40', cement: 450, flyash: 90, agg20: 720, agg10: 470, sand: 770, water: 150, admixture: 4.5, slump: '150 ± 25 mm', wcRatio: 0.32 },
 };
 
-// Initial realistic batch sheets for SM CONCRETECH
-const INITIAL_BATCH_SHEETS = [
-  {
-    id: 'BS-25-26/1042',
-    sheetNo: '25-26/1042',
-    date: '19-Oct-2026',
-    time: '09:45 AM',
-    mixGrade: 'M25',
-    volume: 6.0,
-    batchesCount: 6,
-    customerName: 'Shree Construction & Infra',
-    site: 'Tanang Highway Pier Zone #4',
-    vehicleNo: 'MH-10-CR-1212',
-    driverName: 'Sachin Shinde',
-    operatorName: 'Rajesh Mane',
-    qcStatus: 'Approved',
-    targetSlump: '120 ± 25 mm',
-    actualSlump: '125 mm',
-    moisturePercent: 2.5,
-    materials: [
-      { name: 'Cement (OPC 53)', target: 2160, actual: 2168, unit: 'kg' },
-      { name: 'Fly Ash (Pozzocrete)', target: 360, actual: 358, unit: 'kg' },
-      { name: '20mm Coarse Aggregate', target: 4500, actual: 4522, unit: 'kg' },
-      { name: '10mm Coarse Aggregate', target: 3000, actual: 2994, unit: 'kg' },
-      { name: 'Crushed M-Sand', target: 4800, actual: 4815, unit: 'kg' },
-      { name: 'Water', target: 990, actual: 994, unit: 'L' },
-      { name: 'Admixture (PCE)', target: 18.0, actual: 18.2, unit: 'kg' },
-    ],
-    remarks: 'Pumping concrete batch approved by site engineer.',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'BS-25-26/1041',
-    sheetNo: '25-26/1041',
-    date: '19-Oct-2026',
-    time: '08:15 AM',
-    mixGrade: 'M30',
-    volume: 6.0,
-    batchesCount: 6,
-    customerName: 'Kulkarni Builders & Developers',
-    site: 'Sangli Bypass Bridge Slab #2',
-    vehicleNo: 'MH-10-CR-1313',
-    driverName: 'Vikas Jadhav',
-    operatorName: 'Rajesh Mane',
-    qcStatus: 'Approved',
-    targetSlump: '130 ± 25 mm',
-    actualSlump: '135 mm',
-    moisturePercent: 2.2,
-    materials: [
-      { name: 'Cement (OPC 53)', target: 2340, actual: 2345, unit: 'kg' },
-      { name: 'Fly Ash (Pozzocrete)', target: 420, actual: 418, unit: 'kg' },
-      { name: '20mm Coarse Aggregate', target: 4440, actual: 4455, unit: 'kg' },
-      { name: '10mm Coarse Aggregate', target: 2940, actual: 2932, unit: 'kg' },
-      { name: 'Crushed M-Sand', target: 4740, actual: 4752, unit: 'kg' },
-      { name: 'Water', target: 960, actual: 962, unit: 'L' },
-      { name: 'Admixture (PCE)', target: 21.0, actual: 21.1, unit: 'kg' },
-    ],
-    remarks: 'Bridge grade mix. High early strength formulation.',
-    createdAt: new Date(Date.now() - 3600000).toISOString()
-  }
-];
+const INITIAL_BATCH_SHEETS = [];
 
 export default function BatchingSheetsView() {
+  const { language } = useLanguage();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [guidedWizardOpen, setGuidedWizardOpen] = useState(false);
+
   const [sheets, setSheets] = useState(() => {
     try {
       const saved = localStorage.getItem(BATCHING_STORAGE_KEY);
@@ -110,12 +57,19 @@ export default function BatchingSheetsView() {
     return INITIAL_BATCH_SHEETS;
   });
 
+  // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
-    try {
-      localStorage.setItem(BATCHING_STORAGE_KEY, JSON.stringify(sheets));
-    } catch (e) {
-      console.error('Storage error:', e);
-    }
+    const unsub = subscribeCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, INITIAL_BATCH_SHEETS, (cloudSheets) => {
+      if (Array.isArray(cloudSheets) && cloudSheets.length > 0) {
+        setSheets(cloudSheets);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Save changes to localStorage & Cloud Firestore
+  useEffect(() => {
+    pushCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, sheets);
   }, [sheets]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -265,8 +219,8 @@ export default function BatchingSheetsView() {
   }, 0);
 
   return (
-    <div className="w-full space-y-4 text-xs text-slate-800">
-      
+    <div className="w-full space-y-3 text-xs text-slate-800">
+
       {/* Toast Notification */}
       {notification && typeof document !== 'undefined' && createPortal(
         <div className="fixed top-5 right-5 z-[100000] p-4 rounded-2xl bg-slate-900/95 text-white border border-slate-700 shadow-2xl flex items-center gap-3 animate-pop-in backdrop-blur-md">
@@ -276,77 +230,69 @@ export default function BatchingSheetsView() {
         document.body
       )}
 
-      {/* Top 4 KPI Operational Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+      {/* Top 4 KPI Operational Cards (Ultra-Compact) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {/* 1. Total Volume */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Concrete Batched</span>
-            <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <ClipboardList className="w-3.5 h-3.5" />
+        <div className="bg-white rounded-xl border border-slate-200 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Concrete Batched</span>
+            <div className="font-mono font-black text-slate-900 text-xs sm:text-sm tracking-tight mt-0.5">
+              {totalVolume.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">m³</span>
+            </div>
+            <div className="text-[9px] text-slate-400 font-medium truncate mt-0.5">
+              {sheets.length} Total Batches
             </div>
           </div>
-          <div>
-            <div className="font-mono font-black text-slate-900 text-lg sm:text-xl">
-              {totalVolume.toFixed(1)} <span className="text-xs font-normal text-slate-500">m³</span>
-            </div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-              {sheets.length} Total Batches Produced
-            </div>
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <ClipboardList className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* 2. Cement Consumed */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Cement Batched</span>
-            <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Scale className="w-3.5 h-3.5" />
+        <div className="bg-white rounded-xl border border-slate-200 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Cement Batched</span>
+            <div className="font-mono font-black text-slate-900 text-xs sm:text-sm tracking-tight mt-0.5">
+              {(totalCementKg / 1000).toFixed(2)} <span className="text-[10px] font-normal text-slate-500">Tons</span>
             </div>
-          </div>
-          <div>
-            <div className="font-mono font-black text-slate-900 text-lg sm:text-xl">
-              {(totalCementKg / 1000).toFixed(2)} <span className="text-xs font-normal text-slate-500">Tons</span>
-            </div>
-            <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
+            <div className="text-[9px] text-emerald-700 font-medium truncate mt-0.5">
               OPC 53 Silo Consumption
             </div>
+          </div>
+          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Scale className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* 3. SCADA Accuracy */}
-        <div className="bg-white rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/30 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-emerald-800 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Batching Accuracy</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <ShieldCheck className="w-3.5 h-3.5" />
+        <div className="bg-white rounded-xl border border-emerald-200/80 bg-gradient-to-r from-white to-emerald-50/20 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block truncate">Batch Accuracy</span>
+            <div className="font-mono font-black text-emerald-700 text-xs sm:text-sm tracking-tight mt-0.5">
+              99.6% <span className="text-[10px] font-normal text-emerald-600">IS:4926</span>
+            </div>
+            <div className="text-[9px] text-emerald-700 font-medium truncate mt-0.5">
+              ±1.5% Target Tolerance
             </div>
           </div>
-          <div>
-            <div className="font-mono font-black text-emerald-700 text-lg sm:text-xl">
-              99.6% <span className="text-xs font-normal text-emerald-600">IS:4926</span>
-            </div>
-            <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
-              Within ±1.5% Target Tolerance
-            </div>
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* 4. Mixer Fleet Batched */}
-        <div className="bg-white rounded-2xl border border-blue-200/80 bg-gradient-to-br from-white to-blue-50/30 p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-blue-800 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Mixers Loaded</span>
-            <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-              <Truck className="w-3.5 h-3.5" />
+        <div className="bg-white rounded-xl border border-blue-200/80 bg-gradient-to-r from-white to-blue-50/20 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block truncate">Mixers Loaded</span>
+            <div className="font-mono font-black text-blue-700 text-xs sm:text-sm tracking-tight mt-0.5">
+              {sheets.length} <span className="text-[10px] font-normal text-blue-600">Trips</span>
+            </div>
+            <div className="text-[9px] text-blue-700 font-medium truncate mt-0.5">
+              Slump Verified
             </div>
           </div>
-          <div>
-            <div className="font-mono font-black text-blue-700 text-lg sm:text-xl">
-              {sheets.length} <span className="text-xs font-normal text-blue-600">Trips</span>
-            </div>
-            <div className="text-[10px] text-blue-700 font-medium mt-0.5">
-              All Mixers Slump Verified
-            </div>
+          <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+            <Truck className="w-3.5 h-3.5" />
           </div>
         </div>
       </div>
@@ -365,6 +311,16 @@ export default function BatchingSheetsView() {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={() => setGuidedWizardOpen(true)}
+            className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="3-Step Guided Batching Wizard"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>3-Step Guided</span>
+          </button>
+
           <button
             type="button"
             onClick={handleOpenCreateModal}
@@ -1014,6 +970,23 @@ export default function BatchingSheetsView() {
         </div>,
         document.body
       )}
+
+      {/* Universal Help Popover Modal */}
+      <HelpModal 
+        isOpen={helpOpen} 
+        onClose={() => setHelpOpen(false)} 
+        topic="makeConcrete" 
+      />
+
+      {/* Guided 3-Step Make Concrete Wizard */}
+      <MakeConcreteWizard 
+        isOpen={guidedWizardOpen} 
+        onClose={() => setGuidedWizardOpen(false)} 
+        onSuccess={() => {
+          setGuidedWizardOpen(false);
+          showToast(language === 'mr' ? 'काँक्रीट बॅचिंगची नोंद यशस्वीपणे झाली!' : 'Concrete production recorded successfully!');
+        }} 
+      />
 
     </div>
   );

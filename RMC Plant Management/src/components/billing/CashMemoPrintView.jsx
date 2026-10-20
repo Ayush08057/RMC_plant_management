@@ -37,6 +37,15 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return '11-Oct-2025';
     try {
+      const parts = dateStr.includes('-') ? dateStr.split('-') : (dateStr.includes('/') ? dateStr.split('/') : null);
+      if (parts && parts.length === 3 && parts[0].length <= 2 && parts[2].length === 4) {
+        const day = parts[0].padStart(2, '0');
+        const mIdx = parseInt(parts[1], 10) - 1;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        if (mIdx >= 0 && mIdx < 12) {
+          return `${day}-${months[mIdx]}-${parts[2]}`;
+        }
+      }
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
       const day = String(d.getDate()).padStart(2, '0');
