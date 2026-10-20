@@ -293,17 +293,6 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                     <span className="text-[11px] text-black font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
                       {companies.length} {companies.length === 1 ? 'Company' : 'Companies'}
                     </span>
-                    {canManageCompanies && (
-                      <button
-                        type="button"
-                        onClick={openAddPlantModal}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-[11px] font-bold transition-colors cursor-pointer"
-                        title="Add New Company"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Add</span>
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -387,7 +376,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       className="w-full py-2 px-3 rounded-lg text-center text-xs font-bold text-white bg-[#1D5FA7] hover:bg-[#123B6D] transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-3.5 h-3.5 text-white" />
-                      <span>+ Add New Company Workspace</span>
+                      <span>Add New Company Workspace</span>
                     </button>
                   </div>
                 )}
