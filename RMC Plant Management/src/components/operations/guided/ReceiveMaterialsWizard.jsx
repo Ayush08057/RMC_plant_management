@@ -46,8 +46,8 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
 
   // Form State
   const [selectedMaterial, setSelectedMaterial] = useState(MATERIALS_LIST[0]);
-  const [supplierName, setSupplierName] = useState(SUPPLIERS_LIST[0]);
-  const [quantity, setQuantity] = useState(30.0);
+  const [supplierName, setSupplierName] = useState('');
+  const [quantity, setQuantity] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [challanNo, setChallanNo] = useState('');
   const [grossWeight, setGrossWeight] = useState('');
@@ -83,17 +83,25 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
   };
 
   const handleSave = () => {
+    const slipNumber = `WB-${Math.floor(1000 + Math.random() * 9000)}`;
+    const challanNumber = challanNo || `CH-${Math.floor(1000 + Math.random() * 9000)}`;
+    const todayDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const todayTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
     const inwardRecord = {
       id: `INW-${Date.now()}`,
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      slipNo: slipNumber,
+      challanNo: challanNumber,
+      date: todayDate,
+      time: todayTime,
       material: selectedMaterial.name,
       supplier: supplierName,
       quantity: Number(quantity),
+      netTons: Number(quantity),
       unit: selectedMaterial.unit,
       vehicleNo: vehicleNo || 'MH-10-AQ-9080',
-      challanNo: challanNo || `CH-${Math.floor(1000 + Math.random() * 9000)}`,
       targetSilo: selectedMaterial.defaultSilo,
+      destination: selectedMaterial.defaultSilo,
       createdAt: new Date().toISOString()
     };
 
@@ -103,6 +111,28 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       const updated = [inwardRecord, ...existing];
       localStorage.setItem(INWARD_STORAGE_KEY, JSON.stringify(updated));
       pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updated);
+
+      // Also create corresponding Weighbridge receipt so history is logged in Weighbridge view
+      const wbKey = 'rmc_weighbridge_v2';
+      const existingWbRaw = localStorage.getItem(wbKey);
+      const existingWb = existingWbRaw ? JSON.parse(existingWbRaw) : [];
+      const newWb = {
+        id: `WB-${Date.now()}`,
+        slipNo: slipNumber,
+        date: todayDate,
+        time: todayTime,
+        vehicleNo: inwardRecord.vehicleNo,
+        material: inwardRecord.material,
+        party: inwardRecord.supplier,
+        gross: Number((Number(quantity) + 12.5).toFixed(2)),
+        tare: 12.5,
+        net: Number(Number(quantity).toFixed(2)),
+        unit: 'Tons',
+        status: 'Approved'
+      };
+      const updatedWb = [newWb, ...existingWb];
+      localStorage.setItem(wbKey, JSON.stringify(updatedWb));
+      pushCloudStore('cloud_weighbridge', wbKey, updatedWb);
     } catch (e) {
       console.warn('Error saving material inward:', e);
     }

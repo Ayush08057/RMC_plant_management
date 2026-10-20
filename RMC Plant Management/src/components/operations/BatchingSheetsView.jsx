@@ -60,7 +60,7 @@ export default function BatchingSheetsView() {
   // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, INITIAL_BATCH_SHEETS, (cloudSheets) => {
-      if (Array.isArray(cloudSheets) && cloudSheets.length > 0) {
+      if (Array.isArray(cloudSheets)) {
         setSheets(cloudSheets);
       }
     });

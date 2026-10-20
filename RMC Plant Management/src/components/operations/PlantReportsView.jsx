@@ -13,6 +13,7 @@ import {
   ArrowDownToLine,
   Truck
 } from 'lucide-react';
+import { sanitizeStoreItems } from '../../services/cloudSyncService';
 
 export default function PlantReportsView() {
   const [reportType, setReportType] = useState('daily'); // 'daily', 'reconciliation', 'client_summary'
@@ -23,7 +24,7 @@ export default function PlantReportsView() {
     try {
       const saved = localStorage.getItem('rmc_batching_sheets_v2');
       if (saved) {
-        const parsed = JSON.parse(saved);
+        const parsed = sanitizeStoreItems(JSON.parse(saved));
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((b) => ({
             ticketNo: b.sheetNo || b.id || 'BT-REC',
@@ -50,7 +51,7 @@ export default function PlantReportsView() {
     try {
       const savedChallans = localStorage.getItem('rmc_delivery_challans_v2');
       if (savedChallans) {
-        const parsed = JSON.parse(savedChallans);
+        const parsed = sanitizeStoreItems(JSON.parse(savedChallans));
         if (Array.isArray(parsed) && parsed.length > 0) {
           const map = {};
           parsed.forEach((c) => {

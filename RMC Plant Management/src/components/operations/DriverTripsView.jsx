@@ -60,7 +60,7 @@ export default function DriverTripsView() {
   // Subscribe to real-time Cloud Sync for cross-device updates
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_driver_trips', STORAGE_KEY, INITIAL_TRIPS, (cloudTrips) => {
-      if (Array.isArray(cloudTrips) && cloudTrips.length > 0) {
+      if (Array.isArray(cloudTrips)) {
         setTrips(cloudTrips);
       }
     });
@@ -347,7 +347,9 @@ export default function DriverTripsView() {
                   <span className="font-medium text-slate-800 truncate" title={`${trip.clientName} - ${trip.siteName}`}>
                     {trip.clientName} - {trip.siteName}
                   </span>
-                  <span className="text-slate-400 font-mono shrink-0">({trip.distanceKm}km)</span>
+                  {trip.distanceKm ? (
+                    <span className="text-slate-400 font-mono shrink-0">({trip.distanceKm}km)</span>
+                  ) : null}
                 </div>
 
                 {/* 4. Timestamp & Status */}

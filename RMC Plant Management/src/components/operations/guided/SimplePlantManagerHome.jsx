@@ -75,7 +75,6 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
       badgeBg: 'bg-blue-100 text-blue-900',
       stepCount: t('5 Steps'),
       action: () => setActiveWizard('sendVehicle'),
-      highlight: true,
     },
     {
       id: 'recordReturn',
@@ -178,7 +177,7 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {PRIMARY_ACTIONS.map((item) => {
             const Icon = item.icon;
             return (
@@ -186,22 +185,18 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
                 key={item.id}
                 type="button"
                 onClick={item.action}
-                className={`group relative text-left p-2.5 rounded-xl bg-white border transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs hover:border-blue-500 flex items-center gap-2.5 ${
-                  item.highlight 
-                    ? 'border-blue-400 bg-blue-50/20 ring-1 ring-blue-300/40' 
-                    : 'border-slate-200/90 hover:border-slate-300'
-                }`}
+                className="group relative text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-blue-400 hover:shadow-xs transition-all duration-150 cursor-pointer shadow-2xs flex items-center gap-3 active:scale-[0.99]"
               >
-                <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${item.colorClass}`}>
-                  <Icon className="w-4 h-4 stroke-[2.2]" />
+                <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${item.colorClass}`}>
+                  <Icon className="w-4.5 h-4.5 stroke-[2.2]" />
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <h3 className="text-xs font-bold text-slate-900 group-hover:text-blue-700 truncate leading-tight">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <h3 className="text-xs font-bold text-slate-900 group-hover:text-blue-700 truncate leading-tight" title={item.title}>
                       {item.title}
                     </h3>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono shrink-0 ${item.badgeBg}`}>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full font-mono shrink-0 ${item.badgeBg}`}>
                       {item.stepCount}
                     </span>
                   </div>
@@ -209,8 +204,6 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
                     {item.desc}
                   </p>
                 </div>
-
-                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
             );
           })}

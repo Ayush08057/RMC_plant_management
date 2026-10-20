@@ -29,7 +29,7 @@ export default function MaterialInwardView() {
   // Subscribe to cloud sync
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, INITIAL_INWARD, (cloudRecords) => {
-      if (Array.isArray(cloudRecords) && cloudRecords.length > 0) {
+      if (Array.isArray(cloudRecords)) {
         setRecords(cloudRecords);
       }
     });
@@ -145,14 +145,14 @@ export default function MaterialInwardView() {
               filtered.map(r => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <td className="py-2.5 px-3 font-mono font-bold">
-                    {r.slipNo}
-                    <div className="text-[10px] text-slate-500 font-normal">{r.date}</div>
+                    {r.slipNo || r.challanNo || 'WB-INW'}
+                    <div className="text-[10px] text-slate-500 font-normal">{r.date || (r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB') : '--')}</div>
                   </td>
                   <td className="py-2.5 px-3 font-bold text-slate-900">{r.material}</td>
                   <td className="py-2.5 px-3">{r.supplier}</td>
                   <td className="py-2.5 px-3 font-mono font-semibold">{r.vehicleNo}</td>
-                  <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-700">{r.netTons} Tons</td>
-                  <td className="py-2.5 px-3 text-slate-600">{r.destination}</td>
+                  <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-700">{r.netTons || r.quantity || 0} Tons</td>
+                  <td className="py-2.5 px-3 text-slate-600">{r.destination || r.targetSilo || 'Storage Yard'}</td>
                 </tr>
               ))
             )}

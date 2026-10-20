@@ -249,17 +249,17 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
     const unsubBills = subscribeCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, INITIAL_BILLS, (cloudBills) => {
-      if (Array.isArray(cloudBills) && cloudBills.length > 0) {
+      if (Array.isArray(cloudBills)) {
         setBills(cloudBills.map(normalizeBill));
       }
     });
     const unsubPurchases = subscribeCloudStore('cloud_plant_purchases', PURCHASES_STORAGE_KEY, INITIAL_PURCHASES, (cloudPurchases) => {
-      if (Array.isArray(cloudPurchases) && cloudPurchases.length > 0) {
+      if (Array.isArray(cloudPurchases)) {
         setPurchases(cloudPurchases);
       }
     });
     const unsubOtp = subscribeCloudStore('cloud_billing_otp', OTP_LOGS_STORAGE_KEY, INITIAL_OTP_LOGS, (cloudOtp) => {
-      if (Array.isArray(cloudOtp) && cloudOtp.length > 0) {
+      if (Array.isArray(cloudOtp)) {
         setOtpLogs(cloudOtp);
       }
     });

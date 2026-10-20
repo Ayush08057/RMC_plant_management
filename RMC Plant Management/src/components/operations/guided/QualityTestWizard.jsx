@@ -10,6 +10,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
+import { pushCloudStore } from '../../../services/cloudSyncService';
 import HelpModal from './HelpModal';
 
 const QC_STORAGE_KEY = 'rmc_qc_tests_v2';
@@ -49,6 +50,7 @@ export default function QualityTestWizard({ isOpen, onClose, onComplete }) {
       const existing = existingRaw ? JSON.parse(existingRaw) : [];
       const updated = [testRecord, ...existing];
       localStorage.setItem(QC_STORAGE_KEY, JSON.stringify(updated));
+      pushCloudStore('cloud_qc_tests', QC_STORAGE_KEY, updated);
     } catch (e) {
       console.warn('QC save error:', e);
     }

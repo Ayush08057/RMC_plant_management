@@ -51,7 +51,7 @@ export default function DieselManagementView() {
   // Subscribe to real-time Cloud Sync for cross-device updates
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_diesel_management', STORAGE_KEY, INITIAL_LOGS, (cloudLogs) => {
-      if (Array.isArray(cloudLogs) && cloudLogs.length > 0) {
+      if (Array.isArray(cloudLogs)) {
         setLogs(cloudLogs);
       }
     });

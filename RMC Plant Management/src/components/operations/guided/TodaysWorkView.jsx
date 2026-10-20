@@ -14,6 +14,7 @@ import {
   User
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
+import { subscribeCloudStore, sanitizeStoreItems } from '../../../services/cloudSyncService';
 
 const TRIPS_KEY = 'rmc_driver_trips_v2';
 const CHALLANS_KEY = 'rmc_delivery_challans_v2';
@@ -31,19 +32,39 @@ export default function TodaysWorkView({ onOpenWizard, onNavigateModule }) {
   useEffect(() => {
     try {
       const tr = localStorage.getItem(TRIPS_KEY);
-      if (tr) setTrips(JSON.parse(tr));
+      if (tr) setTrips(sanitizeStoreItems(JSON.parse(tr)));
 
       const ch = localStorage.getItem(CHALLANS_KEY);
-      if (ch) setChallans(JSON.parse(ch));
+      if (ch) setChallans(sanitizeStoreItems(JSON.parse(ch)));
 
       const bt = localStorage.getItem(BATCHING_KEY);
-      if (bt) setBatches(JSON.parse(bt));
+      if (bt) setBatches(sanitizeStoreItems(JSON.parse(bt)));
 
       const inw = localStorage.getItem(INWARD_KEY);
-      if (inw) setInward(JSON.parse(inw));
+      if (inw) setInward(sanitizeStoreItems(JSON.parse(inw)));
     } catch (e) {
       console.warn('Error loading today work data:', e);
     }
+
+    const unsubTrips = subscribeCloudStore('cloud_driver_trips', TRIPS_KEY, [], (items) => {
+      if (Array.isArray(items)) setTrips(items);
+    });
+    const unsubInward = subscribeCloudStore('cloud_material_inward', INWARD_KEY, [], (items) => {
+      if (Array.isArray(items)) setInward(items);
+    });
+    const unsubChallans = subscribeCloudStore('cloud_delivery_challans', CHALLANS_KEY, [], (items) => {
+      if (Array.isArray(items)) setChallans(items);
+    });
+    const unsubBatches = subscribeCloudStore('cloud_batching_sheets', BATCHING_KEY, [], (items) => {
+      if (Array.isArray(items)) setBatches(items);
+    });
+
+    return () => {
+      unsubTrips();
+      unsubInward();
+      unsubChallans();
+      unsubBatches();
+    };
   }, []);
 
   // 1. Vehicles currently away from plant
@@ -156,7 +177,7 @@ export default function TodaysWorkView({ onOpenWizard, onNavigateModule }) {
             </div>
           </div>
           <div className="text-2xl font-black text-purple-900 mt-1">
-            {totalConcreteM3 > 0 ? totalConcreteM3.toFixed(1) : '186.5'}
+            {totalConcreteM3.toFixed(1)}
             <span className="text-xs font-normal text-slate-500 ml-1">m³</span>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">

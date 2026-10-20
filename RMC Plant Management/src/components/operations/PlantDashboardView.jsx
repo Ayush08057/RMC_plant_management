@@ -8,13 +8,14 @@ import {
   PackageCheck,
   FileText
 } from 'lucide-react';
+import { sanitizeStoreItems } from '../../services/cloudSyncService';
 
 export default function PlantDashboardView({ onNavigateTab }) {
   // Live operational data from plant records (clean empty default)
   const [batches] = React.useState(() => {
     try {
       const saved = localStorage.getItem('rmc_batching_sheets_v2');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? sanitizeStoreItems(JSON.parse(saved)) : [];
     } catch {
       return [];
     }
@@ -23,7 +24,7 @@ export default function PlantDashboardView({ onNavigateTab }) {
   const [trips] = React.useState(() => {
     try {
       const saved = localStorage.getItem('rmc_driver_trips_v2');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? sanitizeStoreItems(JSON.parse(saved)) : [];
     } catch {
       return [];
     }
@@ -32,7 +33,7 @@ export default function PlantDashboardView({ onNavigateTab }) {
   const [inwardRecords] = React.useState(() => {
     try {
       const saved = localStorage.getItem('rmc_material_inward_v2');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? sanitizeStoreItems(JSON.parse(saved)) : [];
     } catch {
       return [];
     }

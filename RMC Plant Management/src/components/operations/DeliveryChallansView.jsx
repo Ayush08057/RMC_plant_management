@@ -76,7 +76,7 @@ export default function DeliveryChallansView() {
   // Subscribe to real-time Cloud Sync for cross-device updates
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_delivery_challans', CHALLAN_STORAGE_KEY, INITIAL_CHALLANS, (cloudChallans) => {
-      if (Array.isArray(cloudChallans) && cloudChallans.length > 0) {
+      if (Array.isArray(cloudChallans)) {
         setChallans(cloudChallans);
       }
     });

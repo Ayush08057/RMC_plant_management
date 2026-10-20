@@ -38,7 +38,7 @@ export const TRANSLATIONS = {
     sendVehicleDesc: 'Select a driver, mixer truck, customer site, and quantity to dispatch.',
     recordReturnTitle: 'Record Vehicle Return',
     recordReturnDesc: 'Record when a transit mixer returns safely to the plant.',
-    driverAttendanceTitle: 'Driver & Staff Attendance',
+    driverAttendanceTitle: 'Driver Attendance',
     driverAttendanceDesc: 'Mark today’s attendance for drivers, operators, and plant helpers.',
     checkVehicleTitle: 'Check Vehicle Status',
     checkVehicleDesc: 'See where trucks are: on road, pouring at site, or waiting in yard.',

@@ -15,7 +15,7 @@ export default function WeighbridgeView() {
 
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_weighbridge', 'rmc_weighbridge_v2', INITIAL_WEIGHBRIDGE, (cloudSlips) => {
-      if (Array.isArray(cloudSlips) && cloudSlips.length > 0) {
+      if (Array.isArray(cloudSlips)) {
         setSlips(cloudSlips);
       }
     });

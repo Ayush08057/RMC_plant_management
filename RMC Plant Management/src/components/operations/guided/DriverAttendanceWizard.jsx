@@ -14,27 +14,33 @@ import { useLanguage } from '../../../context/LanguageContext';
 import { useWorkforce } from '../../../context/WorkforceContext';
 import HelpModal from './HelpModal';
 
-const DRIVERS_STAFF = [
-  { id: 'DRV-001', name: 'Sachin Shinde', role: 'Transit Mixer Driver', defaultStatus: 'Present' },
-  { id: 'DRV-002', name: 'Vikas Jadhav', role: 'Transit Mixer Driver', defaultStatus: 'Present' },
-  { id: 'DRV-003', name: 'Sunil Kadam', role: 'Transit Mixer Driver', defaultStatus: 'Present' },
-  { id: 'DRV-004', name: 'Ramesh Pawar', role: 'Transit Mixer Driver', defaultStatus: 'Present' },
-  { id: 'DRV-005', name: 'Sanjay Yadav', role: 'Transit Mixer Driver', defaultStatus: 'Present' },
-  { id: 'OPR-001', name: 'Rajesh Mane', role: 'Batching Plant Operator', defaultStatus: 'Present' },
-  { id: 'HLP-001', name: 'Dattu Shinde', role: 'Plant Helper / Loader', defaultStatus: 'Present' },
-];
-
 export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) {
   const { language, t } = useLanguage();
   const [showHelp, setShowHelp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [attendanceMap, setAttendanceMap] = useState(() => {
-    const init = {};
-    DRIVERS_STAFF.forEach(staff => {
-      init[staff.id] = staff.defaultStatus;
-    });
-    return init;
+  const workforce = useWorkforce();
+
+  const staffList = (workforce?.employees || []).filter((e) => {
+    const roleLower = (e.role || '').toLowerCase();
+    const deptLower = (e.department || '').toLowerCase();
+    return (
+      roleLower.includes('driver') ||
+      roleLower.includes('operator') ||
+      roleLower.includes('helper') ||
+      deptLower.includes('fleet') ||
+      deptLower.includes('production')
+    );
   });
+
+  const [attendanceMap, setAttendanceMap] = useState({});
+
+  React.useEffect(() => {
+    const init = {};
+    staffList.forEach((staff) => {
+      init[staff.id] = 'Present';
+    });
+    setAttendanceMap(init);
+  }, [workforce?.employees]);
 
   const toggleStatus = (id, newStatus) => {
     setAttendanceMap(prev => ({
@@ -44,7 +50,7 @@ export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) 
   };
 
   const handleSave = () => {
-    // Record attendance into localStorage / audit
+    // Record attendance into localStorage & central workforce ledger
     try {
       const today = new Date().toISOString().split('T')[0];
       const records = DRIVERS_STAFF.map(s => ({
@@ -56,6 +62,20 @@ export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) 
         recordedAt: new Date().toISOString()
       }));
       localStorage.setItem(`rmc_attendance_${today}`, JSON.stringify(records));
+
+      if (workforce && typeof workforce.addAttendanceRecord === 'function') {
+        DRIVERS_STAFF.forEach(s => {
+          workforce.addAttendanceRecord({
+            employeeId: s.id,
+            employeeName: s.name,
+            role: s.role,
+            status: attendanceMap[s.id] || 'Present',
+            punchIn: '08:00 AM',
+            date: today,
+            remarks: 'Guided Plant Daily Roll Call'
+          });
+        });
+      }
     } catch (e) {
       console.warn('Attendance save err:', e);
     }
@@ -146,45 +166,51 @@ export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) 
             </div>
 
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {DRIVERS_STAFF.map((staff) => {
-                const status = attendanceMap[staff.id];
-                return (
-                  <div
-                    key={staff.id}
-                    className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2"
-                  >
-                    <div>
-                      <div className="font-bold text-xs text-slate-900">{staff.name}</div>
-                      <div className="text-[10px] text-slate-500">{staff.role}</div>
-                    </div>
+              {staffList.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  {language === 'mr' ? 'कोणताही ड्रायव्हर किंवा कामगार नोंदणीकृत नाही.' : 'No drivers or operational personnel enrolled yet in workforce directory.'}
+                </div>
+              ) : (
+                staffList.map((staff) => {
+                  const status = attendanceMap[staff.id];
+                  return (
+                    <div
+                      key={staff.id}
+                      className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{staff.name}</div>
+                        <div className="text-[10px] text-slate-500">{staff.role}</div>
+                      </div>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleStatus(staff.id, 'Present')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          status === 'Present'
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {language === 'mr' ? 'हजर (P)' : 'Present'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleStatus(staff.id, 'Absent')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          status === 'Absent'
-                            ? 'bg-rose-600 text-white shadow-xs'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {language === 'mr' ? 'गैरहजर (A)' : 'Absent'}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(staff.id, 'Present')}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            status === 'Present'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {language === 'mr' ? 'हजर (P)' : 'Present'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(staff.id, 'Absent')}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            status === 'Absent'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {language === 'mr' ? 'गैरहजर (A)' : 'Absent'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-200 gap-2">
