@@ -1397,6 +1397,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 'Date',
                 'Bill No.',
                 'Bill Amount',
+                'Payment Credited',
                 'Description',
                 'Balance'
               ];
@@ -1405,6 +1406,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 `"${formatDisplayDate(b.date)}"`,
                 `"${(b.billNo || '').replace(/"/g, '""')}"`,
                 Number(b.finalAmount || 0).toFixed(2),
+                Number(b.paidAmount || 0).toFixed(2),
                 `"${(getBillDescription(b) || '').replace(/"/g, '""')}"`,
                 Number(b.balanceAmount || 0).toFixed(2)
               ]);
@@ -1512,11 +1514,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                     <button
                       type="button"
                       onClick={() => {
-                        const targetCust = selectedCustomer !== 'ALL' ? selectedCustomer : (uniqueCustomers[0] || 'Cash Customer');
-                        setCustomerStatementModal(targetCust);
+                        setCustomerStatementModal(selectedCustomer || 'ALL');
                       }}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
-                      title="Open Statement of Account"
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                      title="Open Cash Memo and Billing Statement (with Payment Credited)"
                     >
                       <FileText className="w-3.5 h-3.5 text-blue-600" />
                       <span>Statement</span>
@@ -1785,9 +1786,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         <tr className="bg-slate-50 text-slate-800 font-bold text-[11px] border-b border-slate-300 select-none">
                           <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200 w-[110px]">Date</th>
                           <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200 w-[120px]">Bill No.</th>
-                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[140px]">Bill Amount</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[130px]">Bill Amount</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[130px]">Payment Credited</th>
                           <th className="py-2.5 px-3 border-r border-slate-200 min-w-[200px]">Description</th>
-                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[140px]">Balance</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[130px]">Balance</th>
                           <th className="py-2.5 px-2 text-center whitespace-nowrap w-[170px] bg-slate-100/60">Actions</th>
                         </tr>
                       </thead>
@@ -1813,7 +1815,12 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                   ₹ {formatCurrency(bill.finalAmount)}
                                 </td>
 
-                                {/* 4. Description (Editable inline) */}
+                                {/* 4. Payment Credited */}
+                                <td className="py-2.5 px-3 text-right whitespace-nowrap font-mono font-bold text-emerald-700 text-xs border-r border-slate-200/80">
+                                  {Number(bill.paidAmount || 0) > 0 ? `₹ ${formatCurrency(bill.paidAmount)}` : '₹ 0.00'}
+                                </td>
+
+                                {/* 5. Description (Editable inline) */}
                                 <td className="py-2 px-3 border-r border-slate-200/80 min-w-[220px]">
                                   <input
                                     type="text"
@@ -1843,7 +1850,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                   )}
                                 </td>
 
-                                {/* 5. Balance */}
+                                {/* 6. Balance */}
                                 <td className={`py-2.5 px-3 text-right whitespace-nowrap font-mono text-xs border-r border-slate-200/80 ${hasBalance ? 'bg-amber-50/30 font-black text-amber-900' : 'text-emerald-600 font-semibold'}`}>
                                   {hasBalance ? (
                                     <span>₹ {formatCurrency(bill.balanceAmount)}</span>
@@ -1927,6 +1934,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-xs border-r border-slate-200 text-slate-950 font-black">
                               ₹ {formatCurrency(filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0))}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-xs border-r border-slate-200 text-emerald-700 font-black">
+                              ₹ {formatCurrency(filteredBills.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0))}
                             </td>
                             <td className="py-2.5 px-3 border-r border-slate-200 text-center font-normal text-xs text-slate-500">
                               {filteredBills.length} record{filteredBills.length !== 1 ? 's' : ''}
@@ -2022,17 +2032,23 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                               />
                             </div>
 
-                            {/* Mobile Financial Breakdown: Bill Amount & Balance */}
-                            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-center bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                            {/* Mobile Financial Breakdown: Bill Amount, Payment Credited & Balance */}
+                            <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
                               <div>
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Bill Amount</span>
-                                <span className="font-mono font-black text-slate-900 text-sm block mt-0.5">
+                                <span className="font-mono font-black text-slate-900 text-xs block mt-0.5">
                                   ₹ {formatCurrency(bill.finalAmount)}
                                 </span>
                               </div>
                               <div>
+                                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider block">Payment Credited</span>
+                                <span className="font-mono font-black text-emerald-700 text-xs block mt-0.5">
+                                  {Number(bill.paidAmount || 0) > 0 ? `₹ ${formatCurrency(bill.paidAmount)}` : '₹ 0.00'}
+                                </span>
+                              </div>
+                              <div>
                                 <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">Balance</span>
-                                <span className={`font-mono font-black text-sm block mt-0.5 ${hasBalance ? 'text-amber-900' : 'text-emerald-700'}`}>
+                                <span className={`font-mono font-black text-xs block mt-0.5 ${hasBalance ? 'text-amber-900' : 'text-emerald-700'}`}>
                                   ₹ {formatCurrency(bill.balanceAmount)}
                                   {!hasBalance && ' ✓'}
                                 </span>
@@ -4029,6 +4045,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             setCustomerStatementModal(cust);
           }}
           onUpdateDescription={handleInlineUpdateDescription}
+          onRecordPayment={handleOpenPaymentModal}
           onClose={() => setCustomerStatementModal(null)}
         />
       )}

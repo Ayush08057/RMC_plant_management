@@ -27,6 +27,7 @@ export default function CustomerStatementModal({
   uniqueCustomers = [],
   onSelectCustomer,
   onUpdateDescription,
+  onRecordPayment,
   onClose,
 }) {
   const [selectedCust, setSelectedCust] = useState(customerName || 'Cash Customer');
@@ -55,11 +56,13 @@ export default function CustomerStatementModal({
     }, 50);
   };
 
-  // Filter bills for the selected customer
+  // Filter bills for the selected customer (or all customers if 'ALL')
+  const isAll = !selectedCust || selectedCust === 'ALL' || selectedCust.toLowerCase() === 'all customers';
   const customerBills = allBills
     .map(normalizeBill)
     .filter(
       (b) =>
+        isAll ||
         (b.customerName || 'Cash Customer').trim().toLowerCase() ===
         (selectedCust || '').trim().toLowerCase()
     );
@@ -89,7 +92,21 @@ export default function CustomerStatementModal({
 
   // Financial aggregates for filtered statement records
   const totalFilteredBilled = filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
-  const totalFilteredBalance = filteredBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0);
+  const totalFilteredPaid = filteredBills.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0);
+  const totalFilteredBalance = totalFilteredBilled - totalFilteredPaid;
+
+  // Running balance calculation for statement ledger rows
+  let cumulativeRunningBalance = 0;
+  const statementRows = filteredBills.map((b) => {
+    const billAmt = Number(b.finalAmount) || 0;
+    const paidAmt = Number(b.paidAmount) || 0;
+    cumulativeRunningBalance += (billAmt - paidAmt);
+    return {
+      ...b,
+      paymentCredited: paidAmt,
+      statementBalance: cumulativeRunningBalance,
+    };
+  });
 
   // Extract customer contact & sites
   const customerMobile =
@@ -112,19 +129,20 @@ export default function CustomerStatementModal({
     setAppliedFilter({ fromDate: '', toDate: '' });
   };
 
-  // Export 5-column statement to CSV/Excel respecting the selected date range
+  // Export 6-column statement to CSV/Excel respecting the selected date range
   const handleExportStatement = () => {
-    if (filteredBills.length === 0) {
+    if (statementRows.length === 0) {
       alert('No statement records to export for the selected date range.');
       return;
     }
-    const headers = ['Date', 'Bill No.', 'Bill Amount', 'Description', 'Balance'];
-    const rows = filteredBills.map((b) => [
+    const headers = ['Date', 'Bill No.', 'Bill Amount', 'Payment Credited', 'Description', 'Balance'];
+    const rows = statementRows.map((b) => [
       `"${formatDisplayDate(b.date)}"`,
       `"${b.billNo || ''}"`,
       Number(b.finalAmount || 0).toFixed(2),
+      Number(b.paymentCredited || 0).toFixed(2),
       `"${(getBillDescription(b) || '').replace(/"/g, '""')}"`,
-      Number(b.balanceAmount || 0).toFixed(2),
+      Number(b.statementBalance || 0).toFixed(2),
     ]);
 
     // Add total row at bottom
@@ -132,7 +150,8 @@ export default function CustomerStatementModal({
       '"Total"',
       '""',
       totalFilteredBilled.toFixed(2),
-      `"${filteredBills.length} records"`,
+      totalFilteredPaid.toFixed(2),
+      `"${statementRows.length} records"`,
       totalFilteredBalance.toFixed(2),
     ]);
 
@@ -190,6 +209,7 @@ export default function CustomerStatementModal({
                   }}
                   className="bg-slate-800 text-white text-xs rounded-lg px-2.5 py-1.5 pr-7 border border-slate-700 font-bold focus:outline-none focus:border-amber-400 appearance-none cursor-pointer"
                 >
+                  <option value="ALL">All Customers (Combined)</option>
                   {uniqueCustomers.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -319,7 +339,7 @@ export default function CustomerStatementModal({
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-black uppercase tracking-wider text-[11px]">Customer / Party:</span>
-                  <span className="font-bold text-sm text-black">{selectedCust}</span>
+                  <span className="font-bold text-sm text-black">{isAll ? 'All Customers (Combined Statement)' : selectedCust}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-black">Contact Mobile: </span>
@@ -354,47 +374,66 @@ export default function CustomerStatementModal({
             </div>
 
             {/* Financial Summary Box */}
-            <div className="my-3 border border-black bg-slate-50/70 p-3 grid grid-cols-2 gap-4 text-center text-xs">
+            <div className="my-3 border border-black bg-slate-50/70 p-3 grid grid-cols-3 gap-3 text-center text-xs">
               <div className="border-r border-black/40 pr-2">
                 <span className="text-[10px] uppercase font-bold text-slate-700 block">Total Bill Amount</span>
                 <span className="font-mono font-black text-black text-base block mt-0.5">
                   ₹ {formatCurrency(totalFilteredBilled)}
                 </span>
               </div>
+              <div className="border-r border-black/40 pr-2">
+                <span className="text-[10px] uppercase font-bold text-slate-700 block">Payment Credited</span>
+                <span className="font-mono font-black text-emerald-800 text-base block mt-0.5">
+                  ₹ {formatCurrency(totalFilteredPaid)}
+                </span>
+              </div>
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-700 block">Total Balance Due</span>
                 <span className={`font-mono font-black text-base block mt-0.5 ${totalFilteredBalance > 0 ? 'text-black' : 'text-emerald-700'}`}>
                   ₹ {formatCurrency(totalFilteredBalance)}
-                  {totalFilteredBalance === 0 && ' ✓'}
+                  {totalFilteredBalance <= 0 && ' ✓'}
                 </span>
               </div>
             </div>
 
-            {/* EXACTLY FIVE STATEMENT COLUMNS */}
+            {/* EXACTLY SIX STATEMENT COLUMNS */}
             <div className="mt-3">
               <table className="w-full border-collapse border border-black text-xs text-left">
                 <thead>
                   <tr className="border-b-2 border-black bg-slate-100 font-bold text-black text-xs">
-                    <th className="py-2 px-2.5 border-r border-black w-[15%]">Date</th>
-                    <th className="py-2 px-2.5 border-r border-black w-[15%]">Bill No.</th>
-                    <th className="py-2 px-2.5 border-r border-black w-[20%] text-right">Bill Amount</th>
-                    <th className="py-2 px-2.5 border-r border-black w-[30%]">Description</th>
-                    <th className="py-2 px-2.5 text-right w-[20%]">Balance</th>
+                    <th className="py-2 px-2 border-r border-black w-[13%] whitespace-nowrap">Date</th>
+                    <th className="py-2 px-2 border-r border-black w-[13%] whitespace-nowrap">Bill No.</th>
+                    <th className="py-2 px-2 border-r border-black w-[18%] text-right whitespace-nowrap">Bill Amount</th>
+                    <th className="py-2 px-2 border-r border-black w-[18%] text-right whitespace-nowrap">Payment Credited</th>
+                    <th className="py-2 px-2 border-r border-black w-[22%]">Description</th>
+                    <th className="py-2 px-2 text-right w-[16%] whitespace-nowrap">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredBills.length > 0 ? (
-                    filteredBills.map((b, idx) => (
+                  {statementRows.length > 0 ? (
+                    statementRows.map((b, idx) => (
                       <tr key={b.id || idx} className="border-b border-black/70 hover:bg-slate-50/50">
-                        <td className="py-2 px-2.5 border-r border-black font-mono">
+                        {/* 1. Date */}
+                        <td className="py-2 px-2 border-r border-black font-mono">
                           {formatDisplayDate(b.date)}
                         </td>
-                        <td className="py-2 px-2.5 border-r border-black font-mono font-bold">
+
+                        {/* 2. Bill No. */}
+                        <td className="py-2 px-2 border-r border-black font-mono font-bold">
                           {b.billNo}
                         </td>
-                        <td className="py-2 px-2.5 border-r border-black text-right font-mono font-bold">
+
+                        {/* 3. Bill Amount */}
+                        <td className="py-2 px-2 border-r border-black text-right font-mono font-bold whitespace-nowrap">
                           ₹ {formatCurrency(b.finalAmount)}
                         </td>
+
+                        {/* 4. Payment Credited */}
+                        <td className="py-2 px-2 border-r border-black text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
+                          ₹ {formatCurrency(b.paymentCredited)}
+                        </td>
+
+                        {/* 5. Description */}
                         <td className="py-1 px-2 border-r border-black">
                           {onUpdateDescription ? (
                             <>
@@ -406,7 +445,7 @@ export default function CustomerStatementModal({
                                 value={b.description !== undefined ? b.description : (getBillDescription(b) === '-' ? '' : getBillDescription(b))}
                                 onChange={(e) => onUpdateDescription(b.id, e.target.value)}
                                 placeholder="Type payment description..."
-                                className="print:hidden w-full px-2 py-1 text-xs font-medium text-slate-900 bg-transparent hover:bg-white/80 focus:bg-white rounded border border-transparent hover:border-slate-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+                                className="print:hidden w-full px-1.5 py-0.5 text-xs font-medium text-slate-900 bg-transparent hover:bg-white/80 focus:bg-white rounded border border-transparent hover:border-slate-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
                                 title="Click to edit description manually"
                               />
                             </>
@@ -414,14 +453,16 @@ export default function CustomerStatementModal({
                             getBillDescription(b)
                           )}
                         </td>
-                        <td className="py-2 px-2.5 text-right font-mono font-bold">
-                          ₹ {formatCurrency(b.balanceAmount)}
+
+                        {/* 6. Balance */}
+                        <td className="py-2 px-2 text-right font-mono font-bold whitespace-nowrap">
+                          ₹ {formatCurrency(b.statementBalance)}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-slate-500 italic">
+                      <td colSpan={6} className="py-6 text-center text-slate-500 italic">
                         No statement records found for the selected period.
                       </td>
                     </tr>
@@ -429,16 +470,19 @@ export default function CustomerStatementModal({
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-bold border-t-2 border-black text-xs">
-                    <td colSpan={2} className="py-2 px-2.5 border-r border-black uppercase text-right">
+                    <td colSpan={2} className="py-2 px-2 border-r border-black uppercase text-right whitespace-nowrap">
                       Total:
                     </td>
-                    <td className="py-2 px-2.5 border-r border-black text-right font-mono font-black">
+                    <td className="py-2 px-2 border-r border-black text-right font-mono font-black whitespace-nowrap">
                       ₹ {formatCurrency(totalFilteredBilled)}
                     </td>
-                    <td className="py-2 px-2.5 border-r border-black text-center text-[11px] text-slate-600">
-                      {filteredBills.length} record{filteredBills.length !== 1 ? 's' : ''}
+                    <td className="py-2 px-2 border-r border-black text-right font-mono font-black text-emerald-800 whitespace-nowrap">
+                      ₹ {formatCurrency(totalFilteredPaid)}
                     </td>
-                    <td className="py-2 px-2.5 text-right font-mono font-black">
+                    <td className="py-2 px-2 border-r border-black text-center text-[11px] text-slate-600">
+                      {statementRows.length} record{statementRows.length !== 1 ? 's' : ''}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-black whitespace-nowrap">
                       ₹ {formatCurrency(totalFilteredBalance)}
                     </td>
                   </tr>
