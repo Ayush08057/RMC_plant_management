@@ -116,7 +116,7 @@ export default function MaterialInwardView() {
             title="Receive Raw Material Inward Entry"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Inward Entry</span>
+            <span>{language === 'mr' ? 'कच्चा माल नोंदवा' : 'Inward Entry'}</span>
           </button>
         </div>
       </div>

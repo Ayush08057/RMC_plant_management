@@ -1,7 +1,10 @@
 import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function StatusBadge({ status, text, size = 'sm' }) {
-  const norm = (status || text || '').toString().toLowerCase();
+  const { t } = useLanguage();
+  const rawText = text || status || '';
+  const norm = rawText.toString().toLowerCase();
 
   let styles = 'bg-[#F5F9FF] text-[#1D5FA7] border-[#D4E4F7]';
   let dotColor = 'bg-[#1D5FA7]';
@@ -67,7 +70,7 @@ export default function StatusBadge({ status, text, size = 'sm' }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border shadow-2xs ${sizeClasses} ${styles}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shrink-0 animate-pulse`} />
-      <span className="capitalize whitespace-nowrap">{text || status}</span>
+      <span className="capitalize whitespace-nowrap">{t(rawText)}</span>
     </span>
   );
 }

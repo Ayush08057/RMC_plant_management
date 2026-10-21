@@ -14,30 +14,26 @@ import {
   HelpCircle,
   AlertCircle,
   ShieldCheck,
-  Check
+  Check,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
+import { useWorkforce } from '../../../context/WorkforceContext';
 import { subscribeCloudStore, pushCloudStore } from '../../../services/cloudSyncService';
 import HelpModal from './HelpModal';
 
+const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
 const CHALLAN_STORAGE_KEY = 'rmc_delivery_challans_v2';
 const TRIPS_STORAGE_KEY = 'rmc_driver_trips_v2';
 const BILLING_STORAGE_KEY = 'rmc_billing_records_v3';
 
-const FLEET_VEHICLES = [
-  { vehicleNo: 'MH-10-CR-1212', defaultDriver: 'Sachin Shinde', capacity: 6.0, status: 'Ready' },
-  { vehicleNo: 'MH-10-CR-1313', defaultDriver: 'Vikas Jadhav', capacity: 6.0, status: 'Ready' },
-  { vehicleNo: 'MH-10-CR-1414', defaultDriver: 'Sunil Kadam', capacity: 6.0, status: 'Ready' },
-  { vehicleNo: 'MH-12-RN-4401', defaultDriver: 'Ramesh Pawar', capacity: 7.0, status: 'Ready' },
-  { vehicleNo: 'MH-12-RN-8822', defaultDriver: 'Sanjay Yadav', capacity: 8.0, status: 'Ready' },
-];
-
-const DRIVERS_LIST = [
-  { name: 'Sachin Shinde', phone: '+91 94218 58681', experience: '5 yrs' },
-  { name: 'Vikas Jadhav', phone: '+91 98221 44012', experience: '7 yrs' },
-  { name: 'Sunil Kadam', phone: '+91 97654 32109', experience: '4 yrs' },
-  { name: 'Ramesh Pawar', phone: '+91 98221 44012', experience: '8 yrs' },
-  { name: 'Sanjay Yadav', phone: '+91 97110 55432', experience: '6 yrs' },
+const DEFAULT_FLEET = [
+  { id: 'VEH-001', vehicleNo: 'MH-10-CR-1212', defaultDriver: 'Sachin Shinde', capacity: 6.0, status: 'Ready', type: 'Transit Mixer (TM)' },
+  { id: 'VEH-002', vehicleNo: 'MH-10-CR-1313', defaultDriver: 'Vikas Jadhav', capacity: 6.0, status: 'Ready', type: 'Transit Mixer (TM)' },
+  { id: 'VEH-003', vehicleNo: 'MH-10-CR-1414', defaultDriver: 'Sunil Kadam', capacity: 6.0, status: 'Ready', type: 'Transit Mixer (TM)' },
+  { id: 'VEH-004', vehicleNo: 'MH-12-RN-4401', defaultDriver: 'Ramesh Pawar', capacity: 7.0, status: 'Ready', type: 'Transit Mixer (TM)' },
+  { id: 'VEH-005', vehicleNo: 'MH-12-RN-8822', defaultDriver: 'Sanjay Yadav', capacity: 8.0, status: 'Ready', type: 'Transit Mixer (TM)' },
 ];
 
 const DEFAULT_CUSTOMERS = [
@@ -53,27 +49,159 @@ const VOLUME_PRESETS = [3.0, 4.5, 6.0, 7.0, 8.0];
 
 export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
   const { language, t } = useLanguage();
+  const { employees } = useWorkforce();
   const [step, setStep] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [createdChallan, setCreatedChallan] = useState(null);
 
+  // Dynamic fleet vehicles loaded from persistent local + cloud store
+  const [vehicles, setVehicles] = useState(() => {
+    try {
+      const raw = localStorage.getItem(VEHICLE_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_FLEET;
+  });
+
+  // Add New Vehicle Modal States
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [newVehicleNo, setNewVehicleNo] = useState('');
+  const [newCapacity, setNewCapacity] = useState(6.0);
+  const [newDriver, setNewDriver] = useState('');
+  const [addError, setAddError] = useState('');
+
+  // Subscribe to real-time vehicle updates
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VEHICLE_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setVehicles(parsed);
+        }
+      } else {
+        localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(DEFAULT_FLEET));
+        pushCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, DEFAULT_FLEET);
+      }
+    } catch {}
+
+    const unsub = subscribeCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, [], (items) => {
+      if (Array.isArray(items) && items.length > 0) {
+        setVehicles(items);
+      }
+    });
+
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [isOpen]);
+
+  // Dynamic driver list from real registered workforce
+  const registeredDrivers = React.useMemo(() => {
+    return (employees || []).filter((e) => {
+      if (!e) return false;
+      const roleLower = (e.role || '').toLowerCase();
+      const deptLower = (e.department || '').toLowerCase();
+      return (
+        roleLower.includes('driver') ||
+        deptLower.includes('transport') ||
+        deptLower.includes('logistics') ||
+        deptLower.includes('fleet')
+      );
+    });
+  }, [employees]);
+
   // Form State
-  const [selectedVehicle, setSelectedVehicle] = useState(FLEET_VEHICLES[0].vehicleNo);
-  const [selectedDriver, setSelectedDriver] = useState(FLEET_VEHICLES[0].defaultDriver);
+  const [selectedVehicle, setSelectedVehicle] = useState(() => vehicles[0]?.vehicleNo || '');
+  const [selectedDriver, setSelectedDriver] = useState(() => vehicles[0]?.defaultDriver || '');
   const [customerName, setCustomerName] = useState('');
   const [siteLocation, setSiteLocation] = useState('');
   const [mixGrade, setMixGrade] = useState('M25');
-  const [quantity, setQuantity] = useState(6.0);
+  const [quantity, setQuantity] = useState(() => vehicles[0]?.capacity || 6.0);
   const [slump, setSlump] = useState('125 ± 25 mm');
   const [validationError, setValidationError] = useState('');
 
-  // Auto-fill driver when vehicle is selected
+  // Auto-fill driver & capacity when vehicle is selected
   const handleVehicleSelect = (veh) => {
     setSelectedVehicle(veh.vehicleNo);
-    setSelectedDriver(veh.defaultDriver);
-    if (veh.capacity) setQuantity(veh.capacity);
+    const driverName = veh.defaultDriver || veh.driver || '';
+    if (driverName && !selectedDriver) {
+      setSelectedDriver(driverName);
+    }
+    if (veh.capacity) setQuantity(Number(veh.capacity));
     setValidationError('');
+  };
+
+  // Add new vehicle handler
+  const handleSaveNewVehicle = () => {
+    const trimmedNo = newVehicleNo.trim().toUpperCase();
+    if (!trimmedNo) {
+      setAddError(language === 'mr' ? 'कृपया गाडी नंबर टाका.' : 'Please enter vehicle registration number.');
+      return;
+    }
+    const capNum = parseFloat(newCapacity);
+    if (!capNum || capNum <= 0) {
+      setAddError(language === 'mr' ? 'कृपया योग्य ड्रम क्षमता टाका.' : 'Please enter valid drum capacity.');
+      return;
+    }
+
+    // Check duplicate
+    if (vehicles.some(v => (v.vehicleNo || '').toLowerCase() === trimmedNo.toLowerCase())) {
+      setAddError(language === 'mr' ? 'हा गाडी नंबर आधीच यादीत उपलब्ध आहे.' : 'This vehicle number is already in the list.');
+      return;
+    }
+
+    const newVeh = {
+      id: `VEH-${Date.now()}`,
+      vehicleNo: trimmedNo,
+      type: 'Transit Mixer (TM)',
+      capacity: capNum,
+      defaultDriver: newDriver.trim() || '',
+      driver: newDriver.trim() || '',
+      status: 'Ready',
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [newVeh, ...vehicles];
+    setVehicles(updated);
+    try {
+      localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(updated));
+      pushCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, updated);
+    } catch {}
+
+    // Auto-select the newly created vehicle immediately
+    handleVehicleSelect(newVeh);
+    setShowAddVehicle(false);
+    setNewVehicleNo('');
+    setNewDriver('');
+    setAddError('');
+  };
+
+  // Delete vehicle handler (allows removing dummy or decommissioned vehicles)
+  const handleDeleteVehicle = (vehNo) => {
+    const confirmMsg = language === 'mr'
+      ? `तुम्हाला ${vehNo} ही गाडी यादीतून काढायची आहे का?`
+      : `Are you sure you want to remove vehicle ${vehNo} from the fleet list?`;
+    if (window.confirm(confirmMsg)) {
+      const updated = vehicles.filter(v => v.vehicleNo !== vehNo);
+      setVehicles(updated);
+      try {
+        localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(updated));
+        pushCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, updated);
+      } catch {}
+      if (selectedVehicle === vehNo) {
+        if (updated.length > 0) {
+          handleVehicleSelect(updated[0]);
+        } else {
+          setSelectedVehicle('');
+          setSelectedDriver('');
+        }
+      }
+    }
   };
 
   const handleCustomerSelect = (cust) => {
@@ -300,39 +428,100 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
             {/* STEP 1: SELECT VEHICLE */}
             {step === 1 && (
               <div className="space-y-3">
-                <div className="border-b pb-2">
-                  <h4 className="text-sm font-black text-slate-900">{t('qWhichVehicle')}</h4>
-                  <p className="text-xs text-slate-500">{language === 'mr' ? 'प्लॅन्टमध्ये उपलब्ध असलेल्या गाड्यांपैकी एक निवडा:' : 'Select an available truck ready for loading:'}</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">{t('qWhichVehicle')}</h4>
+                    <p className="text-xs text-slate-500">
+                      {language === 'mr' ? 'प्लॅन्टमध्ये उपलब्ध असलेल्या गाड्यांपैकी एक निवडा:' : 'Select an available truck ready for loading:'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewVehicleNo('');
+                      setNewCapacity(6.0);
+                      setNewDriver('');
+                      setAddError('');
+                      setShowAddVehicle(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{language === 'mr' ? 'नवीन गाडी जोडा' : 'Add Vehicle'}</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {FLEET_VEHICLES.map((v) => {
-                    const isSelected = selectedVehicle === v.vehicleNo;
-                    return (
-                      <button
-                        key={v.vehicleNo}
-                        type="button"
-                        onClick={() => handleVehicleSelect(v)}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className={`p-2 rounded-lg ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                            <Truck className="w-4 h-4" />
+                {vehicles.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 space-y-3">
+                    <Truck className="w-10 h-10 mx-auto text-slate-300 stroke-[1.5]" />
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-800">
+                        {language === 'mr' ? 'एकही गाडी नोंदवलेली नाही' : 'No Vehicles Registered Yet'}
+                      </h5>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {language === 'mr' ? 'काँक्रीट पाठवण्यासाठी आधी तुमच्या प्लॅन्टची गाडी जोडा.' : 'Add your plant transit mixer to start sending concrete.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewVehicleNo('');
+                        setNewCapacity(6.0);
+                        setNewDriver('');
+                        setAddError('');
+                        setShowAddVehicle(true);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{language === 'mr' ? 'पहिली गाडी जोडा' : 'Add First Vehicle'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
+                    {vehicles.map((v) => {
+                      const isSelected = selectedVehicle === v.vehicleNo;
+                      return (
+                        <div
+                          key={v.vehicleNo}
+                          onClick={() => handleVehicleSelect(v)}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between group ${
+                            isSelected
+                              ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                              <Truck className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono font-black text-xs text-slate-900 truncate">{v.vehicleNo}</div>
+                              <div className="text-[10px] text-slate-500 truncate">
+                                {v.capacity || 6} m³ • {v.defaultDriver || v.driver || (language === 'mr' ? 'ड्रायव्हर नेमलेला नाही' : 'No driver assigned')}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-mono font-black text-xs text-slate-900">{v.vehicleNo}</div>
-                            <div className="text-[10px] text-slate-500">{v.capacity} m³ • {v.defaultDriver}</div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            {isSelected && <Check className="w-4 h-4 text-blue-600 stroke-[3]" />}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteVehicle(v.vehicleNo);
+                              }}
+                              className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors opacity-70 group-hover:opacity-100"
+                              title={language === 'mr' ? 'गाडी यादीतून काढा' : 'Delete Vehicle'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-blue-600 stroke-[3]" />}
-                      </button>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -345,32 +534,54 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {DRIVERS_LIST.map((d) => {
-                    const isSelected = selectedDriver === d.name;
-                    return (
-                      <button
-                        key={d.name}
-                        type="button"
-                        onClick={() => { setSelectedDriver(d.name); setValidationError(''); }}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className={`p-2 rounded-lg ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                            <User className="w-4 h-4" />
+                  {registeredDrivers.length > 0 ? (
+                    registeredDrivers.map((d, idx) => {
+                      const isSelected = selectedDriver === d?.name;
+                      return (
+                        <button
+                          key={d?.id || d?.name || idx}
+                          type="button"
+                          onClick={() => { setSelectedDriver(d?.name || ''); setValidationError(''); }}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected
+                              ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className={`p-2 rounded-lg ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                              <User className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-xs text-slate-900">{d?.name || 'Driver'} <span className="font-mono text-[10px] text-slate-500 font-normal">({d?.id || 'DRV'})</span></div>
+                              <div className="text-[10px] text-slate-500 font-mono">{d?.mobile || d?.phone || 'Fleet Driver'}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-bold text-xs text-slate-900">{d.name}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">{d.phone}</div>
-                          </div>
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-blue-600 stroke-[3]" />}
-                      </button>
-                    );
-                  })}
+                          {isSelected && <Check className="w-4 h-4 text-blue-600 stroke-[3]" />}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="col-span-full py-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      <User className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                      <p className="font-semibold text-slate-600">No Drivers Registered in Workforce Directory</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Drivers registered by Admin in Workforce will appear here automatically.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Direct Driver Name Input Option */}
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    {language === 'mr' ? 'किंवा इतर ड्रायव्हरचे नाव टाका:' : 'Or enter custom/contract driver name:'}
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedDriver}
+                    onChange={(e) => { setSelectedDriver(e.target.value); setValidationError(''); }}
+                    placeholder="Enter driver name"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-500"
+                  />
                 </div>
               </div>
             )}
@@ -595,6 +806,146 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Quick Add Vehicle Modal */}
+        {showAddVehicle && (
+          <div className="fixed inset-0 z-[11000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="px-5 py-3.5 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-white/20 text-white">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm tracking-wide">
+                      {language === 'mr' ? 'नवीन गाडी जोडा' : 'Add New Fleet Vehicle'}
+                    </h3>
+                    <p className="text-[11px] text-blue-200">
+                      {language === 'mr' ? 'गाडी नंबर आणि ड्रम क्षमता नोंदवा' : 'Register a new mixer truck to your plant fleet'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddVehicle(false)}
+                  className="p-1 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-3.5 text-xs text-slate-800">
+                {addError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{addError}</span>
+                  </div>
+                )}
+
+                {/* Vehicle Number */}
+                <div>
+                  <label className="block text-xs font-black text-slate-900 mb-1">
+                    {language === 'mr' ? 'गाडी नोंदणी क्रमांक (Vehicle Number) *' : 'Vehicle Registration Number *'}
+                  </label>
+                  <input
+                    type="text"
+                    value={newVehicleNo}
+                    onChange={(e) => {
+                      setNewVehicleNo(e.target.value.toUpperCase());
+                      setAddError('');
+                    }}
+                    placeholder="e.g. MH-10-CR-2020"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-black text-sm text-slate-900 bg-slate-50 focus:bg-white focus:border-blue-600 uppercase tracking-wide shadow-2xs"
+                    autoFocus
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1 font-mono">Format: State-RTO-Series-Number (e.g. MH-10-CR-1212)</p>
+                </div>
+
+                {/* Drum Capacity */}
+                <div>
+                  <label className="block text-xs font-black text-slate-900 mb-1">
+                    {language === 'mr' ? 'ड्रम मिक्सिंग क्षमता (Drum Capacity - m³) *' : 'Mixing Drum Capacity (m³) *'}
+                  </label>
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    {[6.0, 7.0, 8.0, 10.0].map((cap) => (
+                      <button
+                        key={cap}
+                        type="button"
+                        onClick={() => setNewCapacity(cap)}
+                        className={`py-2 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                          Number(newCapacity) === cap
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-300'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {cap} m³
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-500">{language === 'mr' ? 'किंवा इतर क्षमता:' : 'Or custom capacity:'}</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="20"
+                      value={newCapacity}
+                      onChange={(e) => setNewCapacity(parseFloat(e.target.value) || '')}
+                      className="w-24 px-2.5 py-1 rounded-lg border border-slate-300 font-bold text-xs"
+                    />
+                    <span className="text-xs font-bold text-slate-600">m³</span>
+                  </div>
+                </div>
+
+                {/* Assigned Default Driver */}
+                <div>
+                  <label className="block text-xs font-black text-slate-900 mb-1">
+                    {language === 'mr' ? 'नेमलेला ड्रायव्हर (Assigned Driver - पर्यायी)' : 'Default Driver (Optional)'}
+                  </label>
+                  {registeredDrivers.length > 0 ? (
+                    <select
+                      value={newDriver}
+                      onChange={(e) => setNewDriver(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-xs text-slate-800 bg-slate-50 focus:bg-white"
+                    >
+                      <option value="">{language === 'mr' ? '-- ड्रायव्हर निवडा किंवा खाली लिहा --' : '-- Select registered driver or type below --'}</option>
+                      {registeredDrivers.map((d, idx) => (
+                        <option key={d?.id || d?.name || idx} value={d?.name || ''}>{d?.name || 'Driver'} ({d?.id || 'DRV'})</option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <input
+                    type="text"
+                    value={newDriver}
+                    onChange={(e) => setNewDriver(e.target.value)}
+                    placeholder="e.g. Sachin Shinde"
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-slate-50 focus:bg-white"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddVehicle(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    {t('cancel', 'Cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveNewVehicle}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>{language === 'mr' ? 'गाडी सेव्ह करा आणि निवडा' : 'Save & Select Vehicle'}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

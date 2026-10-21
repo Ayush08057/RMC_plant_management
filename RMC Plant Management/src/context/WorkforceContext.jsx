@@ -25,7 +25,8 @@ import {
 import { 
   EMPLOYEE_STATUS, 
   validateEmployeeForRegistration,
-  createEmployeeFirebaseAuth
+  createEmployeeFirebaseAuth,
+  saveEmployeeCredentials
 } from '../services/employeeAuthService.js';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../utils/shiftUtils.js';
@@ -525,7 +526,7 @@ export const WorkforceProvider = ({ children }) => {
    * ------------------------------------------------------------- */
   const addEmployee = (empData) => {
     const cleanId = empData.id.trim().toUpperCase();
-    const cleanUsername = (empData.username || empData.id).trim().toLowerCase();
+    const cleanUsername = (empData.username || empData.id).trim().toLowerCase().replace(/^@+/, '');
 
     // Unique ID check
     const existing = data.employees.find((e) => e.id.toLowerCase() === cleanId.toLowerCase());
@@ -536,7 +537,7 @@ export const WorkforceProvider = ({ children }) => {
     // Unique Username check
     if (empData.username && empData.username.trim()) {
       const existingUser = data.employees.find(
-        (e) => (e.username || '').toLowerCase() === cleanUsername && e.id.toLowerCase() !== cleanId.toLowerCase()
+        (e) => (e.username || '').toLowerCase().replace(/^@+/, '') === cleanUsername && e.id.toLowerCase() !== cleanId.toLowerCase()
       );
       if (existingUser) {
         throw new Error(`Username "${cleanUsername}" is already assigned to ${existingUser.name}. Please select a different username.`);
@@ -550,13 +551,15 @@ export const WorkforceProvider = ({ children }) => {
       ...empData,
       id: cleanId,
       username: cleanUsername,
+      password: assignedPassword,
       status: assignedStatus,
       salary: Number(empData.salary) || 30000,
       joiningDate: empData.joiningDate || new Date().toISOString().split('T')[0],
       shiftId: empData.shiftId || 'SFT-GEN',
     };
-    // Strictly strip plaintext password from employee record
-    delete newEmp.password;
+
+    // Store credentials in authoritative vault for 100% reliable local/remote employee logins
+    saveEmployeeCredentials(newEmp, assignedPassword);
 
     // If status is Active, automatically provision user account in Firebase Auth
     if (newEmp.status === EMPLOYEE_STATUS.ACTIVE) {
@@ -578,6 +581,7 @@ export const WorkforceProvider = ({ children }) => {
           employeeId: newEmp.id,
           name: newEmp.name,
           username: newEmp.username,
+          password: assignedPassword,
           email: newEmp.email,
           phone: newEmp.mobile,
           role: newEmp.role,
@@ -596,14 +600,18 @@ export const WorkforceProvider = ({ children }) => {
           currentUsers.unshift(userRecord);
         }
         localStorage.setItem('rmc_users_db_v2', JSON.stringify(currentUsers));
-        saveDocumentWithId(COLLECTIONS.USERS, userRecord.id, userRecord).catch(() => {});
+
+        // Save to Firestore without plaintext password
+        const { password: _up, ...cloudUserRecord } = userRecord;
+        saveDocumentWithId(COLLECTIONS.USERS, userRecord.id, cloudUserRecord).catch(() => {});
       } catch (err) {
         console.warn('Failed to sync new employee to users store:', err);
       }
     }
 
     // Save to Cloud Firestore without plaintext password
-    saveDocumentWithId(COLLECTIONS.EMPLOYEES, newEmp.id, newEmp).catch(() => {});
+    const { password: _p, ...cloudEmp } = newEmp;
+    saveDocumentWithId(COLLECTIONS.EMPLOYEES, newEmp.id, cloudEmp).catch(() => {});
 
     setData((prev) => ({
       ...prev,
@@ -939,17 +947,28 @@ export const WorkforceProvider = ({ children }) => {
   };
 
   const updateEmployee = (id, fields) => {
-    // Update in Cloud Firestore
-    updateDocument(COLLECTIONS.EMPLOYEES, id, fields).catch(() => {});
+    const cleanId = (id || '').toUpperCase();
+    const cleanFields = { ...fields };
+    if (cleanFields.username) {
+      cleanFields.username = cleanFields.username.toLowerCase().replace(/^@+/, '').trim();
+    }
+
+    // Save to Vault if password was updated
+    if (cleanFields.password) {
+      saveEmployeeCredentials({ id: cleanId, ...cleanFields }, cleanFields.password);
+    }
+
+    // Update in Cloud Firestore (without password)
+    const { password: _p, ...cloudFields } = cleanFields;
+    updateDocument(COLLECTIONS.EMPLOYEES, id, cloudFields).catch(() => {});
 
     setData((prev) => ({
       ...prev,
-      employees: prev.employees.map((e) => (e.id === id ? { ...e, ...fields } : e)),
+      employees: prev.employees.map((e) => (e.id === id ? { ...e, ...cleanFields } : e)),
     }));
 
     // Sync updated credentials and info to user account store
     try {
-      const cleanId = (id || '').toUpperCase();
       const storedUsersRaw = localStorage.getItem('rmc_users_db_v2');
       if (storedUsersRaw) {
         const currentUsers = JSON.parse(storedUsersRaw);
@@ -960,18 +979,19 @@ export const WorkforceProvider = ({ children }) => {
           const u = currentUsers[userIndex];
           currentUsers[userIndex] = {
             ...u,
-            ...(fields.name && { name: fields.name }),
-            ...(fields.username && { username: fields.username.toLowerCase() }),
-            ...(fields.email && { email: fields.email }),
-            ...(fields.mobile && { phone: fields.mobile }),
-            ...(fields.role && { role: fields.role }),
-            ...(fields.status && { status: fields.status }),
-            ...(fields.department && { department: fields.department }),
-            ...(fields.plant && { plantLocation: fields.plant }),
+            ...(cleanFields.name && { name: cleanFields.name }),
+            ...(cleanFields.username && { username: cleanFields.username }),
+            ...(cleanFields.email && { email: cleanFields.email }),
+            ...(cleanFields.mobile && { phone: cleanFields.mobile }),
+            ...(cleanFields.role && { role: cleanFields.role }),
+            ...(cleanFields.status && { status: cleanFields.status }),
+            ...(cleanFields.department && { department: cleanFields.department }),
+            ...(cleanFields.plant && { plantLocation: cleanFields.plant }),
+            ...(cleanFields.password && { password: cleanFields.password }),
           };
-          delete currentUsers[userIndex].password;
           localStorage.setItem('rmc_users_db_v2', JSON.stringify(currentUsers));
-          updateDocument(COLLECTIONS.USERS, `USR-${cleanId}`, currentUsers[userIndex]).catch(() => {});
+          const { password: _up, ...cloudUserRecord } = currentUsers[userIndex];
+          updateDocument(COLLECTIONS.USERS, `USR-${cleanId}`, cloudUserRecord).catch(() => {});
         }
       }
     } catch (err) {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, BarChart2, CheckCircle2 } from 'lucide-react';
 import Modal from './Modal';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function KPICard({ 
   title, 
@@ -14,6 +15,7 @@ export default function KPICard({
   detailsData = null,
 }) {
   const [showInternalModal, setShowInternalModal] = useState(false);
+  const { t } = useLanguage();
 
   const handleCardClick = (e) => {
     if (onClick) {
@@ -40,7 +42,7 @@ export default function KPICard({
         <div>
           <div className="flex items-center justify-between gap-1.5">
             <span className="text-[10px] font-bold text-black uppercase tracking-wider leading-tight block truncate font-sans">
-              {title}
+              {typeof title === 'string' ? t(title) : title}
             </span>
             {Icon && (
               <div className="w-5 h-5 rounded-md bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0">
@@ -56,8 +58,8 @@ export default function KPICard({
         {(subtext || trend) && (
           <div className="mt-0.5 pt-1 border-t border-[#D4E4F7]/60 flex items-center justify-between text-[10px] text-slate-700 gap-1 min-w-0">
             {subtext && (
-              <span className="text-slate-600 text-[10px] font-medium leading-tight truncate flex-1 min-w-0" title={subtext}>
-                {subtext}
+              <span className="text-slate-600 text-[10px] font-medium leading-tight truncate flex-1 min-w-0" title={typeof subtext === 'string' ? t(subtext) : subtext}>
+                {typeof subtext === 'string' ? t(subtext) : subtext}
               </span>
             )}
             {trend && (
@@ -69,7 +71,7 @@ export default function KPICard({
                     : 'text-black bg-[#F5F9FF] border-[#D4E4F7]'
               }`}>
                 {trendType === 'up' ? <TrendingUp className="w-2.5 h-2.5 text-[#1D5FA7] shrink-0" /> : trendType === 'down' ? <TrendingDown className="w-2.5 h-2.5 text-[#1D5FA7] shrink-0" /> : null}
-                <span className="whitespace-nowrap">{trend}</span>
+                <span className="whitespace-nowrap">{typeof trend === 'string' ? t(trend) : trend}</span>
               </span>
             )}
           </div>
@@ -81,27 +83,27 @@ export default function KPICard({
         <Modal
           isOpen={showInternalModal}
           onClose={() => setShowInternalModal(false)}
-          title={`${title} • Detailed Metrics & Telemetry`}
-          subtitle="Real-time KPI breakdown and SCADA synchronized parameters"
+          title={`${typeof title === 'string' ? t(title) : title} • ${t('Detailed Metrics & Telemetry')}`}
+          subtitle={t('Real-time KPI breakdown and SCADA synchronized parameters')}
           icon={Icon || BarChart2}
         >
           <div className="space-y-3.5 text-xs sm:text-sm">
             <div className="p-4 rounded-xl bg-[#F5F9FF] border border-[#D4E4F7] space-y-1">
-              <span className="text-xs font-mono text-slate-700 uppercase font-semibold tracking-wider">Current Metric Value</span>
+              <span className="text-xs font-mono text-slate-700 uppercase font-semibold tracking-wider">{t('Current Metric Value')}</span>
               <div className="text-2xl sm:text-3xl font-bold text-black font-mono">{value}</div>
-              <p className="text-xs sm:text-sm text-slate-700 font-medium">{subtext}</p>
+              <p className="text-xs sm:text-sm text-slate-700 font-medium">{typeof subtext === 'string' ? t(subtext) : subtext}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 font-mono text-xs">
               <div className="p-3 rounded-lg bg-white border border-[#D4E4F7]">
-                <span className="text-xs text-slate-600 block font-semibold">Trend Status</span>
+                <span className="text-xs text-slate-600 block font-semibold">{t('Trend Status')}</span>
                 <span className="font-semibold text-black flex items-center gap-1 mt-0.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#1D5FA7]" />
-                  <span>{trend || 'Active Telemetry'}</span>
+                  <span>{(typeof trend === 'string' ? t(trend) : trend) || t('Active Telemetry')}</span>
                 </span>
               </div>
               <div className="p-3 rounded-lg bg-white border border-[#D4E4F7]">
-                <span className="text-xs text-slate-600 block font-semibold">SCADA Sync Time</span>
+                <span className="text-xs text-slate-600 block font-semibold">{t('SCADA Sync Time')}</span>
                 <span className="font-semibold text-black mt-0.5 block">
                   {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                 </span>
@@ -110,11 +112,11 @@ export default function KPICard({
 
             {detailsData && (
               <div className="p-3 rounded-xl bg-[#F5F9FF] border border-[#D4E4F7] space-y-2">
-                <span className="font-bold text-black text-xs">Sub-system Breakdown</span>
+                <span className="font-bold text-black text-xs">{t('Sub-system Breakdown')}</span>
                 <div className="space-y-1 text-xs">
                   {Object.entries(detailsData).map(([k, v], i) => (
                     <div key={i} className="flex justify-between border-b border-[#D4E4F7] pb-1">
-                      <span className="text-slate-700 capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
+                      <span className="text-slate-700 capitalize">{t(k.replace(/([A-Z])/g, ' $1'))}:</span>
                       <span className="font-semibold text-black font-mono">{String(v)}</span>
                     </div>
                   ))}
@@ -128,7 +130,7 @@ export default function KPICard({
                 onClick={() => setShowInternalModal(false)}
                 className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white cursor-pointer shadow-2xs"
               >
-                Close Pop-Up
+                {t('Close Pop-Up')}
               </button>
             </div>
           </div>

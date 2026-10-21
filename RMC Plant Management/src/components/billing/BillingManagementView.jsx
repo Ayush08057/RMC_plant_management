@@ -50,7 +50,8 @@ import {
   CircleDollarSign,
   ChevronDown,
   FileSpreadsheet,
-  Download
+  Download,
+  RotateCcw
 } from 'lucide-react';
 import CashMemoPrintView from './CashMemoPrintView';
 import CustomerStatementModal from './CustomerStatementModal';
@@ -59,7 +60,13 @@ import { numberToIndianWords } from '../../utils/numberToWords';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { sendOwnerOtpApi, verifyOwnerOtpApi } from '../../services/otpService';
-import { normalizeBill } from '../../utils/billingPayments';
+import {
+  normalizeBill,
+  parseToDateOnly,
+  formatDisplayDate,
+  formatCurrency,
+  getBillDescription,
+} from '../../utils/billingPayments';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 
 export { normalizeBill };
@@ -333,6 +340,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   }, [otpModalOpen, resendCountdown]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [tableFromDate, setTableFromDate] = useState('');
+  const [tableToDate, setTableToDate] = useState('');
+  const [appliedDateFilter, setAppliedDateFilter] = useState({ fromDate: '', toDate: '' });
   const [isTableFullScreen, setIsTableFullScreen] = useState(false);
   const [notification, setNotification] = useState(null);
 
@@ -409,6 +419,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     initialPaymentMode: 'Cash',
     initialPaymentRef: '',
     initialPaymentRemarks: '',
+    description: '',
   });
 
   const [billMobileError, setBillMobileError] = useState(null);
@@ -882,6 +893,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       let initialPaid = 0;
       let initialStatus = 'Unpaid';
 
+      const enteredDescription = (billForm.description || billForm.initialPaymentRemarks || '').trim();
+
       if (billForm.initialPaymentOption === 'full') {
         initialPaid = finalAmount;
         initialStatus = 'Paid';
@@ -893,7 +906,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           mode: billForm.initialPaymentMode || 'Cash',
           referenceNo: (billForm.initialPaymentRef || 'Full payment at billing').trim(),
           receivedBy: user?.name || 'Cashier / Supervisor',
-          remarks: (billForm.initialPaymentRemarks || 'Paid in full on generation').trim(),
+          description: enteredDescription,
+          remarks: enteredDescription || 'Full payment at billing',
           createdAt: new Date().toISOString(),
         });
       } else if (billForm.initialPaymentOption === 'partial') {
@@ -909,7 +923,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             mode: billForm.initialPaymentMode || 'Cash',
             referenceNo: (billForm.initialPaymentRef || 'Advance payment at billing').trim(),
             receivedBy: user?.name || 'Cashier / Supervisor',
-            remarks: (billForm.initialPaymentRemarks || 'Advance manual cash/online payment on site').trim(),
+            description: enteredDescription,
+            remarks: enteredDescription || 'Advance payment at billing',
             createdAt: new Date().toISOString(),
           });
         }
@@ -936,6 +951,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         balanceAmount: initialBalance,
         paymentStatus: initialStatus,
         payments: initialPayments,
+        description: enteredDescription,
+        paymentRemarks: enteredDescription,
         amountInWords,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -1036,7 +1053,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       receivedBy: user?.name || 'Cashier / Supervisor',
-      remarks: norm.balanceAmount > 0 ? (norm.paidAmount > 0 ? 'Balance settlement payment' : 'Advance received on site') : '',
+      description: '',
+      remarks: '',
     });
     setPaymentError(null);
   };
@@ -1062,6 +1080,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       }
     }
 
+    const enteredDescription = (paymentForm.description || paymentForm.remarks || '').trim();
+
     const newPayment = {
       id: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       date: paymentForm.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -1070,7 +1090,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       mode: paymentForm.mode || 'Cash',
       referenceNo: (paymentForm.referenceNo || '').trim(),
       receivedBy: (paymentForm.receivedBy || user?.name || 'Cashier / Supervisor').trim(),
-      remarks: (paymentForm.remarks || '').trim(),
+      description: enteredDescription,
+      remarks: enteredDescription,
       createdAt: new Date().toISOString(),
     };
 
@@ -1084,6 +1105,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
         return normalizeBill({
           ...b,
+          description: enteredDescription || b.description || '',
+          paymentRemarks: enteredDescription || b.paymentRemarks || '',
           payments: updatedPayments,
           paidAmount: newPaid,
           balanceAmount: newBalance,
@@ -1181,6 +1204,27 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         console.error('Storage error:', e);
       }
       showToast(`Voucher #${voucherNo} removed.`);
+    }
+  };
+
+  // Inline Description Editor (for manual typing in the table)
+  const handleInlineUpdateDescription = (billId, newDesc) => {
+    const updatedBills = bills.map((b) => {
+      if (b.id === billId) {
+        return normalizeBill({
+          ...b,
+          description: newDesc,
+          paymentRemarks: newDesc,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return b;
+    });
+    setBills(updatedBills);
+    try {
+      localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedBills));
+    } catch (err) {
+      console.error('Storage error:', err);
     }
   };
 
@@ -1314,6 +1358,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 (b.vehicle || '').toLowerCase().includes(q) ||
                 (b.constructionDate || '').toLowerCase().includes(q) ||
                 (b.date || '').toLowerCase().includes(q) ||
+                (b.description || '').toLowerCase().includes(q) ||
+                (b.paymentRemarks || '').toLowerCase().includes(q) ||
                 (b.items && b.items.some(it => (it.material || '').toLowerCase().includes(q)))
               );
 
@@ -1321,7 +1367,23 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 paymentFilter === 'PENDING' ? Number(b.balanceAmount || 0) > 0 :
                 paymentFilter === 'PAID' ? Number(b.balanceAmount || 0) <= 0 : true;
 
-              return matchesSearch && matchesPayment;
+              // Date Period Filter (Inclusive of both boundary dates)
+              let matchesDate = true;
+              if (appliedDateFilter.fromDate || appliedDateFilter.toDate) {
+                const billDateObj = parseToDateOnly(b.date);
+                if (billDateObj) {
+                  if (appliedDateFilter.fromDate) {
+                    const fromObj = parseToDateOnly(appliedDateFilter.fromDate);
+                    if (fromObj && billDateObj.getTime() < fromObj.getTime()) matchesDate = false;
+                  }
+                  if (appliedDateFilter.toDate) {
+                    const toObj = parseToDateOnly(appliedDateFilter.toDate);
+                    if (toObj && billDateObj.getTime() > toObj.getTime()) matchesDate = false;
+                  }
+                }
+              }
+
+              return matchesSearch && matchesPayment && matchesDate;
             });
 
             // 1-Click Export to Microsoft Excel / CSV Ledger
@@ -1332,44 +1394,20 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               }
 
               const headers = [
-                'SN',
-                'Bill No',
-                'Bill Date',
-                'Construction Date',
-                'Customer / Party Name',
-                'Mobile Number',
-                'Site Destination',
-                'Vehicle',
-                'Material Items & Quantities',
-                'Bill Total (INR)',
-                'Cash Paid (INR)',
-                'Online Paid (INR)',
-                'Total Paid (INR)',
-                'Balance Due (INR)',
-                'Payment Status'
+                'Date',
+                'Bill No.',
+                'Bill Amount',
+                'Description',
+                'Balance'
               ];
 
-              const rows = filteredBills.map((b, idx) => {
-                const itemsStr = (b.items || []).map((it) => `${it.material} (${it.qty} ${it.unit})`).join('; ');
-                const totalPaid = Number(b.paidAmount || (Number(b.cashPaidAmount || 0) + Number(b.onlinePaidAmount || 0)));
-                return [
-                  idx + 1,
-                  `"${(b.billNo || '').replace(/"/g, '""')}"`,
-                  `"${b.date || ''}"`,
-                  `"${b.constructionDate || b.date || ''}"`,
-                  `"${(b.customerName || 'Cash Customer').replace(/"/g, '""')}"`,
-                  `"${(b.customerMobile || '').replace(/"/g, '""')}"`,
-                  `"${(b.site || b.place || '').replace(/"/g, '""')}"`,
-                  `"${(b.vehicle || 'Direct').replace(/"/g, '""')}"`,
-                  `"${itemsStr.replace(/"/g, '""')}"`,
-                  Number(b.finalAmount || 0).toFixed(2),
-                  Number(b.cashPaidAmount || 0).toFixed(2),
-                  Number(b.onlinePaidAmount || 0).toFixed(2),
-                  totalPaid.toFixed(2),
-                  Number(b.balanceAmount || 0).toFixed(2),
-                  `"${b.paymentStatus || 'Unpaid'}"`
-                ].join(',');
-              });
+              const rows = filteredBills.map((b) => [
+                `"${formatDisplayDate(b.date)}"`,
+                `"${(b.billNo || '').replace(/"/g, '""')}"`,
+                Number(b.finalAmount || 0).toFixed(2),
+                `"${(getBillDescription(b) || '').replace(/"/g, '""')}"`,
+                Number(b.balanceAmount || 0).toFixed(2)
+              ]);
 
               // Add UTF-8 BOM so Excel opens currency and symbols without formatting artifacts
               const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\n');
@@ -1504,8 +1542,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       title="Create / Add New Cash Memo Record"
                     >
                       <Plus className="w-3.5 h-3.5 text-slate-950" />
-                      <span className="hidden sm:inline">+ New Memo</span>
-                      <span className="sm:hidden">+ New</span>
+                      <span className="hidden sm:inline">New Memo</span>
+                      <span className="sm:hidden">New</span>
                     </button>
                   </div>
                 </div>
@@ -1652,6 +1690,61 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   </div>
                 </div>
 
+                {/* Date Period Filter Bar (Above the table) */}
+                <div className="bg-white rounded-xl border border-slate-200/90 p-2.5 sm:p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Date Period Filter:</span>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[11px] font-bold text-slate-600">From Date</label>
+                      <input
+                        type="date"
+                        value={tableFromDate}
+                        onChange={(e) => setTableFromDate(e.target.value)}
+                        className="px-2.5 py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[11px] font-bold text-slate-600">To Date</label>
+                      <input
+                        type="date"
+                        value={tableToDate}
+                        onChange={(e) => setTableToDate(e.target.value)}
+                        className="px-2.5 py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAppliedDateFilter({ fromDate: tableFromDate, toDate: tableToDate })}
+                        className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer active:scale-95"
+                      >
+                        Apply Filter
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTableFromDate('');
+                          setTableToDate('');
+                          setAppliedDateFilter({ fromDate: '', toDate: '' });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-300 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                      >
+                        <RotateCcw className="w-3 h-3 text-slate-500" />
+                        <span>Reset Filter</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {(appliedDateFilter.fromDate || appliedDateFilter.toDate) && (
+                    <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
+                      Period: <strong>{appliedDateFilter.fromDate ? formatDisplayDate(appliedDateFilter.fromDate) : 'Start'}</strong> to <strong>{appliedDateFilter.toDate ? formatDisplayDate(appliedDateFilter.toDate) : 'End'}</strong> ({filteredBills.length} memos)
+                    </div>
+                  )}
+                </div>
+
                 {/* Table Container */}
                 <div className={`w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden ${isTableFullScreen ? 'fixed inset-0 z-[999999] w-screen h-screen bg-white rounded-none p-0 m-0 border-none overflow-auto flex flex-col' : ''}`}>
                   {isTableFullScreen && (
@@ -1690,121 +1783,76 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                     <table className="w-full text-left text-xs text-slate-800 border-collapse border-b border-slate-200">
                       <thead>
                         <tr className="bg-slate-50 text-slate-800 font-bold text-[11px] border-b border-slate-300 select-none">
-                          <th className="py-2.5 px-1 text-center w-7 font-mono text-slate-500 border-r border-slate-200">#</th>
-                          <th className="py-2.5 px-2 whitespace-nowrap border-r border-slate-200 w-[80px]">Date</th>
-                          <th className="py-2.5 px-2 whitespace-nowrap border-r border-slate-200 w-[85px]">Bill #</th>
-                          <th className="py-2.5 px-2.5 border-r border-slate-200 min-w-[140px]">Customer / Party</th>
-                          <th className="py-2.5 px-2.5 border-r border-slate-200 min-w-[120px]">Site Destination</th>
-                          <th className="py-2.5 px-2 text-center whitespace-nowrap border-r border-slate-200 w-[95px]">Vehicle</th>
-                          <th className="py-2.5 px-2 text-right whitespace-nowrap border-r border-slate-200 w-[95px]">Bill Total (₹)</th>
-                          <th className="py-2.5 px-2 text-right whitespace-nowrap text-emerald-800 bg-emerald-50/50 border-r border-slate-200 w-[90px]">Paid (₹)</th>
-                          <th className="py-2.5 px-2 text-right whitespace-nowrap text-amber-900 bg-amber-50/50 border-r border-slate-200 w-[100px]">Balance Due (₹)</th>
-                          <th className="py-2.5 px-1.5 text-center whitespace-nowrap border-r border-slate-200 w-[75px]">Status</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200 w-[110px]">Date</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200 w-[120px]">Bill No.</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[140px]">Bill Amount</th>
+                          <th className="py-2.5 px-3 border-r border-slate-200 min-w-[200px]">Description</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[140px]">Balance</th>
                           <th className="py-2.5 px-2 text-center whitespace-nowrap w-[170px] bg-slate-100/60">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {filteredBills.length > 0 ? (
-                          filteredBills.map((bill, idx) => {
+                          filteredBills.map((bill) => {
                             const timing = getTimingStatus(bill.createdAt);
                             const hasBalance = Number(bill.balanceAmount || 0) > 0;
-                            const materialsTooltip = bill.items && bill.items.length > 0 
-                              ? bill.items.map(it => `${it.material} (${it.qty}${it.unit})`).join(', ')
-                              : 'Cash Memo';
                             return (
                               <tr key={bill.id} className="even:bg-slate-50/40 odd:bg-white hover:bg-amber-50/60 transition-colors">
-                                {/* 1. Row Index (#) */}
-                                <td className="py-2.5 px-1 text-center font-mono text-[10px] text-slate-400 font-semibold border-r border-slate-200/80">
-                                  {idx + 1}
+                                {/* 1. Date */}
+                                <td className="py-2.5 px-3 whitespace-nowrap font-mono text-xs text-slate-800 border-r border-slate-200/80 leading-tight">
+                                  <div>{formatDisplayDate(bill.date)}</div>
                                 </td>
 
-                                {/* 2. Bill Date */}
-                                <td className="py-2.5 px-2 whitespace-nowrap font-mono text-xs text-slate-800 border-r border-slate-200/80 leading-tight">
-                                  <div>{bill.date}</div>
-                                  {bill.constructionDate && bill.constructionDate !== bill.date && (
-                                    <div className="text-[9.5px] text-amber-800 font-medium">Const: {bill.constructionDate}</div>
+                                {/* 2. Bill No. */}
+                                <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200/80 text-xs">
+                                  <span>#{bill.billNo}</span>
+                                </td>
+
+                                {/* 3. Bill Amount */}
+                                <td className="py-2.5 px-3 text-right whitespace-nowrap font-mono font-bold text-slate-950 text-xs border-r border-slate-200/80">
+                                  ₹ {formatCurrency(bill.finalAmount)}
+                                </td>
+
+                                {/* 4. Description (Editable inline) */}
+                                <td className="py-2 px-3 border-r border-slate-200/80 min-w-[220px]">
+                                  <input
+                                    type="text"
+                                    value={bill.description !== undefined ? bill.description : (getBillDescription(bill) === '-' ? '' : getBillDescription(bill))}
+                                    onChange={(e) => handleInlineUpdateDescription(bill.id, e.target.value)}
+                                    placeholder="Type description (e.g. Cash Received, Online Payment)..."
+                                    className="w-full px-2 py-1 text-xs font-semibold text-slate-900 bg-slate-50/80 hover:bg-slate-100/90 focus:bg-white rounded border border-slate-200 hover:border-slate-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+                                    title="Click to edit payment description manually"
+                                  />
+                                  {bill.customerName && (
+                                    <div className="flex items-center gap-1.5 mt-1 px-0.5">
+                                      <span className="text-[10.5px] text-slate-500 font-medium truncate" title={bill.customerName}>
+                                        {bill.customerName}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedCustomer(bill.customerName || 'Cash Customer');
+                                          setCustomerStatementModal(bill.customerName || 'Cash Customer');
+                                        }}
+                                        className="text-[9px] font-semibold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-1.5 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
+                                        title="Open Statement"
+                                      >
+                                        Statement
+                                      </button>
+                                    </div>
                                   )}
                                 </td>
 
-                                {/* 3. Bill Number */}
-                                <td className="py-2.5 px-2 whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200/80 text-xs">
-                                  <span title={materialsTooltip}>#{bill.billNo}</span>
-                                </td>
-
-                                {/* 4. Customer / Party */}
-                                <td className="py-2.5 px-2.5 border-r border-slate-200/80 min-w-0">
-                                  <div className="flex items-center justify-between gap-1.5 min-w-0">
-                                    <span className="font-bold text-slate-900 text-xs truncate" title={bill.customerName}>
-                                      {bill.customerName}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedCustomer(bill.customerName || 'Cash Customer');
-                                        setCustomerStatementModal(bill.customerName || 'Cash Customer');
-                                      }}
-                                      className="text-[9px] font-semibold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-1.5 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
-                                      title="Open Ledger Statement"
-                                    >
-                                      Statement
-                                    </button>
-                                  </div>
-                                </td>
-
-                                {/* 5. Site Destination */}
-                                <td className="py-2.5 px-2.5 border-r border-slate-200/80 text-slate-700 min-w-0">
-                                  <span className="truncate block text-xs" title={bill.site || bill.place}>
-                                    {bill.site || bill.place || 'Tanang Site Zone'}
-                                  </span>
-                                </td>
-
-                                {/* 6. Vehicle */}
-                                <td className="py-2.5 px-2 text-center whitespace-nowrap font-mono text-xs text-slate-700 border-r border-slate-200/80">
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-bold text-[10.5px] text-slate-800 truncate block max-w-[85px] mx-auto" title={bill.vehicle || 'Direct'}>
-                                    {bill.vehicle || 'Direct'}
-                                  </span>
-                                </td>
-
-                                {/* 7. Bill Total (₹) */}
-                                <td className="py-2.5 px-2 text-right whitespace-nowrap font-mono font-bold text-slate-950 text-xs border-r border-slate-200/80">
-                                  ₹ {Number(bill.finalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </td>
-
-                                {/* 8. Paid Amount (₹) */}
-                                <td className="py-2.5 px-2 text-right whitespace-nowrap font-mono font-bold text-emerald-700 text-xs bg-emerald-50/20 border-r border-slate-200/80">
-                                  ₹ {Number(bill.paidAmount || (Number(bill.cashPaidAmount || 0) + Number(bill.onlinePaidAmount || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </td>
-
-                                {/* 9. Balance Due (₹) */}
-                                <td className={`py-2.5 px-2 text-right whitespace-nowrap font-mono text-xs border-r border-slate-200/80 ${hasBalance ? 'bg-amber-50/30 font-black text-amber-900' : 'text-emerald-600 font-semibold'}`}>
+                                {/* 5. Balance */}
+                                <td className={`py-2.5 px-3 text-right whitespace-nowrap font-mono text-xs border-r border-slate-200/80 ${hasBalance ? 'bg-amber-50/30 font-black text-amber-900' : 'text-emerald-600 font-semibold'}`}>
                                   {hasBalance ? (
-                                    <span>₹ {Number(bill.balanceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    <span>₹ {formatCurrency(bill.balanceAmount)}</span>
                                   ) : (
                                     <span className="text-[10px] font-bold text-emerald-600">₹ 0 (Cleared ✓)</span>
                                   )}
                                 </td>
 
-                                {/* 10. Payment Status Badge */}
-                                <td className="py-2.5 px-1.5 text-center whitespace-nowrap border-r border-slate-200/80">
-                                  {bill.paymentStatus === 'Paid' ? (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[9.5px] font-bold">
-                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                                      <span>Paid</span>
-                                    </span>
-                                  ) : bill.paymentStatus === 'Partially Paid' ? (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-bold">
-                                      <Clock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
-                                      <span>Partial</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[9.5px] font-bold">
-                                      <AlertCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
-                                      <span>Unpaid</span>
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* 11. Actions: Clearly Formatted Options (Pay, Print, Edit, Delete) - Always 100% visible */}
+                                {/* 6. Actions */}
                                 <td className="py-2.5 px-2 text-center whitespace-nowrap bg-slate-50/30">
                                   <div className="flex items-center justify-center gap-1.5">
                                     {/* + Pay Button */}
@@ -1863,8 +1911,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                           })
                         ) : (
                           <tr>
-                            <td colSpan={11} className="py-12 text-center text-slate-400">
-                              No cash memos found matching search query.
+                            <td colSpan={6} className="py-12 text-center text-slate-400">
+                              No cash memos found matching the selected period / query.
                             </td>
                           </tr>
                         )}
@@ -1874,20 +1922,20 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       {filteredBills.length > 0 && (
                         <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 select-none">
                           <tr>
-                            <td colSpan={6} className="py-2.5 px-2 text-right uppercase text-[10px] tracking-wider text-slate-600 border-r border-slate-200">
+                            <td colSpan={2} className="py-2.5 px-3 text-right uppercase text-[10px] tracking-wider text-slate-600 border-r border-slate-200">
                               Total ({filteredBills.length} Memos Displayed):
                             </td>
-                            <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-slate-200 text-slate-950 font-black">
-                              ₹ {filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <td className="py-2.5 px-3 text-right font-mono text-xs border-r border-slate-200 text-slate-950 font-black">
+                              ₹ {formatCurrency(filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0))}
                             </td>
-                            <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-slate-200 text-emerald-800 font-black bg-emerald-50/50">
-                              ₹ {filteredBills.reduce((s, b) => s + (Number(b.paidAmount || (Number(b.cashPaidAmount || 0) + Number(b.onlinePaidAmount || 0))) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <td className="py-2.5 px-3 border-r border-slate-200 text-center font-normal text-xs text-slate-500">
+                              {filteredBills.length} record{filteredBills.length !== 1 ? 's' : ''}
                             </td>
-                            <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-slate-200 text-amber-900 font-black bg-amber-50/50">
-                              ₹ {filteredBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <td className="py-2.5 px-3 text-right font-mono text-xs border-r border-slate-200 text-amber-900 font-black bg-amber-50/50">
+                              ₹ {formatCurrency(filteredBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0))}
                             </td>
-                            <td colSpan={2} className="py-2.5 px-1.5 text-center text-[10px] text-slate-500 font-normal">
-                              Excel Register View
+                            <td className="py-2.5 px-2 text-center text-[10px] text-slate-500 font-normal bg-slate-100/60">
+                              Cash Memo Register
                             </td>
                           </tr>
                         </tfoot>
@@ -1962,35 +2010,31 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                               </div>
                             </div>
 
-                            {/* Transit Vehicle & Material Items Summary */}
-                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] pt-1 border-t border-slate-100">
-                              <span className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono text-slate-800 font-bold text-[10px]">
-                                <Truck className="w-3 h-3 text-slate-500 shrink-0" />
-                                <span>{bill.vehicle || 'Direct Mixer'}</span>
-                              </span>
-                              <div className="font-medium text-slate-700 text-[11px] truncate flex-1 min-w-[140px]">
-                                {bill.items.map((it) => `${it.material} (${it.qty} ${it.unit})`).join(', ')}
-                              </div>
+                            {/* Description & Payment Info (Editable) */}
+                            <div className="pt-1.5 border-t border-slate-100 text-xs">
+                              <span className="text-[10px] uppercase font-bold text-slate-500 block">Description</span>
+                              <input
+                                type="text"
+                                value={bill.description !== undefined ? bill.description : (getBillDescription(bill) === '-' ? '' : getBillDescription(bill))}
+                                onChange={(e) => handleInlineUpdateDescription(bill.id, e.target.value)}
+                                placeholder="Type description (e.g. Cash Received, Online Payment)..."
+                                className="w-full mt-0.5 px-2 py-1 text-xs font-semibold text-slate-900 bg-slate-50 hover:bg-slate-100 focus:bg-white rounded border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+                              />
                             </div>
 
-                            {/* Mobile Financial Breakdown: Total / Paid / Due */}
-                            <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-xl border border-slate-100">
+                            {/* Mobile Financial Breakdown: Bill Amount & Balance */}
+                            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-center bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
                               <div>
-                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Total Bill</span>
-                                <span className="font-mono font-black text-slate-900 text-xs">
-                                  ₹ {Number(bill.finalAmount).toLocaleString('en-IN')}
+                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Bill Amount</span>
+                                <span className="font-mono font-black text-slate-900 text-sm block mt-0.5">
+                                  ₹ {formatCurrency(bill.finalAmount)}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider block">Paid</span>
-                                <span className="font-mono font-black text-emerald-700 text-xs">
-                                  ₹ {Number(bill.paidAmount || 0).toLocaleString('en-IN')}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] text-amber-800 font-bold uppercase tracking-wider block">Balance Due</span>
-                                <span className={`font-mono font-black text-xs ${hasBalance ? 'text-amber-800' : 'text-emerald-600'}`}>
-                                  {hasBalance ? `₹ ${Number(bill.balanceAmount).toLocaleString('en-IN')}` : '₹ 0'}
+                                <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">Balance</span>
+                                <span className={`font-mono font-black text-sm block mt-0.5 ${hasBalance ? 'text-amber-900' : 'text-emerald-700'}`}>
+                                  ₹ {formatCurrency(bill.balanceAmount)}
+                                  {!hasBalance && ' ✓'}
                                 </span>
                               </div>
                             </div>
@@ -3364,13 +3408,13 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                         <div>
                           <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                            Remarks / Notes <span className="text-slate-400 font-normal">(Optional)</span>
+                            Description <span className="text-slate-400 font-normal">(Payment Info / Notes)</span>
                           </label>
                           <input
                             type="text"
-                            value={billForm.initialPaymentRemarks}
-                            onChange={(e) => setBillForm({ ...billForm, initialPaymentRemarks: e.target.value })}
-                            placeholder="e.g. Paid in cash on site to mixer driver"
+                            value={billForm.description ?? billForm.initialPaymentRemarks}
+                            onChange={(e) => setBillForm({ ...billForm, description: e.target.value, initialPaymentRemarks: e.target.value })}
+                            placeholder="e.g. Cash Received, Online Payment Received"
                             className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:bg-white focus:border-[#1D5FA7] transition-all"
                           />
                         </div>
@@ -3827,16 +3871,16 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       />
                     </div>
 
-                    {/* Remarks */}
+                    {/* Description */}
                     <div>
                       <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Remarks / Note
+                        Description
                       </label>
                       <input
                         type="text"
-                        value={paymentForm.remarks}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, remarks: e.target.value })}
-                        placeholder="e.g. Advance paid at site"
+                        value={paymentForm.description ?? paymentForm.remarks}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, description: e.target.value, remarks: e.target.value })}
+                        placeholder="e.g. Cash Received, Online Payment Received"
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:bg-white focus:border-emerald-600 transition-all"
                       />
                     </div>
@@ -3984,6 +4028,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             setSelectedCustomer(cust);
             setCustomerStatementModal(cust);
           }}
+          onUpdateDescription={handleInlineUpdateDescription}
           onClose={() => setCustomerStatementModal(null)}
         />
       )}

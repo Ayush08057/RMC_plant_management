@@ -17,6 +17,7 @@ import {
   Gauge
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import RecordVehicleReturnWizard from './guided/RecordVehicleReturnWizard';
 import { useLanguage } from '../../context/LanguageContext';
@@ -26,9 +27,25 @@ const STORAGE_KEY = 'rmc_driver_trips_v2';
 const INITIAL_TRIPS = [];
 
 export default function DriverTripsView() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  const { employees } = useWorkforce();
   const [helpOpen, setHelpOpen] = useState(false);
   const [returnWizardOpen, setReturnWizardOpen] = useState(false);
+
+  // Dynamic driver list from real registered workforce
+  const registeredDrivers = React.useMemo(() => {
+    return (employees || []).filter((e) => {
+      if (!e) return false;
+      const roleLower = (e.role || '').toLowerCase();
+      const deptLower = (e.department || '').toLowerCase();
+      return (
+        roleLower.includes('driver') ||
+        deptLower.includes('transport') ||
+        deptLower.includes('logistics') ||
+        deptLower.includes('fleet')
+      );
+    });
+  }, [employees]);
 
   const [trips, setTrips] = useState(() => {
     try {
@@ -45,9 +62,9 @@ export default function DriverTripsView() {
 
   // New Trip form state
   const [newTrip, setNewTrip] = useState({
-    vehicleNo: 'MH-12-RN-4401',
-    driverName: 'Ramesh Pawar',
-    driverPhone: '+91 98221 44012',
+    vehicleNo: '',
+    driverName: '',
+    driverPhone: '',
     clientName: '',
     siteName: '',
     distanceKm: 15,
@@ -223,26 +240,26 @@ export default function DriverTripsView() {
       <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#D4E4F7] shadow-2xs flex flex-wrap items-center justify-between gap-1.5 sm:gap-3 text-xs">
         <div className="flex items-center gap-1.5">
           <Truck size={13} className="text-blue-600" />
-          <span className="text-slate-500 text-[11px]">In-Transit:</span>
-          <span className="font-bold text-slate-900 text-xs">{activeTripsCount} <span className="font-normal text-slate-500 text-[10px]">mixers</span></span>
+          <span className="text-slate-500 text-[11px]">{t('In Transit')}:</span>
+          <span className="font-bold text-slate-900 text-xs">{activeTripsCount} <span className="font-normal text-slate-500 text-[10px]">{language === 'mr' ? 'गाड्या' : 'mixers'}</span></span>
         </div>
         <div className="h-3 w-px bg-slate-200 hidden sm:block" />
         <div className="flex items-center gap-1.5">
           <CheckCircle size={13} className="text-emerald-600" />
-          <span className="text-slate-500 text-[11px]">Completed:</span>
-          <span className="font-bold text-slate-900 text-xs">{completedToday} <span className="font-normal text-slate-500 text-[10px]">trips</span></span>
+          <span className="text-slate-500 text-[11px]">{t('Completed')}:</span>
+          <span className="font-bold text-slate-900 text-xs">{completedToday} <span className="font-normal text-slate-500 text-[10px]">{language === 'mr' ? 'फेऱ्या' : 'trips'}</span></span>
         </div>
         <div className="h-3 w-px bg-slate-200 hidden sm:block" />
         <div className="flex items-center gap-1.5">
           <Gauge size={13} className="text-amber-600" />
-          <span className="text-slate-500 text-[11px]">Delivered:</span>
+          <span className="text-slate-500 text-[11px]">{t('Delivered')}:</span>
           <span className="font-bold text-slate-900 text-xs">{totalVolumeDelivered.toFixed(1)} <span className="font-normal text-slate-500 text-[10px]">m³</span></span>
         </div>
         <div className="h-3 w-px bg-slate-200 hidden sm:block" />
         <div className="flex items-center gap-1.5">
           <Clock size={13} className="text-purple-600" />
-          <span className="text-slate-500 text-[11px]">Turnaround:</span>
-          <span className="font-bold text-slate-900 text-xs">{avgTurnaround} <span className="font-normal text-slate-500 text-[10px]">min/trip</span></span>
+          <span className="text-slate-500 text-[11px]">{language === 'mr' ? 'सरासरी वेळ:' : 'Turnaround:'}</span>
+          <span className="font-bold text-slate-900 text-xs">{avgTurnaround} <span className="font-normal text-slate-500 text-[10px]">{language === 'mr' ? 'मि/फेरी' : 'min/trip'}</span></span>
         </div>
       </div>
 
@@ -253,7 +270,7 @@ export default function DriverTripsView() {
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search trip, mixer, driver, site..."
+            placeholder={t('Search vehicle, driver...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-7 pr-2 py-1 h-7 bg-slate-50/70 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#136dec] focus:bg-white text-slate-800 placeholder-slate-400"
@@ -279,7 +296,7 @@ export default function DriverTripsView() {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 font-medium'
                 }`}
               >
-                {label}
+                {t(label)}
               </button>
             );
           })}
@@ -291,10 +308,10 @@ export default function DriverTripsView() {
             type="button"
             onClick={() => setReturnWizardOpen(true)}
             className="h-7 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded shadow-2xs transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
-            title="Record Vehicle Return"
+            title={language === 'mr' ? 'गाडी परत आल्याची नोंद' : 'Record Vehicle Return'}
           >
             <CheckCircle size={13} />
-            <span>Record Return</span>
+            <span>{language === 'mr' ? 'गाडी परत आली' : 'Record Return'}</span>
           </button>
 
           <button
@@ -302,7 +319,7 @@ export default function DriverTripsView() {
             className="h-7 px-2.5 bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold rounded shadow-2xs transition-all active:scale-95 flex items-center gap-1 cursor-pointer shrink-0"
           >
             <Plus size={14} />
-            <span>Dispatch Trip</span>
+            <span>{language === 'mr' ? 'गाडी रवाना करा' : 'Dispatch Trip'}</span>
           </button>
         </div>
       </div>
@@ -403,34 +420,57 @@ export default function DriverTripsView() {
             <form onSubmit={handleCreateTrip} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Vehicle / Mixer No</label>
-                  <select
-                    value={newTrip.vehicleNo}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      let dName = 'Ramesh Pawar';
-                      let dPhone = '+91 98221 44012';
-                      if (v === 'MH-12-RN-8822') { dName = 'Sanjay Kumar Yadav'; dPhone = '+91 97110 55432'; }
-                      if (v === 'MH-14-BT-1920') { dName = 'Mahesh Shinde'; dPhone = '+91 94220 89110'; }
-                      if (v === 'MH-12-PQ-9003') { dName = 'Deepak Gaikwad'; dPhone = '+91 98812 77091'; }
-                      setNewTrip({ ...newTrip, vehicleNo: v, driverName: dName, driverPhone: dPhone });
-                    }}
-                    className="w-full border border-slate-200 rounded-lg py-1.5 px-2 font-medium bg-slate-50 text-slate-800 text-xs focus:ring-1 focus:ring-[#136dec]"
-                  >
-                    <option value="MH-12-RN-4401">MH-12-RN-4401 (TM-01, 7m³)</option>
-                    <option value="MH-12-RN-8822">MH-12-RN-8822 (TM-02, 6m³)</option>
-                    <option value="MH-14-BT-1920">MH-14-BT-1920 (TM-03, 8m³)</option>
-                    <option value="MH-12-PQ-9003">MH-12-PQ-9003 (TM-04, 6m³)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Driver Name</label>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Vehicle / Mixer No *</label>
                   <input
                     type="text"
-                    value={newTrip.driverName}
-                    readOnly
-                    className="w-full border border-slate-200 rounded-lg py-1.5 px-2 bg-slate-100 text-slate-700 font-semibold text-xs cursor-not-allowed"
+                    value={newTrip.vehicleNo}
+                    onChange={(e) => setNewTrip({ ...newTrip, vehicleNo: e.target.value.toUpperCase() })}
+                    placeholder="e.g. MH-10-CR-1212"
+                    list="trip-vehicle-suggestions"
+                    className="w-full border border-slate-200 rounded-lg py-1.5 px-2 font-mono uppercase bg-slate-50 text-slate-800 text-xs focus:ring-1 focus:ring-[#136dec]"
+                    required
                   />
+                  <datalist id="trip-vehicle-suggestions">
+                    <option value="MH-10-CR-1212">TM-01 (6 m³)</option>
+                    <option value="MH-10-CR-1313">TM-02 (6 m³)</option>
+                    <option value="MH-10-CR-1414">TM-03 (6 m³)</option>
+                    <option value="MH-10-CR-1515">TM-04 (7 m³)</option>
+                    <option value="MH-10-CR-1616">TM-05 (8 m³)</option>
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Driver Name *</label>
+                  {registeredDrivers.length > 0 ? (
+                    <select
+                      value={newTrip.driverName}
+                      onChange={(e) => {
+                        const selDriver = registeredDrivers.find((d) => d.name === e.target.value);
+                        setNewTrip({
+                          ...newTrip,
+                          driverName: e.target.value,
+                          driverPhone: selDriver?.mobile || newTrip.driverPhone,
+                        });
+                      }}
+                      className="w-full border border-slate-200 rounded-lg py-1.5 px-2 bg-slate-50 text-slate-800 font-semibold text-xs focus:ring-1 focus:ring-[#136dec]"
+                      required
+                    >
+                      <option value="">Select Registered Driver</option>
+                      {registeredDrivers.map((d, idx) => (
+                        <option key={d?.id || d?.name || idx} value={d?.name || ''}>
+                          {d?.name || 'Driver'} ({d?.id || 'DRV'})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={newTrip.driverName}
+                      onChange={(e) => setNewTrip({ ...newTrip, driverName: e.target.value })}
+                      placeholder="Enter driver name"
+                      className="w-full border border-slate-200 rounded-lg py-1.5 px-2 bg-slate-50 text-slate-800 font-semibold text-xs focus:ring-1 focus:ring-[#136dec]"
+                      required
+                    />
+                  )}
                 </div>
               </div>
 

@@ -124,7 +124,7 @@ export default function DieselManagementView() {
           className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs shadow-2xs transition active:scale-95 cursor-pointer shrink-0"
         >
           <Plus size={14} />
-          <span>+ Record Fuel Dispense</span>
+          <span>Record Fuel Dispense</span>
         </button>
       </div>
 

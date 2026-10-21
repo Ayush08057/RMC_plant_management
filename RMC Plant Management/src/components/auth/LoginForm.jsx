@@ -193,7 +193,7 @@ export default function LoginForm() {
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-0.5 flex items-center justify-between">
                 <span>Username, ID, or Email</span>
-                <span className="text-[9px] text-amber-700 font-semibold font-mono">e.g. rahul_driver, ADM-001</span>
+                <span className="text-[9px] text-amber-700 font-semibold font-mono">e.g. @suraj, rahul_driver, ADM-001</span>
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-amber-600 transition-colors">
@@ -203,7 +203,7 @@ export default function LoginForm() {
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Enter Username, Employee ID, or Email"
+                  placeholder="Enter @username, Employee ID, or Email"
                   disabled={isSubmitting}
                   autoComplete="username"
                   className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-medium shadow-2xs"

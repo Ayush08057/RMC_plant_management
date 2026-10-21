@@ -32,12 +32,7 @@ import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
 
-const DEFAULT_FLEET = [
-  { id: 'TM-01', vehicleNo: 'MH-04-AZ-9921', status: 'On Route', driver: 'Ramesh Powar (DRV-001)', location: 'Metro Line 3 - Pier 44', capacity: '7 m³', rpm: 12.4, slump: 135, temp: '28.2°C', drumStatus: 'Agitating', elapsedMins: 38 },
-  { id: 'TM-02', vehicleNo: 'MH-04-BC-1144', status: 'Loading', driver: 'Suresh Shinde (DRV-002)', location: 'Batching Plant Bay #02', capacity: '8 m³', rpm: 15.8, slump: 140, temp: '27.8°C', drumStatus: 'Mixing', elapsedMins: 12 },
-  { id: 'TM-03', vehicleNo: 'MH-04-CD-7782', status: 'Available', driver: 'Santosh Patil (DRV-003)', location: 'Staging Yard Bay #04', capacity: '7 m³', rpm: 0, slump: '--', temp: '26.0°C', drumStatus: 'Standby', elapsedMins: 0 },
-  { id: 'TM-04', vehicleNo: 'MH-04-DE-3391', status: 'Available', driver: 'Unassigned', location: 'Staging Yard Bay #05', capacity: '8 m³', rpm: 0, slump: '--', temp: '25.8°C', drumStatus: 'Standby', elapsedMins: 0 },
-];
+const DEFAULT_FLEET = [];
 
 export default function DispatcherDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -59,34 +54,33 @@ export default function DispatcherDashboardPage() {
 
   // Driver Assignment Form State
   const [driverForm, setDriverForm] = useState({
-    vehicleId: 'TM-04',
-    driverName: 'Ramesh Powar (DRV-001)',
-    shift: 'Morning Shift (06:00 - 14:00)',
-    site: 'Metro Line 3 - Pier 44',
+    vehicleId: '',
+    driverName: '',
+    shift: 'General Morning Shift (09:00 - 18:00)',
+    site: '',
   });
 
   // Vehicle Allocation Form State
   const [vehicleAllocForm, setVehicleAllocForm] = useState({
-    vehicleId: 'TM-03',
+    vehicleId: '',
     bay: 'Loading Bay #01',
     mixGrade: 'M30 RMC',
   });
 
-  // Dynamic driver list from workforce
+  // Dynamic driver list from real registered workforce
   const driverOptions = useMemo(() => {
-    const fromWorkforce = (employees || [])
-      .filter((e) => (e.role || '').toLowerCase().includes('driver') || (e.department || '').toLowerCase().includes('transport') || (e.department || '').toLowerCase().includes('logistics'))
+    return (employees || [])
+      .filter((e) => {
+        const roleLower = (e.role || '').toLowerCase();
+        const deptLower = (e.department || '').toLowerCase();
+        return (
+          roleLower.includes('driver') ||
+          deptLower.includes('transport') ||
+          deptLower.includes('logistics') ||
+          deptLower.includes('fleet')
+        );
+      })
       .map((e) => `${e.name} (${e.id})`);
-    
-    const defaults = [
-      'Ramesh Powar (DRV-001)',
-      'Suresh Shinde (DRV-002)',
-      'Santosh Patil (DRV-003)',
-      'Prakash Jadhav (DRV-004)',
-      'Anand Deshmukh (DRV-005)',
-    ];
-
-    return Array.from(new Set([...fromWorkforce, ...defaults]));
   }, [employees]);
 
   // New dispatch form
@@ -187,7 +181,9 @@ export default function DispatcherDashboardPage() {
     setToastMessage(`Transit Mixer ${vehicleAllocForm.vehicleId} staged at ${vehicleAllocForm.bay} for ${vehicleAllocForm.mixGrade}!`);
   };
 
-  const currentTelemetry = fleet.find((v) => v.id === selectedTelemetryId) || fleet[0] || DEFAULT_FLEET[0];
+  const currentTelemetry = useMemo(() => {
+    return (fleet || []).find((v) => v?.id === selectedTelemetryId) || (fleet || [])[0] || null;
+  }, [fleet, selectedTelemetryId]);
 
   // Filtered dispatches
   const filteredDispatches = statusFilter === 'All'
@@ -533,8 +529,22 @@ export default function DispatcherDashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium">
-                  No transit mixers currently logged in the staging yard roster.
+                <div className="col-span-full py-10 px-4 text-center flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-3 shadow-2xs">
+                    <Truck className="w-6 h-6 stroke-[1.8]" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 mb-1">No Active Transit Mixers in Yard or On Route</h4>
+                  <p className="text-[11px] text-slate-500 max-w-sm mb-4">
+                    Mixer fleet and telematics telemetry will populate dynamically once transit vehicles and drivers are assigned and dispatched.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#1D5FA7] hover:bg-[#174e8a] text-white shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create First Dispatch</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -663,11 +673,18 @@ export default function DispatcherDashboardPage() {
               onChange={(e) => setVehicleAllocForm({ ...vehicleAllocForm, vehicleId: e.target.value })}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold cursor-pointer focus:bg-white focus:border-[#1D5FA7]"
             >
-              {fleet.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.id} ({v.vehicleNo}) — Currently {v.status} [{v.capacity}]
-                </option>
-              ))}
+              {fleet && fleet.length > 0 ? (
+                <>
+                  <option value="">Select Transit Mixer</option>
+                  {fleet.map((v) => (
+                    <option key={v?.id} value={v?.id}>
+                      {v?.id} ({v?.vehicleNo}) — Currently {v?.status} [{v?.capacity}]
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <option value="">No transit mixer vehicles in yard</option>
+              )}
             </select>
           </div>
 
@@ -747,11 +764,18 @@ export default function DispatcherDashboardPage() {
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold cursor-pointer focus:bg-white focus:border-[#1D5FA7]"
                 required
               >
-                {fleet.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.id} ({v.vehicleNo}) — Current: {v.driver}
-                  </option>
-                ))}
+                {fleet && fleet.length > 0 ? (
+                  <>
+                    <option value="">Select Transit Mixer</option>
+                    {fleet.map((v) => (
+                      <option key={v?.id} value={v?.id}>
+                        {v?.id} ({v?.vehicleNo}) — Current: {v?.driver}
+                      </option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="">No transit mixer vehicles in yard</option>
+                )}
               </select>
             </div>
 
@@ -765,11 +789,18 @@ export default function DispatcherDashboardPage() {
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold cursor-pointer focus:bg-white focus:border-[#1D5FA7]"
                 required
               >
-                {driverOptions.map((d, idx) => (
-                  <option key={idx} value={d}>
-                    {d}
-                  </option>
-                ))}
+                {driverOptions.length > 0 ? (
+                  <>
+                    <option value="">Select Enrolled Driver</option>
+                    {driverOptions.map((d, idx) => (
+                      <option key={idx} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="">No registered drivers found (Enroll in Workforce)</option>
+                )}
               </select>
             </div>
           </div>
@@ -835,121 +866,148 @@ export default function DispatcherDashboardPage() {
       </Modal>
 
       {/* Live Drum Telemetry & Slump Clock Modal */}
-      <Modal
-        isOpen={showTelemetryModal}
-        onClose={() => setShowTelemetryModal(false)}
-        title="Transit Mixer Drum Telemetry & Slump Inspector"
-        subtitle="Real-time IoT sensor telemetry monitoring drum rotation (RPM), temperature, and concrete slump life."
-        icon={RotateCw}
-      >
-        <div className="space-y-4 text-xs text-slate-700">
-          {/* Vehicle selector pills */}
-          <div>
-            <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Select Fleet Transit Mixer
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {fleet.map((v) => (
+      {showTelemetryModal && (
+        <Modal
+          isOpen={showTelemetryModal}
+          onClose={() => setShowTelemetryModal(false)}
+          title="Transit Mixer Drum Telemetry & Slump Inspector"
+          subtitle="Real-time IoT sensor telemetry monitoring drum rotation (RPM), temperature, and concrete slump life."
+          icon={RotateCw}
+        >
+          <div className="space-y-4 text-xs text-slate-700">
+            {/* Vehicle selector pills */}
+            <div>
+              <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Select Fleet Transit Mixer
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {fleet && fleet.length > 0 ? (
+                  fleet.map((v) => (
+                    <button
+                      key={v?.id}
+                      type="button"
+                      onClick={() => setSelectedTelemetryId(v?.id)}
+                      className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        currentTelemetry?.id === v?.id
+                          ? 'bg-[#1D5FA7] text-white shadow-2xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                      }`}
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      <span>{v?.id} ({v?.vehicleNo})</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-400 italic">No fleet vehicles currently in roster</div>
+                )}
+              </div>
+            </div>
+
+            {currentTelemetry ? (
+              <>
+                {/* Telemetry Overview Card */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-[#D4E4F7] space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <div>
+                      <div className="text-sm font-extrabold text-slate-900 font-mono">{currentTelemetry.id} • {currentTelemetry.vehicleNo || 'TM-UNIT'}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">Driver: <strong className="text-slate-900">{currentTelemetry.driver || 'Unassigned'}</strong> • Route: {currentTelemetry.location || 'Staging Yard'}</div>
+                    </div>
+                    <StatusBadge status={currentTelemetry.status || 'Staged'} />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Drum Speed</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <RotateCw className="w-4 h-4 text-[#1D5FA7]" />
+                        <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.rpm || 0} <span className="text-xs font-normal text-slate-500">RPM</span></span>
+                      </div>
+                      <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">{currentTelemetry.drumStatus || 'Agitating'}</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Slump Life Clock</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Clock className="w-4 h-4 text-amber-600" />
+                        <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.elapsedMins || 0} / 90 <span className="text-xs font-normal text-slate-500">m</span></span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Initial setting window</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Estimated Slump</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Gauge className="w-4 h-4 text-emerald-600" />
+                        <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.slump || 135} <span className="text-xs font-normal text-slate-500">mm</span></span>
+                      </div>
+                      <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">Target M30 range</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Mix Temperature</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Activity className="w-4 h-4 text-blue-600" />
+                        <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.temp || '28.2°C'}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Hydration stable</span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar of Slump Life */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-slate-700">Concrete Freshness & Setting Progress</span>
+                      <span className="font-mono font-bold text-slate-900">{Math.round(((currentTelemetry.elapsedMins || 20) / 90) * 100)}% Elapsed</span>
+                    </div>
+                    <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, Math.round(((currentTelemetry.elapsedMins || 20) / 90) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setToastMessage(`IoT telemetry refreshed for ${currentTelemetry.id} (RPM: ${currentTelemetry.rpm || 0} RPM).`)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span>Ping On-Board Sensor</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowTelemetryModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white cursor-pointer shadow-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="py-8 px-4 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mx-auto mb-3">
+                  <Truck className="w-6 h-6 stroke-[1.8]" />
+                </div>
+                <div className="text-xs font-bold text-slate-700 mb-1">No Active Transit Mixers in Fleet</div>
+                <p className="text-[11px] text-slate-500 max-w-xs mx-auto mb-4">
+                  IoT drum sensor telemetry and slump tracking will activate once vehicles are added or dispatched.
+                </p>
                 <button
-                  key={v.id}
                   type="button"
-                  onClick={() => setSelectedTelemetryId(v.id)}
-                  className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    currentTelemetry.id === v.id
-                      ? 'bg-[#1D5FA7] text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                  }`}
+                  onClick={() => setShowTelemetryModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1D5FA7] text-white cursor-pointer"
                 >
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>{v.id} ({v.vehicleNo})</span>
+                  Close
                 </button>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
-
-          {/* Telemetry Overview Card */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-[#D4E4F7] space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-              <div>
-                <div className="text-sm font-extrabold text-slate-900 font-mono">{currentTelemetry.id} • {currentTelemetry.vehicleNo}</div>
-                <div className="text-xs text-slate-600 mt-0.5">Driver: <strong className="text-slate-900">{currentTelemetry.driver}</strong> • Route: {currentTelemetry.location}</div>
-              </div>
-              <StatusBadge status={currentTelemetry.status} />
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Drum Speed</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <RotateCw className="w-4 h-4 text-[#1D5FA7]" />
-                  <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.rpm || 0} <span className="text-xs font-normal text-slate-500">RPM</span></span>
-                </div>
-                <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">{currentTelemetry.drumStatus || 'Agitating'}</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Slump Life Clock</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Clock className="w-4 h-4 text-amber-600" />
-                  <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.elapsedMins || 0} / 90 <span className="text-xs font-normal text-slate-500">m</span></span>
-                </div>
-                <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Initial setting window</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Estimated Slump</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Gauge className="w-4 h-4 text-emerald-600" />
-                  <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.slump || 135} <span className="text-xs font-normal text-slate-500">mm</span></span>
-                </div>
-                <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">Target M30 range</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block font-mono">Mix Temperature</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Activity className="w-4 h-4 text-blue-600" />
-                  <span className="text-base font-black font-mono text-slate-900">{currentTelemetry.temp || '28.2°C'}</span>
-                </div>
-                <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Hydration stable</span>
-              </div>
-            </div>
-
-            {/* Progress Bar of Slump Life */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="font-semibold text-slate-700">Concrete Freshness & Setting Progress</span>
-                <span className="font-mono font-bold text-slate-900">{Math.round(((currentTelemetry.elapsedMins || 20) / 90) * 100)}% Elapsed</span>
-              </div>
-              <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, Math.round(((currentTelemetry.elapsedMins || 20) / 90) * 100))}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center pt-2">
-            <button
-              type="button"
-              onClick={() => setToastMessage(`IoT telemetry refreshed for ${currentTelemetry.id} (RPM: ${currentTelemetry.rpm} RPM).`)}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>Ping On-Board Sensor</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowTelemetryModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white cursor-pointer shadow-xs"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </AppLayout>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import StatusBadge from './StatusBadge';
 import { ChevronLeft, ChevronRight, Search, Inbox, Maximize2, Minimize2, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function DataTable({
   title,
@@ -29,6 +30,7 @@ export default function DataTable({
   tableFixed = false,
   noScroll = true,
 }) {
+  const { language, t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
@@ -147,17 +149,17 @@ export default function DataTable({
             )}
             <div className="min-w-0">
               <h3 className={`font-bold text-black tracking-tight flex items-center gap-1.5 flex-wrap ${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
-                <span className="whitespace-nowrap">{title}</span>
+                <span className="whitespace-nowrap">{typeof title === 'string' ? t(title) : title}</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] font-mono font-bold shrink-0 shadow-2xs">
-                  {filteredData.length} records
+                  {filteredData.length} {language === 'mr' ? 'नोंदी' : 'records'}
                 </span>
                 {isFullscreen && (
                   <span className="hidden md:inline-flex items-center gap-1 text-[10px] sm:text-[11px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] shrink-0 font-mono">
-                    Full Screen Mode
+                    {language === 'mr' ? 'फुल स्क्रीन मोड' : 'Full Screen Mode'}
                   </span>
                 )}
               </h3>
-              {subtitle && <p className="text-xs text-slate-700 font-medium line-clamp-1 mt-0.5">{subtitle}</p>}
+              {subtitle && <p className="text-xs text-slate-700 font-medium line-clamp-1 mt-0.5">{typeof subtitle === 'string' ? t(subtitle) : subtitle}</p>}
             </div>
           </div>
 
@@ -172,7 +174,7 @@ export default function DataTable({
                     setSearchQuery(e.target.value);
                     setCurrentPage(1);
                   }}
-                  placeholder={searchPlaceholder}
+                  placeholder={typeof searchPlaceholder === 'string' ? t(searchPlaceholder) : searchPlaceholder}
                   className={`w-full bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs ${compact ? 'pl-8 pr-7 py-1 sm:py-1.5' : 'pl-9 pr-7 py-1.5 sm:py-2'}`}
                 />
                 {searchQuery && (
@@ -224,8 +226,8 @@ export default function DataTable({
                         } ${isLast ? (compact ? 'pr-2.5 sm:pr-3' : 'pr-3.5 sm:pr-4') : ''
                         } ${alignClass} ${col.headerClassName || ''}`}
                     >
-                      <span className="font-mono font-bold text-white block truncate" title={typeof col.header === 'string' ? col.header : undefined}>
-                        {col.header}
+                      <span className="font-mono font-bold text-white block truncate" title={typeof col.header === 'string' ? t(col.header) : undefined}>
+                        {typeof col.header === 'string' ? t(col.header) : col.header}
                       </span>
                     </th>
                   );
@@ -399,7 +401,7 @@ export default function DataTable({
                             {detailCols.map((col, cIdx) => (
                               <div key={cIdx} className="min-w-0">
                                 <span className="text-[11px] text-slate-600 font-bold uppercase tracking-wider block truncate">
-                                  {col.header}:
+                                  {typeof col.header === 'string' ? t(col.header) : col.header}:
                                 </span>
                                 <div className="font-bold text-black text-xs sm:text-sm truncate mt-0.5">
                                   {col.render ? col.render(row) : row[col.accessor]}
@@ -424,10 +426,10 @@ export default function DataTable({
             <div className="py-10 text-center text-slate-700 bg-white rounded-xl border border-[#D4E4F7]">
               <Inbox className="w-8 h-8 mx-auto mb-2 text-[#1D5FA7]" />
               <div className="text-sm sm:text-base font-bold text-black">
-                {searchQuery.trim() ? noMatchesMessage : emptyMessage}
+                {searchQuery.trim() ? (typeof noMatchesMessage === 'string' ? t(noMatchesMessage) : noMatchesMessage) : (typeof emptyMessage === 'string' ? t(emptyMessage) : emptyMessage)}
               </div>
               {searchQuery.trim() && (
-                <p className="text-xs sm:text-sm text-slate-600 mt-1 font-medium">Try clearing or refining search terms</p>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1 font-medium">{language === 'mr' ? 'शोध शब्द तपासा किंवा बदला' : 'Try clearing or refining search terms'}</p>
               )}
             </div>
           )}
@@ -437,14 +439,18 @@ export default function DataTable({
         <div className={`border-t border-[#D4E4F7] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-700 w-full overflow-hidden bg-[#F5F9FF] shrink-0 ${compact ? 'py-1 px-2.5 sm:px-3 text-xs' : 'p-2.5 sm:p-3 sm:text-sm'}`}>
           <div className="flex items-center gap-4 text-xs sm:text-sm font-semibold">
             <div>
-              Showing <span className="font-mono font-bold text-black">{filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{' '}
-              <span className="font-mono font-bold text-black">{Math.min(currentPage * pageSize, filteredData.length)}</span> of{' '}
-              <span className="font-mono font-bold text-black">{filteredData.length}</span> records
+              {language === 'mr' ? 'दाखवत आहे ' : 'Showing '}
+              <span className="font-mono font-bold text-black">{filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span>{' '}
+              {language === 'mr' ? 'ते ' : 'to '}
+              <span className="font-mono font-bold text-black">{Math.min(currentPage * pageSize, filteredData.length)}</span>{' '}
+              {language === 'mr' ? 'पैकी ' : 'of '}
+              <span className="font-mono font-bold text-black">{filteredData.length}</span>{' '}
+              {language === 'mr' ? 'नोंदी' : 'records'}
             </div>
 
             {/* Page Size Selector */}
             <div className="hidden sm:flex items-center gap-1.5 text-xs sm:text-sm text-slate-700 font-medium">
-              <span>Per page:</span>
+              <span>{language === 'mr' ? 'प्रति पान:' : 'Per page:'}</span>
               <select
                 value={pageSize}
                 onChange={(e) => {
@@ -463,7 +469,9 @@ export default function DataTable({
 
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-xs sm:text-sm font-semibold">
-              Page <span className="font-mono font-bold text-black">{currentPage}</span> of{' '}
+              {language === 'mr' ? 'पान ' : 'Page '}
+              <span className="font-mono font-bold text-black">{currentPage}</span>{' '}
+              {language === 'mr' ? 'पैकी ' : 'of '}
               <span className="font-mono font-bold text-black">{totalPages}</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -474,7 +482,7 @@ export default function DataTable({
                 className="px-3 py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:bg-[#EAF3FF] text-black disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs font-semibold text-xs sm:text-sm flex items-center gap-1"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Previous</span>
+                <span className="hidden sm:inline">{language === 'mr' ? 'मागे' : 'Previous'}</span>
               </button>
               <button
                 type="button"
@@ -482,7 +490,7 @@ export default function DataTable({
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 className="px-3 py-1.5 rounded-xl bg-white border border-[#D4E4F7] hover:bg-[#EAF3FF] text-black disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs font-semibold text-xs sm:text-sm flex items-center gap-1"
               >
-                <span className="hidden sm:inline">Next</span>
+                <span className="hidden sm:inline">{language === 'mr' ? 'पुढे' : 'Next'}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

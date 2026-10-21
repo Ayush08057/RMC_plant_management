@@ -323,33 +323,35 @@ export default function PlantManagerDashboardPage() {
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       actions={
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('attendance')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Mark or View Daily Attendance"
-          >
-            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>{t('Daily Attendance')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowPlanModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-          >
-            <Gauge className="w-3.5 h-3.5 text-white" />
-            <span>{t('Shift Plan')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowInventoryModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Layers className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>{t('Silo Stock')}</span>
-          </button>
-        </div>
+        viewMode === 'advanced' ? (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('attendance')}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Mark or View Daily Attendance"
+            >
+              <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
+              <span>{t('Daily Attendance')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPlanModal(true)}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            >
+              <Gauge className="w-3.5 h-3.5 text-white" />
+              <span>{t('Shift Plan')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowInventoryModal(true)}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#1D5FA7]" />
+              <span>{t('Silo Stock')}</span>
+            </button>
+          </div>
+        ) : null
       }
     >
       {activeTab === 'employees' && <EmployeeManagementView defaultPlant="Main Plant Unit #01" />}

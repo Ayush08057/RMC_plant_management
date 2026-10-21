@@ -1257,7 +1257,7 @@ export default function AttendanceManagementView({
                                 className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10.5px] font-semibold transition-colors cursor-pointer shadow-2xs flex items-center gap-1 shrink-0"
                               >
                                 <Plus className="w-3 h-3 text-blue-600" />
-                                <span>+ File Report</span>
+                                <span>File Report</span>
                               </button>
                             </div>
                           )}

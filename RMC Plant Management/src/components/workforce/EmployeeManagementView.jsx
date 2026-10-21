@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { ROLES } from '../../data/mockUsers';
 import { MOCK_PLANTS } from '../../data/mockDashboardData';
 import DataTable from '../dashboard/DataTable';
@@ -39,6 +40,7 @@ import { formatShiftOption } from '../../utils/shiftUtils';
 
 export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const {
     employees,
     shifts,
@@ -104,9 +106,9 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     status: 'Active',
     address: '',
     emergencyName: '',
-    emergencyRelation: 'Spouse',
+    emergencyRelation: '',
     emergencyPhone: '',
-    bankName: 'HDFC Bank',
+    bankName: '',
     accountNo: '',
     ifsc: '',
     shiftId: 'SFT-GEN',
@@ -214,9 +216,9 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       status: 'Active',
       address: '',
       emergencyName: '',
-      emergencyRelation: 'Family',
+      emergencyRelation: '',
       emergencyPhone: '',
-      bankName: 'State Bank of India',
+      bankName: '',
       accountNo: '',
       ifsc: '',
       shiftId: 'SFT-MORN',
@@ -255,7 +257,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
 
     try {
       const generatedEmail = formData.email?.trim() || `${formData.name.toLowerCase().replace(/\s+/g, '.')}@smconcretech.com`;
-      const cleanUsername = formData.username.trim().toLowerCase().replace(/\s+/g, '');
+      const cleanUsername = formData.username.trim().toLowerCase().replace(/\s+/g, '').replace(/^@+/, '');
 
       addEmployee({
         id: formData.id,
@@ -274,14 +276,14 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         status: formData.status || 'Active',
         address: formData.address || 'Navi Mumbai Plant Industrial Zone',
         emergencyContact: {
-          name: formData.emergencyName || 'Relative',
-          relation: formData.emergencyRelation || 'Family',
-          phone: formData.emergencyPhone || formData.mobile,
+          name: formData.emergencyName?.trim() || '',
+          relation: formData.emergencyRelation?.trim() || '',
+          phone: formData.emergencyPhone?.trim() || '',
         },
         bankDetails: {
-          bankName: formData.bankName,
-          accountNo: formData.accountNo || 'XXXX-XXXX-1234',
-          ifsc: formData.ifsc || 'SBIN0001920',
+          bankName: formData.bankName?.trim() || '',
+          accountNo: formData.accountNo?.trim() || '',
+          ifsc: formData.ifsc?.trim() || '',
         },
         shiftId: formData.shiftId,
       });
@@ -300,7 +302,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       } catch {
         // ignore
       }
-      setToastMessage(`Employee ${formData.name} (${newEmp.id}) added successfully! Username: @${cleanUsername}`);
+      setToastMessage(`Employee ${formData.name} (${formData.id}) added successfully! Username: @${cleanUsername}`);
       setFormData({
         id: '',
         name: '',
@@ -318,9 +320,9 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         status: 'Active',
         address: '',
         emergencyName: '',
-        emergencyRelation: 'Family',
+        emergencyRelation: '',
         emergencyPhone: '',
-        bankName: 'State Bank of India',
+        bankName: '',
         accountNo: '',
         ifsc: '',
         shiftId: 'SFT-MORN',
@@ -389,7 +391,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       return;
     }
 
-    const cleanUsername = (formData.username || activeEmployee.username || activeEmployee.id).trim().toLowerCase().replace(/\s+/g, '');
+    const cleanUsername = (formData.username || activeEmployee.username || activeEmployee.id).trim().toLowerCase().replace(/\s+/g, '').replace(/^@+/, '');
     const assignedPassword = formData.password || activeEmployee.password || 'Pass@123';
 
     updateEmployee(activeEmployee.id, {
@@ -578,8 +580,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     <div className="w-full flex-1 flex flex-col min-h-0">
       {/* Main Employee Table - Strict Fullscreen Fit Without Scrollbars */}
       <DataTable
-        title="Enterprise Employee Directory"
-        subtitle="Batching operators, mixer drivers, QC engineers, supervisors, and administrative staff"
+        title={t('Workforce Roster')}
+        subtitle={t('Batching operators, mixer drivers, QC engineers, supervisors, and administrative staff')}
         icon={Users}
         columns={columns}
         data={filteredEmployees}
@@ -590,17 +592,17 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
         tableMinWidth="w-full"
         searchable={false}
         itemsPerPage={6}
-        emptyMessage="No Employee Records Registered"
-        emptySubtext="Click '+ Add Employee' to create your first plant driver, operator, or engineer profile."
+        emptyMessage={t('No Employee Records Registered')}
+        emptySubtext={t("Click '+ Add Employee' to create your first plant driver, operator, or engineer profile.")}
         actions={
           <button
             type="button"
             onClick={handleOpenAdd}
             className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#246BCE] hover:bg-[#1D5FA7] text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95"
-            title="Add Employee to Directory"
+            title={t('Add Employee')}
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span className="whitespace-nowrap font-bold">Add Employee</span>
+            <span className="whitespace-nowrap font-bold">{t('Add Employee')}</span>
           </button>
         }
         toolbar={
@@ -613,7 +615,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search name, ID, phone, email..."
+                  placeholder={t('Search name, ID, phone, email...')}
                   className="w-full pl-8 pr-6 py-1 rounded-lg text-xs bg-white border border-[#D4E4F7] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20 font-medium transition-all shadow-2xs"
                 />
                 {searchTerm && (
@@ -621,7 +623,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                     type="button"
                     onClick={() => setSearchTerm('')}
                     className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    title="Clear search"
+                    title={t('Clear Search')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -633,9 +635,9 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 value={selectedPlant}
                 onChange={(e) => setSelectedPlant(e.target.value)}
                 className="px-2 py-1 rounded-lg text-xs bg-white border border-[#D4E4F7] text-slate-800 font-semibold focus:outline-none focus:border-[#246BCE] cursor-pointer shadow-2xs"
-                title="Filter by Plant"
+                title={t('Filter by Plant')}
               >
-                <option value="All Plants">All Plants</option>
+                <option value="All Plants">{t('All Plants')}</option>
                 {MOCK_PLANTS.map((p) => (
                   <option key={p.id} value={p.name}>{p.name}</option>
                 ))}
@@ -646,11 +648,11 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
                 className="px-2 py-1 rounded-lg text-xs bg-white border border-[#D4E4F7] text-slate-800 font-semibold focus:outline-none focus:border-[#246BCE] cursor-pointer shadow-2xs"
-                title="Filter by Role"
+                title={t('Filter by Role')}
               >
-                <option value="All">All Roles</option>
+                <option value="All">{t('All Roles')}</option>
                 {Object.values(ROLES).map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>{t(r)}</option>
                 ))}
               </select>
 
@@ -659,16 +661,16 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
                 className="px-2 py-1 rounded-lg text-xs bg-white border border-[#D4E4F7] text-slate-800 font-semibold focus:outline-none focus:border-[#246BCE] cursor-pointer shadow-2xs"
-                title="Filter by Status"
+                title={t('Filter by Status')}
               >
-                <option value="All">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Pending Registration">Pending Reg.</option>
-                <option value="Pending Approval">Pending Appr.</option>
-                <option value="On Leave">On Leave</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Rejected">Rejected</option>
-                <option value="Suspended">Suspended</option>
+                <option value="All">{t('All Statuses')}</option>
+                <option value="Active">{t('Active')}</option>
+                <option value="Pending Registration">{t('Pending Registration')}</option>
+                <option value="Pending Approval">{t('Pending Approval')}</option>
+                <option value="On Leave">{t('Leave')}</option>
+                <option value="Inactive">{t('Inactive')}</option>
+                <option value="Rejected">{t('Rejected')}</option>
+                <option value="Suspended">{t('Suspended')}</option>
               </select>
             </div>
 
@@ -685,7 +687,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 className="text-[11px] font-semibold text-[#1D5FA7] hover:underline flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <RefreshCw className="w-3 h-3" />
-                <span>Reset Filters</span>
+                <span>{t('Clear')}</span>
               </button>
             )}
           </div>
@@ -757,8 +759,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Register New Employee"
-        subtitle="Create verified workforce record with plant assignment, role, and credentials."
+        title={t('Register New Employee')}
+        subtitle={t('Create verified workforce record with plant assignment, role, and credentials.')}
         icon={UserPlus}
         maxWidth="max-w-4xl"
       >
@@ -967,19 +969,107 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
             </div>
           </div>
 
+          {/* Optional Bank Settlement & Emergency Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs pt-1">
+            {/* Bank Details Card */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>Bank Settlement Details (Optional)</span>
+              </span>
+              <div className="space-y-1.5">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Bank Name</label>
+                  <input
+                    type="text"
+                    value={formData.bankName}
+                    onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                    placeholder="e.g. State Bank of India, HDFC Bank"
+                    className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Account Number</label>
+                    <input
+                      type="text"
+                      value={formData.accountNo}
+                      onChange={(e) => setFormData({ ...formData, accountNo: e.target.value })}
+                      placeholder="e.g. 1234567890"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">IFSC Code</label>
+                    <input
+                      type="text"
+                      value={formData.ifsc}
+                      onChange={(e) => setFormData({ ...formData, ifsc: e.target.value.toUpperCase() })}
+                      placeholder="e.g. SBIN0001234"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact Card */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                <span>Emergency Contact Details (Optional)</span>
+              </span>
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Contact Name</label>
+                    <input
+                      type="text"
+                      value={formData.emergencyName}
+                      onChange={(e) => setFormData({ ...formData, emergencyName: e.target.value })}
+                      placeholder="e.g. Sunita Sharma"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Relation</label>
+                    <input
+                      type="text"
+                      value={formData.emergencyRelation}
+                      onChange={(e) => setFormData({ ...formData, emergencyRelation: e.target.value })}
+                      placeholder="e.g. Spouse, Brother"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Emergency Phone</label>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={formData.emergencyPhone}
+                    onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    placeholder="e.g. 9820011223"
+                    className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowAddModal(false)}
               className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer transition-colors"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="submit"
               className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 cursor-pointer transition-all"
             >
-              Confirm Registration
+              {t('Confirm & Save')}
             </button>
           </div>
         </form>
@@ -990,8 +1080,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title={`Edit Employee (${activeEmployee?.id})`}
-        subtitle="Modify operational parameters, assigned shift, and employment status."
+        title={activeEmployee ? `${t('Edit Employee')} (${activeEmployee?.id})` : t('Edit Employee')}
+        subtitle={t('Update employee profile, shift allocation, contact details and salary')}
         icon={Edit3}
         maxWidth="max-w-4xl"
       >
@@ -1119,19 +1209,107 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
             </div>
           </div>
 
+          {/* Optional Bank Settlement & Emergency Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs pt-1">
+            {/* Bank Details Card */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>Bank Settlement Details</span>
+              </span>
+              <div className="space-y-1.5">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Bank Name</label>
+                  <input
+                    type="text"
+                    value={formData.bankName}
+                    onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                    placeholder="e.g. State Bank of India, HDFC Bank"
+                    className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Account Number</label>
+                    <input
+                      type="text"
+                      value={formData.accountNo}
+                      onChange={(e) => setFormData({ ...formData, accountNo: e.target.value })}
+                      placeholder="e.g. 1234567890"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">IFSC Code</label>
+                    <input
+                      type="text"
+                      value={formData.ifsc}
+                      onChange={(e) => setFormData({ ...formData, ifsc: e.target.value.toUpperCase() })}
+                      placeholder="e.g. SBIN0001234"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact Card */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                <span>Emergency Contact Details</span>
+              </span>
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Contact Name</label>
+                    <input
+                      type="text"
+                      value={formData.emergencyName}
+                      onChange={(e) => setFormData({ ...formData, emergencyName: e.target.value })}
+                      placeholder="e.g. Sunita Sharma"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Relation</label>
+                    <input
+                      type="text"
+                      value={formData.emergencyRelation}
+                      onChange={(e) => setFormData({ ...formData, emergencyRelation: e.target.value })}
+                      placeholder="e.g. Spouse, Brother"
+                      className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Emergency Phone</label>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={formData.emergencyPhone}
+                    onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    placeholder="e.g. 9820011223"
+                    className="w-full px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setShowEditModal(false)}
               className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer transition-colors"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="submit"
               className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 cursor-pointer transition-all"
             >
-              Save Changes
+              {t('Save Details')}
             </button>
           </div>
         </form>
@@ -1141,8 +1319,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       <Modal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
-        title={activeEmployee ? `${activeEmployee.name} (${activeEmployee.id})` : 'Employee Dossier'}
-        subtitle="Detailed personnel information, banking parameters, and emergency contact details."
+        title={activeEmployee ? `${activeEmployee.name} (${activeEmployee.id})` : t('Employee Dossier')}
+        subtitle={t('Detailed personnel information, banking parameters, and emergency contact details.')}
         icon={UserCheck}
       >
         {activeEmployee && (
@@ -1156,10 +1334,10 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 />
                 <div>
                   <div className="font-bold text-slate-900 text-sm">{activeEmployee.name}</div>
-                  <div className="text-slate-500 font-mono text-[11px]">{activeEmployee.role} • {activeEmployee.id}</div>
+                  <div className="text-slate-500 font-mono text-[11px]">{t(activeEmployee.role)} • {activeEmployee.id}</div>
                   <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
                     <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                    <span>Verified Biometric Profile</span>
+                    <span>{t('Verified')}</span>
                   </div>
                 </div>
               </div>
@@ -1171,17 +1349,17 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
                   <Key className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Daily Portal Login Credentials</span>
+                  <span>{t('Daily Login Credentials')}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs">
                   <div>
-                    <span className="text-[10px] text-slate-500 block">Username:</span>
+                    <span className="text-[10px] text-slate-500 block">{t('Username')}:</span>
                     <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-amber-300 inline-block shadow-2xs">
                       @{activeEmployee.username || activeEmployee.id?.toLowerCase()}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 block">Password:</span>
+                    <span className="text-[10px] text-slate-500 block">{t('Password')}:</span>
                     <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-amber-300 inline-block shadow-2xs">
                       {showPassword ? (activeEmployee.password || 'Pass@123') : '••••••••••••'}
                     </span>
@@ -1191,7 +1369,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                     onClick={() => setShowPassword(!showPassword)}
                     className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer mt-3"
                   >
-                    {showPassword ? 'Hide' : 'Reveal'}
+                    {showPassword ? t('Hide') : t('Reveal')}
                   </button>
                 </div>
               </div>
@@ -1204,12 +1382,12 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 {copiedKey === activeEmployee.id ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-slate-950" />
-                    <span>Copied!</span>
+                    <span>{t('Done')}</span>
                   </>
                 ) : (
                   <>
                     <Copy className="w-3.5 h-3.5 text-slate-950" />
-                    <span>Copy Credentials</span>
+                    <span>{t('Copy Credentials')}</span>
                   </>
                 )}
               </button>
@@ -1217,27 +1395,27 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
 
             <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200">
               <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Plant</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('Plant')}</span>
                 <span className="text-slate-900 font-bold">{activeEmployee.plant}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Department</span>
-                <span className="text-slate-800 font-medium">{activeEmployee.department}</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('Department')}</span>
+                <span className="text-slate-800 font-medium">{t(activeEmployee.department)}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Mobile</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('Mobile')}</span>
                 <span className="text-slate-900 font-mono font-bold">{activeEmployee.mobile}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Joining Date</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('Joining Date')}</span>
                 <span className="text-slate-800 font-mono font-medium">{activeEmployee.joiningDate}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Monthly Basic Salary</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('Monthly Basic Salary')}</span>
                 <span className="text-emerald-700 font-mono font-bold text-sm">₹ {activeEmployee.salary?.toLocaleString('en-IN')}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Assigned Shift</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('Assigned Shift')}</span>
                 <span className="text-cyan-800 font-mono font-bold">{activeEmployee.shiftId}</span>
               </div>
             </div>
@@ -1248,26 +1426,50 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 <span className="text-[10px] text-amber-800 uppercase font-black block mb-1.5 font-mono">
                   Emergency Contact
                 </span>
-                <div className="space-y-1 text-[11px] text-slate-700">
-                  <div>Name: <span className="font-bold text-slate-900">{activeEmployee.emergencyContact?.name || 'N/A'}</span></div>
-                  <div>Relation: <span className="font-medium">{activeEmployee.emergencyContact?.relation || 'N/A'}</span></div>
-                  <div className="font-mono font-semibold">Phone: {activeEmployee.emergencyContact?.phone || 'N/A'}</div>
-                </div>
+                {activeEmployee.emergencyContact?.name || activeEmployee.emergencyContact?.phone ? (
+                  <div className="space-y-1 text-[11px] text-slate-700">
+                    <div>Name: <span className="font-bold text-slate-900">{activeEmployee.emergencyContact.name || 'Not Provided'}</span></div>
+                    <div>Relation: <span className="font-medium">{activeEmployee.emergencyContact.relation || 'Family / Relative'}</span></div>
+                    <div className="font-mono font-semibold">Phone: {activeEmployee.emergencyContact.phone || 'Not Provided'}</div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-500 italic py-1">
+                    No emergency contact details provided yet.
+                  </div>
+                )}
               </div>
 
               <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
                 <span className="text-[10px] text-emerald-800 uppercase font-black block mb-1.5 font-mono">
                   Bank Settlement Details
                 </span>
-                <div className="space-y-1 text-[11px] text-slate-700">
-                  <div>Bank: <span className="font-bold text-slate-900">{activeEmployee.bankDetails?.bankName || 'HDFC Bank'}</span></div>
-                  <div className="font-mono font-semibold">A/C: {activeEmployee.bankDetails?.accountNo || 'XXXX-XXXX-1234'}</div>
-                  <div className="font-mono font-semibold">IFSC: {activeEmployee.bankDetails?.ifsc || 'HDFC0000128'}</div>
-                </div>
+                {activeEmployee.bankDetails?.accountNo || activeEmployee.bankDetails?.bankName ? (
+                  <div className="space-y-1 text-[11px] text-slate-700">
+                    <div>Bank: <span className="font-bold text-slate-900">{activeEmployee.bankDetails.bankName || 'Not Specified'}</span></div>
+                    <div className="font-mono font-semibold">A/C: {activeEmployee.bankDetails.accountNo || 'Not Specified'}</div>
+                    <div className="font-mono font-semibold">IFSC: {activeEmployee.bankDetails.ifsc || 'Not Specified'}</div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-500 italic py-1">
+                    No bank account details provided yet.
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  handleOpenEdit(activeEmployee);
+                }}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Dossier Parameters</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowProfileModal(false)}
@@ -1284,8 +1486,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
       <Modal
         isOpen={showDeleteModal}
         onClose={handleCancelDelete}
-        title="Confirm Employee Record Deletion"
-        subtitle="Permanent removal from enterprise workforce directory."
+        title={t('Delete Employee Confirmation')}
+        subtitle={t('Permanent removal from enterprise workforce directory.')}
         icon={AlertTriangle}
         maxWidth="max-w-md"
       >
@@ -1297,10 +1499,10 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
               </div>
               <div className="min-w-0 flex-1">
                 <h4 className="font-extrabold text-rose-950 text-sm">
-                  Delete {employeeToDelete.name}?
+                  {t('Are you sure you want to permanently delete this employee record?')}
                 </h4>
                 <p className="text-rose-800/90 text-xs mt-0.5 leading-relaxed">
-                  This action cannot be undone. All role authorizations, shift rosters, and employee profile records for this account will be permanently erased.
+                  {t('This action cannot be undone. All shift assignments, login credentials, and attendance records associated with this employee will be lost.')}
                 </p>
               </div>
             </div>
@@ -1308,30 +1510,30 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
             {/* Target Employee Summary Card */}
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 font-mono text-[11px]">
               <div className="flex justify-between items-center text-slate-600">
-                <span>Employee ID:</span>
+                <span>{t('Emp ID')}:</span>
                 <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
                   {employeeToDelete.id}
                 </span>
               </div>
               <div className="flex justify-between items-center text-slate-600">
-                <span>Assigned Role:</span>
+                <span>{t('Role')}:</span>
                 <span className="font-semibold text-slate-900">
-                  {employeeToDelete.role}
+                  {t(employeeToDelete.role)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-slate-600">
-                <span>Plant Node:</span>
+                <span>{t('Plant')}:</span>
                 <span className="font-semibold text-slate-900 truncate max-w-[180px]">
                   {employeeToDelete.plant || 'Main Plant'}
                 </span>
               </div>
               <div className="flex justify-between items-center text-slate-600">
-                <span>Current Status:</span>
+                <span>{t('Status')}:</span>
                 <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${employeeToDelete.status === 'Active'
                     ? 'bg-emerald-100 text-emerald-800'
                     : 'bg-amber-100 text-amber-800'
                   }`}>
-                  {employeeToDelete.status || 'Active'}
+                  {t(employeeToDelete.status) || t('Active')}
                 </span>
               </div>
             </div>
@@ -1342,7 +1544,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 onClick={handleCancelDelete}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer"
               >
-                Cancel
+                {t('Cancel')}
               </button>
               <button
                 type="button"
@@ -1350,7 +1552,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-md shadow-rose-600/25 flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
                 <Trash2 className="w-3.5 h-3.5 text-white" />
-                <span>Confirm Delete</span>
+                <span>{t('Permanently Delete Employee')}</span>
               </button>
             </div>
           </div>

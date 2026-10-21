@@ -21,6 +21,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import SendVehicleWizard from './guided/SendVehicleWizard';
 import { useLanguage } from '../../context/LanguageContext';
@@ -30,6 +31,8 @@ const BILLING_STORAGE_KEY = 'rmc_billing_records_v3';
 
 const INITIAL_CHALLANS = [];
 
+const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
+
 const FLEET_MIXERS = [
   { vehicleNo: 'MH-10-CR-1212', driverName: 'Sachin Shinde', capacity: 6.0 },
   { vehicleNo: 'MH-10-CR-1313', driverName: 'Vikas Jadhav', capacity: 6.0 },
@@ -37,6 +40,23 @@ const FLEET_MIXERS = [
   { vehicleNo: 'MH-12-RN-4401', driverName: 'Ramesh Pawar', capacity: 7.0 },
   { vehicleNo: 'MH-12-RN-8822', driverName: 'Sanjay Yadav', capacity: 8.0 },
 ];
+
+function getFleetVehicles() {
+  try {
+    const raw = localStorage.getItem(VEHICLE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(v => ({
+          vehicleNo: v.vehicleNo,
+          driverName: v.driverName || v.defaultDriver || v.driver || 'Driver',
+          capacity: v.capacity || 6.0
+        }));
+      }
+    }
+  } catch {}
+  return FLEET_MIXERS;
+}
 
 const CONCRETE_GRADES = [
   'M15 Concrete',
@@ -59,9 +79,24 @@ const DEFAULT_CUSTOMERS = [
 ];
 
 export default function DeliveryChallansView() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  const { employees } = useWorkforce();
   const [helpOpen, setHelpOpen] = useState(false);
   const [guidedWizardOpen, setGuidedWizardOpen] = useState(false);
+
+  const registeredDrivers = useMemo(() => {
+    return (employees || []).filter((e) => {
+      if (!e) return false;
+      const roleLower = (e.role || '').toLowerCase();
+      const deptLower = (e.department || '').toLowerCase();
+      return (
+        roleLower.includes('driver') ||
+        deptLower.includes('transport') ||
+        deptLower.includes('logistics') ||
+        deptLower.includes('fleet')
+      );
+    });
+  }, [employees]);
 
   const [challans, setChallans] = useState(() => {
     try {
@@ -124,33 +159,45 @@ export default function DeliveryChallansView() {
     return list;
   }, [challans]);
 
-  const [form, setForm] = useState({
-    challanNo: 'DC-25-26/1421',
-    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-    departureTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-    customerName: '',
-    site: '',
-    vehicleNo: FLEET_MIXERS[0].vehicleNo,
-    driverName: FLEET_MIXERS[0].driverName,
-    grade: 'M25 Concrete',
-    quantity: 6.0,
-    slump: '125 ± 25 mm',
-    receiverName: '',
+  const [fleetList, setFleetList] = useState(getFleetVehicles);
+
+  useEffect(() => {
+    const refreshFleet = () => setFleetList(getFleetVehicles());
+    window.addEventListener('storage', refreshFleet);
+    return () => window.removeEventListener('storage', refreshFleet);
+  }, []);
+
+  const [form, setForm] = useState(() => {
+    const initialFleet = getFleetVehicles();
+    return {
+      challanNo: 'DC-25-26/1421',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      departureTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      customerName: '',
+      site: '',
+      vehicleNo: initialFleet[0]?.vehicleNo || '',
+      driverName: initialFleet[0]?.driverName || '',
+      grade: 'M25 Concrete',
+      quantity: initialFleet[0]?.capacity || 6.0,
+      slump: '125 ± 25 mm',
+      receiverName: '',
+    };
   });
 
   const openNewChallanModal = () => {
     const nextNumber = challans.length + 1421;
     const now = new Date();
+    const currentFleet = getFleetVehicles();
     setForm({
       challanNo: `DC-25-26/${nextNumber}`,
       date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       departureTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       customerName: '',
       site: '',
-      vehicleNo: FLEET_MIXERS[0].vehicleNo,
-      driverName: FLEET_MIXERS[0].driverName,
+      vehicleNo: currentFleet[0]?.vehicleNo || '',
+      driverName: currentFleet[0]?.driverName || '',
       grade: 'M25 Concrete',
-      quantity: 6.0,
+      quantity: currentFleet[0]?.capacity || 6.0,
       slump: '125 ± 25 mm',
       receiverName: '',
     });
@@ -168,7 +215,7 @@ export default function DeliveryChallansView() {
   };
 
   const handleSelectVehicle = (vehicleNo) => {
-    const found = FLEET_MIXERS.find(v => v.vehicleNo === vehicleNo);
+    const found = fleetList.find(v => v.vehicleNo === vehicleNo) || FLEET_MIXERS.find(v => v.vehicleNo === vehicleNo);
     if (found) {
       setForm(prev => ({
         ...prev,
@@ -255,26 +302,26 @@ export default function DeliveryChallansView() {
             <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex">
               <Truck className="w-4 h-4" />
             </span>
-            <span>Transit Mixer Delivery Challans & Gate Passes</span>
+            <span>{t('Transit Mixer Delivery Challans & Gate Passes')}</span>
           </h2>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            Automated concrete dispatch documentation, real-time fleet delivery, and gate passes
+            {t('Automated concrete dispatch documentation, real-time fleet delivery, and gate passes')}
           </p>
         </div>
 
         {/* Ultra-compact inline KPI badges saving screen space */}
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
           <div className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold border border-slate-200">
-            Total: <span className="font-mono text-slate-900 font-black">{challans.length}</span> Challans
+            {t('Total')}: <span className="font-mono text-slate-900 font-black">{challans.length}</span> {t('Challans')}
           </div>
           <div className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 font-bold border border-blue-200">
-            Dispatched: <span className="font-mono font-black">{totalVolume.toFixed(1)}</span> m³
+            {t('Dispatched')}: <span className="font-mono font-black">{totalVolume.toFixed(1)}</span> m³
           </div>
           <div className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
-            In Transit: <span className="font-mono font-black">{inTransitCount}</span>
+            {t('In Transit')}: <span className="font-mono font-black">{inTransitCount}</span>
           </div>
           <div className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
-            Delivered: <span className="font-mono font-black">{deliveredCount}</span>
+            {t('Delivered')}: <span className="font-mono font-black">{deliveredCount}</span>
           </div>
         </div>
       </div>
@@ -288,7 +335,7 @@ export default function DeliveryChallansView() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search challan #, customer, truck, site..."
+              placeholder={t('Search by vehicle, challan, customer...')}
               className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium focus:bg-white focus:outline-emerald-500 transition-all"
             />
           </div>
@@ -306,7 +353,7 @@ export default function DeliveryChallansView() {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {tab}
+                {t(tab)}
               </button>
             ))}
           </div>
@@ -320,7 +367,7 @@ export default function DeliveryChallansView() {
             title="5-Step Guided Dispatch Wizard"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>5-Step Guided</span>
+            <span>{t('5-Step Guided')}</span>
           </button>
 
           <button
@@ -329,7 +376,7 @@ export default function DeliveryChallansView() {
             className="w-full sm:w-auto px-4 py-1.5 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer shrink-0 transition-all active:scale-95 text-xs"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Issue Delivery Challan</span>
+            <span>{t('Issue Delivery Challan')}</span>
           </button>
         </div>
       </div>
@@ -339,13 +386,13 @@ export default function DeliveryChallansView() {
         <table className="w-full min-w-[800px] text-left text-xs">
           <thead>
             <tr className="bg-slate-100/90 text-slate-900 font-black uppercase text-[10px] border-b border-slate-200">
-              <th className="py-2.5 px-3">Challan # & Time</th>
-              <th className="py-2.5 px-3">Customer & Site Location</th>
-              <th className="py-2.5 px-3">Mixer Fleet & Driver</th>
-              <th className="py-2.5 px-3">Mix Grade</th>
-              <th className="py-2.5 px-3 text-right">Quantity</th>
-              <th className="py-2.5 px-3 text-center">Delivery Status</th>
-              <th className="py-2.5 px-3 text-right">Actions</th>
+              <th className="py-2.5 px-3">{t('Challan # & Time')}</th>
+              <th className="py-2.5 px-3">{t('Customer & Site Location')}</th>
+              <th className="py-2.5 px-3">{t('Mixer Fleet & Driver')}</th>
+              <th className="py-2.5 px-3">{t('Mix Grade')}</th>
+              <th className="py-2.5 px-3 text-right">{t('Quantity')}</th>
+              <th className="py-2.5 px-3 text-center">{t('Delivery Status')}</th>
+              <th className="py-2.5 px-3 text-right">{t('Actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -353,7 +400,7 @@ export default function DeliveryChallansView() {
               <tr>
                 <td colSpan="7" className="py-8 text-center text-slate-400">
                   <FileText className="w-8 h-8 mx-auto mb-1.5 opacity-40" />
-                  <p className="font-semibold text-xs">No delivery challans found matching your query.</p>
+                  <p className="font-semibold text-xs">{t('No delivery challans found matching your query.')}</p>
                 </td>
               </tr>
             ) : (
@@ -388,7 +435,7 @@ export default function DeliveryChallansView() {
                       {c.grade}
                     </span>
                     {c.slump && (
-                      <span className="block text-[10px] text-slate-500 mt-0.5">Slump: {c.slump}</span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">{t('Slump')}: {c.slump}</span>
                     )}
                   </td>
                   <td className="py-2.5 px-3 text-right whitespace-nowrap">
@@ -409,12 +456,12 @@ export default function DeliveryChallansView() {
                       {c.status === 'Delivered' ? (
                         <>
                           <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                          <span>Delivered</span>
+                          <span>{t('Delivered')}</span>
                         </>
                       ) : (
                         <>
                           <Clock className="w-3 h-3 text-amber-700 animate-pulse" />
-                          <span>In Transit</span>
+                          <span>{t('In Transit')}</span>
                         </>
                       )}
                     </button>
@@ -428,7 +475,7 @@ export default function DeliveryChallansView() {
                         title="Print Computerized Delivery Challan & Gate Pass"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>Print</span>
+                        <span>{t('Print')}</span>
                       </button>
                       <button
                         type="button"
@@ -681,7 +728,7 @@ export default function DeliveryChallansView() {
 
                 {/* Fleet Presets Selector */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {FLEET_MIXERS.map(mixer => {
+                  {fleetList.map(mixer => {
                     const isSelected = form.vehicleNo === mixer.vehicleNo;
                     return (
                       <button
@@ -717,8 +764,17 @@ export default function DeliveryChallansView() {
                       type="text"
                       value={form.driverName}
                       onChange={e => setForm({ ...form, driverName: e.target.value })}
+                      placeholder="Enter or select driver"
+                      list="challan-driver-list"
                       className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:border-emerald-500 focus:outline-none"
                     />
+                    <datalist id="challan-driver-list">
+                      {registeredDrivers.map((d, idx) => (
+                        <option key={d?.id || d?.name || idx} value={d?.name || ''}>
+                          {d?.name || 'Driver'} ({d?.id || 'DRV'})
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 

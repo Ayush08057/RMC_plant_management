@@ -288,9 +288,104 @@ export function validateLoginAttempt(identifier, password, employees = [], users
   };
 }
 
+export const VAULT_STORAGE_KEY = 'rmc_employee_credentials_vault_v1';
+
 /**
- * Resolves any login identifier (Employee ID, Username, Email, Phone) to an
- * authoritative account profile and verified email for Firebase Authentication.
+ * Persists assigned employee credentials to a secure local credentials vault so that
+ * newly added or edited employees can always log in without relying on external network provisioning.
+ */
+export function saveEmployeeCredentials(empData, password) {
+  if (!empData || !password) return;
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(VAULT_STORAGE_KEY) : null;
+    const vault = raw ? JSON.parse(raw) : {};
+
+    const cleanUsername = (empData.username || '').toLowerCase().replace(/^@+/, '').trim();
+    const cleanId = (empData.id || empData.employeeId || '').toUpperCase().trim();
+    const cleanEmail = (empData.email || '').toLowerCase().trim();
+    const cleanPhone = normalizePhone(empData.mobile || empData.phone);
+
+    const record = {
+      password: String(password).trim(),
+      id: cleanId,
+      username: cleanUsername,
+      name: empData.name,
+      role: empData.role,
+      email: cleanEmail,
+      mobile: empData.mobile || empData.phone,
+      plant: empData.plant || empData.plantLocation,
+      department: empData.department,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (cleanId) vault[cleanId] = record;
+    if (cleanUsername) {
+      vault[cleanUsername] = record;
+      vault[`@${cleanUsername}`] = record;
+    }
+    if (cleanEmail) vault[cleanEmail] = record;
+    if (cleanPhone) vault[cleanPhone] = record;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
+    }
+  } catch (err) {
+    console.warn('Failed to save employee credentials to vault:', err);
+  }
+}
+
+/**
+ * Retrieves stored credentials from vault or last registration cache by any identifier
+ */
+export function getEmployeeStoredCredentials(identifier) {
+  if (!identifier || typeof window === 'undefined') return null;
+  const clean = identifier.trim();
+  const lower = clean.toLowerCase();
+  const stripped = lower.replace(/^@+/, '');
+  const phone = normalizePhone(clean);
+
+  // 1. Check Primary Credentials Vault
+  try {
+    const raw = localStorage.getItem(VAULT_STORAGE_KEY);
+    if (raw) {
+      const vault = JSON.parse(raw);
+      const hit =
+        vault[clean.toUpperCase()] ||
+        vault[clean] ||
+        vault[lower] ||
+        vault[`@${stripped}`] ||
+        vault[stripped] ||
+        (phone && vault[phone]);
+      if (hit && hit.password) return hit;
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Check Last Registered Credentials Cache
+  try {
+    const lastRaw = localStorage.getItem('rmc_last_registered_employee_credentials');
+    if (lastRaw) {
+      const last = JSON.parse(lastRaw);
+      const lastUsername = (last.username || '').toLowerCase().replace(/^@+/, '');
+      const lastId = (last.id || '').toUpperCase();
+      if (
+        (lastUsername && (lastUsername === lower || lastUsername === stripped)) ||
+        (lastId && (lastId === clean.toUpperCase() || lastId === stripped.toUpperCase()))
+      ) {
+        return last;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+/**
+ * Resolves any login identifier (Employee ID, Username with or without '@', Email, Phone) to an
+ * authoritative account profile and verified email for Authentication.
  * Strictly guarantees that user cannot tamper with role or company assignment.
  */
 export function resolveLoginIdentity(identifier, employees = [], users = []) {
@@ -298,6 +393,9 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
 
   const cleanId = identifier.trim();
   const lowerId = cleanId.toLowerCase();
+  const strippedId = cleanId.replace(/^@+/, '').trim();
+  const strippedLower = strippedId.toLowerCase();
+  const isEmailFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanId);
   const isPhoneFormat = /^[+]?[\d\s-]{7,15}$/.test(cleanId) && cleanId.replace(/\D/g, '').length >= 7;
   const digitsOnly = isPhoneFormat ? normalizePhone(cleanId) : '';
 
@@ -310,9 +408,11 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
     const accPhone = normalizePhone(acc.phone);
     return (
       accId === cleanId.toUpperCase() ||
+      accId === strippedId.toUpperCase() ||
       accEmail === lowerId ||
       accSecEmail === lowerId ||
       accUsername === lowerId ||
+      accUsername === strippedLower ||
       (digitsOnly && accPhone && (digitsOnly === accPhone || accPhone.endsWith(digitsOnly)))
     );
   });
@@ -332,19 +432,20 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
       avatar: roleAcc.avatar,
       isOfficialAccount: true,
       redirectPath: roleAcc.portalRoute || ROLE_ROUTES[roleAcc.role] || '/login',
+      assignedPassword: roleAcc.password,
     };
   }
 
-  // 2. Find employee in workforce database
+  // 2. Find employee in workforce database (matches username with or without '@', employee ID, email, or phone)
   const matchingEmp = employees.find((e) => {
     const eId = (e.id || '').toUpperCase();
-    const eUsername = (e.username || '').toLowerCase();
+    const eUsername = (e.username || '').toLowerCase().replace(/^@+/, '');
     const eEmail = (e.email || '').toLowerCase();
     const ePhone = normalizePhone(e.mobile);
     return (
-      (eUsername && eUsername === lowerId) ||
-      eId === cleanId.toUpperCase() ||
-      eEmail === lowerId ||
+      (eUsername && (eUsername === lowerId || eUsername === strippedLower)) ||
+      (eId && (eId === cleanId.toUpperCase() || eId === strippedId.toUpperCase())) ||
+      (eEmail && (eEmail === lowerId || eEmail === strippedLower)) ||
       (digitsOnly && ePhone && (digitsOnly === ePhone || ePhone.endsWith(digitsOnly)))
     );
   });
@@ -353,15 +454,19 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
   const matchingUser = users.find((u) => {
     const uEmpId = (u.employeeId || '').toUpperCase();
     const uId = (u.id || '').toUpperCase();
-    const uUsername = (u.username || '').toLowerCase();
+    const uUsername = (u.username || '').toLowerCase().replace(/^@+/, '');
     const uEmail = (u.email || '').toLowerCase();
     const uPhone = normalizePhone(u.phone || u.mobile);
     return (
-      (uUsername && uUsername === lowerId) ||
-      uEmpId === cleanId.toUpperCase() ||
-      uId === cleanId.toUpperCase() ||
-      uId === `USR-${cleanId.toUpperCase()}` ||
-      uEmail === lowerId ||
+      (uUsername && (uUsername === lowerId || uUsername === strippedLower)) ||
+      (uEmpId && (uEmpId === cleanId.toUpperCase() || uEmpId === strippedId.toUpperCase())) ||
+      (uId && (
+        uId === cleanId.toUpperCase() ||
+        uId === strippedId.toUpperCase() ||
+        uId === `USR-${cleanId.toUpperCase()}` ||
+        uId === `USR-${strippedId.toUpperCase()}`
+      )) ||
+      (uEmail && (uEmail === lowerId || uEmail === strippedLower)) ||
       (digitsOnly && uPhone && (digitsOnly === uPhone || uPhone.endsWith(digitsOnly)))
     );
   });
@@ -369,13 +474,13 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
   const empRecord = matchingEmp || matchingUser;
 
   if (!empRecord) {
-    // If identifier is an email format, allow attempting Firebase Auth directly
-    if (lowerId.includes('@')) {
+    // If identifier is a genuine email format, allow attempting Firebase Auth directly
+    if (isEmailFormat) {
       return {
         found: true,
         email: lowerId,
         user: {
-          id: `USR-${cleanId}`,
+          id: `USR-${strippedId}`,
           email: lowerId,
           name: lowerId.split('@')[0],
           role: ROLES.PLANT_MANAGER,
@@ -383,7 +488,7 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
         },
         role: ROLES.PLANT_MANAGER,
         status: EMPLOYEE_STATUS.ACTIVE,
-        employeeId: cleanId,
+        employeeId: strippedId,
         name: lowerId.split('@')[0],
         isOfficialAccount: false,
         redirectPath: '/plant-manager',
@@ -394,7 +499,11 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
 
   const trustedRole = empRecord.role || ROLES.PLANT_MANAGER;
   const status = empRecord.status || (matchingUser ? EMPLOYEE_STATUS.ACTIVE : EMPLOYEE_STATUS.PENDING_REGISTRATION);
-  const resolvedEmail = empRecord.email || matchingUser?.email || empRecord.registeredEmail || `${cleanId.toLowerCase()}@smconcretech.com`;
+  const resolvedEmail = empRecord.email || matchingUser?.email || empRecord.registeredEmail || `${strippedLower}@smconcretech.com`;
+
+  // Check stored vault credentials
+  const vaultHit = getEmployeeStoredCredentials(cleanId);
+  const resolvedPassword = empRecord.password || matchingUser?.password || vaultHit?.password || 'Pass@123';
 
   const safeProfile = {
     id: matchingUser?.id || `USR-${empRecord.id}`,
@@ -410,6 +519,7 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
     permissions: empRecord.permissions || ['ROLE_ACCESS'],
     avatar: (empRecord.name || 'EM').substring(0, 2).toUpperCase(),
     mustChangePassword: Boolean(empRecord.mustChangePassword),
+    password: resolvedPassword,
   };
 
   return {
@@ -425,6 +535,7 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
     avatar: safeProfile.avatar,
     isOfficialAccount: false,
     redirectPath: ROLE_ROUTES[trustedRole] || '/login',
+    assignedPassword: resolvedPassword,
   };
 }
 

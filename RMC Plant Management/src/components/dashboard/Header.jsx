@@ -37,7 +37,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
     addPlant,
   } = useWorkforce();
   const { user, logout } = useAuth();
-  const { language, setLanguage, toggleLanguage } = useLanguage();
+  const { language, setLanguage, toggleLanguage, t } = useLanguage();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddPlantModal, setShowAddPlantModal] = useState(false);
@@ -287,11 +287,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 <div className="flex items-center justify-between pb-2 border-b border-[#D4E4F7] mb-2 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Building2 className="w-4 h-4 text-[#1D5FA7] shrink-0" />
-                    <span className="font-bold text-black uppercase tracking-wide text-xs truncate">Company Workspaces</span>
+                    <span className="font-bold text-black uppercase tracking-wide text-xs truncate">{t('Company Workspaces')}</span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className="text-[11px] text-black font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
-                      {companies.length} {companies.length === 1 ? 'Company' : 'Companies'}
+                      {companies.length} {companies.length === 1 ? t('Company') : t('Companies')}
                     </span>
                   </div>
                 </div>
@@ -334,11 +334,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                             </div>
                             <span className="text-[11px] text-slate-700 flex items-center gap-1 truncate">
                               <MapPin className="w-2.5 h-2.5 shrink-0 text-[#1D5FA7]" />
-                              <span className="truncate">{company.location || 'Company workspace'}</span>
+                              <span className="truncate">{company.location || t('Company workspace')}</span>
                               {company.type && (
                                 <>
                                   <span>•</span>
-                                  <span className="text-[10px] font-mono text-black font-bold">{company.type}</span>
+                                  <span className="text-[10px] font-mono text-black font-bold">{t(company.type)}</span>
                                 </>
                               )}
                             </span>
@@ -376,7 +376,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       className="w-full py-2 px-3 rounded-lg text-center text-xs font-bold text-white bg-[#1D5FA7] hover:bg-[#123B6D] transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-3.5 h-3.5 text-white" />
-                      <span>Add New Company Workspace</span>
+                      <span>{t('Add New Company Workspace')}</span>
                     </button>
                   </div>
                 )}
@@ -444,13 +444,13 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               >
                 <div className="flex items-center justify-between pb-2 border-b border-[#D4E4F7] mb-2 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-xs sm:text-sm font-bold text-black truncate">Notifications</span>
+                    <span className="text-xs sm:text-sm font-bold text-black truncate">{t('Notifications')}</span>
                     <span className="text-[11px] text-[#1D5FA7] font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
                       {(notifications || []).length}
                     </span>
                     {unreadCount > 0 && (
                       <span className="text-[11px] font-mono font-bold bg-blue-100 px-2 py-0.5 rounded text-blue-800">
-                        {unreadCount} new
+                        {unreadCount} {t('new')}
                       </span>
                     )}
                   </div>
@@ -461,7 +461,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                         onClick={() => (notifications || []).filter((n) => !n.read).forEach((n) => markNotificationRead(n.id))}
                         className="text-[11px] text-[#1D5FA7] hover:underline font-bold cursor-pointer"
                       >
-                        Mark all read
+                        {t('Mark all read')}
                       </button>
                     )}
                     {notifications && notifications.length > 0 && (
@@ -470,7 +470,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                         onClick={clearNotifications}
                         className="text-[11px] text-slate-700 hover:text-black hover:underline font-mono font-bold cursor-pointer"
                       >
-                        Clear All
+                        {t('Clear All')}
                       </button>
                     )}
                   </div>
@@ -482,8 +482,8 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       <div className="w-9 h-9 mx-auto rounded-full bg-[#F5F9FF] border border-[#D4E4F7] flex items-center justify-center text-[#1D5FA7] mb-2">
                         <Bell className="w-4 h-4 opacity-60" />
                       </div>
-                      <p className="text-sm font-bold text-black">No notifications</p>
-                      <p className="text-xs text-slate-600 mt-0.5">You're all caught up with current updates.</p>
+                      <p className="text-sm font-bold text-black">{t('No notifications')}</p>
+                      <p className="text-xs text-slate-600 mt-0.5">{t("You're all caught up with current updates.")}</p>
                     </div>
                   ) : (
                     notifications.map((n) => (
@@ -502,11 +502,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                             {!n.read && (
                               <span className="w-2 h-2 rounded-full bg-[#1D5FA7] shrink-0" />
                             )}
-                            <span className="text-xs sm:text-sm font-bold text-black truncate">{n.title}</span>
+                            <span className="text-xs sm:text-sm font-bold text-black truncate">{typeof n.title === 'string' ? t(n.title) : n.title}</span>
                           </div>
                           <span className="text-[11px] text-slate-600 font-mono shrink-0">{n.time}</span>
                         </div>
-                        <p className="text-xs text-slate-800 mt-0.5 leading-relaxed break-words">{n.desc}</p>
+                        <p className="text-xs text-slate-800 mt-0.5 leading-relaxed break-words">{typeof n.desc === 'string' ? t(n.desc) : n.desc}</p>
                       </div>
                     ))
                   )}
@@ -520,11 +520,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             type="button"
             onClick={logout}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] hover:border-[#1D5FA7] text-xs font-bold transition-colors cursor-pointer shadow-2xs shrink-0"
-            title="Sign Out of active session"
-            aria-label="Sign Out"
+            title={t('Sign Out of active session')}
+            aria-label={t('Sign Out')}
           >
             <LogOut className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span className="hidden sm:inline">Sign Out</span>
+            <span className="hidden sm:inline">{t('Sign Out')}</span>
           </button>
         </div>
       </header>
@@ -533,8 +533,8 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
       <Modal
         isOpen={showAddPlantModal}
         onClose={() => setShowAddPlantModal(false)}
-        title="Register New Company Workspace"
-        subtitle="Create an independent enterprise company entity with its own branding, plants, and workforce."
+        title={t('Register New Company Workspace')}
+        subtitle={t('Create an independent enterprise company entity with its own branding, plants, and workforce.')}
         icon={Building2}
       >
         <form onSubmit={handleAddPlant} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
@@ -545,7 +545,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           )}
 
           <div>
-            <label htmlFor="header-plant-name" className="mb-1 block font-bold text-black">Company Name *</label>
+            <label htmlFor="header-plant-name" className="mb-1 block font-bold text-black">{t('Company Name')} *</label>
             <input
               id="header-plant-name"
               required
@@ -559,7 +559,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="header-plant-code" className="mb-1 block font-bold text-black">Company Short Code <span className="font-normal text-slate-700">(optional)</span></label>
+              <label htmlFor="header-plant-code" className="mb-1 block font-bold text-black">{t('Company Short Code')} <span className="font-normal text-slate-700">({t('optional')})</span></label>
               <input
                 id="header-plant-code"
                 value={plantForm.code}
@@ -569,25 +569,25 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               />
             </div>
             <div>
-              <label htmlFor="header-plant-type" className="mb-1 block font-bold text-black">Business Type</label>
+              <label htmlFor="header-plant-type" className="mb-1 block font-bold text-black">{t('Business Type')}</label>
               <select
                 id="header-plant-type"
                 value={plantForm.type}
                 onChange={(event) => setPlantForm((form) => ({ ...form, type: event.target.value }))}
                 className="w-full cursor-pointer rounded-lg border border-[#D4E4F7] bg-white px-3 py-2 font-medium text-black outline-none focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20"
               >
-                <option value="RMC Plant">RMC Plant (Ready Mix Concrete)</option>
-                <option value="Infra Division">Infra Division & Projects</option>
-                <option value="Precast Products">Precast Products</option>
-                <option value="Aggregates & Mining">Aggregates & Mining</option>
-                <option value="Other">Other Enterprise Unit</option>
+                <option value="RMC Plant">{t('RMC Plant')}</option>
+                <option value="Infra Division">{t('Infra Division')}</option>
+                <option value="Precast Products">{t('Precast Products')}</option>
+                <option value="Aggregates & Mining">{t('Aggregates & Mining')}</option>
+                <option value="Other">{t('Other')}</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="header-plant-location" className="mb-1 block font-bold text-black">Headquarters / Location</label>
+              <label htmlFor="header-plant-location" className="mb-1 block font-bold text-black">{t('Headquarters / Location')}</label>
               <input
                 id="header-plant-location"
                 value={plantForm.location}
@@ -597,7 +597,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               />
             </div>
             <div>
-              <label htmlFor="header-plant-capacity" className="mb-1 block font-bold text-black">Production Capacity</label>
+              <label htmlFor="header-plant-capacity" className="mb-1 block font-bold text-black">{t('Production Capacity')}</label>
               <input
                 id="header-plant-capacity"
                 value={plantForm.capacity}
@@ -618,11 +618,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               )}
             </div>
             <div className="flex-1">
-              <span className="block font-bold text-black text-[11px]">Company Logo Icon (Optional)</span>
+              <span className="block font-bold text-black text-[11px]">{t('Company Logo Icon (Optional)')}</span>
               <div className="flex items-center gap-2 mt-1">
                 <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white cursor-pointer transition-colors shadow-2xs">
                   <Upload className="w-2.5 h-2.5" />
-                  <span>Upload Logo</span>
+                  <span>{t('Upload Logo')}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -640,7 +640,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                     onClick={() => setPlantForm((prev) => ({ ...prev, logo: '' }))}
                     className="text-[10px] font-bold text-slate-700 hover:text-black cursor-pointer"
                   >
-                    Clear
+                    {t('Clear')}
                   </button>
                 )}
               </div>
@@ -653,13 +653,13 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               onClick={() => setShowAddPlantModal(false)} 
               className="rounded-lg border border-[#D4E4F7] bg-white px-3.5 py-1.5 font-bold text-black transition hover:bg-[#F5F9FF] cursor-pointer"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button 
               type="submit" 
               className="rounded-lg bg-[#1D5FA7] hover:bg-[#123B6D] px-4 py-1.5 font-bold text-white shadow-xs transition cursor-pointer"
             >
-              Register Company
+              {t('Register Company')}
             </button>
           </div>
         </form>
@@ -669,8 +669,8 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
       <Modal
         isOpen={Boolean(companyToEdit)}
         onClose={() => setCompanyToEdit(null)}
-        title={`Company Settings • ${companyToEdit?.name || 'Company'}`}
-        subtitle="Manage company profile and brand logo icon"
+        title={`${t('Company Settings')} • ${companyToEdit?.name || t('Company')}`}
+        subtitle={t('Manage company profile and brand logo icon')}
         icon={Building2}
       >
         <form onSubmit={handleSaveEditCompany} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
@@ -690,12 +690,12 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               )}
             </div>
             <div className="flex-1 space-y-1 text-center sm:text-left">
-              <span className="block font-bold text-black text-xs">Company Brand Logo</span>
+              <span className="block font-bold text-black text-xs">{t('Company Brand Logo')}</span>
               <p className="text-[10.5px] text-slate-700">Square emblem (.PNG, .JPG, .WEBP max 3MB). Fits edge-to-edge on sidebar & header.</p>
               <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
                 <label className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#1D5FA7] hover:bg-[#123B6D] text-white cursor-pointer shadow-xs transition-colors flex items-center gap-1">
                   <Upload className="w-3 h-3" />
-                  <span>Upload Logo</span>
+                  <span>{t('Upload Logo')}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -713,7 +713,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                     onClick={() => setEditCompanyForm((prev) => ({ ...prev, logo: '' }))}
                     className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-black border border-[#D4E4F7] hover:bg-slate-100 cursor-pointer"
                   >
-                    Reset
+                    {t('Clear')}
                   </button>
                 )}
               </div>
@@ -721,7 +721,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
 
           <div>
-            <label className="mb-1 block font-bold text-black">Company Name *</label>
+            <label className="mb-1 block font-bold text-black">{t('Company Name')} *</label>
             <input
               required
               value={editCompanyForm.name}
@@ -733,7 +733,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block font-bold text-black">Location</label>
+              <label className="mb-1 block font-bold text-black">{t('Location')}</label>
               <input
                 value={editCompanyForm.location}
                 onChange={(e) => setEditCompanyForm((prev) => ({ ...prev, location: e.target.value }))}
@@ -742,16 +742,16 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               />
             </div>
             <div>
-              <label className="mb-1 block font-bold text-black">Company Type</label>
+              <label className="mb-1 block font-bold text-black">{t('Business Type')}</label>
               <select
                 value={editCompanyForm.type}
                 onChange={(e) => setEditCompanyForm((prev) => ({ ...prev, type: e.target.value }))}
                 className="w-full cursor-pointer rounded-lg border border-[#D4E4F7] bg-white px-3 py-2 font-medium text-black outline-none focus:border-[#246BCE] focus:ring-1 focus:ring-[#246BCE]/20"
               >
-                <option value="RMC Plant">RMC Plant</option>
-                <option value="Infra Division">Infra Division</option>
-                <option value="Concrete Tech">Concrete Tech</option>
-                <option value="Other">Other</option>
+                <option value="RMC Plant">{t('RMC Plant')}</option>
+                <option value="Infra Division">{t('Infra Division')}</option>
+                <option value="Concrete Tech">{t('Precast Products')}</option>
+                <option value="Other">{t('Other')}</option>
               </select>
             </div>
           </div>
@@ -762,13 +762,13 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               onClick={() => setCompanyToEdit(null)}
               className="rounded-lg border border-[#D4E4F7] bg-white px-3.5 py-1.5 font-bold text-black transition hover:bg-[#F5F9FF] cursor-pointer"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="submit"
               className="rounded-lg bg-[#1D5FA7] hover:bg-[#123B6D] px-4 py-1.5 font-bold text-white shadow-xs transition cursor-pointer"
             >
-              Save Company Changes
+              {t('Save Company Changes')}
             </button>
           </div>
         </form>
@@ -778,15 +778,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
       <Modal
         isOpen={Boolean(plantToDelete)}
         onClose={() => setPlantToDelete(null)}
-        title="Confirm Company Deletion"
-        subtitle="Permanent workspace removal"
+        title={t('Confirm Company Deletion')}
+        subtitle={t('Permanent workspace removal')}
         maxWidth="max-w-md"
         icon={AlertTriangle}
       >
         <div className="space-y-3.5 text-xs">
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-black">
             <p className="font-bold text-sm text-red-900 mb-1">
-              Are you sure you want to delete this company?
+              {t('Are you sure you want to delete this company?')}
             </p>
             <p className="text-red-700 text-xs leading-relaxed">
               Are you sure you want to permanently delete <strong className="font-bold">"{plantToDelete?.name}"</strong>? All associated plant facilities, records, and workspace configurations will be permanently removed. This action cannot be undone.
@@ -808,7 +808,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 <MapPin className="w-3.5 h-3.5 text-[#1D5FA7] shrink-0" />
                 <span className="truncate">{plantToDelete.location || 'Headquarters'}</span>
                 <span>•</span>
-                <span className="font-mono text-black font-bold">{plantToDelete.type || 'Company'}</span>
+                <span className="font-mono text-black font-bold">{t(plantToDelete.type) || t('Company')}</span>
               </div>
             </div>
           )}
@@ -819,7 +819,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               onClick={() => setPlantToDelete(null)}
               className="px-3.5 py-1.5 rounded-lg font-bold text-black bg-white border border-[#D4E4F7] hover:bg-[#F5F9FF] transition-colors cursor-pointer"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="button"
@@ -827,7 +827,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
               className="px-3.5 py-1.5 rounded-lg font-bold text-white bg-red-600 hover:bg-red-700 transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Yes, Delete Company</span>
+              <span>{t('Yes, Delete Company')}</span>
             </button>
           </div>
         </div>
