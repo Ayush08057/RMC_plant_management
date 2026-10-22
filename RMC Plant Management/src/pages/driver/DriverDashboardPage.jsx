@@ -32,6 +32,7 @@ import { formatToIndian12Hr } from '../../utils/shiftUtils';
 import { useAuth } from '../../context/AuthContext';
 import { pushCloudStore } from '../../services/cloudSyncService';
 import { calculateTripDistance, STORAGE_KEYS } from '../../services/plantOperationsService';
+import { uploadTripPhoto, validateTripPhotoFile } from '../../services/storageService';
 
 // Workforce Views
 import MobilePunchWidget from '../../components/workforce/MobilePunchWidget';
@@ -163,14 +164,83 @@ export default function DriverDashboardPage() {
     }
   };
 
-  const handlePhotoSelect = (e, field) => {
+  const [uploadingField, setUploadingField] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const extractCleanPhotoMeta = (photo) => {
+    if (!photo) return null;
+    if (typeof photo === 'object' && (photo.storagePath || photo.downloadUrl)) {
+      return {
+        storagePath: photo.storagePath || null,
+        downloadUrl: photo.downloadUrl || null,
+        fileName: photo.fileName || 'trip_photo.jpg',
+        timestamp: photo.timestamp || Date.now(),
+        photoType: photo.photoType || 'photo',
+        uploadedBy: photo.uploadedBy || currentDriverId,
+        fileSizeFormatted: photo.fileSizeFormatted || ''
+      };
+    }
+    if (typeof photo === 'string') {
+      return photo;
+    }
+    return null;
+  };
+
+  const handlePhotoSelect = async (e, field) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setStepForm(prev => ({ ...prev, [field]: reader.result }));
-    };
-    reader.readAsDataURL(file);
+    setStepError('');
+
+    const validation = validateTripPhotoFile(file);
+    if (!validation.valid) {
+      setStepError(validation.error);
+      return;
+    }
+
+    // Ephemeral object URL for immediate user visual feedback without persisting Base64
+    const previewUrl = URL.createObjectURL(file);
+    setStepForm(prev => ({ ...prev, [field]: { previewUrl, uploading: true } }));
+    setUploadingField(field);
+    setUploadProgress(10);
+
+    try {
+      const tripId = effectiveActiveTrip?.dispatchId || effectiveActiveTrip?.id || `TRIP-${Date.now()}`;
+      const companyId = user?.companyId || 'sm-concretech';
+
+      const photoMeta = await uploadTripPhoto(file, {
+        companyId,
+        tripId,
+        photoType: field,
+        userId: currentDriverId
+      }, (pct) => {
+        setUploadProgress(pct);
+      });
+
+      setStepForm(prev => ({
+        ...prev,
+        [field]: {
+          ...photoMeta,
+          previewUrl
+        }
+      }));
+      setToastMessage(`✓ ${file.name} uploaded securely to Cloud Storage!`);
+    } catch (err) {
+      console.warn('Storage upload notice:', err.message);
+      setStepError(`Upload Notice: ${err.message}. Retrying or proceeding with local snapshot.`);
+      setStepForm(prev => ({
+        ...prev,
+        [field]: {
+          storagePath: null,
+          downloadUrl: null,
+          previewUrl,
+          fileName: file.name,
+          error: err.message
+        }
+      }));
+    } finally {
+      setUploadingField(null);
+      setUploadProgress(0);
+    }
   };
 
   const handleSaveStep = () => {
@@ -187,7 +257,7 @@ export default function DriverDashboardPage() {
       updatedTrip = {
         ...updatedTrip,
         startOdometer: startOdo,
-        startOdoPhoto: stepForm.startOdoPhoto,
+        startOdoPhoto: extractCleanPhotoMeta(stepForm.startOdoPhoto),
         startGps: stepForm.startGps || '16.8524° N, 74.5815° E',
         departureTime: nowTime,
         status: 'In Transit',
@@ -197,7 +267,7 @@ export default function DriverDashboardPage() {
       updatedTrip = {
         ...updatedTrip,
         arrivedAtSite: true,
-        siteArrivalPhoto: stepForm.siteArrivalPhoto,
+        siteArrivalPhoto: extractCleanPhotoMeta(stepForm.siteArrivalPhoto),
         siteArrivalGps: stepForm.siteArrivalGps || '16.8524° N, 74.5815° E',
         siteArrivalTime: nowTime,
         status: 'Arrived',
@@ -207,7 +277,7 @@ export default function DriverDashboardPage() {
       updatedTrip = {
         ...updatedTrip,
         siteWorkDone: true,
-        siteDeparturePhoto: stepForm.siteDeparturePhoto,
+        siteDeparturePhoto: extractCleanPhotoMeta(stepForm.siteDeparturePhoto),
         siteDepartureGps: stepForm.siteDepartureGps || '16.8524° N, 74.5815° E',
         siteDepartureTime: nowTime,
         status: 'Returning',
@@ -225,7 +295,7 @@ export default function DriverDashboardPage() {
         updatedTrip = {
           ...updatedTrip,
           finalOdometer: finalOdo,
-          finalOdoPhoto: stepForm.finalOdoPhoto,
+          finalOdoPhoto: extractCleanPhotoMeta(stepForm.finalOdoPhoto),
           finalGps: stepForm.finalGps || '16.8524° N, 74.5815° E',
           plantReturnTime: nowTime,
           distanceKm: tripDistance,
@@ -785,26 +855,50 @@ export default function DriverDashboardPage() {
 
               {/* Start Odometer Photo */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-blue-600" />
-                  <span>Odometer Photo (Dashboard)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 font-bold flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-blue-600" />
+                    <span>Odometer Photo (Dashboard)</span>
+                  </label>
+                  {stepForm.startOdoPhoto?.storagePath && (
+                    <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      ✓ Cloud Stored
+                    </span>
+                  )}
+                </div>
                 <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
                   <Camera className="w-6 h-6 text-slate-400 mb-1" />
                   <span className="text-[11px] font-bold text-slate-700">
-                    {stepForm.startOdoPhoto ? '✓ Photo Selected (Tap to retake)' : 'Take Photo or Choose File'}
+                    {uploadingField === 'startOdoPhoto'
+                      ? `Uploading to Cloud Storage... ${uploadProgress}%`
+                      : stepForm.startOdoPhoto
+                        ? '✓ Photo Selected (Tap to retake)'
+                        : 'Take Photo or Choose File'}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
+                    disabled={uploadingField === 'startOdoPhoto'}
                     onChange={(e) => handlePhotoSelect(e, 'startOdoPhoto')}
                     className="hidden"
                   />
                 </label>
-                {stepForm.startOdoPhoto && (
+                {uploadingField === 'startOdoPhoto' && (
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden mt-1.5">
+                    <div className="bg-amber-500 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+                {(stepForm.startOdoPhoto?.downloadUrl || stepForm.startOdoPhoto?.previewUrl || typeof stepForm.startOdoPhoto === 'string') && (
                   <div className="mt-2 text-center">
-                    <img src={stepForm.startOdoPhoto} alt="Odo" className="h-20 mx-auto rounded-lg border object-cover" />
+                    <img
+                      src={stepForm.startOdoPhoto?.downloadUrl || stepForm.startOdoPhoto?.previewUrl || (typeof stepForm.startOdoPhoto === 'string' ? stepForm.startOdoPhoto : '')}
+                      alt="Odo"
+                      className="h-20 mx-auto rounded-lg border object-cover shadow-2xs"
+                    />
+                    {stepForm.startOdoPhoto?.storagePath && (
+                      <p className="text-[9px] font-mono text-slate-500 mt-0.5 truncate">{stepForm.startOdoPhoto.storagePath}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -842,26 +936,50 @@ export default function DriverDashboardPage() {
 
               {/* Site Arrival Photo */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-emerald-600" />
-                  <span>Site Arrival Photo (Truck at Site)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 font-bold flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-emerald-600" />
+                    <span>Site Arrival Photo (Truck at Site)</span>
+                  </label>
+                  {stepForm.siteArrivalPhoto?.storagePath && (
+                    <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      ✓ Cloud Stored
+                    </span>
+                  )}
+                </div>
                 <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
                   <Camera className="w-6 h-6 text-slate-400 mb-1" />
                   <span className="text-[11px] font-bold text-slate-700">
-                    {stepForm.siteArrivalPhoto ? '✓ Arrival Photo Captured' : 'Take Site Photo or Choose File'}
+                    {uploadingField === 'siteArrivalPhoto'
+                      ? `Uploading to Cloud Storage... ${uploadProgress}%`
+                      : stepForm.siteArrivalPhoto
+                        ? '✓ Arrival Photo Captured (Tap to retake)'
+                        : 'Take Site Photo or Choose File'}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
+                    disabled={uploadingField === 'siteArrivalPhoto'}
                     onChange={(e) => handlePhotoSelect(e, 'siteArrivalPhoto')}
                     className="hidden"
                   />
                 </label>
-                {stepForm.siteArrivalPhoto && (
+                {uploadingField === 'siteArrivalPhoto' && (
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden mt-1.5">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+                {(stepForm.siteArrivalPhoto?.downloadUrl || stepForm.siteArrivalPhoto?.previewUrl || typeof stepForm.siteArrivalPhoto === 'string') && (
                   <div className="mt-2 text-center">
-                    <img src={stepForm.siteArrivalPhoto} alt="Site Arrival" className="h-20 mx-auto rounded-lg border object-cover" />
+                    <img
+                      src={stepForm.siteArrivalPhoto?.downloadUrl || stepForm.siteArrivalPhoto?.previewUrl || (typeof stepForm.siteArrivalPhoto === 'string' ? stepForm.siteArrivalPhoto : '')}
+                      alt="Site Arrival"
+                      className="h-20 mx-auto rounded-lg border object-cover shadow-2xs"
+                    />
+                    {stepForm.siteArrivalPhoto?.storagePath && (
+                      <p className="text-[9px] font-mono text-slate-500 mt-0.5 truncate">{stepForm.siteArrivalPhoto.storagePath}</p>
+                    )}
                   </div>
                 )}
               </div>

@@ -30,6 +30,44 @@ export const ALLOWED_DOCUMENT_MIME_TYPES = [
   'image/webp'
 ];
 
+// Allowed MIME types for driver trip photographs
+export const ALLOWED_PHOTO_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp'
+];
+
+/**
+ * Validates a driver trip photograph file before upload
+ * @param {File} file
+ * @returns {{ valid: boolean, error?: string }}
+ */
+export function validateTripPhotoFile(file) {
+  if (!file) {
+    return { valid: false, error: 'No photograph selected for upload.' };
+  }
+
+  if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    return {
+      valid: false,
+      error: `Photo exceeds 5 MB limit (Current: ${sizeMb} MB). Maximum allowed size is 5 MB.`
+    };
+  }
+
+  const isAllowedMime = ALLOWED_PHOTO_MIME_TYPES.includes(file.type);
+  const isAllowedExtension = /\.(jpe?g|png|webp)$/i.test(file.name || '');
+
+  if (!isAllowedExtension || (file.type && !isAllowedMime)) {
+    return {
+      valid: false,
+      error: 'Invalid photograph format. Only JPEG, PNG, and WebP images are accepted.'
+    };
+  }
+
+  return { valid: true, error: null };
+}
+
 /**
  * Validates a document file before upload
  * @param {File} file 
@@ -254,4 +292,101 @@ export async function deleteEmployeeDocumentFile(storagePath) {
     console.error(`Storage object ${storagePath} deletion error:`, err);
     throw err;
   }
+}
+
+/**
+ * Uploads an operational driver trip photograph to Firebase Cloud Storage.
+ * 
+ * Path hierarchy:
+ * operations/{companyId}/{tripId}/{photoType}_{timestamp}_{random}.{ext}
+ * 
+ * @param {File} file
+ * @param {Object} metadata { companyId, tripId, photoType, userId }
+ * @param {Function} onProgress Callback receiving percentage 0-100
+ * @returns {Promise<{ storagePath: string, downloadUrl: string, fileName: string, fileSizeFormatted: string, photoType: string, tripId: string, timestamp: number, uploadedBy: string }>}
+ */
+export async function uploadTripPhoto(file, { companyId = 'sm-concretech', tripId, photoType = 'trip_photo', userId = 'DRV' }, onProgress) {
+  const validation = validateTripPhotoFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+  if (!tripId) {
+    throw new Error('Trip ID is required for operations storage path segregation.');
+  }
+
+  const cleanCompanyId = (companyId || 'sm-concretech').trim();
+  const cleanTripId = String(tripId).trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+  const ext = (file.name || '').split('.').pop() || 'jpg';
+  const cleanExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext.toLowerCase()) ? ext.toLowerCase() : 'jpg';
+  const timestamp = Date.now();
+  const randomSuffix = Math.random().toString(36).substring(2, 7);
+  const fileName = `${photoType}_${timestamp}_${randomSuffix}.${cleanExt}`;
+
+  const storagePath = `operations/${cleanCompanyId}/${cleanTripId}/${fileName}`;
+  const storageRef = ref(storage, storagePath);
+
+  const customMetadata = {
+    companyId: cleanCompanyId,
+    tripId: cleanTripId,
+    photoType,
+    uploadedBy: userId,
+    uploadedAt: new Date().toISOString(),
+    originalName: file.name || fileName
+  };
+
+  return new Promise((resolve, reject) => {
+    const uploadTask = uploadBytesResumable(storageRef, file, {
+      contentType: file.type || 'image/jpeg',
+      customMetadata
+    });
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+        if (typeof onProgress === 'function') onProgress(progress);
+      },
+      (error) => {
+        console.error('Firebase Storage trip photo upload error:', error);
+        let userMessage = 'Photo upload failed due to network or storage error.';
+        if (error.code === 'storage/unauthorized') {
+          userMessage = 'Permission denied. Unauthorized storage operation for this company/trip.';
+        } else if (error.code === 'storage/canceled') {
+          userMessage = 'Photo upload canceled.';
+        } else if (error.code === 'storage/quota-exceeded') {
+          userMessage = 'Storage quota exceeded. Please contact Administrator.';
+        }
+        reject(new Error(userMessage));
+      },
+      async () => {
+        try {
+          const downloadUrl = await getDownloadURL(storageRef);
+          resolve({
+            storagePath,
+            downloadUrl,
+            fileName,
+            fileSizeFormatted: formatBytes(file.size),
+            fileType: file.type || 'image/jpeg',
+            photoType,
+            tripId: cleanTripId,
+            uploadedBy: userId,
+            timestamp
+          });
+        } catch (urlErr) {
+          // Fallback if getDownloadURL has issues
+          resolve({
+            storagePath,
+            downloadUrl: null,
+            fileName,
+            fileSizeFormatted: formatBytes(file.size),
+            fileType: file.type || 'image/jpeg',
+            photoType,
+            tripId: cleanTripId,
+            uploadedBy: userId,
+            timestamp
+          });
+        }
+      }
+    );
+  });
 }
