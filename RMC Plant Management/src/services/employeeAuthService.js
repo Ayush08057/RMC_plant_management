@@ -514,7 +514,7 @@ export function resolveLoginIdentity(identifier, employees = [], users = []) {
     role: trustedRole,
     department: empRecord.department || 'Operations',
     plantLocation: empRecord.plant || empRecord.plantLocation || 'Main Plant HQ',
-    companyId: empRecord.companyId || 'CMP-SM-001',
+    companyId: empRecord.companyId === 'CMP-SM-001' ? 'sm-concretech' : (empRecord.companyId || 'sm-concretech'),
     status,
     permissions: empRecord.permissions || ['ROLE_ACCESS'],
     avatar: (empRecord.name || 'EM').substring(0, 2).toUpperCase(),

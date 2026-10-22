@@ -135,7 +135,7 @@ export function sanitizeFileName(name) {
  * @param {Function} onProgress Callback receiving percentage 0-100
  * @returns {Promise<{ storagePath: string, downloadUrl: string, fileName: string, fileSizeFormatted: string }>}
  */
-export async function uploadEmployeeDocument(file, { companyId = 'CMP-SM-001', employeeId, documentType }, onProgress) {
+export async function uploadEmployeeDocument(file, { companyId = 'sm-concretech', employeeId, documentType }, onProgress) {
   const validation = validateDocumentFile(file);
   if (!validation.valid) {
     throw new Error(validation.error);

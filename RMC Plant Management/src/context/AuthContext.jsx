@@ -39,6 +39,8 @@ const STORAGE_USERS_KEY = 'rmc_users_db_v2';
 const STORAGE_SESSION_KEY = 'rmc_current_user_v3';
 const STORAGE_REMEMBER_KEY = 'rmc_remember_choice_v3';
 
+const normalizeCompanyId = (id) => (id === 'CMP-SM-001' ? 'sm-concretech' : (id || 'sm-concretech'));
+
 export const AuthProvider = ({ children }) => {
   // Clear any legacy persistent login sessions so opening the website always asks for login first
   useEffect(() => {
@@ -270,7 +272,7 @@ export const AuthProvider = ({ children }) => {
 
   const getWorkforceEmployees = () => {
     try {
-      const activeCompanyId = localStorage.getItem('rmc_active_company_v1') || 'CMP-SM-001';
+      const activeCompanyId = normalizeCompanyId(localStorage.getItem('rmc_active_company_v1'));
       const companySaved = localStorage.getItem(`rmc_workforce_state_v9_${activeCompanyId}`);
       if (companySaved) {
         const parsed = JSON.parse(companySaved);
@@ -447,7 +449,7 @@ export const AuthProvider = ({ children }) => {
       ...resolved.user,
       uid: firebaseUser.uid,
       role: resolved.role,
-      companyId: resolved.user?.companyId || localStorage.getItem('rmc_active_company_v1') || 'CMP-SM-001',
+      companyId: normalizeCompanyId(resolved.user?.companyId || localStorage.getItem('rmc_active_company_v1')),
       isMasterAdmin: isMaster,
       originalAdminUser: isMaster ? { ...resolved.user, uid: firebaseUser.uid } : null,
       lastLoginAt: new Date().toISOString(),
@@ -540,7 +542,7 @@ export const AuthProvider = ({ children }) => {
 
     // 2. Transition employee status: Pending Registration -> Pending Approval (NO PLAINTEXT PASSWORDS)
     try {
-      const activeCompanyId = localStorage.getItem('rmc_active_company_v1') || 'CMP-SM-001';
+      const activeCompanyId = normalizeCompanyId(localStorage.getItem('rmc_active_company_v1'));
       const storageKey = `rmc_workforce_state_v9_${activeCompanyId}`;
       const storedRaw = localStorage.getItem(storageKey);
       if (storedRaw) {
