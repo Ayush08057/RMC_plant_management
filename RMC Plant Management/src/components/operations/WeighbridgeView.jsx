@@ -185,6 +185,61 @@ export default function WeighbridgeView() {
     setIsNewModalOpen(true);
   };
 
+
+  // Helper to sync Weighbridge inward weighments with Silo Inventory
+  const updateSiloInventoryForWeighment = (materialName, netKg, slipNo, vehNo, party, isReversal = false) => {
+    try {
+      const netTons = Number(((netKg || 0) / 1000).toFixed(2));
+      if (netTons <= 0) return;
+      const factor = isReversal ? -1 : 1;
+
+      let targetKey = 'agg20';
+      const matLower = (materialName || '').toLowerCase();
+      if (matLower.includes('cement')) targetKey = 'cement';
+      else if (matLower.includes('fly ash') || matLower.includes('pozzocrete')) targetKey = 'flyash';
+      else if (matLower.includes('10mm')) targetKey = 'agg10';
+      else if (matLower.includes('20mm')) targetKey = 'agg20';
+      else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
+      else if (matLower.includes('river sand')) targetKey = 'riverSand';
+
+      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
+      if (siloData[targetKey]) {
+        const cur = Number(siloData[targetKey].stockTons) || 0;
+        siloData[targetKey].stockTons = Math.max(0, Number((cur + factor * netTons).toFixed(2)));
+        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
+      }
+
+      // Sync with Inward slips
+      const rawInward = localStorage.getItem(STORAGE_KEYS.INWARD);
+      let inwardData = rawInward ? JSON.parse(rawInward) : [];
+      if (isReversal) {
+        inwardData = inwardData.filter((r) => r.slipNo !== `#${slipNo}` && r.slipNo !== slipNo);
+      } else {
+        const newInward = {
+          id: `INW-WB-${Date.now()}`,
+          slipNo: `#${slipNo}`,
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          material: materialName,
+          supplier: party,
+          vehicleNo: vehNo,
+          netTons,
+          unit: 'Tons',
+          status: 'Finalized',
+          targetSilo: siloData[targetKey]?.siloName || 'Storage Silo',
+          createdAt: new Date().toISOString(),
+        };
+        inwardData = [newInward, ...inwardData];
+      }
+      localStorage.setItem(STORAGE_KEYS.INWARD, JSON.stringify(inwardData));
+      pushCloudStore('cloud_material_inward', STORAGE_KEYS.INWARD, inwardData);
+    } catch (err) {
+      console.warn('Inventory sync notice for weighbridge:', err.message);
+    }
+  };
+
   const handleSubmitNewWeighment = (e, shouldPrint = false) => {
     e.preventDefault();
     if (!vehicleNo.trim()) {
@@ -249,59 +304,6 @@ export default function WeighbridgeView() {
     }
   };
 
-  // Helper to sync Weighbridge inward weighments with Silo Inventory
-  const updateSiloInventoryForWeighment = (materialName, netKg, slipNo, vehNo, party, isReversal = false) => {
-    try {
-      const netTons = Number(((netKg || 0) / 1000).toFixed(2));
-      if (netTons <= 0) return;
-      const factor = isReversal ? -1 : 1;
-
-      let targetKey = 'agg20';
-      const matLower = (materialName || '').toLowerCase();
-      if (matLower.includes('cement')) targetKey = 'cement';
-      else if (matLower.includes('fly ash') || matLower.includes('pozzocrete')) targetKey = 'flyash';
-      else if (matLower.includes('10mm')) targetKey = 'agg10';
-      else if (matLower.includes('20mm')) targetKey = 'agg20';
-      else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
-      else if (matLower.includes('river sand')) targetKey = 'riverSand';
-
-      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
-      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
-      if (siloData[targetKey]) {
-        const cur = Number(siloData[targetKey].stockTons) || 0;
-        siloData[targetKey].stockTons = Math.max(0, Number((cur + factor * netTons).toFixed(2)));
-        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
-        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
-      }
-
-      // Sync with Inward slips
-      const rawInward = localStorage.getItem(STORAGE_KEYS.INWARD);
-      let inwardData = rawInward ? JSON.parse(rawInward) : [];
-      if (isReversal) {
-        inwardData = inwardData.filter((r) => r.slipNo !== `#${slipNo}` && r.slipNo !== slipNo);
-      } else {
-        const newInward = {
-          id: `INW-WB-${Date.now()}`,
-          slipNo: `#${slipNo}`,
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          material: materialName,
-          supplier: party,
-          vehicleNo: vehNo,
-          netTons,
-          unit: 'Tons',
-          status: 'Finalized',
-          targetSilo: siloData[targetKey]?.siloName || 'Storage Silo',
-          createdAt: new Date().toISOString(),
-        };
-        inwardData = [newInward, ...inwardData];
-      }
-      localStorage.setItem(STORAGE_KEYS.INWARD, JSON.stringify(inwardData));
-      pushCloudStore('cloud_material_inward', STORAGE_KEYS.INWARD, inwardData);
-    } catch (err) {
-      console.warn('Inventory sync notice for weighbridge:', err.message);
-    }
-  };
 
   // Open 2nd weight modal for pending slips
   const handleOpenSecondWeight = (slip) => {

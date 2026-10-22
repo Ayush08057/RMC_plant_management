@@ -106,6 +106,48 @@ export default function PlantDashboardView({ onNavigateTab }) {
   const aggTons = normalizedSilo.agg20.current;
   const sandTons = normalizedSilo.sand.current;
 
+  const todayProductionM3 = batches.reduce((acc, b) => acc + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0);
+  const monthProductionM3 = todayProductionM3;
+  const activeTripsCount = trips.filter(t => t.status === 'Active' || t.status === 'En Route' || t.status === 'Pouring').length;
+  const idleMixersCount = trips.filter(t => t.status === 'Available' || t.status === 'In Yard').length;
+  const totalMixers = trips.length;
+  const totalBatchesToday = batches.length;
+
+  const fleetStatus = trips.map(t => ({
+    id: t.tripId || t.id,
+    reg: t.vehicleNo || t.vehicleReg || '--',
+    driver: t.driverName || t.driver || '--',
+    status: t.status || 'Active',
+    grade: t.concreteGrade || t.grade || '--',
+    dest: t.destinationSite || t.site || t.customerName || '--'
+  }));
+
+  const hourlyBatches = React.useMemo(() => {
+    if (!batches || batches.length === 0) return [];
+    const hourMap = {};
+    batches.forEach((b) => {
+      let timeStr = b.time || b.createdAt || b.timestamp;
+      let hour = '09:00 AM';
+      if (timeStr) {
+        try {
+          const d = new Date(timeStr);
+          if (!isNaN(d.getTime())) {
+            const h = d.getHours();
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            hour = `${String(h12).padStart(2, '0')}:00 ${ampm}`;
+          } else if (typeof timeStr === 'string' && timeStr.includes(':')) {
+            hour = timeStr.slice(0, 5);
+          }
+        } catch {}
+      }
+      if (!hourMap[hour]) hourMap[hour] = { time: hour, m3: 0, batches: 0 };
+      hourMap[hour].m3 += parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0;
+      hourMap[hour].batches += 1;
+    });
+    return Object.values(hourMap);
+  }, [batches]);
+
   return (
     <div className="w-full space-y-2.5 sm:space-y-3 text-xs text-slate-800 pb-8">
       {/* Compact Slim Top Header Bar (Replaces large dark blue banner) */}

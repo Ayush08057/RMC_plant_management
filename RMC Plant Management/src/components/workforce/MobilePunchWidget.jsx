@@ -210,57 +210,7 @@ export default function MobilePunchWidget({
     hoursWorked: 8.5,
   });
 
-  // Camera Management
-  const startCamera = async () => {
-    setShowCamera(true);
-    setCameraError(null);
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } },
-          audio: false,
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-        }
-        setCameraStreamActive(true);
-      } else {
-        simulateSelfieCapture();
-      }
-    } catch (err) {
-      console.warn('Camera stream issue:', err);
-      simulateSelfieCapture();
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setCameraStreamActive(false);
-    setShowCamera(false);
-  };
-
-  const capturePhotoFromVideo = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 320;
-      canvas.height = video.videoHeight || 320;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const photoUrl = canvas.toDataURL('image/jpeg', 0.85);
-      setCapturedSelfie(photoUrl);
-      stopCamera();
-    } else {
-      simulateSelfieCapture();
-    }
-  };
-
-  const simulateSelfieCapture = () => {
+  function simulateSelfieCapture() {
     const canvas = document.createElement('canvas');
     canvas.width = 320;
     canvas.height = 320;
@@ -291,6 +241,56 @@ export default function MobilePunchWidget({
     const photoUrl = canvas.toDataURL('image/jpeg', 0.85);
     setCapturedSelfie(photoUrl);
     stopCamera();
+  };
+
+  // Camera Management
+  async function startCamera() {
+    setShowCamera(true);
+    setCameraError(null);
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+        setCameraStreamActive(true);
+      } else {
+        simulateSelfieCapture();
+      }
+    } catch (err) {
+      console.warn('Camera stream issue:', err);
+      simulateSelfieCapture();
+    }
+  };
+
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraStreamActive(false);
+    setShowCamera(false);
+  };
+
+  function capturePhotoFromVideo() {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 320;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const photoUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setCapturedSelfie(photoUrl);
+      stopCamera();
+    } else {
+      simulateSelfieCapture();
+    }
   };
 
   useEffect(() => {

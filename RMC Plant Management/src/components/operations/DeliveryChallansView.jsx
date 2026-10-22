@@ -162,6 +162,23 @@ export default function DeliveryChallansView() {
 
   const [fleetList, setFleetList] = useState(getFleetVehicles);
 
+  const [form, setForm] = useState(() => {
+    const initialFleet = getFleetVehicles();
+    return {
+      challanNo: 'DC-25-26/1421',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      departureTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      customerName: '',
+      site: '',
+      vehicleNo: initialFleet[0]?.vehicleNo || '',
+      driverName: initialFleet[0]?.driverName || '',
+      grade: 'M25 Concrete',
+      quantity: initialFleet[0]?.capacity || 6.0,
+      slump: '125 ± 25 mm',
+      receiverName: '',
+    };
+  });
+
   useEffect(() => {
     const refreshFleet = () => setFleetList(getFleetVehicles());
     window.addEventListener('storage', refreshFleet);
@@ -210,23 +227,6 @@ export default function DeliveryChallansView() {
       challanNo: `${prefix}-25-26/${nextNumber}`
     }));
   };
-
-  const [form, setForm] = useState(() => {
-    const initialFleet = getFleetVehicles();
-    return {
-      challanNo: 'DC-25-26/1421',
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      departureTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      customerName: '',
-      site: '',
-      vehicleNo: initialFleet[0]?.vehicleNo || '',
-      driverName: initialFleet[0]?.driverName || '',
-      grade: 'M25 Concrete',
-      quantity: initialFleet[0]?.capacity || 6.0,
-      slump: '125 ± 25 mm',
-      receiverName: '',
-    };
-  });
 
   const openNewChallanModal = () => {
     const nextNumber = challans.length + 1421;

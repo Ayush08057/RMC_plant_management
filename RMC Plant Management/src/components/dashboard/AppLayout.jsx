@@ -84,7 +84,7 @@ export default function AppLayout({
       />
 
       {/* Main Content Layout - Header strictly pinned at the top */}
-      <div className={`relative z-10 flex-1 h-[100dvh] max-h-[100dvh] flex flex-col transition-[padding-left] duration-200 ease-out w-full max-w-full min-w-0 overflow-hidden ${
+      <div className={`relative flex-1 h-[100dvh] max-h-[100dvh] flex flex-col transition-[padding-left] duration-200 ease-out w-full max-w-full min-w-0 overflow-hidden ${
         sidebarOpen ? 'md:pl-72' : 'md:pl-[68px]'
       }`}>
         {/* Top Header Bar - Fixed strictly to the upper part */}

@@ -214,21 +214,7 @@ export default function AttendanceManagementView({
     return null;
   };
 
-  // Trigger from top header button to open Popup Modal for Manual Entry
-  useEffect(() => {
-    if (triggerMarkAttendance) {
-      handleOpenAdd('manual');
-      onMarkAttendanceReset();
-    }
-  }, [triggerMarkAttendance]);
 
-  // Trigger from top header button to open Popup Modal for Mobile Entry
-  useEffect(() => {
-    if (triggerMobileAttendance) {
-      handleOpenAdd('mobile');
-      onMobileAttendanceReset();
-    }
-  }, [triggerMobileAttendance]);
 
   // Correction Form State
   const [corrForm, setCorrForm] = useState({
@@ -669,6 +655,22 @@ export default function AttendanceManagementView({
     setAddModalTab(tab);
     setShowAddModal(true);
   };
+
+  // Trigger from top header button to open Popup Modal for Manual Entry
+  useEffect(() => {
+    if (triggerMarkAttendance) {
+      handleOpenAdd('manual');
+      onMarkAttendanceReset();
+    }
+  }, [triggerMarkAttendance]);
+
+  // Trigger from top header button to open Popup Modal for Mobile Entry
+  useEffect(() => {
+    if (triggerMobileAttendance) {
+      handleOpenAdd('mobile');
+      onMobileAttendanceReset();
+    }
+  }, [triggerMobileAttendance]);
 
   const handleOpenCorrection = (record) => {
     setSelectedRecord(record);

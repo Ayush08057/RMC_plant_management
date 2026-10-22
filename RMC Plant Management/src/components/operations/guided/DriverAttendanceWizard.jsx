@@ -53,7 +53,7 @@ export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) 
     // Record attendance into localStorage & central workforce ledger
     try {
       const today = new Date().toISOString().split('T')[0];
-      const records = DRIVERS_STAFF.map(s => ({
+      const records = staffList.map(s => ({
         employeeId: s.id,
         name: s.name,
         role: s.role,
@@ -64,7 +64,7 @@ export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) 
       localStorage.setItem(`rmc_attendance_${today}`, JSON.stringify(records));
 
       if (workforce && typeof workforce.addAttendanceRecord === 'function') {
-        DRIVERS_STAFF.forEach(s => {
+        staffList.forEach(s => {
           workforce.addAttendanceRecord({
             employeeId: s.id,
             employeeName: s.name,

@@ -530,6 +530,88 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setShowPurchaseFormModal(true);
   };
 
+  const openEditBillModal = (bill, authorizedByOtp = false) => {
+    setEditingBill({ ...bill, authorizedByOtp });
+    setBillMobileError(null);
+    setBillFormErrors({});
+    const rawMobile = (bill.customerMobile || '').replace(/\D/g, '');
+    const cleanMobile = rawMobile.length === 12 && rawMobile.startsWith('91') ? rawMobile.slice(2) : rawMobile.slice(-10);
+    setBillForm({
+      billNo: bill.billNo,
+      date: bill.date,
+      constructionDate: bill.constructionDate || bill.date || '',
+      vehicle: bill.vehicle || '',
+      place: bill.place || '',
+      customerName: bill.customerName || '',
+      site: bill.site || '',
+      customerMobile: cleanMobile || '',
+      refName: bill.refName || '',
+      items: bill.items || [{ sn: 1, material: 'Pump', qty: 1, unit: 'Unit', rate: 6000, total: 6000 }],
+      transportation: bill.transportation || 0,
+      bankName: bill.bankName || 'SM CONCRETECH',
+      bankAccountNo: bill.bankAccountNo || '41890021000189',
+      bankAccountType: bill.bankAccountType || 'Current',
+      bankBranch: bill.bankBranch || 'Miraj / Sangli',
+      bankIfsc: bill.bankIfsc || 'SBIN0001234',
+      initialPaymentOption: 'unpaid',
+      initialPaymentAmount: 0,
+      initialPaymentMode: 'Cash',
+      initialPaymentRef: '',
+      initialPaymentRemarks: '',
+    });
+    setShowBillFormModal(true);
+  };
+
+  const openEditPurchaseModal = (purchase, authorizedByOtp = false) => {
+    setEditingPurchase({ ...purchase, authorizedByOtp });
+    setPurchaseForm({
+      voucherNo: purchase.voucherNo,
+      date: purchase.date,
+      supplierName: purchase.supplierName,
+      supplierMobile: purchase.supplierMobile,
+      material: purchase.material,
+      vehicleNo: purchase.vehicleNo,
+      plantLocation: purchase.plantLocation,
+      weighbridgeSlipNo: purchase.weighbridgeSlipNo,
+      qty: purchase.qty,
+      unit: purchase.unit,
+      rate: purchase.rate,
+      taxPercent: purchase.taxPercent || 18,
+      paymentStatus: purchase.paymentStatus,
+      remarks: purchase.remarks,
+    });
+    setShowPurchaseFormModal(true);
+  };
+
+  // Helper to trigger Owner OTP modal & generate 6-digit code
+  // Helper to trigger Owner OTP modal via API
+  const initiateOwnerOtpFlow = async (item, typeName) => {
+    setEnteredOtp('');
+    setOtpError(null);
+    setOtpSuccessAlert(null);
+    setResendCountdown(30);
+
+    const refNo = item.billNo || item.voucherNo;
+    try {
+      const res = await sendOwnerOtpApi({
+        phone: OWNER_SECURITY_PROFILE.phone,
+        refNo,
+        typeName,
+        requestedBy: user?.name || 'Accountant',
+      });
+      if (res?.sessionId) {
+        setOtpSessionId(res.sessionId);
+      }
+      setOtpDispatchedSms(`SM CONCRETECH SECURITY ALERT: OTP dispatched via Dove SMS gateway to registered phone ${OWNER_SECURITY_PROFILE.phone}.`);
+      showToast(`📨 OTP dispatched via Dove SMS to ${OWNER_SECURITY_PROFILE.phone}`);
+    } catch (err) {
+      console.warn('OTP API dispatch notice:', err);
+      setOtpDispatchedSms(`SM CONCRETECH SECURITY ALERT: OTP dispatched to ${OWNER_SECURITY_PROFILE.phone}.`);
+    }
+
+    setOtpModalOpen(true);
+  };
+
   /**
    * INITIATE EDIT WORKFLOW:
    * 1. Checks 10-Minute Rule!
@@ -564,34 +646,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     }
   };
 
-  // Helper to trigger Owner OTP modal & generate 6-digit code
-  // Helper to trigger Owner OTP modal via API
-  const initiateOwnerOtpFlow = async (item, typeName) => {
-    setEnteredOtp('');
-    setOtpError(null);
-    setOtpSuccessAlert(null);
-    setResendCountdown(30);
-
-    const refNo = item.billNo || item.voucherNo;
-    try {
-      const res = await sendOwnerOtpApi({
-        phone: OWNER_SECURITY_PROFILE.phone,
-        refNo,
-        typeName,
-        requestedBy: user?.name || 'Accountant',
-      });
-      if (res?.sessionId) {
-        setOtpSessionId(res.sessionId);
-      }
-      setOtpDispatchedSms(`SM CONCRETECH SECURITY ALERT: OTP dispatched via Dove SMS gateway to registered phone ${OWNER_SECURITY_PROFILE.phone}.`);
-      showToast(`📨 OTP dispatched via Dove SMS to ${OWNER_SECURITY_PROFILE.phone}`);
-    } catch (err) {
-      console.warn('OTP API dispatch notice:', err);
-      setOtpDispatchedSms(`SM CONCRETECH SECURITY ALERT: OTP dispatched to ${OWNER_SECURITY_PROFILE.phone}.`);
-    }
-
-    setOtpModalOpen(true);
-  };
 
   const handleResendOtp = async () => {
     if (resendCountdown > 0 || !targetItemForOtp) return;
@@ -680,58 +734,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     }
   };
 
-  const openEditBillModal = (bill, authorizedByOtp = false) => {
-    setEditingBill({ ...bill, authorizedByOtp });
-    setBillMobileError(null);
-    setBillFormErrors({});
-    const rawMobile = (bill.customerMobile || '').replace(/\D/g, '');
-    const cleanMobile = rawMobile.length === 12 && rawMobile.startsWith('91') ? rawMobile.slice(2) : rawMobile.slice(-10);
-    setBillForm({
-      billNo: bill.billNo,
-      date: bill.date,
-      constructionDate: bill.constructionDate || bill.date || '',
-      vehicle: bill.vehicle || '',
-      place: bill.place || '',
-      customerName: bill.customerName || '',
-      site: bill.site || '',
-      customerMobile: cleanMobile || '',
-      refName: bill.refName || '',
-      items: bill.items || [{ sn: 1, material: 'Pump', qty: 1, unit: 'Unit', rate: 6000, total: 6000 }],
-      transportation: bill.transportation || 0,
-      bankName: bill.bankName || 'SM CONCRETECH',
-      bankAccountNo: bill.bankAccountNo || '41890021000189',
-      bankAccountType: bill.bankAccountType || 'Current',
-      bankBranch: bill.bankBranch || 'Miraj / Sangli',
-      bankIfsc: bill.bankIfsc || 'SBIN0001234',
-      initialPaymentOption: 'unpaid',
-      initialPaymentAmount: 0,
-      initialPaymentMode: 'Cash',
-      initialPaymentRef: '',
-      initialPaymentRemarks: '',
-    });
-    setShowBillFormModal(true);
-  };
-
-  const openEditPurchaseModal = (purchase, authorizedByOtp = false) => {
-    setEditingPurchase({ ...purchase, authorizedByOtp });
-    setPurchaseForm({
-      voucherNo: purchase.voucherNo,
-      date: purchase.date,
-      supplierName: purchase.supplierName,
-      supplierMobile: purchase.supplierMobile,
-      material: purchase.material,
-      vehicleNo: purchase.vehicleNo,
-      plantLocation: purchase.plantLocation,
-      weighbridgeSlipNo: purchase.weighbridgeSlipNo,
-      qty: purchase.qty,
-      unit: purchase.unit,
-      rate: purchase.rate,
-      taxPercent: purchase.taxPercent || 18,
-      paymentStatus: purchase.paymentStatus,
-      remarks: purchase.remarks,
-    });
-    setShowPurchaseFormModal(true);
-  };
 
   // Add Item Row to Bill
   const handleAddItemRow = () => {

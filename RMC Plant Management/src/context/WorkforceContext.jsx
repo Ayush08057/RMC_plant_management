@@ -434,6 +434,25 @@ export const WorkforceProvider = ({ children }) => {
     return company;
   };
 
+  // Helper: record an audit log entry
+  const addAuditLog = (action, module, record, status = 'Success') => {
+    const newLog = {
+      id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      user: user?.name || 'System Operator',
+      role: user?.role || 'Admin',
+      action,
+      module,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      record,
+      status,
+    };
+    setData((prev) => ({
+      ...prev,
+      auditLogs: [newLog, ...prev.auditLogs],
+    }));
+    saveDocumentWithId(COLLECTIONS.AUDIT_LOGS, newLog.id, newLog).catch(() => {});
+  };
+
   const removeCompany = async (companyId) => {
     if (!companyId) return;
     if (companies.length <= 1) {
@@ -494,26 +513,6 @@ export const WorkforceProvider = ({ children }) => {
 
   const updateCompanyLogo = (companyId, logoDataUrl) => {
     updateCompany(companyId, { logo: logoDataUrl });
-  };
-
-  // Helper: record an audit log entry
-  const addAuditLog = (action, module, record, status = 'Success') => {
-    const newLog = {
-      id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      user: user?.name || 'System Operator',
-      role: user?.role || 'Admin',
-      action,
-      module,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      record,
-      status,
-    };
-    setData((prev) => ({
-      ...prev,
-      auditLogs: [newLog, ...prev.auditLogs],
-    }));
-    // Sync to Cloud Firestore
-    saveDocumentWithId(COLLECTIONS.AUDIT_LOGS, newLog.id, newLog).catch(() => {});
   };
 
   // Helper: emit a system notification
