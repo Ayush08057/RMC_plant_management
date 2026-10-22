@@ -156,7 +156,8 @@ export default function PlantDashboardView({ onNavigateTab }) {
 
       {/* Compact Space-Saving KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+        <div className="bg-gradient-to-b from-blue-50/35 via-white to-white p-2.5 sm:p-3 pt-3.5 rounded-xl border-2 border-blue-400 hover:border-blue-500 shadow-xs hover:shadow-blue-500/15 transition-all duration-200 flex items-center justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#136dec] transition-all group-hover:h-[4px]" />
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Today's Output</p>
             <p className="text-lg sm:text-xl font-black text-blue-900 mt-0.5">
@@ -167,12 +168,13 @@ export default function PlantDashboardView({ onNavigateTab }) {
               <span>{totalBatchesToday} batches mixed</span>
             </p>
           </div>
-          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0 ml-2">
+          <div className="p-2 bg-blue-100/90 text-blue-600 border border-blue-200 rounded-lg shrink-0 ml-2 shadow-2xs">
             <Layers className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+        <div className="bg-gradient-to-b from-emerald-50/35 via-white to-white p-2.5 sm:p-3 pt-3.5 rounded-xl border-2 border-emerald-400 hover:border-emerald-500 shadow-xs hover:shadow-emerald-500/15 transition-all duration-200 flex items-center justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-emerald-500 transition-all group-hover:h-[4px]" />
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Monthly Yield</p>
             <p className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
@@ -180,12 +182,13 @@ export default function PlantDashboardView({ onNavigateTab }) {
             </p>
             <p className="text-[10px] text-slate-500 font-semibold mt-0.5 truncate">Target: 5,000 m³ (85.6%)</p>
           </div>
-          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0 ml-2">
+          <div className="p-2 bg-emerald-100/90 text-emerald-600 border border-emerald-200 rounded-lg shrink-0 ml-2 shadow-2xs">
             <TrendingUp className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+        <div className="bg-gradient-to-b from-indigo-50/35 via-white to-white p-2.5 sm:p-3 pt-3.5 rounded-xl border-2 border-indigo-400 hover:border-indigo-500 shadow-xs hover:shadow-indigo-500/15 transition-all duration-200 flex items-center justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-indigo-500 transition-all group-hover:h-[4px]" />
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Mixers Active</p>
             <p className="text-lg sm:text-xl font-black text-indigo-900 mt-0.5">
@@ -195,18 +198,19 @@ export default function PlantDashboardView({ onNavigateTab }) {
               {idleMixersCount} idle in yard
             </p>
           </div>
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 ml-2">
+          <div className="p-2 bg-indigo-100/90 text-indigo-600 border border-indigo-200 rounded-lg shrink-0 ml-2 shadow-2xs">
             <Truck className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+        <div className="bg-gradient-to-b from-cyan-50/35 via-white to-white p-2.5 sm:p-3 pt-3.5 rounded-xl border-2 border-cyan-400 hover:border-cyan-500 shadow-xs hover:shadow-cyan-500/15 transition-all duration-200 flex items-center justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-cyan-500 transition-all group-hover:h-[4px]" />
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Plant Health</p>
-            <p className="text-lg sm:text-xl font-black text-emerald-700 mt-0.5">99.2%</p>
+            <p className="text-lg sm:text-xl font-black text-cyan-800 mt-0.5">99.2%</p>
             <p className="text-[10px] text-slate-500 font-semibold mt-0.5 truncate">SCADA Online • Zero Trips Halted</p>
           </div>
-          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0 ml-2">
+          <div className="p-2 bg-cyan-100/90 text-cyan-600 border border-cyan-200 rounded-lg shrink-0 ml-2 shadow-2xs">
             <Activity className="w-4 h-4" />
           </div>
         </div>

@@ -320,15 +320,16 @@ export default function DieselManagementView() {
       {/* Fuel Tank Stock Gauge & KPI Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Main Tank Level Visualizer */}
-        <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-200 shadow-2xs flex flex-col justify-between">
+        <div className="bg-gradient-to-b from-amber-50/35 via-white to-white rounded-xl p-3.5 sm:p-4 pt-4 border-2 border-amber-400 hover:border-amber-500 shadow-xs hover:shadow-amber-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-500 transition-all group-hover:h-[4px]" />
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <span className="text-[11px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1.5">
+              <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
                 <Fuel size={14} className="text-amber-600" />
                 HSD Underground Tank (10 KL)
               </span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                isLowStock ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                isLowStock ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'
               }`}>
                 {isLowStock ? 'Reorder Warning' : 'Safe Operating Level'}
               </span>
@@ -357,9 +358,10 @@ export default function DieselManagementView() {
         </div>
 
         {/* Total Cost Dispensed */}
-        <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-200 shadow-2xs flex flex-col justify-between">
+        <div className="bg-gradient-to-b from-emerald-50/35 via-white to-white rounded-xl p-3.5 sm:p-4 pt-4 border-2 border-emerald-400 hover:border-emerald-500 shadow-xs hover:shadow-emerald-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-emerald-500 transition-all group-hover:h-[4px]" />
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-100 text-amber-700 rounded-lg">
+            <div className="p-2.5 bg-emerald-100/90 text-emerald-700 border border-emerald-300 rounded-lg shadow-2xs">
               <Droplet size={20} />
             </div>
             <div>
@@ -368,16 +370,17 @@ export default function DieselManagementView() {
             </div>
           </div>
 
-          <div className="mt-3 pt-2 border-t flex justify-between items-center text-xs">
+          <div className="mt-3 pt-2 border-t border-emerald-100 flex justify-between items-center text-xs">
             <span className="text-gray-500 font-medium">Total Cost Value:</span>
             <span className="font-black text-emerald-700 text-sm">₹{totalCostDispensed.toLocaleString()}</span>
           </div>
         </div>
 
         {/* Inward Fuel Stock Received */}
-        <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-200 shadow-2xs flex flex-col justify-between">
+        <div className="bg-gradient-to-b from-blue-50/35 via-white to-white rounded-xl p-3.5 sm:p-4 pt-4 border-2 border-blue-400 hover:border-blue-500 shadow-xs hover:shadow-blue-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#136dec] transition-all group-hover:h-[4px]" />
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-100 text-blue-700 rounded-lg">
+            <div className="p-2.5 bg-blue-100/90 text-[#136dec] border border-blue-300 rounded-lg shadow-2xs">
               <ArrowDownToLine size={20} />
             </div>
             <div>

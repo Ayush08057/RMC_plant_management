@@ -470,39 +470,42 @@ export default function BatchingSheetsView() {
       {/* Top 4 KPI Operational Cards (Ultra-Compact) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {/* 1. Total Volume */}
-        <div className="bg-white rounded-xl border border-slate-200 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+        <div className="bg-gradient-to-b from-blue-50/35 via-white to-white rounded-xl border-2 border-blue-400 hover:border-blue-500 p-2 sm:px-2.5 sm:py-2 pt-2.5 shadow-xs hover:shadow-blue-500/15 transition-all duration-200 flex items-center justify-between gap-2 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#136dec] transition-all group-hover:h-[4px]" />
           <div className="min-w-0 flex-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Concrete Batched</span>
             <div className="font-mono font-black text-slate-900 text-xs sm:text-sm tracking-tight mt-0.5">
               {totalVolume.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">m³</span>
             </div>
-            <div className="text-[9px] text-slate-400 font-medium truncate mt-0.5">
+            <div className="text-[9px] text-slate-500 font-medium truncate mt-0.5">
               {sheets.length} Total Batches
             </div>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-blue-100/90 text-blue-600 border border-blue-200 flex items-center justify-center shrink-0 shadow-2xs">
             <ClipboardList className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* 2. Cement Consumed */}
-        <div className="bg-white rounded-xl border border-slate-200 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+        <div className="bg-gradient-to-b from-amber-50/35 via-white to-white rounded-xl border-2 border-amber-400 hover:border-amber-500 p-2 sm:px-2.5 sm:py-2 pt-2.5 shadow-xs hover:shadow-amber-500/15 transition-all duration-200 flex items-center justify-between gap-2 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-500 transition-all group-hover:h-[4px]" />
           <div className="min-w-0 flex-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Cement Batched</span>
             <div className="font-mono font-black text-slate-900 text-xs sm:text-sm tracking-tight mt-0.5">
               {(totalCementKg / 1000).toFixed(2)} <span className="text-[10px] font-normal text-slate-500">Tons</span>
             </div>
-            <div className="text-[9px] text-emerald-700 font-medium truncate mt-0.5">
+            <div className="text-[9px] text-amber-700 font-medium truncate mt-0.5">
               OPC 53 Silo Consumption
             </div>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-amber-100/90 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0 shadow-2xs">
             <Scale className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* 3. SCADA Accuracy */}
-        <div className="bg-white rounded-xl border border-emerald-200/80 bg-gradient-to-r from-white to-emerald-50/20 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+        <div className="bg-gradient-to-b from-emerald-50/35 via-white to-white rounded-xl border-2 border-emerald-400 hover:border-emerald-500 p-2 sm:px-2.5 sm:py-2 pt-2.5 shadow-xs hover:shadow-emerald-500/15 transition-all duration-200 flex items-center justify-between gap-2 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-emerald-500 transition-all group-hover:h-[4px]" />
           <div className="min-w-0 flex-1">
             <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block truncate">Batch Accuracy</span>
             <div className="font-mono font-black text-emerald-700 text-xs sm:text-sm tracking-tight mt-0.5">
@@ -512,23 +515,24 @@ export default function BatchingSheetsView() {
               ±1.5% Target Tolerance
             </div>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-emerald-100/90 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0 shadow-2xs">
             <ShieldCheck className="w-3.5 h-3.5" />
           </div>
         </div>
 
         {/* 4. Mixer Fleet Batched */}
-        <div className="bg-white rounded-xl border border-blue-200/80 bg-gradient-to-r from-white to-blue-50/20 p-2 sm:px-2.5 sm:py-1.5 shadow-2xs flex items-center justify-between gap-2">
+        <div className="bg-gradient-to-b from-indigo-50/35 via-white to-white rounded-xl border-2 border-indigo-400 hover:border-indigo-500 p-2 sm:px-2.5 sm:py-2 pt-2.5 shadow-xs hover:shadow-indigo-500/15 transition-all duration-200 flex items-center justify-between gap-2 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-indigo-500 transition-all group-hover:h-[4px]" />
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block truncate">Mixers Loaded</span>
-            <div className="font-mono font-black text-blue-700 text-xs sm:text-sm tracking-tight mt-0.5">
-              {sheets.length} <span className="text-[10px] font-normal text-blue-600">Trips</span>
+            <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block truncate">Mixers Loaded</span>
+            <div className="font-mono font-black text-indigo-900 text-xs sm:text-sm tracking-tight mt-0.5">
+              {sheets.length} <span className="text-[10px] font-normal text-indigo-600">Trips</span>
             </div>
-            <div className="text-[9px] text-blue-700 font-medium truncate mt-0.5">
+            <div className="text-[9px] text-indigo-700 font-medium truncate mt-0.5">
               Slump Verified
             </div>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-indigo-100/90 text-indigo-700 border border-indigo-200 flex items-center justify-center shrink-0 shadow-2xs">
             <Truck className="w-3.5 h-3.5" />
           </div>
         </div>

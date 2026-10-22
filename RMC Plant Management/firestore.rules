@@ -28,7 +28,7 @@ service cloud.firestore {
     function getUserCompanyId() {
       return request.auth.token.companyId != null
         ? request.auth.token.companyId
-        : (hasUserDoc() && getUserDoc().companyId != null ? getUserDoc().companyId : 'CMP-SM-001');
+        : (hasUserDoc() && getUserDoc().companyId != null ? getUserDoc().companyId : 'sm-concretech');
     }
 
     function isAdmin() {
@@ -104,7 +104,9 @@ service cloud.firestore {
     function isSameCompany(targetCompanyId) {
       return isAuthenticated() && (
         isAdmin() ||
-        targetCompanyId == getUserCompanyId()
+        targetCompanyId == getUserCompanyId() ||
+        ((targetCompanyId == 'CMP-SM-001' || targetCompanyId == 'sm-concretech') &&
+         (getUserCompanyId() == 'CMP-SM-001' || getUserCompanyId() == 'sm-concretech'))
       );
     }
 
@@ -119,9 +121,7 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (
         isAdmin() ||
         (request.auth.uid == userId &&
-         request.resource.data.role != 'Admin' &&
-         request.resource.data.isApproved == false &&
-         request.resource.data.status in ['Pending', 'Pending Approval', 'Pending Registration'])
+         request.resource.data.role != 'Admin')
       );
 
       // Prevent privilege escalation: users updating their own profile CANNOT change role, companyId, isApproved, or status
@@ -175,6 +175,7 @@ service cloud.firestore {
     // =========================================================================
     match /attendance/{attId} {
       allow read: if isAuthenticated() && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
         isOwner(resource.data.employeeId) ||
@@ -186,7 +187,14 @@ service cloud.firestore {
         isOwner(request.resource.data.employeeId) ||
         isOwner(request.resource.data.userId)
       );
-      allow update: if isAuthenticated() && (isManager() || isHR());
+      allow update: if isAuthenticated() && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId) ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
       allow delete: if isAdmin();
     }
 
@@ -341,9 +349,27 @@ service cloud.firestore {
       allow delete: if isSameCompany('CMP-SM-001') && (isAdmin() || isManager());
     }
     match /attendance_CMP-SM-001/{attId} {
-      allow read: if isSameCompany('CMP-SM-001') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
-      allow create: if isSameCompany('CMP-SM-001') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
-      allow update: if isSameCompany('CMP-SM-001') && (isManager() || isHR());
+      allow read: if isSameCompany('CMP-SM-001') && (
+        isOperationalStaff() ||
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isSameCompany('CMP-SM-001') && (
+        isManager() ||
+        isHR() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update: if isSameCompany('CMP-SM-001') && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId) ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
       allow delete: if isAdmin();
     }
     match /shifts_CMP-SM-001/{shiftId} {
@@ -412,9 +438,27 @@ service cloud.firestore {
       allow delete: if isSameCompany('sm-concretech') && (isAdmin() || isManager());
     }
     match /attendance_sm-concretech/{attId} {
-      allow read: if isSameCompany('sm-concretech') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
-      allow create: if isSameCompany('sm-concretech') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
-      allow update: if isSameCompany('sm-concretech') && (isManager() || isHR());
+      allow read: if isSameCompany('sm-concretech') && (
+        isOperationalStaff() ||
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isSameCompany('sm-concretech') && (
+        isManager() ||
+        isHR() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update: if isSameCompany('sm-concretech') && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId) ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
       allow delete: if isAdmin();
     }
     match /shifts_sm-concretech/{shiftId} {
@@ -483,9 +527,27 @@ service cloud.firestore {
       allow delete: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isManager());
     }
     match /attendance_sm-concretech-unit-2/{attId} {
-      allow read: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
-      allow create: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
-      allow update: if isSameCompany('sm-concretech-unit-2') && (isManager() || isHR());
+      allow read: if isSameCompany('sm-concretech-unit-2') && (
+        isOperationalStaff() ||
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isSameCompany('sm-concretech-unit-2') && (
+        isManager() ||
+        isHR() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update: if isSameCompany('sm-concretech-unit-2') && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId) ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
       allow delete: if isAdmin();
     }
     match /shifts_sm-concretech-unit-2/{shiftId} {
@@ -554,9 +616,27 @@ service cloud.firestore {
       allow delete: if isSameCompany('sm-infra-projects') && (isAdmin() || isManager());
     }
     match /attendance_sm-infra-projects/{attId} {
-      allow read: if isSameCompany('sm-infra-projects') && (isManager() || isHR() || isOwner(resource.data.employeeId) || isOwner(resource.data.userId));
-      allow create: if isSameCompany('sm-infra-projects') && (isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId));
-      allow update: if isSameCompany('sm-infra-projects') && (isManager() || isHR());
+      allow read: if isSameCompany('sm-infra-projects') && (
+        isOperationalStaff() ||
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId)
+      );
+      allow create: if isSameCompany('sm-infra-projects') && (
+        isManager() ||
+        isHR() ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
+      allow update: if isSameCompany('sm-infra-projects') && (
+        isManager() ||
+        isHR() ||
+        isOwner(resource.data.employeeId) ||
+        isOwner(resource.data.userId) ||
+        isOwner(request.resource.data.employeeId) ||
+        isOwner(request.resource.data.userId)
+      );
       allow delete: if isAdmin();
     }
     match /shifts_sm-infra-projects/{shiftId} {

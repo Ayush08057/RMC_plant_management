@@ -4,24 +4,36 @@ import { AlertTriangle, Info, CheckCircle2, AlertCircle } from 'lucide-react';
 export default function AlertCard({ title, desc, time, type = 'warning', onAction, actionLabel = 'Review' }) {
   const typeMap = {
     warning: {
-      border: 'border-[#D4E4F7] bg-[#EAF3FF] text-[#123B6D]',
+      cardBorder: 'border-amber-400 hover:border-amber-500',
+      bgGradient: 'bg-gradient-to-b from-amber-50/40 via-white to-white',
+      topBar: 'bg-amber-500',
+      iconBox: 'bg-amber-100/90 border-amber-300 text-amber-700',
       icon: AlertTriangle,
-      iconColor: 'text-[#1D5FA7]',
+      glow: 'hover:shadow-amber-500/15',
     },
     danger: {
-      border: 'border-[#123B6D] bg-[#F5F9FF] text-[#123B6D]',
+      cardBorder: 'border-rose-400 hover:border-rose-500',
+      bgGradient: 'bg-gradient-to-b from-rose-50/40 via-white to-white',
+      topBar: 'bg-rose-500',
+      iconBox: 'bg-rose-100/90 border-rose-300 text-rose-700',
       icon: AlertCircle,
-      iconColor: 'text-[#123B6D]',
+      glow: 'hover:shadow-rose-500/15',
     },
     info: {
-      border: 'border-[#D4E4F7] bg-[#F5F9FF] text-[#123B6D]',
+      cardBorder: 'border-blue-400 hover:border-blue-500',
+      bgGradient: 'bg-gradient-to-b from-blue-50/40 via-white to-white',
+      topBar: 'bg-[#136dec]',
+      iconBox: 'bg-blue-100/90 border-blue-300 text-[#136dec]',
       icon: Info,
-      iconColor: 'text-[#1D5FA7]',
+      glow: 'hover:shadow-blue-500/15',
     },
     success: {
-      border: 'border-[#246BCE] bg-[#EAF3FF] text-[#123B6D]',
+      cardBorder: 'border-emerald-400 hover:border-emerald-500',
+      bgGradient: 'bg-gradient-to-b from-emerald-50/40 via-white to-white',
+      topBar: 'bg-emerald-500',
+      iconBox: 'bg-emerald-100/90 border-emerald-300 text-emerald-700',
       icon: CheckCircle2,
-      iconColor: 'text-[#246BCE]',
+      glow: 'hover:shadow-emerald-500/15',
     },
   };
 
@@ -29,15 +41,21 @@ export default function AlertCard({ title, desc, time, type = 'warning', onActio
   const IconComponent = active.icon;
 
   return (
-    <div className={`p-2 sm:p-2.5 rounded-lg border ${active.border} flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs hover:shadow-xs transition-all w-full max-w-full overflow-hidden min-w-0`}>
+    <div className={`p-2 sm:p-2.5 pt-3 rounded-xl border-2 ${active.cardBorder} ${active.bgGradient} ${active.glow} flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs hover:shadow-sm transition-all w-full max-w-full overflow-hidden min-w-0 relative group`}>
+      {/* Top Accent Lining Highlight */}
+      <div 
+        className={`absolute top-0 left-0 right-0 h-[3px] ${active.topBar} transition-all duration-300 group-hover:h-[4px]`} 
+        aria-hidden="true"
+      />
+
       <div className="flex items-start gap-2 min-w-0 flex-1">
-        <div className="w-5 h-5 rounded bg-white border border-[#D4E4F7] shadow-2xs shrink-0 flex items-center justify-center mt-0.5">
-          <IconComponent className={`w-3 h-3 ${active.iconColor}`} />
+        <div className={`w-5 h-5 rounded-md ${active.iconBox} border shadow-2xs shrink-0 flex items-center justify-center mt-0.5`}>
+          <IconComponent className="w-3 h-3" />
         </div>
         <div className="min-w-0 flex-1">
-          <h4 className="text-[11px] sm:text-xs font-bold text-black break-words">{title}</h4>
-          <p className="text-[10px] sm:text-[10.5px] text-slate-800 mt-0.5 leading-tight break-words">{desc}</p>
-          {time && <span className="text-[8.5px] text-slate-700 font-mono mt-0.5 block font-semibold">{time}</span>}
+          <h4 className="text-[11px] sm:text-xs font-bold text-slate-900 break-words">{title}</h4>
+          <p className="text-[10px] sm:text-[10.5px] text-slate-700 mt-0.5 leading-tight break-words font-medium">{desc}</p>
+          {time && <span className="text-[8.5px] text-slate-500 font-mono mt-0.5 block font-semibold">{time}</span>}
         </div>
       </div>
 
@@ -45,7 +63,7 @@ export default function AlertCard({ title, desc, time, type = 'warning', onActio
         <button
           type="button"
           onClick={onAction}
-          className="self-start sm:self-auto px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] transition-colors shrink-0 cursor-pointer shadow-2xs"
+          className="self-start sm:self-auto px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-colors shrink-0 cursor-pointer shadow-2xs"
         >
           {actionLabel}
         </button>

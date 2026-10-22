@@ -538,7 +538,8 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
         <div className="space-y-4">
           {/* Header Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-blue-50/35 via-white to-white border-2 border-blue-400 hover:border-blue-500 shadow-xs hover:shadow-blue-500/15 transition-all duration-200 relative group overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#136dec] transition-all group-hover:h-[4px]" />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Gross Wages</span>
               <span className="text-lg font-bold text-slate-900 font-mono mt-1 block">
                 ₹ {totalGrossCycle.toLocaleString('en-IN')}
@@ -546,7 +547,8 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
               <span className="text-[10px] text-slate-500">{records.length} employee(s)</span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-amber-50/35 via-white to-white border-2 border-amber-400 hover:border-amber-500 shadow-xs hover:shadow-amber-500/15 transition-all duration-200 relative group overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-500 transition-all group-hover:h-[4px]" />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Advance Deductions</span>
               <span className="text-lg font-bold text-amber-700 font-mono mt-1 block">
                 - ₹ {totalAdvanceCycle.toLocaleString('en-IN')}
@@ -554,7 +556,8 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
               <span className="text-[10px] text-slate-500">Recovered from salary</span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-rose-50/35 via-white to-white border-2 border-rose-400 hover:border-rose-500 shadow-xs hover:shadow-rose-500/15 transition-all duration-200 relative group overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-rose-500 transition-all group-hover:h-[4px]" />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Loan EMI Deductions</span>
               <span className="text-lg font-bold text-rose-600 font-mono mt-1 block">
                 - ₹ {totalLoanEmiCycle.toLocaleString('en-IN')}
@@ -562,7 +565,8 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
               <span className="text-[10px] text-slate-500">Company loan repayments</span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-emerald-50/35 via-white to-white border-2 border-emerald-400 hover:border-emerald-500 shadow-xs hover:shadow-emerald-500/15 transition-all duration-200 relative group overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-emerald-500 transition-all group-hover:h-[4px]" />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Net Salary Payable</span>
               <span className="text-lg font-bold text-emerald-700 font-mono mt-1 block">
                 ₹ {totalNetCycle.toLocaleString('en-IN')}

@@ -315,10 +315,11 @@ export default function LoanManagementView({ employeeFilter = null }) {
     <div className="space-y-4">
       {/* Metrics Banner */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+        <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-indigo-50/35 via-white to-white border-2 border-indigo-400 hover:border-indigo-500 shadow-xs hover:shadow-indigo-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-indigo-500 transition-all group-hover:h-[4px]" />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Loan Book</span>
-            <div className="w-6 h-6 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Total Loan Book</span>
+            <div className="w-6 h-6 rounded-lg bg-indigo-100/90 border border-indigo-300 flex items-center justify-center text-indigo-700 shadow-2xs">
               <IndianRupee className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -330,25 +331,27 @@ export default function LoanManagementView({ employeeFilter = null }) {
           <span className="text-[10px] text-slate-500">{loans.length} total loans</span>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+        <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-emerald-50/35 via-white to-white border-2 border-emerald-400 hover:border-emerald-500 shadow-xs hover:shadow-emerald-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-emerald-500 transition-all group-hover:h-[4px]" />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Repaid</span>
-            <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Total Repaid</span>
+            <div className="w-6 h-6 rounded-lg bg-emerald-100/90 border border-emerald-300 flex items-center justify-center text-emerald-700 shadow-2xs">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="my-1">
-            <span className="text-lg font-bold text-blue-700 font-mono tracking-tight block">
+            <span className="text-lg font-bold text-emerald-700 font-mono tracking-tight block">
               ₹ {totalRepaid.toLocaleString('en-IN')}
             </span>
           </div>
           <span className="text-[10px] text-slate-500">EMI deductions collected</span>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+        <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-amber-50/35 via-white to-white border-2 border-amber-400 hover:border-amber-500 shadow-xs hover:shadow-amber-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-500 transition-all group-hover:h-[4px]" />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Remaining Balance</span>
-            <div className="w-6 h-6 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Remaining Balance</span>
+            <div className="w-6 h-6 rounded-lg bg-amber-100/90 border border-amber-300 flex items-center justify-center text-amber-700 shadow-2xs">
               <TrendingDown className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -360,15 +363,16 @@ export default function LoanManagementView({ employeeFilter = null }) {
           <span className="text-[10px] text-slate-500">Outstanding loan balance</span>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+        <div className="p-3.5 pt-4 rounded-xl bg-gradient-to-b from-purple-50/35 via-white to-white border-2 border-purple-400 hover:border-purple-500 shadow-xs hover:shadow-purple-500/15 transition-all duration-200 flex flex-col justify-between relative group overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-purple-500 transition-all group-hover:h-[4px]" />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Monthly Run Rate</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Monthly Run Rate</span>
+            <div className="w-6 h-6 rounded-lg bg-purple-100/90 border border-purple-300 flex items-center justify-center text-purple-700 shadow-2xs">
               <CreditCard className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="my-1">
-            <span className="text-lg font-bold text-emerald-700 font-mono tracking-tight block">
+            <span className="text-lg font-bold text-purple-800 font-mono tracking-tight block">
               ₹ {monthlyEmiRunRate.toLocaleString('en-IN')}
             </span>
           </div>

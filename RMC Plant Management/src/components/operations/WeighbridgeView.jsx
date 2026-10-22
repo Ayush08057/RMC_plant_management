@@ -452,19 +452,23 @@ export default function WeighbridgeView() {
 
         {/* Quick KPI Counters */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-4 text-left">
-          <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80">
-            <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Today's Slips</span>
+          <div className="bg-gradient-to-b from-indigo-50/35 via-white to-white px-3 py-2 pt-2.5 rounded-xl border-2 border-indigo-400 hover:border-indigo-500 shadow-xs relative overflow-hidden group transition-all">
+            <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-indigo-500 transition-all group-hover:h-[3.5px]" />
+            <span className="text-[10px] text-indigo-700 uppercase font-mono font-bold block">Today's Slips</span>
             <span className="text-sm sm:text-base font-black text-slate-900 font-mono">{metrics.totalSlips}</span>
           </div>
-          <div className="bg-amber-50/70 px-3 py-2 rounded-xl border border-amber-200/80">
+          <div className="bg-gradient-to-b from-amber-50/35 via-white to-white px-3 py-2 pt-2.5 rounded-xl border-2 border-amber-400 hover:border-amber-500 shadow-xs relative overflow-hidden group transition-all">
+            <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-amber-500 transition-all group-hover:h-[3.5px]" />
             <span className="text-[10px] text-amber-700 uppercase font-mono font-bold block">Inward Material</span>
             <span className="text-sm sm:text-base font-black text-amber-900 font-mono">{metrics.inwardTons} MT</span>
           </div>
-          <div className="bg-blue-50/70 px-3 py-2 rounded-xl border border-blue-200/80">
+          <div className="bg-gradient-to-b from-blue-50/35 via-white to-white px-3 py-2 pt-2.5 rounded-xl border-2 border-blue-400 hover:border-blue-500 shadow-xs relative overflow-hidden group transition-all">
+            <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-[#136dec] transition-all group-hover:h-[3.5px]" />
             <span className="text-[10px] text-blue-700 uppercase font-mono font-bold block">Outward RMC</span>
             <span className="text-sm sm:text-base font-black text-blue-900 font-mono">{metrics.outwardTons} MT</span>
           </div>
-          <div className="bg-rose-50/70 px-3 py-2 rounded-xl border border-rose-200/80">
+          <div className="bg-gradient-to-b from-rose-50/35 via-white to-white px-3 py-2 pt-2.5 rounded-xl border-2 border-rose-400 hover:border-rose-500 shadow-xs relative overflow-hidden group transition-all">
+            <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-rose-500 transition-all group-hover:h-[3.5px]" />
             <span className="text-[10px] text-rose-700 uppercase font-mono font-bold block">Pending Tare</span>
             <span className="text-sm sm:text-base font-black text-rose-900 font-mono">{metrics.pendingCount}</span>
           </div>

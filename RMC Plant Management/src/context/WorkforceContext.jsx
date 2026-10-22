@@ -40,6 +40,12 @@ const STORAGE_COMPANIES_KEY = 'rmc_companies_v1';
 const STORAGE_ACTIVE_COMPANY_KEY = 'rmc_active_company_v1';
 const DEFAULT_COMPANY_ID = DEFAULT_COMPANIES[0].id;
 
+export const normalizeCompanyId = (id) => {
+  if (!id) return DEFAULT_COMPANY_ID;
+  if (id === 'CMP-SM-001') return 'sm-concretech';
+  return id;
+};
+
 function getInitialCompanies() {
   try {
     const stored = localStorage.getItem(STORAGE_COMPANIES_KEY);
@@ -142,11 +148,25 @@ export const WorkforceProvider = ({ children }) => {
   const [activeCompanyId, setActiveCompanyId] = useState(() => {
     try {
       const storedId = localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY);
-      return getInitialCompanies().some((company) => company.id === storedId) ? storedId : DEFAULT_COMPANY_ID;
+      const normalized = normalizeCompanyId(storedId);
+      return getInitialCompanies().some((company) => company.id === normalized) ? normalized : DEFAULT_COMPANY_ID;
     } catch {
       return DEFAULT_COMPANY_ID;
     }
   });
+
+  // Ensure active company aligns with authenticated user's assigned company partition
+  useEffect(() => {
+    if (user?.companyId) {
+      const normalized = normalizeCompanyId(user.companyId);
+      if (normalized !== activeCompanyId && companies.some((c) => c.id === normalized)) {
+        setActiveCompanyId(normalized);
+        try {
+          localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, normalized);
+        } catch {}
+      }
+    }
+  }, [user?.companyId, companies, activeCompanyId]);
 
   const [data, setData] = useState(() => loadCompanyData(activeCompanyId));
   const activeCompany = companies.find((company) => company.id === activeCompanyId) || companies[0];

@@ -26,23 +26,74 @@ export default function ChartCard({
   const maxItem = data.reduce((prev, current) => ((prev[dataKey] || 0) > (current[dataKey] || 0)) ? prev : current, data[0] || {});
 
   const themeColors = {
-    amber: { bar: 'from-[#123B6D] via-[#1D5FA7] to-[#246BCE]', hover: 'bg-[#246BCE]', stroke: '#1D5FA7' },
-    purple: { bar: 'from-[#123B6D] via-[#1D5FA7] to-[#246BCE]', hover: 'bg-[#246BCE]', stroke: '#1D5FA7' },
-    emerald: { bar: 'from-[#123B6D] via-[#1D5FA7] to-[#246BCE]', hover: 'bg-[#246BCE]', stroke: '#1D5FA7' },
-    blue: { bar: 'from-[#123B6D] via-[#1D5FA7] to-[#246BCE]', hover: 'bg-[#246BCE]', stroke: '#1D5FA7' },
-    rose: { bar: 'from-[#123B6D] via-[#1D5FA7] to-[#246BCE]', hover: 'bg-[#246BCE]', stroke: '#1D5FA7' },
+    amber: {
+      cardBorder: 'border-amber-400 hover:border-amber-500',
+      bgGradient: 'bg-gradient-to-b from-amber-50/30 via-white to-white',
+      topBar: 'bg-amber-500',
+      iconBox: 'bg-amber-100/90 border-amber-300 text-amber-700',
+      bar: 'from-amber-600 via-amber-500 to-amber-400',
+      hover: 'bg-amber-500',
+      stroke: '#f59e0b',
+      glow: 'hover:shadow-amber-500/15 hover:shadow-md'
+    },
+    purple: {
+      cardBorder: 'border-purple-400 hover:border-purple-500',
+      bgGradient: 'bg-gradient-to-b from-purple-50/30 via-white to-white',
+      topBar: 'bg-purple-500',
+      iconBox: 'bg-purple-100/90 border-purple-300 text-purple-700',
+      bar: 'from-purple-600 via-purple-500 to-purple-400',
+      hover: 'bg-purple-500',
+      stroke: '#a855f7',
+      glow: 'hover:shadow-purple-500/15 hover:shadow-md'
+    },
+    emerald: {
+      cardBorder: 'border-emerald-400 hover:border-emerald-500',
+      bgGradient: 'bg-gradient-to-b from-emerald-50/30 via-white to-white',
+      topBar: 'bg-emerald-500',
+      iconBox: 'bg-emerald-100/90 border-emerald-300 text-emerald-700',
+      bar: 'from-emerald-600 via-emerald-500 to-emerald-400',
+      hover: 'bg-emerald-500',
+      stroke: '#10b981',
+      glow: 'hover:shadow-emerald-500/15 hover:shadow-md'
+    },
+    blue: {
+      cardBorder: 'border-blue-400 hover:border-blue-500',
+      bgGradient: 'bg-gradient-to-b from-blue-50/30 via-white to-white',
+      topBar: 'bg-[#136dec]',
+      iconBox: 'bg-blue-100/90 border-blue-300 text-[#136dec]',
+      bar: 'from-[#123B6D] via-[#1D5FA7] to-[#246BCE]',
+      hover: 'bg-[#246BCE]',
+      stroke: '#1D5FA7',
+      glow: 'hover:shadow-blue-500/15 hover:shadow-md'
+    },
+    rose: {
+      cardBorder: 'border-rose-400 hover:border-rose-500',
+      bgGradient: 'bg-gradient-to-b from-rose-50/30 via-white to-white',
+      topBar: 'bg-rose-500',
+      iconBox: 'bg-rose-100/90 border-rose-300 text-rose-700',
+      bar: 'from-rose-600 via-rose-500 to-rose-400',
+      hover: 'bg-rose-500',
+      stroke: '#f43f5e',
+      glow: 'hover:shadow-rose-500/15 hover:shadow-md'
+    },
   };
 
   const activeTheme = themeColors[color] || themeColors.blue;
 
   return (
     <>
-      <div className="p-2.5 sm:p-3 rounded-lg bg-white border border-[#D4E4F7] shadow-2xs flex flex-col justify-between w-full max-w-full overflow-hidden min-w-0">
+      <div className={`p-2.5 sm:p-3 pt-3.5 rounded-xl ${activeTheme.bgGradient} border-2 ${activeTheme.cardBorder} ${activeTheme.glow} shadow-xs flex flex-col justify-between w-full max-w-full overflow-hidden min-w-0 relative group transition-all duration-200`}>
+        {/* Top Accent Lining Highlight */}
+        <div 
+          className={`absolute top-0 left-0 right-0 h-[3px] ${activeTheme.topBar} transition-all duration-300 group-hover:h-[4px]`} 
+          aria-hidden="true"
+        />
+
         {/* Chart Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 sm:mb-2.5">
           <div className="flex items-center gap-2 min-w-0">
             {Icon && (
-              <div className="w-6 h-6 rounded-md bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0">
+              <div className={`w-6 h-6 rounded-md ${activeTheme.iconBox} border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-2xs`}>
                 <Icon className="w-3 h-3" />
               </div>
             )}
