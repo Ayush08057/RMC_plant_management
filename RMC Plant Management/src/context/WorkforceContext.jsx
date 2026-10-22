@@ -1281,7 +1281,7 @@ export const WorkforceProvider = ({ children }) => {
   /* -------------------------------------------------------------
    * 3. ATTENDANCE MANAGEMENT
    * ------------------------------------------------------------- */
-  const checkIn = (employeeId, options = {}) => {
+  const checkIn = async (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
     const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
@@ -1384,6 +1384,8 @@ export const WorkforceProvider = ({ children }) => {
       id: existingIndex >= 0 ? data.attendance[existingIndex].id : `ATT-${today.replace(/-/g, '')}-${emp.employeeId || emp.id}`,
       date: today,
       employeeId: emp.employeeId || emp.id,
+      userId: user?.uid || user?.id || null,
+      companyId: activeCompanyId,
       employeeName: emp.name,
       role: emp.role,
       plant: emp.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
@@ -1398,9 +1400,12 @@ export const WorkforceProvider = ({ children }) => {
       selfieUrl: options.selfieUrl || (existingIndex >= 0 ? data.attendance[existingIndex].selfieUrl : null),
       gpsLocation: options.gpsLocation || null,
       geofenceStatus: options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available'),
+      createdAt: existingIndex >= 0 ? (data.attendance[existingIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch(() => {});
+    // Authoritative Cloud Firestore persistence before state confirmation
+    await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
 
     setData((prev) => {
       let updatedAttendance;
@@ -1464,7 +1469,7 @@ export const WorkforceProvider = ({ children }) => {
     return false;
   };
 
-  const checkOut = (employeeId, options = {}) => {
+  const checkOut = async (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
     const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
@@ -1518,6 +1523,8 @@ export const WorkforceProvider = ({ children }) => {
 
     const updatedRecord = {
       ...currentRecord,
+      userId: currentRecord.userId || user?.uid || user?.id || null,
+      companyId: currentRecord.companyId || activeCompanyId,
       punchOut: nowTime,
       workingHours,
       overtimeHours,
@@ -1525,9 +1532,11 @@ export const WorkforceProvider = ({ children }) => {
       lastKnownLocation: options.exitGpsLocation || options.gpsLocation || currentRecord.gpsLocation || null,
       exitGeofenceStatus: options.geofenceStatus || (options.exitGpsLocation || options.gpsLocation ? 'Shift Concluded (GPS Verified)' : 'Shift Concluded'),
       remarks: options.remarks ? `${currentRecord.remarks} | Out: ${options.remarks}` : currentRecord.remarks,
+      updatedAt: new Date().toISOString(),
     };
 
-    saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord).catch(() => {});
+    // Authoritative Cloud Firestore persistence before state confirmation
+    await saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord);
 
     setData((prev) => {
       const copy = [...prev.attendance];
@@ -1546,7 +1555,7 @@ export const WorkforceProvider = ({ children }) => {
     return updatedRecord;
   };
 
-  const addAttendanceRecord = (attData) => {
+  const addAttendanceRecord = async (attData) => {
     const emp = data.employees.find(
       (e) => e.id === attData.employeeId || e.employeeId === attData.employeeId
     ) || OFFICIAL_ROLE_ACCOUNTS.find(
@@ -1571,6 +1580,8 @@ export const WorkforceProvider = ({ children }) => {
       id: recordId,
       date: recordDate,
       employeeId: attData.employeeId,
+      userId: attData.userId || user?.uid || user?.id || null,
+      companyId: activeCompanyId,
       employeeName: emp?.name || attData.employeeName || attData.employeeId,
       role: emp?.role || attData.role || 'Staff',
       plant: emp?.plant || attData.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
@@ -1583,9 +1594,12 @@ export const WorkforceProvider = ({ children }) => {
       lateMinutes: attData.lateMinutes || 0,
       remarks: attData.remarks || 'Admin Manual Entry',
       geofenceStatus: attData.geofenceStatus || 'Verified Inside Plant',
-      gpsLocation: attData.gpsLocation || { lat: 18.5204, lng: 73.8567, address: 'Plant Dispatch Hub' }
+      gpsLocation: attData.gpsLocation || { lat: 18.5204, lng: 73.8567, address: 'Plant Dispatch Hub' },
+      updatedAt: new Date().toISOString(),
     };
-    saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch(() => {});
+
+    await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
+
     setData((prev) => {
       let updated;
       if (existingIndex >= 0) {
@@ -1600,11 +1614,11 @@ export const WorkforceProvider = ({ children }) => {
     return newRecord;
   };
 
-  const updateAttendanceRecord = (id, fields) => {
-    const sanitizedFields = { ...fields };
+  const updateAttendanceRecord = async (id, fields) => {
+    const sanitizedFields = { ...fields, updatedAt: new Date().toISOString() };
     if (sanitizedFields.punchIn) sanitizedFields.punchIn = formatToIndian12Hr(sanitizedFields.punchIn);
     if (sanitizedFields.punchOut) sanitizedFields.punchOut = formatToIndian12Hr(sanitizedFields.punchOut);
-    updateDocument(COLLECTIONS.ATTENDANCE, id, sanitizedFields).catch(() => {});
+    await updateDocument(COLLECTIONS.ATTENDANCE, id, sanitizedFields);
 
     setData((prev) => ({
       ...prev,
@@ -1667,34 +1681,42 @@ export const WorkforceProvider = ({ children }) => {
   /* -------------------------------------------------------------
    * 4. DAILY WORK
    * ------------------------------------------------------------- */
-  const submitDailyWork = (workData) => {
-    const emp = data.employees.find((e) => e.id === workData.employeeId);
+  const submitDailyWork = async (workData) => {
+    const emp = data.employees.find(
+      (e) => e.id === workData.employeeId || 
+             e.employeeId === workData.employeeId || 
+             e.id?.toLowerCase() === workData.employeeId?.toLowerCase()
+    );
     const newWork = {
       id: `WRK-${Date.now()}`,
       employeeId: workData.employeeId,
-      employeeName: emp?.name || workData.employeeName,
+      userId: user?.uid || user?.id || null,
+      companyId: activeCompanyId,
+      employeeName: emp?.name || workData.employeeName || workData.employeeId,
       date: workData.date || new Date().toISOString().split('T')[0],
       workDescription: workData.workDescription,
-      department: emp?.department || workData.department,
+      department: emp?.department || workData.department || 'Operations',
       workType: workData.workType || 'Operational Duty',
       hoursWorked: Number(workData.hoursWorked) || 8,
       remarks: workData.remarks || '',
       status: workData.status || 'Submitted',
       supervisorRemarks: null,
       reviewedBy: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    saveDocumentWithId(COLLECTIONS.DAILY_WORK, newWork.id, newWork).catch(() => {});
+    await saveDocumentWithId(COLLECTIONS.DAILY_WORK, newWork.id, newWork);
 
     setData((prev) => ({
       ...prev,
       dailyWork: [newWork, ...prev.dailyWork],
     }));
 
-    addAuditLog(`Submitted Daily Work Log`, 'Daily Work', `${emp?.name} (${newWork.workType})`);
+    addAuditLog(`Submitted Daily Work Log`, 'Daily Work', `${emp?.name || newWork.employeeName} (${newWork.workType})`);
     addNotification({
       title: 'Daily Work Submitted',
-      desc: `${emp?.name} submitted daily log: "${newWork.workDescription.substring(0, 40)}..."`,
+      desc: `${emp?.name || newWork.employeeName} submitted daily log: "${newWork.workDescription.substring(0, 40)}..."`,
       type: 'info',
       category: 'work',
     });

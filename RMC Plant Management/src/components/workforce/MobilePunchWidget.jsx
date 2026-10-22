@@ -185,10 +185,13 @@ export default function MobilePunchWidget({
 
   const todayStr = new Date().toISOString().split('T')[0];
   const userTodayRecord = (attendance || []).find(
-    (a) => (a.employeeId === activeEmployee.id || 
-            a.employeeId === activeEmployee.employeeId || 
-            a.employeeId === selectedEmpId) && 
-           a.date === todayStr
+    (a) => a.date === todayStr &&
+      ((a.employeeId && (
+        a.employeeId.toUpperCase() === (activeEmployee.employeeId || '').toUpperCase() ||
+        a.employeeId.toUpperCase() === (activeEmployee.id || '').toUpperCase() ||
+        a.employeeId.toUpperCase() === (selectedEmpId || '').toUpperCase()
+      )) ||
+      (a.userId && user?.uid && a.userId === user.uid))
   );
 
   const hasPunchedIn = Boolean(userTodayRecord?.punchIn);
@@ -299,7 +302,7 @@ export default function MobilePunchWidget({
   }, []);
 
   // PART 1: Handle Punch In
-  const handlePunchIn = () => {
+  const handlePunchIn = async () => {
     setError(null);
     setSuccessMsg(null);
 
@@ -333,7 +336,7 @@ export default function MobilePunchWidget({
         ? `Inside Plant Fence (${distMeters}m)` 
         : `Outside Plant Boundary (${distMeters}m from plant)`;
 
-      const rec = checkIn(targetId, {
+      const rec = await checkIn(targetId, {
         selfieUrl: selfie,
         gpsLocation: {
           lat: gpsCoords.lat,
@@ -355,7 +358,7 @@ export default function MobilePunchWidget({
   };
 
   // PART 2: Handle Report Submission & Punch Out Together
-  const handlePunchOutWithReport = (e) => {
+  const handlePunchOutWithReport = async (e) => {
     if (e) e.preventDefault();
     setError(null);
     setSuccessMsg(null);
@@ -376,7 +379,7 @@ export default function MobilePunchWidget({
 
       // 1. Submit Daily Work Report
       if (submitDailyWork) {
-        submitDailyWork({
+        await submitDailyWork({
           employeeId: targetId,
           date: todayStr,
           workType: isDriver ? 'Transit Mixer Concrete Delivery' : 'Standard Plant Duty',
@@ -401,7 +404,7 @@ export default function MobilePunchWidget({
         address: `Exit GPS Fix (±${gpsCoords.accuracy}m)`,
       } : null;
 
-      const rec = checkOut(targetId, {
+      const rec = await checkOut(targetId, {
         exitGpsLocation: exitGps,
         remarks: isDriver 
           ? `Mixer ${driverReport.vehicleNo} | ${driverReport.tripsCount} Trips (${driverReport.deliveredM3} m³)` 

@@ -253,10 +253,10 @@ export default function AttendanceManagementView({
 
   // 1-Click Quick Punch In for staff members (with verified live selfie & real device GPS)
   const handleQuickPunchIn = (emp) => {
-    const executePunchIn = (lat, lng, isReal = false) => {
+    const executePunchIn = async (lat, lng, isReal = false) => {
       try {
         const photo = emp.selfieUrl || emp.avatarUrl || null;
-        const rec = checkIn(emp.employeeId || emp.id, {
+        const rec = await checkIn(emp.employeeId || emp.id, {
           selfieUrl: photo,
           remarks: `Facial clock-in verified for ${emp.name}`,
           geofenceStatus: isReal ? `Live Device Location (${lat}, ${lng})` : 'Inside Plant Geofence (18m)',
@@ -293,7 +293,7 @@ export default function AttendanceManagementView({
   };
 
   // 1-Click Quick Punch Out for staff members (MANDATORY DEPARTMENT DAILY REPORT ENFORCED)
-  const handleQuickPunchOut = (emp) => {
+  const handleQuickPunchOut = async (emp) => {
     const targetId = emp.employeeId || emp.id;
     const existingReport = (dailyWork || []).find(
       (w) => (w.employeeId === targetId || w.employeeId === emp.id || w.employeeId === emp.employeeId) &&
@@ -310,7 +310,7 @@ export default function AttendanceManagementView({
     }
 
     try {
-      const rec = checkOut(targetId, {
+      const rec = await checkOut(targetId, {
         remarks: `Shift completed for ${emp.name}. Daily Report filed.`,
       });
       setToastMessage(`✓ Clocked OUT: ${emp.name} at ${formatToIndian12Hr(rec.punchOut)} (Duty: ${rec.workingHours}h)`);
