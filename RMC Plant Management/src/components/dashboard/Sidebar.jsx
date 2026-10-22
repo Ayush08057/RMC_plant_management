@@ -378,13 +378,13 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                 to={ROLE_ROUTES[user?.role] || '/'} 
                 onMouseEnter={(e) => handleMouseEnter({ type: 'logo' }, e)}
                 onMouseLeave={handleMouseLeave}
-                className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/10 hover:scale-105 transition-transform"
+                className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/20 hover:scale-105 transition-transform"
                 title={activeCompany?.name || "SM CONCRETECH"}
               >
                 <img 
                   src={activeCompany?.logo || defaultLogo} 
                   alt={activeCompany?.name || "SM ConcreTech"} 
-                  className="w-full h-full object-contain" 
+                  className="w-full h-full object-cover scale-[1.04]" 
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = defaultLogo;
@@ -515,11 +515,11 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             {/* Top: Logo & System Identity */}
             <div className="p-3.5 border-b border-[#153458]/70 flex items-center justify-between gap-2 bg-[#0c2340] shrink-0">
               <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 min-w-0 flex-1 group">
-                <div className="w-12 h-12 rounded-2xl bg-white p-1 flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/10 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/20 group-hover:scale-105 transition-transform">
                   <img 
                     src={activeCompany?.logo || defaultLogo} 
                     alt={activeCompany?.name || "SM ConcreTech"} 
-                    className="w-full h-full object-contain" 
+                    className="w-full h-full object-cover scale-[1.04]" 
                     onError={(e) => {
                       e.currentTarget.onerror = null;
                       e.currentTarget.src = defaultLogo;
