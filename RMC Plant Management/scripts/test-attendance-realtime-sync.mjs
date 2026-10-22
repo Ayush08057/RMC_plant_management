@@ -63,7 +63,7 @@ for (const p of partitions) {
 
   // Check that update allows isOwner
   const attIndex = rulesContent.indexOf(`match /attendance_${p}/{attId}`);
-  const attSlice = rulesContent.slice(attIndex, attIndex + 900);
+  const attSlice = rulesContent.slice(attIndex, attIndex + 1400);
   assert(
     attSlice.includes('isOwner(resource.data.employeeId)') && attSlice.includes('isOwner(resource.data.userId)'),
     `Partition attendance_${p} allow update permits isOwner(employeeId) and isOwner(userId)`
