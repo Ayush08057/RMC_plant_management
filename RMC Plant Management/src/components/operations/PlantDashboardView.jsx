@@ -54,33 +54,57 @@ export default function PlantDashboardView({ onNavigateTab }) {
     ];
   });
 
-  const todayProductionM3 = batches.reduce((acc, b) => acc + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0);
-  const monthProductionM3 = todayProductionM3;
-  const activeTripsCount = trips.filter(t => t.status === 'Active' || t.status === 'En Route' || t.status === 'Pouring').length;
-  const idleMixersCount = trips.filter(t => t.status === 'Available' || t.status === 'In Yard').length;
-  const totalMixers = trips.length;
-  const totalBatchesToday = batches.length;
+  // Safe normalization layer supporting both Keyed Object ({ cement: {...} }) and Array formats
+  const normalizedSilo = React.useMemo(() => {
+    const defaultLevels = {
+      cement: { current: 65, capacity: 100, name: 'Cement Silo 1 (OPC 53)' },
+      flyash: { current: 42, capacity: 80, name: 'Fly Ash Silo 2 (Dirk Pozzocrete)' },
+      agg20: { current: 140, capacity: 200, name: '20mm Aggregates (Bin A)' },
+      sand: { current: 185, capacity: 250, name: 'Crush Sand (Bin C)' }
+    };
 
-  const hourlyBatches = [];
+    if (!siloInventory || typeof siloInventory !== 'object') {
+      return defaultLevels;
+    }
 
-  const fleetStatus = trips.map(t => ({
-    id: t.tripId || t.id,
-    reg: t.vehicleNo || t.vehicleReg || '--',
-    driver: t.driverName || t.driver || '--',
-    status: t.status || 'Active',
-    grade: t.concreteGrade || t.grade || '--',
-    dest: t.destinationSite || t.site || t.customerName || '--'
-  }));
+    if (Array.isArray(siloInventory)) {
+      const findItem = (pattern) => siloInventory.find(s => 
+        (s.id || '').toLowerCase().includes(pattern) || 
+        (s.name || '').toLowerCase().includes(pattern)
+      );
+      const c = findItem('cement');
+      const f = findItem('fly ash') || findItem('flyash');
+      const a = findItem('agg') || findItem('20mm');
+      const s = findItem('sand');
+      return {
+        cement: { current: Number(c?.current ?? c?.stockTons ?? 65), capacity: Number(c?.capacity ?? c?.capacityTons ?? 100) },
+        flyash: { current: Number(f?.current ?? f?.stockTons ?? 42), capacity: Number(f?.capacity ?? f?.capacityTons ?? 80) },
+        agg20: { current: Number(a?.current ?? a?.stockTons ?? 140), capacity: Number(a?.capacity ?? a?.capacityTons ?? 200) },
+        sand: { current: Number(s?.current ?? s?.stockTons ?? 185), capacity: Number(s?.capacity ?? s?.capacityTons ?? 250) }
+      };
+    }
 
-  const cementSilo = siloInventory.find(s => s.id === 'silo-1' || (s.name || '').toLowerCase().includes('cement')) || { current: 65, capacity: 100 };
-  const flyAshSilo = siloInventory.find(s => s.id === 'silo-2' || (s.name || '').toLowerCase().includes('fly ash')) || { current: 42, capacity: 80 };
-  const aggBin = siloInventory.find(s => s.id === 'bin-1' || (s.name || '').toLowerCase().includes('aggregate') || (s.name || '').includes('20mm')) || { current: 140, capacity: 200 };
-  const sandBin = siloInventory.find(s => s.id === 'bin-2' || (s.name || '').toLowerCase().includes('sand')) || { current: 185, capacity: 250 };
+    // Keyed Object format ({ cement: { stockTons: ... }, ... })
+    const getLevel = (key, defaultCurr, defaultCap) => {
+      const item = siloInventory[key];
+      if (!item) return { current: defaultCurr, capacity: defaultCap };
+      const cur = Number(item.stockTons ?? item.current ?? defaultCurr);
+      const cap = Number(item.capacityTons ?? item.capacity ?? defaultCap);
+      return { current: isNaN(cur) ? defaultCurr : cur, capacity: isNaN(cap) ? defaultCap : cap };
+    };
 
-  const cementTons = cementSilo.current;
-  const flyAshTons = flyAshSilo.current;
-  const aggTons = aggBin.current;
-  const sandTons = sandBin.current;
+    return {
+      cement: getLevel('cement', 65, 100),
+      flyash: getLevel('flyash', 42, 80),
+      agg20: getLevel('agg20', 140, 200),
+      sand: getLevel('sand', 185, 250)
+    };
+  }, [siloInventory]);
+
+  const cementTons = normalizedSilo.cement.current;
+  const flyAshTons = normalizedSilo.flyash.current;
+  const aggTons = normalizedSilo.agg20.current;
+  const sandTons = normalizedSilo.sand.current;
 
   return (
     <div className="w-full space-y-2.5 sm:space-y-3 text-xs text-slate-800 pb-8">

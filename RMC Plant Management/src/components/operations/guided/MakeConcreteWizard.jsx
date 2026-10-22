@@ -33,11 +33,33 @@ export default function MakeConcreteWizard({ isOpen, onClose, onComplete }) {
   const [showHelp, setShowHelp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  // Dynamic Mix Designs from persistent approved store with IS:10262 fallback
+  const availableMixes = React.useMemo(() => {
+    try {
+      const saved = localStorage.getItem('rmc_mix_designs_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const active = parsed.filter(d => d.status !== 'Retired' && d.status !== 'Inactive' && d.approvalStatus !== 'Rejected');
+          if (active.length > 0) return active;
+        }
+      }
+    } catch {}
+    return MIX_DESIGNS;
+  }, [isOpen]);
+
   // State
-  const [selectedMix, setSelectedMix] = useState(MIX_DESIGNS[2]); // Default M25
+  const [selectedMix, setSelectedMix] = useState(() => availableMixes.find(m => m.grade === 'M25') || availableMixes[0]);
   const [volumeM3, setVolumeM3] = useState(6.0);
   const [operatorName, setOperatorName] = useState('Rajesh Mane');
   const [validationError, setValidationError] = useState('');
+
+  // Sync selectedMix if available mixes change
+  useEffect(() => {
+    if (availableMixes.length > 0 && (!selectedMix || !availableMixes.some(m => m.grade === selectedMix.grade))) {
+      setSelectedMix(availableMixes.find(m => m.grade === 'M25') || availableMixes[0]);
+    }
+  }, [availableMixes]);
 
   const handleNext = () => {
     setValidationError('');
@@ -209,7 +231,7 @@ export default function MakeConcreteWizard({ isOpen, onClose, onComplete }) {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                  {MIX_DESIGNS.map((mix) => {
+                  {availableMixes.map((mix) => {
                     const isSelected = selectedMix.grade === mix.grade;
                     return (
                       <button

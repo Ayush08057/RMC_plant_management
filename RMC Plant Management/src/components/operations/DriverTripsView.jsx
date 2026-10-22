@@ -14,13 +14,16 @@ import {
   Navigation,
   Calendar,
   RefreshCw,
-  Gauge
+  Gauge,
+  Camera,
+  X
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import RecordVehicleReturnWizard from './guided/RecordVehicleReturnWizard';
 import { useLanguage } from '../../context/LanguageContext';
+import { uploadTripPhoto, validateTripPhotoFile } from '../../services/storageService';
 
 const STORAGE_KEY = 'rmc_driver_trips_v2';
 
@@ -59,6 +62,7 @@ export default function DriverTripsView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedPhotoTrip, setSelectedPhotoTrip] = useState(null);
 
   // New Trip form state
   const [newTrip, setNewTrip] = useState({
@@ -128,8 +132,10 @@ export default function DriverTripsView() {
       }
       if (t.status === 'Returning') {
         const actualTurnaround = calculateTurnaroundMinutes(t.departureTime, nowStr);
-        const finalOdo = t.finalOdometer || (Number(t.startOdometer) ? Number(t.startOdometer) + (Number(t.distanceKm) || 15) : null);
-        const diffKm = t.startOdometer && finalOdo ? Math.max(0, Number(finalOdo) - Number(t.startOdometer)) : (t.distanceKm || 15);
+        const finalOdo = t.finalOdometer;
+        const diffKm = (t.startOdometer && finalOdo && Number(finalOdo) >= Number(t.startOdometer))
+          ? Number((Number(finalOdo) - Number(t.startOdometer)).toFixed(1))
+          : (t.distanceKm || null);
         return { 
           ...t, 
           status: 'Completed', 
@@ -151,6 +157,12 @@ export default function DriverTripsView() {
       return;
     }
 
+    const sOdo = Number(newTrip.startOdometer);
+    if (!sOdo || sOdo <= 0) {
+      alert('Please enter a valid starting odometer reading from the vehicle dashboard.');
+      return;
+    }
+
     // Prevent duplicate active trips for the same vehicle
     const vehicleTrimmed = (newTrip.vehicleNo || '').trim().toUpperCase();
     if (vehicleTrimmed) {
@@ -165,11 +177,11 @@ export default function DriverTripsView() {
     }
 
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const sOdo = Number(newTrip.startOdometer) || 12450;
     const createdTrip = {
       id: `TRP-${Math.floor(1000 + Math.random() * 9000)}`,
       ...newTrip,
       vehicleNo: vehicleTrimmed,
+      startOdometer: sOdo,
       startOdometer: sOdo,
       finalOdometer: null,
       departureTime: nowStr,
@@ -429,6 +441,17 @@ export default function DriverTripsView() {
                     <span>{trip.status === 'Completed' ? trip.plantReturnTime : (trip.pourStartTime || trip.departureTime || '--')}</span>
                   </div>
                   {getStatusBadge(trip.status)}
+                  {(trip.startOdoPhoto || trip.siteArrivalPhoto || trip.siteDeparturePhoto || trip.finalOdoPhoto) && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhotoTrip(trip)}
+                      className="p-1 rounded text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                      title="View Trip Photographs"
+                    >
+                      <Camera size={12} />
+                      <span className="hidden sm:inline">Photos</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* 5. Action / Turnaround */}
@@ -612,9 +635,32 @@ export default function DriverTripsView() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = () => setNewTrip(prev => ({ ...prev, sitePhoto: reader.result }));
-                        reader.readAsDataURL(file);
+                        const val = validateTripPhotoFile(file);
+                        if (!val.valid) {
+                          alert(val.error);
+                          return;
+                        }
+                        const previewUrl = URL.createObjectURL(file);
+                        setNewTrip(prev => ({ ...prev, sitePhoto: { previewUrl, uploading: true } }));
+                        uploadTripPhoto(file, {
+                          companyId: 'sm-concretech',
+                          tripId: `TRP-${Date.now()}`,
+                          photoType: 'site_photo',
+                          userId: 'DISPATCHER'
+                        }).then(photoMeta => {
+                          setNewTrip(prev => ({
+                            ...prev,
+                            sitePhoto: photoMeta,
+                            siteArrivalPhoto: photoMeta
+                          }));
+                        }).catch(err => {
+                          console.warn('Upload error:', err.message);
+                          setNewTrip(prev => ({
+                            ...prev,
+                            sitePhoto: { storagePath: null, downloadUrl: null, previewUrl, error: err.message },
+                            siteArrivalPhoto: { storagePath: null, downloadUrl: null, previewUrl, error: err.message }
+                          }));
+                        });
                       }
                     }}
                     className="w-full border border-slate-200 rounded-lg py-1 px-2 text-[10px] bg-slate-50 text-slate-700"
@@ -650,6 +696,89 @@ export default function DriverTripsView() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Trip Photo Viewer Modal */}
+      {selectedPhotoTrip && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-xl w-full p-4 border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Camera className="text-[#136dec]" size={18} />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Trip Photographs — {selectedPhotoTrip.vehicleNo} ({selectedPhotoTrip.challanNo || selectedPhotoTrip.id})
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedPhotoTrip(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {[
+                { title: '1. Start Odometer', photo: selectedPhotoTrip.startOdoPhoto, odo: selectedPhotoTrip.startOdometer, gps: selectedPhotoTrip.startGps },
+                { title: '2. Site Arrival', photo: selectedPhotoTrip.siteArrivalPhoto, time: selectedPhotoTrip.siteArrivalTime, gps: selectedPhotoTrip.siteArrivalGps },
+                { title: '3. Site Departure', photo: selectedPhotoTrip.siteDeparturePhoto, time: selectedPhotoTrip.siteDepartureTime, gps: selectedPhotoTrip.siteDepartureGps },
+                { title: '4. Plant Return Odometer', photo: selectedPhotoTrip.finalOdoPhoto, odo: selectedPhotoTrip.finalOdometer, gps: selectedPhotoTrip.finalGps }
+              ].map((item, idx) => {
+                const src = item.photo?.downloadUrl || item.photo?.previewUrl || (typeof item.photo === 'string' ? item.photo : null);
+                return (
+                  <div key={idx} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70 space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-slate-800">{item.title}</span>
+                      {item.photo?.storagePath ? (
+                        <span className="text-[9px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          Cloud Storage
+                        </span>
+                      ) : src ? (
+                        <span className="text-[9px] font-mono text-slate-500 bg-slate-200 px-1 rounded">Local Photo</span>
+                      ) : (
+                        <span className="text-[9px] font-mono text-slate-400">No Photo</span>
+                      )}
+                    </div>
+                    {src ? (
+                      <div className="relative group">
+                        <img src={src} alt={item.title} className="w-full h-32 object-cover rounded border border-slate-300" />
+                        {item.photo?.downloadUrl && (
+                          <a
+                            href={item.photo.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute bottom-1 right-1 bg-black/70 hover:bg-black text-white text-[9px] px-2 py-0.5 rounded font-mono"
+                          >
+                            Open Full
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="h-24 bg-slate-100 rounded border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-[10px]">
+                        Photograph not captured
+                      </div>
+                    )}
+                    <div className="text-[10px] text-slate-600 font-mono space-y-0.5">
+                      {item.odo && <div>Odo: <strong className="text-slate-900">{item.odo} km</strong></div>}
+                      {item.time && <div>Time: <strong>{item.time}</strong></div>}
+                      {item.gps && <div className="truncate" title={item.gps}>GPS: {item.gps}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 mt-3 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedPhotoTrip(null)}
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

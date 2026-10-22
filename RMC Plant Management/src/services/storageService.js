@@ -21,6 +21,7 @@ import { storage } from '../config/firebase.js';
 
 // Maximum allowed document size (5 Megabytes)
 export const MAX_DOCUMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+export const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 
 // Allowed MIME types for personnel documentation
 export const ALLOWED_DOCUMENT_MIME_TYPES = [

@@ -80,7 +80,13 @@ service cloud.firestore {
         isHR() ||
         isAccountant() ||
         isQuality() ||
-        isDispatcher() ||
+        isDispatcher()
+      );
+    }
+
+    function isDriver() {
+      return isAuthenticated() && (
+        isAdmin() ||
         getUserRole() == 'Driver'
       );
     }
@@ -384,6 +390,11 @@ service cloud.firestore {
       allow read: if isSameCompany('CMP-SM-001');
       allow write: if isSameCompany('CMP-SM-001') && isOperationalStaff();
     }
+    match /driverTrips_CMP-SM-001/{tripId} {
+      allow read: if isSameCompany('CMP-SM-001');
+      allow create, update: if isSameCompany('CMP-SM-001') && (isOperationalStaff() || isDriver());
+      allow delete: if isSameCompany('CMP-SM-001') && (isAdmin() || isManager() || isDispatcher());
+    }
 
     // --- sm-concretech Partition ---
     match /employees_sm-concretech/{empId} {
@@ -449,6 +460,11 @@ service cloud.firestore {
     match /hrSettings_sm-concretech/{settingId} {
       allow read: if isSameCompany('sm-concretech');
       allow write: if isSameCompany('sm-concretech') && isOperationalStaff();
+    }
+    match /driverTrips_sm-concretech/{tripId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow create, update: if isSameCompany('sm-concretech') && (isOperationalStaff() || isDriver());
+      allow delete: if isSameCompany('sm-concretech') && (isAdmin() || isManager() || isDispatcher());
     }
 
     // --- sm-concretech-unit-2 Partition ---
@@ -516,6 +532,11 @@ service cloud.firestore {
       allow read: if isSameCompany('sm-concretech-unit-2');
       allow write: if isSameCompany('sm-concretech-unit-2') && isOperationalStaff();
     }
+    match /driverTrips_sm-concretech-unit-2/{tripId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow create, update: if isSameCompany('sm-concretech-unit-2') && (isOperationalStaff() || isDriver());
+      allow delete: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isManager() || isDispatcher());
+    }
 
     // --- sm-infra-projects Partition ---
     match /employees_sm-infra-projects/{empId} {
@@ -581,6 +602,11 @@ service cloud.firestore {
     match /hrSettings_sm-infra-projects/{settingId} {
       allow read: if isSameCompany('sm-infra-projects');
       allow write: if isSameCompany('sm-infra-projects') && isOperationalStaff();
+    }
+    match /driverTrips_sm-infra-projects/{tripId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow create, update: if isSameCompany('sm-infra-projects') && (isOperationalStaff() || isDriver());
+      allow delete: if isSameCompany('sm-infra-projects') && (isAdmin() || isManager() || isDispatcher());
     }
 
     // =========================================================================

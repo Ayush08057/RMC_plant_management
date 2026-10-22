@@ -57,6 +57,18 @@ export default function BatchingSheetsView() {
     return INITIAL_BATCH_SHEETS;
   });
 
+  // Approved active mix designs loaded from persistent store
+  const [mixDesigns, setMixDesigns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rmc_mix_designs_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
   // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, INITIAL_BATCH_SHEETS, (cloudSheets) => {
@@ -64,7 +76,15 @@ export default function BatchingSheetsView() {
         setSheets(cloudSheets);
       }
     });
-    return () => unsub();
+    const unsubDesigns = subscribeCloudStore('cloud_mix_designs', 'rmc_mix_designs_v2', [], (cloudDesigns) => {
+      if (Array.isArray(cloudDesigns) && cloudDesigns.length > 0) {
+        setMixDesigns(cloudDesigns);
+      }
+    });
+    return () => {
+      unsub();
+      unsubDesigns();
+    };
   }, []);
 
   // Save changes to localStorage & Cloud Firestore
@@ -109,26 +129,33 @@ export default function BatchingSheetsView() {
 
   // Automatically update recipe targets with IS:456 & IS:10262 moisture compensation
   const updateMaterialsForGradeAndVolume = (grade, vol, moisturePct = 2.0, absorptionPct = 1.0) => {
-    const preset = MIX_DESIGN_PRESETS[grade] || MIX_DESIGN_PRESETS['M25'];
+    // 1. Resolve mix recipe from persistent approved active mix designs first
+    const activeCustom = (mixDesigns || []).find(d => 
+      (d.grade || '').trim().toUpperCase() === (grade || '').trim().toUpperCase() &&
+      d.status !== 'Retired' && d.status !== 'Inactive' &&
+      d.approvalStatus !== 'Rejected'
+    );
+
+    const preset = activeCustom || MIX_DESIGN_PRESETS[grade] || MIX_DESIGN_PRESETS['M25'];
     const v = Number(vol) || 1;
     const m = Math.max(0, Number(moisturePct) || 0);
     const a = Math.max(0, Number(absorptionPct) || 0);
     const freeMoisturePct = Math.max(0, m - a); // Effective surface moisture contributing to water
 
-    const drySand = preset.sand * v;
+    const drySand = (Number(preset.sand) || 800) * v;
     const moistSandTarget = Math.round(drySand * (1 + m / 100)); // Sand scale weighs moist aggregate
     const waterAddedBySand = Math.round(drySand * (freeMoisturePct / 100)); // Water contributed by moist sand
-    const designWater = preset.water * v;
+    const designWater = (Number(preset.water) || 165) * v;
     const correctedWaterTarget = Math.max(30, Math.round(designWater - waterAddedBySand)); // Deduct surface water from batch water
 
     return [
-      { name: 'Cement (OPC 53)', target: Math.round(preset.cement * v), actual: Math.round(preset.cement * v + (Math.random() * 8 - 4)), unit: 'kg', tolerancePct: 2 },
-      { name: 'Fly Ash (Pozzocrete)', target: Math.round(preset.flyash * v), actual: Math.round(preset.flyash * v + (Math.random() * 4 - 2)), unit: 'kg', tolerancePct: 2 },
-      { name: '20mm Coarse Aggregate', target: Math.round(preset.agg20 * v), actual: Math.round(preset.agg20 * v + (Math.random() * 16 - 8)), unit: 'kg', tolerancePct: 3 },
-      { name: '10mm Coarse Aggregate', target: Math.round(preset.agg10 * v), actual: Math.round(preset.agg10 * v + (Math.random() * 12 - 6)), unit: 'kg', tolerancePct: 3 },
-      { name: 'Crushed M-Sand', target: moistSandTarget, actual: Math.round(moistSandTarget + (Math.random() * 18 - 9)), unit: 'kg', tolerancePct: 3, moistureCompensated: true },
-      { name: 'Water', target: correctedWaterTarget, actual: Math.round(correctedWaterTarget + (Math.random() * 4 - 2)), unit: 'L', tolerancePct: 2, moistureCompensated: true },
-      { name: 'Admixture (PCE)', target: Number((preset.admixture * v).toFixed(1)), actual: Number((preset.admixture * v + (Math.random() * 0.2 - 0.1)).toFixed(1)), unit: 'kg', tolerancePct: 2 },
+      { name: 'Cement (OPC 53)', target: Math.round((Number(preset.cement) || 360) * v), actual: null, unit: 'kg', tolerancePct: 2 },
+      { name: 'Fly Ash (Pozzocrete)', target: Math.round((Number(preset.flyash) || 60) * v), actual: null, unit: 'kg', tolerancePct: 2 },
+      { name: '20mm Coarse Aggregate', target: Math.round((Number(preset.agg20) || 750) * v), actual: null, unit: 'kg', tolerancePct: 3 },
+      { name: '10mm Coarse Aggregate', target: Math.round((Number(preset.agg10) || 500) * v), actual: null, unit: 'kg', tolerancePct: 3 },
+      { name: 'Crushed M-Sand', target: moistSandTarget, actual: null, unit: 'kg', tolerancePct: 3, moistureCompensated: true },
+      { name: 'Water', target: correctedWaterTarget, actual: null, unit: 'L', tolerancePct: 2, moistureCompensated: true },
+      { name: 'Admixture (PCE)', target: Number(((Number(preset.admixture) || 3.0) * v).toFixed(1)), actual: null, unit: 'kg', tolerancePct: 2 },
     ];
   };
 
@@ -188,7 +215,16 @@ export default function BatchingSheetsView() {
     }));
   };
 
-  const handleFinalizeProduction = (sheet) => {
+  const [shortfallModal, setShortfallModal] = useState(null);
+  const [supervisorForm, setSupervisorForm] = useState({
+    name: 'Plant Manager',
+    employeeId: 'MGR-001',
+    reason: 'Physical silo contains unrecorded bulk delivery',
+    confirmed: false,
+    error: ''
+  });
+
+  const handleFinalizeProduction = (sheet, supervisorApproval = null) => {
     if (!sheet) return;
     if (sheet.stockDeducted) {
       showToast(`Stock already deducted for batch #${sheet.sheetNo}.`);
@@ -199,6 +235,64 @@ export default function BatchingSheetsView() {
       const siloKey = 'rmc_silo_inventory_v2';
       const rawSilo = localStorage.getItem(siloKey);
       const siloData = rawSilo ? JSON.parse(rawSilo) : null;
+
+      // 1. Strict Stock Availability Validation before deduction
+      if (!supervisorApproval && siloData) {
+        const shortfalls = [];
+        (sheet.materials || []).forEach((m) => {
+          const act = Number(m.actual) || Number(m.target) || 0;
+          const tons = act / 1000;
+          const nameLower = (m.name || '').toLowerCase();
+
+          let available = 0;
+          let unit = m.unit || 'kg';
+          let required = act;
+
+          if (nameLower.includes('cement') && siloData.cement) {
+            available = Number(siloData.cement.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('fly ash') && siloData.flyash) {
+            available = Number(siloData.flyash.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('20mm') && siloData.agg20) {
+            available = Number(siloData.agg20.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('10mm') && siloData.agg10) {
+            available = Number(siloData.agg10.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('sand') && siloData.sand) {
+            available = Number(siloData.sand.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('admixture') && siloData.admixturePce) {
+            available = Number(siloData.admixturePce.stockLiters || 0);
+            required = act;
+            unit = 'Litres';
+          }
+
+          if (required > available) {
+            shortfalls.push({
+              material: m.name,
+              required: Number(required.toFixed(2)),
+              available: Number(available.toFixed(2)),
+              deficit: Number((required - available).toFixed(2)),
+              unit
+            });
+          }
+        });
+
+        if (shortfalls.length > 0) {
+          // Block finalization and display shortfall authorization workflow
+          setShortfallModal({ sheet, shortfalls });
+          return;
+        }
+      }
+
+      // 2. Perform safe deductions
       if (siloData) {
         (sheet.materials || []).forEach((m) => {
           const act = Number(m.actual) || Number(m.target) || 0;
@@ -226,17 +320,33 @@ export default function BatchingSheetsView() {
         ...s,
         stockDeducted: true,
         productionStatus: 'Completed',
-        finalizedAt: new Date().toISOString()
+        finalizedAt: new Date().toISOString(),
+        supervisorOverride: supervisorApproval ? {
+          approvedBy: supervisorApproval.name,
+          approverId: supervisorApproval.employeeId,
+          reason: supervisorApproval.reason,
+          authorizedAt: new Date().toISOString(),
+          shortfalls: supervisorApproval.shortfalls
+        } : null
       } : s);
+
       setSheets(updated);
       if (selectedSheet?.id === sheet.id) {
         setSelectedSheet({
           ...selectedSheet,
           stockDeducted: true,
           productionStatus: 'Completed',
-          finalizedAt: new Date().toISOString()
+          finalizedAt: new Date().toISOString(),
+          supervisorOverride: supervisorApproval ? {
+            approvedBy: supervisorApproval.name,
+            approverId: supervisorApproval.employeeId,
+            reason: supervisorApproval.reason,
+            authorizedAt: new Date().toISOString(),
+            shortfalls: supervisorApproval.shortfalls
+          } : null
         });
       }
+      setShortfallModal(null);
       showToast(`✓ Production for Sheet #${sheet.sheetNo} finalized! Raw materials deducted from Silo inventory.`);
     } catch (err) {
       console.warn('Production stock deduction notice:', err.message);
@@ -886,9 +996,10 @@ export default function BatchingSheetsView() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {form.materials.map((m, idx) => {
-                        const diff = m.target > 0 ? (((m.actual - m.target) / m.target) * 100) : 0;
+                        const hasActual = m.actual !== null && m.actual !== undefined && m.actual !== '';
+                        const diff = hasActual && m.target > 0 ? (((Number(m.actual) - m.target) / m.target) * 100) : 0;
                         const tol = m.tolerancePct || (m.name.includes('Aggregate') || m.name.includes('Sand') ? 3.0 : 2.0);
-                        const isOk = Math.abs(diff) <= tol;
+                        const isOk = !hasActual || Math.abs(diff) <= tol;
                         return (
                           <tr key={m.name} className="hover:bg-slate-50/60">
                             <td className="py-2 px-3 font-semibold text-slate-900 flex items-center gap-1.5">
@@ -906,18 +1017,25 @@ export default function BatchingSheetsView() {
                               <input
                                 type="number"
                                 step="any"
-                                value={m.actual}
+                                value={m.actual !== null && m.actual !== undefined ? m.actual : ''}
+                                placeholder="Pending"
                                 onChange={(e) => handleMaterialActualChange(idx, e.target.value)}
                                 className="w-24 text-right px-2 py-1 rounded-lg border border-slate-300 font-mono font-bold text-slate-900 bg-white"
                               />
                               <span className="ml-1 text-[10px] text-slate-500 font-mono">{m.unit}</span>
                             </td>
                             <td className="py-2 px-3 text-right">
-                              <span className={`font-mono font-bold text-[10px] px-1.5 py-0.5 rounded ${
-                                isOk ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                              }`}>
-                                {diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`} (Limit ±{tol}%)
-                              </span>
+                              {hasActual ? (
+                                <span className={`font-mono font-bold text-[10px] px-1.5 py-0.5 rounded ${
+                                  isOk ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}>
+                                  {diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`} (Limit ±{tol}%)
+                                </span>
+                              ) : (
+                                <span className="font-mono text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                  Pending Scale Entry
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -1039,18 +1157,25 @@ export default function BatchingSheetsView() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-mono">
                     {selectedSheet.materials?.map((m) => {
-                      const diff = m.target > 0 ? (((m.actual - m.target) / m.target) * 100) : 0;
+                      const hasAct = m.actual !== null && m.actual !== undefined && m.actual !== '';
+                      const diff = hasAct && m.target > 0 ? (((Number(m.actual) - m.target) / m.target) * 100) : 0;
                       return (
                         <tr key={m.name}>
                           <td className="py-2 font-sans font-medium text-slate-900">{m.name}</td>
                           <td className="py-2 text-right text-slate-500">{m.target} {m.unit}</td>
-                          <td className="py-2 text-right font-bold text-slate-900">{m.actual} {m.unit}</td>
+                          <td className="py-2 text-right font-bold text-slate-900">
+                            {hasAct ? `${m.actual} ${m.unit}` : <span className="text-amber-600 font-sans font-normal italic">Pending Entry</span>}
+                          </td>
                           <td className="py-2 text-right">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              Math.abs(diff) <= 2 ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'
-                            }`}>
-                              {diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`}
-                            </span>
+                            {hasAct ? (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                Math.abs(diff) <= (m.tolerancePct || 2) ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'
+                              }`}>
+                                {diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-sans text-[10px]">--</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1207,13 +1332,14 @@ export default function BatchingSheetsView() {
               </thead>
               <tbody>
                 {printingSheet.materials?.map((m) => {
-                  const diff = m.target > 0 ? (((m.actual - m.target) / m.target) * 100) : 0;
+                  const hasAct = m.actual !== null && m.actual !== undefined && m.actual !== '';
+                  const diff = hasAct && m.target > 0 ? (((Number(m.actual) - m.target) / m.target) * 100) : 0;
                   return (
                     <tr key={m.name}>
                       <td className="py-0.5">{m.name}</td>
                       <td className="text-right">{m.target}</td>
-                      <td className="text-right font-bold">{m.actual} {m.unit}</td>
-                      <td className="text-right">{diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}%</td>
+                      <td className="text-right font-bold">{hasAct ? `${m.actual} ${m.unit}` : `${m.target} (Target)`}</td>
+                      <td className="text-right">{hasAct ? `${diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}%` : '--'}</td>
                     </tr>
                   );
                 })}
@@ -1237,6 +1363,146 @@ export default function BatchingSheetsView() {
               </div>
             </div>
 
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================
+          MODAL: INSUFFICIENT STOCK BLOCK & SUPERVISOR OVERRIDE
+          ======================================================== */}
+      {shortfallModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 border border-rose-300 space-y-3.5 text-xs">
+            <div className="flex justify-between items-center border-b border-rose-100 pb-2.5">
+              <div className="flex items-center gap-2 text-rose-800">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                <h3 className="font-black text-sm text-slate-900">
+                  Production Finalization Blocked: Insufficient Stock
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShortfallModal(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-slate-600 leading-relaxed text-[11px]">
+              Batch Sheet <strong>#{shortfallModal.sheet.sheetNo}</strong> requires materials that exceed currently recorded Silo inventory. Clamping to zero is prohibited by quality SOPs.
+            </p>
+
+            {/* Shortfall Deficit Table */}
+            <div className="border border-rose-200 rounded-xl overflow-hidden">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-rose-50 text-rose-950 font-bold border-b border-rose-200">
+                  <tr>
+                    <th className="py-2 px-3">Material</th>
+                    <th className="py-2 px-2 text-right">Required</th>
+                    <th className="py-2 px-2 text-right">In Silo</th>
+                    <th className="py-2 px-3 text-right text-rose-700">Shortfall Deficit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rose-100">
+                  {shortfallModal.shortfalls.map((sf, idx) => (
+                    <tr key={idx} className="bg-white font-mono">
+                      <td className="py-2 px-3 font-sans font-bold text-slate-900">{sf.material}</td>
+                      <td className="py-2 px-2 text-right text-slate-700">{sf.required} {sf.unit}</td>
+                      <td className="py-2 px-2 text-right text-slate-500">{sf.available} {sf.unit}</td>
+                      <td className="py-2 px-3 text-right font-black text-rose-600">-{sf.deficit} {sf.unit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Controlled Supervisor Exception Authorization */}
+            <div className="p-3 bg-amber-50/80 border border-amber-300 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-950 text-xs">
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                <span>Authorized Supervisor Override Workflow</span>
+              </div>
+              <p className="text-[10px] text-amber-800 leading-tight">
+                If physical materials are present (e.g., pending inward weighment slip not yet finalized in system), a plant manager must authorize this emergency exception.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-0.5">Authorizing Incharge *</label>
+                  <input
+                    type="text"
+                    value={supervisorForm.name}
+                    onChange={(e) => setSupervisorForm({ ...supervisorForm, name: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-medium"
+                    placeholder="e.g. Plant Manager"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-0.5">Employee / PIN ID *</label>
+                  <input
+                    type="text"
+                    value={supervisorForm.employeeId}
+                    onChange={(e) => setSupervisorForm({ ...supervisorForm, employeeId: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-mono font-bold"
+                    placeholder="e.g. MGR-001"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-0.5">Documented Business Reason *</label>
+                <select
+                  value={supervisorForm.reason}
+                  onChange={(e) => setSupervisorForm({ ...supervisorForm, reason: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-medium text-[11px]"
+                >
+                  <option value="Physical silo contains unrecorded bulk delivery">Physical silo contains unrecorded bulk delivery</option>
+                  <option value="Emergency highway pour authorized by Plant Incharge">Emergency highway pour authorized by Plant Incharge</option>
+                  <option value="Quality testing material compensation approved by QC Lead">Quality testing material compensation approved by QC Lead</option>
+                  <option value="Stock reconciliation pending month-end physical dip check">Stock reconciliation pending month-end physical dip check</option>
+                </select>
+              </div>
+
+              <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={supervisorForm.confirmed}
+                  onChange={(e) => setSupervisorForm({ ...supervisorForm, confirmed: e.target.checked })}
+                  className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-[10px] text-slate-700 font-semibold leading-tight">
+                  I confirm that physical stock is verified and authorize this negative production exception into the audit log.
+                </span>
+              </label>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShortfallModal(null)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-100 text-xs cursor-pointer"
+              >
+                Abort & Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!supervisorForm.confirmed || !supervisorForm.name.trim() || !supervisorForm.employeeId.trim()}
+                onClick={() => {
+                  handleFinalizeProduction(shortfallModal.sheet, {
+                    name: supervisorForm.name.trim(),
+                    employeeId: supervisorForm.employeeId.trim(),
+                    reason: supervisorForm.reason,
+                    shortfalls: shortfallModal.shortfalls
+                  });
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Authorize & Deduct Exception</span>
+              </button>
+            </div>
           </div>
         </div>,
         document.body

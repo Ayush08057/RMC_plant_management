@@ -149,11 +149,24 @@ export default function MixDesignView() {
   };
 
   const handleDeleteDesign = (id, grade) => {
-    if (window.confirm(`Are you sure you want to retire Mix Design ${grade} (${id})?`)) {
-      const updated = designs.filter(d => d.id !== id);
+    const target = designs.find(d => d.id === id);
+    if (!target) return;
+
+    if (target.status === 'Retired') {
+      if (window.confirm(`Reactivate Mix Design ${grade} (${id}) for active plant batching?`)) {
+        const updated = designs.map(d => d.id === id ? { ...d, status: 'Active', updatedAt: new Date().toISOString() } : d);
+        saveDesigns(updated);
+        showToast(`✓ Mix Design ${grade} reactivated as Active.`);
+        if (selectedDesign?.id === id) setSelectedDesign(prev => ({ ...prev, status: 'Active' }));
+      }
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to retire Mix Design ${grade} (${id})?\n\nThis recipe will be safely deactivated from new batch production while strictly preserving historical batching records and audit history.`)) {
+      const updated = designs.map(d => d.id === id ? { ...d, status: 'Retired', retiredAt: new Date().toISOString() } : d);
       saveDesigns(updated);
-      showToast(`Mix Design ${grade} retired.`);
-      if (selectedDesign?.id === id) setSelectedDesign(null);
+      showToast(`✓ Mix Design ${grade} retired. Historical recipe preserved.`);
+      if (selectedDesign?.id === id) setSelectedDesign(prev => ({ ...prev, status: 'Retired' }));
     }
   };
 

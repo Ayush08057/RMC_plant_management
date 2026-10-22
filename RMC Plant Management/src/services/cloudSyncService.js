@@ -109,9 +109,11 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
 
       if (snap.exists()) {
         const cloudPayload = snap.data();
-        if (cloudPayload && Array.isArray(cloudPayload.items)) {
-          const cleanItems = sanitizeStoreItems(cloudPayload.items);
-          if (cleanItems.length !== cloudPayload.items.length) {
+        if (cloudPayload && cloudPayload.items !== undefined) {
+          const cleanItems = Array.isArray(cloudPayload.items)
+            ? sanitizeStoreItems(cloudPayload.items)
+            : cloudPayload.items;
+          if (Array.isArray(cloudPayload.items) && cleanItems.length !== cloudPayload.items.length) {
             // Permanent cloud purge of legacy dummy records
             try {
               await setDoc(docRef, {
@@ -160,9 +162,11 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
       if (!isMounted) return;
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.items)) {
-          const cleanItems = sanitizeStoreItems(data.items);
-          if (cleanItems.length !== data.items.length) {
+        if (data && data.items !== undefined) {
+          const cleanItems = Array.isArray(data.items)
+            ? sanitizeStoreItems(data.items)
+            : data.items;
+          if (Array.isArray(data.items) && cleanItems.length !== data.items.length) {
             setDoc(docRef, {
               items: cleanItems,
               updatedAt: Date.now(),
@@ -189,7 +193,86 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
 }
 
 /**
- * Pushes updated data to Cloud Firestore and updates local cache
+ * Smart concurrency merge: merges local and cloud collections by unique entity ID and timestamp
+ * Prevents stale local state from silently overwriting newer cloud records added by other devices.
+ * 
+ * @param {Array|Object} localItems 
+ * @param {Array|Object} cloudItems 
+ * @returns {Array|Object} Merged and deduplicated collection
+ */
+export function mergeCollectionItems(localItems, cloudItems) {
+  if (!Array.isArray(localItems) && !Array.isArray(cloudItems)) {
+    if (typeof localItems === 'object' && typeof cloudItems === 'object') {
+      return { ...(cloudItems || {}), ...(localItems || {}) };
+    }
+    return localItems !== undefined ? localItems : cloudItems;
+  }
+
+  const lList = Array.isArray(localItems) ? localItems : [];
+  const cList = Array.isArray(cloudItems) ? cloudItems : [];
+
+  const itemMap = new Map();
+
+  const getItemKey = (item, idx) => {
+    if (!item) return `idx_${idx}`;
+    return String(
+      item.id ||
+      item.dispatchId ||
+      item.tripId ||
+      item.challanNo ||
+      item.slipNo ||
+      item.sheetNo ||
+      item.invoiceNo ||
+      item.key ||
+      (item.vehicleNo && item.date && item.time ? `${item.vehicleNo}_${item.date}_${item.time}` : '') ||
+      `idx_${idx}`
+    );
+  };
+
+  const getItemTimestamp = (item) => {
+    if (!item) return 0;
+    const ts = item.updatedAt || item.timestamp || item.createdAt || item.date;
+    if (typeof ts === 'number') return ts;
+    if (typeof ts === 'string') {
+      const parsed = Date.parse(ts);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return 0;
+  };
+
+  // 1. Seed with existing cloud records
+  cList.forEach((cItem, idx) => {
+    if (!cItem) return;
+    const key = getItemKey(cItem, idx);
+    itemMap.set(key, cItem);
+  });
+
+  // 2. Merge local records:
+  // - Retains items unique to local
+  // - Retains items unique to cloud (added concurrently on another terminal)
+  // - For items in both, selects the newer revision
+  lList.forEach((lItem, idx) => {
+    if (!lItem) return;
+    const key = getItemKey(lItem, idx);
+    if (!itemMap.has(key)) {
+      itemMap.set(key, lItem);
+    } else {
+      const existingCloud = itemMap.get(key);
+      const lTime = getItemTimestamp(lItem);
+      const cTime = getItemTimestamp(existingCloud);
+      if (lTime >= cTime) {
+        itemMap.set(key, { ...existingCloud, ...lItem });
+      } else {
+        itemMap.set(key, { ...lItem, ...existingCloud });
+      }
+    }
+  });
+
+  return Array.from(itemMap.values());
+}
+
+/**
+ * Pushes updated data to Cloud Firestore and updates local cache with smart concurrency merge
  * @param {string} docKey - e.g. 'cloud_billing_bills'
  * @param {string} localKey - localStorage key
  * @param {any} data - array or object to save
@@ -206,15 +289,42 @@ export async function pushCloudStore(docKey, localKey, data) {
     }
   }
 
-  // 2. Persist to Firestore
+  // 2. Persist to Firestore with smart concurrency merge
   try {
     const collectionName = getSyncCollectionName();
     const docRef = doc(db, collectionName, docKey);
+
+    let finalPayload = cleanData;
+
+    // Concurrency protection: fetch latest cloud snapshot before overwrite
+    if (Array.isArray(cleanData)) {
+      try {
+        const cloudSnap = await getDoc(docRef);
+        if (cloudSnap.exists()) {
+          const cloudPayload = cloudSnap.data();
+          if (cloudPayload && Array.isArray(cloudPayload.items)) {
+            const cleanCloud = sanitizeStoreItems(cloudPayload.items);
+            // Merge to prevent overwriting records added concurrently by other users
+            finalPayload = mergeCollectionItems(cleanData, cleanCloud);
+          }
+        }
+      } catch (fetchErr) {
+        // Fall back to cleanData if getDoc encounters a network issue
+      }
+    }
+
     await setDoc(docRef, {
-      items: cleanData,
+      items: finalPayload,
       updatedAt: Date.now(),
       source: 'web_client_sync'
     }, { merge: true });
+
+    // Update local cache if merged with new remote items
+    if (Array.isArray(finalPayload) && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        localStorage.setItem(localKey, JSON.stringify(finalPayload));
+      } catch {}
+    }
   } catch (err) {
     console.warn(`[CloudSync] Cloud push error for ${docKey}:`, err.message);
   }

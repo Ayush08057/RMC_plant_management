@@ -151,16 +151,16 @@ export default function DriverDashboardPage() {
           setGpsStatus(`✓ GPS Locked: ${coords}`);
         },
         () => {
-          const fallback = '16.8524° N, 74.5815° E (Sangli Plant)';
-          setStepForm(prev => ({ ...prev, [field]: fallback }));
-          setGpsStatus(`⚠️ GPS permission denied. Set to Plant base: ${fallback}`);
+          const unavailable = 'Location Unavailable (Permission Denied)';
+          setStepForm(prev => ({ ...prev, [field]: unavailable }));
+          setGpsStatus(`⚠️ ${unavailable}`);
         },
         { enableHighAccuracy: true, timeout: 6000 }
       );
     } else {
-      const fallback = '16.8524° N, 74.5815° E (Sangli Plant)';
-      setStepForm(prev => ({ ...prev, [field]: fallback }));
-      setGpsStatus(`GPS not supported. Set to: ${fallback}`);
+      const unavailable = 'Location Unavailable (Device Unsupported)';
+      setStepForm(prev => ({ ...prev, [field]: unavailable }));
+      setGpsStatus(`⚠️ ${unavailable}`);
     }
   };
 
@@ -258,7 +258,7 @@ export default function DriverDashboardPage() {
         ...updatedTrip,
         startOdometer: startOdo,
         startOdoPhoto: extractCleanPhotoMeta(stepForm.startOdoPhoto),
-        startGps: stepForm.startGps || '16.8524° N, 74.5815° E',
+        startGps: stepForm.startGps || 'Location Unavailable',
         departureTime: nowTime,
         status: 'In Transit',
       };
@@ -268,7 +268,7 @@ export default function DriverDashboardPage() {
         ...updatedTrip,
         arrivedAtSite: true,
         siteArrivalPhoto: extractCleanPhotoMeta(stepForm.siteArrivalPhoto),
-        siteArrivalGps: stepForm.siteArrivalGps || '16.8524° N, 74.5815° E',
+        siteArrivalGps: stepForm.siteArrivalGps || 'Location Unavailable',
         siteArrivalTime: nowTime,
         status: 'Arrived',
       };
@@ -278,7 +278,7 @@ export default function DriverDashboardPage() {
         ...updatedTrip,
         siteWorkDone: true,
         siteDeparturePhoto: extractCleanPhotoMeta(stepForm.siteDeparturePhoto),
-        siteDepartureGps: stepForm.siteDepartureGps || '16.8524° N, 74.5815° E',
+        siteDepartureGps: stepForm.siteDepartureGps || 'Location Unavailable',
         siteDepartureTime: nowTime,
         status: 'Returning',
       };
@@ -290,13 +290,17 @@ export default function DriverDashboardPage() {
         setStepError('Please enter a valid positive final odometer reading.');
         return;
       }
+      if (startOdo <= 0) {
+        setStepError('Starting odometer is missing or invalid. Please correct starting odometer first.');
+        return;
+      }
       try {
         const tripDistance = calculateTripDistance(startOdo, finalOdo);
         updatedTrip = {
           ...updatedTrip,
           finalOdometer: finalOdo,
           finalOdoPhoto: extractCleanPhotoMeta(stepForm.finalOdoPhoto),
-          finalGps: stepForm.finalGps || '16.8524° N, 74.5815° E',
+          finalGps: stepForm.finalGps || 'Location Unavailable',
           plantReturnTime: nowTime,
           distanceKm: tripDistance,
           tripDistanceKm: tripDistance,
@@ -1017,26 +1021,50 @@ export default function DriverDashboardPage() {
 
               {/* Site Departure Photo */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-indigo-600" />
-                  <span>Site Departure / Signed Slip Photo</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 font-bold flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-indigo-600" />
+                    <span>Site Departure / Signed Slip Photo</span>
+                  </label>
+                  {stepForm.siteDeparturePhoto?.storagePath && (
+                    <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      ✓ Cloud Stored
+                    </span>
+                  )}
+                </div>
                 <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
                   <Camera className="w-6 h-6 text-slate-400 mb-1" />
                   <span className="text-[11px] font-bold text-slate-700">
-                    {stepForm.siteDeparturePhoto ? '✓ Departure Photo Captured' : 'Take Slip Photo or Choose File'}
+                    {uploadingField === 'siteDeparturePhoto'
+                      ? `Uploading to Cloud Storage... ${uploadProgress}%`
+                      : stepForm.siteDeparturePhoto
+                        ? '✓ Departure Photo Captured (Tap to retake)'
+                        : 'Take Slip Photo or Choose File'}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
+                    disabled={uploadingField === 'siteDeparturePhoto'}
                     onChange={(e) => handlePhotoSelect(e, 'siteDeparturePhoto')}
                     className="hidden"
                   />
                 </label>
-                {stepForm.siteDeparturePhoto && (
+                {uploadingField === 'siteDeparturePhoto' && (
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden mt-1.5">
+                    <div className="bg-indigo-500 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+                {(stepForm.siteDeparturePhoto?.downloadUrl || stepForm.siteDeparturePhoto?.previewUrl || typeof stepForm.siteDeparturePhoto === 'string') && (
                   <div className="mt-2 text-center">
-                    <img src={stepForm.siteDeparturePhoto} alt="Site Departure" className="h-20 mx-auto rounded-lg border object-cover" />
+                    <img
+                      src={stepForm.siteDeparturePhoto?.downloadUrl || stepForm.siteDeparturePhoto?.previewUrl || (typeof stepForm.siteDeparturePhoto === 'string' ? stepForm.siteDeparturePhoto : '')}
+                      alt="Site Departure"
+                      className="h-20 mx-auto rounded-lg border object-cover shadow-2xs"
+                    />
+                    {stepForm.siteDeparturePhoto?.storagePath && (
+                      <p className="text-[9px] font-mono text-slate-500 mt-0.5 truncate">{stepForm.siteDeparturePhoto.storagePath}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1101,26 +1129,50 @@ export default function DriverDashboardPage() {
 
               {/* Final Return Odo Photo */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-blue-600" />
-                  <span>Return Odometer Photo</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 font-bold flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-blue-600" />
+                    <span>Return Odometer Photo</span>
+                  </label>
+                  {stepForm.finalOdoPhoto?.storagePath && (
+                    <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      ✓ Cloud Stored
+                    </span>
+                  )}
+                </div>
                 <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
                   <Camera className="w-6 h-6 text-slate-400 mb-1" />
                   <span className="text-[11px] font-bold text-slate-700">
-                    {stepForm.finalOdoPhoto ? '✓ Return Photo Captured' : 'Take Photo or Choose File'}
+                    {uploadingField === 'finalOdoPhoto'
+                      ? `Uploading to Cloud Storage... ${uploadProgress}%`
+                      : stepForm.finalOdoPhoto
+                        ? '✓ Return Photo Captured (Tap to retake)'
+                        : 'Take Photo or Choose File'}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
+                    disabled={uploadingField === 'finalOdoPhoto'}
                     onChange={(e) => handlePhotoSelect(e, 'finalOdoPhoto')}
                     className="hidden"
                   />
                 </label>
-                {stepForm.finalOdoPhoto && (
+                {uploadingField === 'finalOdoPhoto' && (
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden mt-1.5">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+                {(stepForm.finalOdoPhoto?.downloadUrl || stepForm.finalOdoPhoto?.previewUrl || typeof stepForm.finalOdoPhoto === 'string') && (
                   <div className="mt-2 text-center">
-                    <img src={stepForm.finalOdoPhoto} alt="Final Odo" className="h-20 mx-auto rounded-lg border object-cover" />
+                    <img
+                      src={stepForm.finalOdoPhoto?.downloadUrl || stepForm.finalOdoPhoto?.previewUrl || (typeof stepForm.finalOdoPhoto === 'string' ? stepForm.finalOdoPhoto : '')}
+                      alt="Final Odo"
+                      className="h-20 mx-auto rounded-lg border object-cover shadow-2xs"
+                    />
+                    {stepForm.finalOdoPhoto?.storagePath && (
+                      <p className="text-[9px] font-mono text-slate-500 mt-0.5 truncate">{stepForm.finalOdoPhoto.storagePath}</p>
+                    )}
                   </div>
                 )}
               </div>

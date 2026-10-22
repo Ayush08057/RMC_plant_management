@@ -301,6 +301,35 @@ export default function DeliveryChallansView() {
     setChallans(updated);
     setShowCreateModal(false);
 
+    // Sync corresponding driver trip record so fleet and driver tracking are immediately updated
+    try {
+      const tripKey = 'rmc_driver_trips_v2';
+      const rawTrips = localStorage.getItem(tripKey);
+      const tripList = rawTrips ? JSON.parse(rawTrips) : [];
+      const existingTrip = tripList.find(t => t.challanNo === newChallan.challanNo);
+      if (!existingTrip) {
+        const newTrip = {
+          id: `TRP-${Date.now()}`,
+          challanNo: newChallan.challanNo,
+          vehicleNo: newChallan.vehicleNo || 'Mixer',
+          driverName: newChallan.driverName || 'Driver',
+          clientName: newChallan.customerName,
+          siteName: newChallan.site,
+          grade: newChallan.grade,
+          quantityM3: Number(newChallan.quantity) || 6.0,
+          departureTime: newChallan.departureTime || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          status: 'Departed',
+          isNonBill,
+          createdAt: new Date().toISOString()
+        };
+        const updatedTrips = [newTrip, ...tripList];
+        localStorage.setItem(tripKey, JSON.stringify(updatedTrips));
+        pushCloudStore('cloud_driver_trips', tripKey, updatedTrips);
+      }
+    } catch (err) {
+      console.warn('Trip sync from challan notice:', err);
+    }
+
     if (autoPrint) {
       setPrintingChallan(newChallan);
     }

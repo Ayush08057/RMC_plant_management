@@ -40,10 +40,7 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
           setActiveTrips(ongoing);
           if (ongoing.length > 0) {
             setSelectedTrip(ongoing[0]);
-            const sOdo = Number(ongoing[0].startOdometer) || 0;
-            if (sOdo > 0) {
-              setFinalOdo(String(sOdo + (Number(ongoing[0].distanceKm) || 15)));
-            }
+            setFinalOdo('');
           }
         }
       }
@@ -54,20 +51,25 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
 
   const handleSelectTrip = (trip) => {
     setSelectedTrip(trip);
-    const sOdo = Number(trip.startOdometer) || 0;
-    if (sOdo > 0) {
-      setFinalOdo(String(sOdo + (Number(trip.distanceKm) || 15)));
-    } else {
-      setFinalOdo('');
-    }
+    setFinalOdo('');
   };
 
   const handleSave = () => {
     if (!selectedTrip) return;
 
     const startOdo = Number(selectedTrip.startOdometer) || 0;
-    const endOdo = Number(finalOdo) || (startOdo > 0 ? startOdo + (Number(selectedTrip.distanceKm) || 15) : 0);
-    const diffKm = endOdo > startOdo ? Number((endOdo - startOdo).toFixed(1)) : (Number(selectedTrip.distanceKm) || 15);
+    const endOdo = Number(finalOdo);
+
+    if (!endOdo || endOdo <= 0) {
+      alert(language === 'mr' ? 'कृपया अंतिम ओडोमीटर रीडिंग टाका.' : 'Please enter a valid positive final odometer reading.');
+      return;
+    }
+    if (startOdo > 0 && endOdo < startOdo) {
+      alert(language === 'mr' ? 'अंतिम ओडोमीटर सुरुवातीच्या ओडोमीटरपेक्षा कमी असू शकत नाही.' : `Final odometer (${endOdo}) cannot be less than starting odometer (${startOdo}).`);
+      return;
+    }
+
+    const diffKm = startOdo > 0 ? Number((endOdo - startOdo).toFixed(1)) : 0;
 
     // Calculate actual turnaround minutes
     let actualTurnaround = 45;

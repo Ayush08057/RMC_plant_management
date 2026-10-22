@@ -102,9 +102,16 @@ export default function DieselManagementView() {
     const unsubInward = subscribeCloudStore('cloud_diesel_inward', INWARD_STORAGE_KEY, INITIAL_INWARD_LOGS, (cloudInward) => {
       if (Array.isArray(cloudInward)) setInwardLogs(cloudInward);
     });
+    const unsubTank = subscribeCloudStore('cloud_diesel_tank_stock', TANK_STOCK_STORAGE_KEY, { stock: 6450 }, (cloudTank) => {
+      if (cloudTank && typeof cloudTank === 'object' && cloudTank.stock !== undefined) {
+        const val = Number(cloudTank.stock);
+        if (!isNaN(val)) setCurrentTankStock(val);
+      }
+    });
     return () => {
       unsubDispense();
       unsubInward();
+      unsubTank();
     };
   }, []);
 
