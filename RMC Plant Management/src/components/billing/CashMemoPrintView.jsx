@@ -116,41 +116,33 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
         
         {/* Top Control Bar (Hidden in Print) */}
         <div className="no-print bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer shrink-0"
               title="Go Back (Esc)"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-white" />
               <span>Back</span>
             </button>
 
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <h3 className="text-xs sm:text-sm font-bold tracking-wide truncate">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
+              <h3 className="text-xs sm:text-sm font-bold tracking-wide truncate text-white">
                 Cash Memo #{bill.billNo || '25-26/114'}
               </h3>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleNativePrint}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-3.5 h-3.5 text-slate-950" />
               <span>Print / Save PDF</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
-              title="Close"
-            >
-              <X className="w-4 h-4" />
             </button>
           </div>
         </div>

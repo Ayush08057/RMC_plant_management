@@ -28,6 +28,7 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
     new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
   );
   const [returnedM3, setReturnedM3] = useState(0);
+  const [finalOdo, setFinalOdo] = useState('');
 
   useEffect(() => {
     try {
@@ -37,7 +38,13 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
         if (Array.isArray(parsed)) {
           const ongoing = parsed.filter(t => t.status !== 'Completed');
           setActiveTrips(ongoing);
-          if (ongoing.length > 0) setSelectedTrip(ongoing[0]);
+          if (ongoing.length > 0) {
+            setSelectedTrip(ongoing[0]);
+            const sOdo = Number(ongoing[0].startOdometer) || 0;
+            if (sOdo > 0) {
+              setFinalOdo(String(sOdo + (Number(ongoing[0].distanceKm) || 15)));
+            }
+          }
         }
       }
     } catch (e) {
@@ -45,8 +52,41 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
     }
   }, [isOpen]);
 
+  const handleSelectTrip = (trip) => {
+    setSelectedTrip(trip);
+    const sOdo = Number(trip.startOdometer) || 0;
+    if (sOdo > 0) {
+      setFinalOdo(String(sOdo + (Number(trip.distanceKm) || 15)));
+    } else {
+      setFinalOdo('');
+    }
+  };
+
   const handleSave = () => {
     if (!selectedTrip) return;
+
+    const startOdo = Number(selectedTrip.startOdometer) || 0;
+    const endOdo = Number(finalOdo) || (startOdo > 0 ? startOdo + (Number(selectedTrip.distanceKm) || 15) : 0);
+    const diffKm = endOdo > startOdo ? Number((endOdo - startOdo).toFixed(1)) : (Number(selectedTrip.distanceKm) || 15);
+
+    // Calculate actual turnaround minutes
+    let actualTurnaround = 45;
+    try {
+      if (selectedTrip.departureTime) {
+        const now = new Date();
+        const depParts = selectedTrip.departureTime.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
+        if (depParts) {
+          let depHour = parseInt(depParts[1], 10);
+          const depMin = parseInt(depParts[2], 10);
+          const depAmPm = depParts[3];
+          if (depAmPm && depAmPm.toUpperCase() === 'PM' && depHour < 12) depHour += 12;
+          if (depAmPm && depAmPm.toUpperCase() === 'AM' && depHour === 12) depHour = 0;
+          const depDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), depHour, depMin);
+          const diffMs = Math.max(0, now.getTime() - depDate.getTime());
+          actualTurnaround = Math.round(diffMs / (1000 * 60)) || 45;
+        }
+      }
+    } catch {}
 
     // Update in rmc_driver_trips_v2
     try {
@@ -59,6 +99,10 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
               ...t,
               status: 'Completed',
               plantReturnTime: returnTime,
+              finalOdometer: endOdo,
+              distanceKm: diffKm,
+              tripDistanceKm: diffKm,
+              turnaroundMins: actualTurnaround,
               returnedM3: Number(returnedM3) || 0
             };
           }
@@ -70,6 +114,27 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
     } catch (e) {
       console.warn('Error updating trip:', e);
     }
+
+    // Also update vehicle in fleet to Available & update odometer
+    try {
+      const vehKey = 'rmc_plant_vehicles_v2';
+      const vehRaw = localStorage.getItem(vehKey);
+      if (vehRaw) {
+        const vehList = JSON.parse(vehRaw);
+        const updatedVehs = vehList.map(v => {
+          if (v.vehicleNo === selectedTrip.vehicleNo) {
+            return {
+              ...v,
+              status: 'Available / Plant',
+              currentOdometer: endOdo || v.currentOdometer
+            };
+          }
+          return v;
+        });
+        localStorage.setItem(vehKey, JSON.stringify(updatedVehs));
+        pushCloudStore('cloud_plant_vehicles', vehKey, updatedVehs);
+      }
+    } catch {}
 
     // Also update delivery challans to Delivered
     try {
@@ -196,7 +261,7 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
                         <button
                           key={trip.id}
                           type="button"
-                          onClick={() => setSelectedTrip(trip)}
+                          onClick={() => handleSelectTrip(trip)}
                           className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                             isSelected
                               ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-300 font-bold shadow-xs'
@@ -225,8 +290,8 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
                   </div>
                 </div>
 
-                {/* Return time & leftover concrete */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                {/* Return time, final odometer & leftover concrete */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t">
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">
                       {t('qReturnTime')}
@@ -235,12 +300,25 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
                       type="text"
                       value={returnTime}
                       onChange={e => setReturnTime(e.target.value)}
-                      className="w-full px-3 py-1.5 border rounded-lg text-xs font-mono font-bold bg-white focus:outline-emerald-500"
+                      className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-bold bg-white focus:outline-emerald-500"
                     />
                   </div>
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                      {language === 'mr' ? 'शिल्लक काँक्रीट (m³):' : 'Returned Concrete (m³):'}
+                      Final Odometer (km)
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      placeholder="e.g. 12480"
+                      value={finalOdo}
+                      onChange={e => setFinalOdo(e.target.value)}
+                      className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-bold bg-white focus:outline-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      {language === 'mr' ? 'शिल्लक काँक्रीट (m³):' : 'Returned (m³):'}
                     </label>
                     <input
                       type="number"
@@ -248,7 +326,7 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
                       min="0"
                       value={returnedM3}
                       onChange={e => setReturnedM3(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 border rounded-lg text-xs font-mono bg-white focus:outline-emerald-500"
+                      className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white focus:outline-emerald-500"
                     />
                   </div>
                 </div>

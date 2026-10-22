@@ -123,6 +123,21 @@ service firebase.storage {
     }
 
     // =========================================================================
+    // Plant Operations, Trip & Challan Photos
+    // Segregated path: operations/{companyId}/{entityId}/{fileName}
+    // =========================================================================
+    match /operations/{companyId}/{entityId}/{fileName} {
+      allow read: if isSameCompany(companyId);
+      allow create: if isSameCompany(companyId) && (
+        isManager(companyId) ||
+        isHR(companyId) ||
+        getUserRole() in ['Dispatcher', 'Driver', 'Weighbridge Operator', 'Quality Incharge']
+      ) && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/jpeg|image/png|image/webp|application/pdf');
+      allow update, delete: if isManager(companyId) || isHR(companyId);
+    }
+
+    // =========================================================================
     // Default Fallback: Strict Deny All Other Paths
     // =========================================================================
     match /{allPaths=**} {

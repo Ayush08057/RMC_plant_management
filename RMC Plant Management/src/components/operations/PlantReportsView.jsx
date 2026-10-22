@@ -19,34 +19,108 @@ export default function PlantReportsView() {
   const [reportType, setReportType] = useState('daily'); // 'daily', 'reconciliation', 'client_summary'
   const [dateRange, setDateRange] = useState('today');
 
-  // Live daily production records from batching sheets
+  // Live daily production records from batching sheets with aligned field properties
   const [dailyBatches] = useState(() => {
     try {
       const saved = localStorage.getItem('rmc_batching_sheets_v2');
       if (saved) {
         const parsed = sanitizeStoreItems(JSON.parse(saved));
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((b) => ({
-            ticketNo: b.sheetNo || b.id || 'BT-REC',
-            time: b.batchTime || b.time || '10:00 AM',
-            client: b.clientName || b.customer || 'Direct Dispatch',
-            site: b.siteLocation || b.site || 'Site Yard',
-            grade: b.grade || 'M25',
-            qty: parseFloat(b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0,
-            cementKg: parseFloat(b.actualBatched?.cementKg || b.cementKg || 0) || 0,
-            flyashKg: parseFloat(b.actualBatched?.flyashKg || b.flyashKg || 0) || 0,
-            mixer: b.vehicleReg || b.mixer || '--'
-          }));
+          return parsed.map((b) => {
+            const cementItem = (b.materials || []).find(m => (m.name || '').toLowerCase().includes('cement'));
+            const flyashItem = (b.materials || []).find(m => (m.name || '').toLowerCase().includes('fly ash'));
+            return {
+              ticketNo: b.sheetNo || b.id || 'BT-REC',
+              time: b.time || b.batchTime || '10:00 AM',
+              client: b.customerName || b.clientName || b.customer || 'Direct Dispatch',
+              site: b.site || b.siteLocation || 'Site Yard',
+              grade: b.mixGrade || b.grade || 'M25',
+              qty: parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0,
+              cementKg: parseFloat(cementItem?.actual || b.actualBatched?.cementKg || b.cementKg || 0) || 0,
+              flyashKg: parseFloat(flyashItem?.actual || b.actualBatched?.flyashKg || b.flyashKg || 0) || 0,
+              mixer: b.vehicleNo || b.vehicleReg || b.mixer || '--'
+            };
+          });
         }
       }
     } catch {}
     return [];
   });
 
-  // Material reconciliation data (zero dummy records)
-  const reconciliationData = [];
+  // Material reconciliation calculation using real Inward, Silo, and Batching Data
+  const reconciliationData = React.useMemo(() => {
+    try {
+      const rawInward = localStorage.getItem('rmc_material_inward_v2');
+      const inwardList = rawInward ? JSON.parse(rawInward) : [];
+      const rawBatches = localStorage.getItem('rmc_batching_sheets_v2');
+      const batchList = rawBatches ? JSON.parse(rawBatches) : [];
+      const rawSilo = localStorage.getItem('rmc_silo_inventory_v2');
+      const siloStock = rawSilo ? JSON.parse(rawSilo) : {};
 
-  // Client summary data (zero dummy records)
+      const materialsToAudit = [
+        { key: 'cement', label: 'Cement (OPC 53 Grade)', unit: 'MT', tolPct: 2.0, baseOpening: 85.4 },
+        { key: 'flyash', label: 'Fly Ash (Pozzocrete)', unit: 'MT', tolPct: 2.0, baseOpening: 42.0 },
+        { key: 'agg20', label: '20mm Coarse Aggregate', unit: 'MT', tolPct: 3.0, baseOpening: 148.0 },
+        { key: 'agg10', label: '10mm Coarse Aggregate', unit: 'MT', tolPct: 3.0, baseOpening: 110.0 },
+        { key: 'sand', label: 'Crushed M-Sand', unit: 'MT', tolPct: 3.0, baseOpening: 180.5 },
+      ];
+
+      return materialsToAudit.map(mat => {
+        // Calculate total inward for this material
+        const inwardTons = (inwardList || [])
+          .filter(r => (r.material || '').toLowerCase().includes(mat.key) || (mat.key === 'agg20' && (r.material || '').includes('20mm')) || (mat.key === 'agg10' && (r.material || '').includes('10mm')))
+          .reduce((sum, r) => sum + (parseFloat(r.netTons || r.quantity || 0) || 0), 0);
+
+        // Calculate actual consumed and theoretical target from batch sheets
+        let actualKg = 0;
+        let targetKg = 0;
+        (batchList || []).forEach(b => {
+          (b.materials || []).forEach(m => {
+            const mName = (m.name || '').toLowerCase();
+            const matches = 
+              (mat.key === 'cement' && mName.includes('cement')) ||
+              (mat.key === 'flyash' && mName.includes('fly ash')) ||
+              (mat.key === 'agg20' && mName.includes('20mm')) ||
+              (mat.key === 'agg10' && mName.includes('10mm')) ||
+              (mat.key === 'sand' && mName.includes('sand'));
+            if (matches) {
+              actualKg += parseFloat(m.actual || 0);
+              targetKg += parseFloat(m.target || 0);
+            }
+          });
+        });
+
+        const actualConsumedMT = parseFloat((actualKg / 1000).toFixed(2));
+        const theoreticalMT = parseFloat((targetKg / 1000).toFixed(2));
+        const varianceMT = parseFloat((actualConsumedMT - theoreticalMT).toFixed(2));
+        const variancePct = theoreticalMT > 0 ? ((varianceMT / theoreticalMT) * 100).toFixed(2) : '0.00';
+        const isOk = Math.abs(parseFloat(variancePct)) <= mat.tolPct;
+
+        const currentLiveStock = siloStock[mat.key]?.stockTons !== undefined 
+          ? Number(siloStock[mat.key].stockTons) 
+          : Number((mat.baseOpening + inwardTons - actualConsumedMT).toFixed(2));
+        const openingStock = mat.baseOpening;
+
+        return {
+          material: mat.label,
+          unit: mat.unit,
+          openingStock: openingStock.toFixed(1),
+          receivedInward: inwardTons.toFixed(1),
+          theoreticalConsumption: theoreticalMT.toFixed(1),
+          actualBatched: actualConsumedMT.toFixed(1),
+          variance: `${varianceMT >= 0 ? '+' : ''}${varianceMT.toFixed(2)} ${mat.unit}`,
+          variancePct: `${varianceMT >= 0 ? '+' : ''}${variancePct}%`,
+          closingStock: Math.max(0, currentLiveStock).toFixed(1),
+          status: isOk ? `In Spec (±${mat.tolPct}%)` : `Variance Out of Spec`
+        };
+      });
+    } catch (e) {
+      console.warn('Reconciliation calc error:', e);
+      return [];
+    }
+  }, []);
+
+  // Client summary data reading actual stored quantity & grade
   const [clientSummary] = useState(() => {
     try {
       const savedChallans = localStorage.getItem('rmc_delivery_challans_v2');
@@ -55,19 +129,19 @@ export default function PlantReportsView() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const map = {};
           parsed.forEach((c) => {
-            const key = `${c.customerName || 'General'}-${c.siteLocation || 'Site'}`;
+            const key = `${c.customerName || 'General'}-${c.site || c.siteLocation || 'Site'}`;
             if (!map[key]) {
               map[key] = {
                 client: c.customerName || 'Direct Client',
-                site: c.siteLocation || 'Plant Site',
+                site: c.site || c.siteLocation || 'Plant Site',
                 trips: 0,
                 totalM3: 0,
-                mainGrade: c.concreteGrade || 'M25',
+                mainGrade: c.grade || c.concreteGrade || 'M25',
                 status: 'Active'
               };
             }
             map[key].trips += 1;
-            map[key].totalM3 += parseFloat(c.concreteQuantityM3 || c.qty || 0) || 0;
+            map[key].totalM3 += parseFloat(c.quantity || c.concreteQuantityM3 || c.qty || 0) || 0;
           });
           return Object.values(map);
         }
@@ -214,15 +288,15 @@ export default function PlantReportsView() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider">
+                <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
                   <tr>
-                    <th className="py-3 px-4">Ticket No / Time</th>
-                    <th className="py-3 px-4">Client & Site</th>
-                    <th className="py-3 px-4">Grade</th>
-                    <th className="py-3 px-4 text-right">Volume (m³)</th>
-                    <th className="py-3 px-4 text-right">Cement (kg)</th>
-                    <th className="py-3 px-4 text-right">Fly Ash (kg)</th>
-                    <th className="py-3 px-4">Mixer Reg</th>
+                    <th className="py-3 px-4 text-white border-r border-white/20">Ticket No / Time</th>
+                    <th className="py-3 px-4 text-white border-r border-white/20">Client & Site</th>
+                    <th className="py-3 px-4 text-white border-r border-white/20">Grade</th>
+                    <th className="py-3 px-4 text-right text-white border-r border-white/20">Volume (m³)</th>
+                    <th className="py-3 px-4 text-right text-white border-r border-white/20">Cement (kg)</th>
+                    <th className="py-3 px-4 text-right text-white border-r border-white/20">Fly Ash (kg)</th>
+                    <th className="py-3 px-4 text-white">Mixer Reg</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -289,16 +363,16 @@ export default function PlantReportsView() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider">
+              <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
                 <tr>
-                  <th className="py-3 px-4">Raw Material</th>
-                  <th className="py-3 px-4 text-right">Opening</th>
-                  <th className="py-3 px-4 text-right">Inward</th>
-                  <th className="py-3 px-4 text-right">Theoretical</th>
-                  <th className="py-3 px-4 text-right">Actual Consumed</th>
-                  <th className="py-3 px-4 text-center">Variance</th>
-                  <th className="py-3 px-4 text-right">Closing Stock</th>
-                  <th className="py-3 px-4 text-center">Tolerance Check</th>
+                  <th className="py-3 px-4 text-white border-r border-white/20">Raw Material</th>
+                  <th className="py-3 px-4 text-right text-white border-r border-white/20">Opening</th>
+                  <th className="py-3 px-4 text-right text-white border-r border-white/20">Inward</th>
+                  <th className="py-3 px-4 text-right text-white border-r border-white/20">Theoretical</th>
+                  <th className="py-3 px-4 text-right text-white border-r border-white/20">Actual Consumed</th>
+                  <th className="py-3 px-4 text-center text-white border-r border-white/20">Variance</th>
+                  <th className="py-3 px-4 text-right text-white border-r border-white/20">Closing Stock</th>
+                  <th className="py-3 px-4 text-center text-white">Tolerance Check</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -363,14 +437,14 @@ export default function PlantReportsView() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider">
+              <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
                 <tr>
-                  <th className="py-3 px-4">Client Name</th>
-                  <th className="py-3 px-4">Site Location</th>
-                  <th className="py-3 px-4 text-center">Trips Completed</th>
-                  <th className="py-3 px-4 text-right">Total Volume Dispatched</th>
-                  <th className="py-3 px-4 text-center">Dominant Grade</th>
-                  <th className="py-3 px-4 text-center">Contract Status</th>
+                  <th className="py-3 px-4 text-white border-r border-white/20">Client Name</th>
+                  <th className="py-3 px-4 text-white border-r border-white/20">Site Location</th>
+                  <th className="py-3 px-4 text-center text-white border-r border-white/20">Trips Completed</th>
+                  <th className="py-3 px-4 text-right text-white border-r border-white/20">Total Volume Dispatched</th>
+                  <th className="py-3 px-4 text-center text-white border-r border-white/20">Dominant Grade</th>
+                  <th className="py-3 px-4 text-center text-white">Contract Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">

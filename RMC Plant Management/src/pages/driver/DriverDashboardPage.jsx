@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/dashboard/AppLayout';
 import StatusBadge from '../../components/dashboard/StatusBadge';
 import Modal from '../../components/dashboard/Modal';
@@ -19,12 +19,19 @@ import {
   User,
   Building2,
   Calendar,
-  CheckCircle
+  CheckCircle,
+  Camera,
+  Gauge,
+  Upload,
+  Check,
+  X
 } from 'lucide-react';
 import { MOCK_DRIVER_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { formatToIndian12Hr } from '../../utils/shiftUtils';
 import { useAuth } from '../../context/AuthContext';
+import { pushCloudStore } from '../../services/cloudSyncService';
+import { calculateTripDistance, STORAGE_KEYS } from '../../services/plantOperationsService';
 
 // Workforce Views
 import MobilePunchWidget from '../../components/workforce/MobilePunchWidget';
@@ -57,33 +64,221 @@ export default function DriverDashboardPage() {
     (a) => a.employeeId === currentDriverId || a.employeeId === user?.id || a.employeeId === user?.employeeId
   );
 
-  // Milestone Steps
-  const steps = [
-    { step: 1, label: 'ASSIGNED', short: 'ASG', desc: 'Gate Order Received' },
-    { step: 2, label: 'LOADING', short: 'LOAD', desc: 'At Batching Chute' },
-    { step: 3, label: 'DISPATCHED', short: 'DSP', desc: 'Gate Pass Signed' },
-    { step: 4, label: 'ON ROUTE', short: 'ROUTE', desc: 'In Highway Transit' },
-    { step: 5, label: 'ARRIVED', short: 'ARR', desc: 'At Pouring Site' },
-    { step: 6, label: 'UNLOADING', short: 'UNLD', desc: 'Hooked to Pump' },
-    { step: 7, label: 'DELIVERED', short: 'DONE', desc: 'Challan Signed' },
+  // 4-Step Mobile Workflow State & Persistence
+  const [persistedTrips, setPersistedTrips] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.TRIPS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const effectiveActiveTrip = React.useMemo(() => {
+    const fromStorage = (persistedTrips || []).find(
+      (t) => t.status !== 'Completed' && (
+        t.driverId === currentDriverId ||
+        (t.driverName && currentDriverName && t.driverName.toLowerCase().includes(currentDriverName.toLowerCase())) ||
+        !t.driverId
+      )
+    );
+    return fromStorage || activeTrip;
+  }, [persistedTrips, currentDriverId, currentDriverName, activeTrip]);
+
+  // Determine which of the 4 steps is active
+  const currentWorkflowStep = React.useMemo(() => {
+    if (!effectiveActiveTrip) return 1;
+    if (effectiveActiveTrip.status === 'Completed') return 5; // All done
+    if (!effectiveActiveTrip.startOdometer) return 1; // Step 1: Start Trip
+    if (!effectiveActiveTrip.arrivedAtSite) return 2; // Step 2: Arrived at Site
+    if (!effectiveActiveTrip.siteWorkDone) return 3; // Step 3: Complete Site Work
+    return 4; // Step 4: Return to Plant
+  }, [effectiveActiveTrip]);
+
+  // Step modal state
+  const [showStepModal, setShowStepModal] = useState(false);
+  const [modalStep, setModalStep] = useState(1);
+  const [stepForm, setStepForm] = useState({
+    startOdometer: '',
+    startOdoPhoto: null,
+    startGps: '',
+    siteArrivalPhoto: null,
+    siteArrivalGps: '',
+    siteDeparturePhoto: null,
+    siteDepartureGps: '',
+    finalOdometer: '',
+    finalOdoPhoto: null,
+    finalGps: '',
+  });
+  const [stepError, setStepError] = useState('');
+  const [gpsStatus, setGpsStatus] = useState('');
+
+  // 4-Step Definition
+  const workflowStages = [
+    { step: 1, title: 'Start Trip', desc: 'Starting Odo + Photo + GPS', badge: 'DEPART' },
+    { step: 2, title: 'Arrived at Site', desc: 'Site Photo + GPS Coords', badge: 'SITE' },
+    { step: 3, title: 'Complete Site Work', desc: 'Departure Photo + GPS', badge: 'UNLOAD' },
+    { step: 4, title: 'Return to Plant', desc: 'Final Odo + Auto Distance', badge: 'RETURN' },
   ];
 
-  const currentStep = activeTrip?.currentStep || 4;
+  const openWorkflowStep = (stepNumber) => {
+    setModalStep(stepNumber);
+    setStepError('');
+    setGpsStatus('');
+    setStepForm({
+      startOdometer: effectiveActiveTrip?.startOdometer || '',
+      startOdoPhoto: effectiveActiveTrip?.startOdoPhoto || null,
+      startGps: effectiveActiveTrip?.startGps || '',
+      siteArrivalPhoto: effectiveActiveTrip?.siteArrivalPhoto || null,
+      siteArrivalGps: effectiveActiveTrip?.siteArrivalGps || '',
+      siteDeparturePhoto: effectiveActiveTrip?.siteDeparturePhoto || null,
+      siteDepartureGps: effectiveActiveTrip?.siteDepartureGps || '',
+      finalOdometer: effectiveActiveTrip?.finalOdometer || '',
+      finalOdoPhoto: effectiveActiveTrip?.finalOdoPhoto || null,
+      finalGps: effectiveActiveTrip?.finalGps || '',
+    });
+    setShowStepModal(true);
+  };
 
-  const handleNextStep = () => {
-    if (!activeTrip) return;
-    if (currentStep < 7) {
-      const next = currentStep + 1;
-      if (updateTripMilestone && activeTrip.id) {
-        updateTripMilestone(activeTrip.id, next);
-      }
-      setToastMessage(`Milestone updated to: ${steps[next - 1].label}`);
+  const captureGpsForField = (field) => {
+    setGpsStatus('Detecting device GPS coordinates...');
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = `${pos.coords.latitude.toFixed(6)}° N, ${pos.coords.longitude.toFixed(6)}° E`;
+          setStepForm(prev => ({ ...prev, [field]: coords }));
+          setGpsStatus(`✓ GPS Locked: ${coords}`);
+        },
+        () => {
+          const fallback = '16.8524° N, 74.5815° E (Sangli Plant)';
+          setStepForm(prev => ({ ...prev, [field]: fallback }));
+          setGpsStatus(`⚠️ GPS permission denied. Set to Plant base: ${fallback}`);
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
     } else {
-      if (updateTripMilestone && activeTrip.id) {
-        updateTripMilestone(activeTrip.id, 7);
-      }
-      setToastMessage('Delivery trip is fully completed! Return to plant.');
+      const fallback = '16.8524° N, 74.5815° E (Sangli Plant)';
+      setStepForm(prev => ({ ...prev, [field]: fallback }));
+      setGpsStatus(`GPS not supported. Set to: ${fallback}`);
     }
+  };
+
+  const handlePhotoSelect = (e, field) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setStepForm(prev => ({ ...prev, [field]: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveStep = () => {
+    setStepError('');
+    const nowTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    let updatedTrip = { ...effectiveActiveTrip };
+
+    if (modalStep === 1) {
+      const startOdo = Number(stepForm.startOdometer);
+      if (!startOdo || startOdo <= 0) {
+        setStepError('Please enter a valid positive starting odometer reading.');
+        return;
+      }
+      updatedTrip = {
+        ...updatedTrip,
+        startOdometer: startOdo,
+        startOdoPhoto: stepForm.startOdoPhoto,
+        startGps: stepForm.startGps || '16.8524° N, 74.5815° E',
+        departureTime: nowTime,
+        status: 'In Transit',
+      };
+      setToastMessage('Step 1 Complete: Starting odometer and GPS logged!');
+    } else if (modalStep === 2) {
+      updatedTrip = {
+        ...updatedTrip,
+        arrivedAtSite: true,
+        siteArrivalPhoto: stepForm.siteArrivalPhoto,
+        siteArrivalGps: stepForm.siteArrivalGps || '16.8524° N, 74.5815° E',
+        siteArrivalTime: nowTime,
+        status: 'Arrived',
+      };
+      setToastMessage('Step 2 Complete: Arrived at pouring site!');
+    } else if (modalStep === 3) {
+      updatedTrip = {
+        ...updatedTrip,
+        siteWorkDone: true,
+        siteDeparturePhoto: stepForm.siteDeparturePhoto,
+        siteDepartureGps: stepForm.siteDepartureGps || '16.8524° N, 74.5815° E',
+        siteDepartureTime: nowTime,
+        status: 'Returning',
+      };
+      setToastMessage('Step 3 Complete: Site pouring completed. Transit mixer returning.');
+    } else if (modalStep === 4) {
+      const finalOdo = Number(stepForm.finalOdometer);
+      const startOdo = Number(updatedTrip.startOdometer) || Number(stepForm.startOdometer) || 0;
+      if (!finalOdo || finalOdo <= 0) {
+        setStepError('Please enter a valid positive final odometer reading.');
+        return;
+      }
+      try {
+        const tripDistance = calculateTripDistance(startOdo, finalOdo);
+        updatedTrip = {
+          ...updatedTrip,
+          finalOdometer: finalOdo,
+          finalOdoPhoto: stepForm.finalOdoPhoto,
+          finalGps: stepForm.finalGps || '16.8524° N, 74.5815° E',
+          plantReturnTime: nowTime,
+          distanceKm: tripDistance,
+          tripDistanceKm: tripDistance,
+          status: 'Completed',
+        };
+        setToastMessage(`Step 4 Complete: Trip finalized! Distance calculated: ${tripDistance} km`);
+      } catch (err) {
+        setStepError(err.message);
+        return;
+      }
+    }
+
+    // Persist trip to storage & cloud
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.TRIPS);
+      let list = raw ? JSON.parse(raw) : [];
+      let found = false;
+      list = list.map(t => {
+        if (t.id === updatedTrip.id || (updatedTrip.dispatchId && t.dispatchId === updatedTrip.dispatchId)) {
+          found = true;
+          return updatedTrip;
+        }
+        return t;
+      });
+      if (!found) {
+        list.unshift(updatedTrip);
+      }
+      localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(list));
+      pushCloudStore('cloud_driver_trips', STORAGE_KEYS.TRIPS, list);
+      setPersistedTrips(list);
+
+      // If Step 4 is completed, mark matching Delivery Challan as Delivered
+      if (modalStep === 4 && updatedTrip.challanNo) {
+        try {
+          const chRaw = localStorage.getItem(STORAGE_KEYS.CHALLANS);
+          if (chRaw) {
+            const chList = JSON.parse(chRaw).map(c => {
+              if (c.challanNo === updatedTrip.challanNo || c.id === updatedTrip.challanId) {
+                return { ...c, status: 'Delivered' };
+              }
+              return c;
+            });
+            localStorage.setItem(STORAGE_KEYS.CHALLANS, JSON.stringify(chList));
+            pushCloudStore('cloud_delivery_challans', STORAGE_KEYS.CHALLANS, chList);
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Storage sync error:', e);
+    }
+
+    setShowStepModal(false);
   };
 
   const handleReportProblem = (e) => {
@@ -144,14 +339,14 @@ export default function DriverDashboardPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[550px] text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-mono uppercase text-[10px] border-b border-slate-200">
+                <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono uppercase text-[11px] font-bold tracking-wider border-b-2 border-[#0B2546]">
                   <tr>
-                    <th className="py-2.5 px-3">Date</th>
-                    <th className="py-2.5 px-3">Punch In</th>
-                    <th className="py-2.5 px-3">Punch Out</th>
-                    <th className="py-2.5 px-3">Total Hours</th>
-                    <th className="py-2.5 px-3">Face Recognition Photo</th>
-                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Date</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Punch In</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Punch Out</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Total Hours</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Face Recognition Photo</th>
+                    <th className="py-3 px-3 text-white">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -311,61 +506,75 @@ export default function DriverDashboardPage() {
                 </div>
               </div>
 
-              {/* 7-Step Delivery Progress Track */}
+              {/* 4-Step Smartphone Delivery Progress Track */}
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-bold uppercase tracking-wider text-[11px]">Journey Milestone</span>
-                  <span className="font-mono text-amber-700 font-bold text-xs">
-                    {currentStep}/7: {steps[currentStep - 1]?.label}
+                  <span className="text-slate-700 font-black uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Driver 4-Step Trip Workflow</span>
+                  </span>
+                  <span className="font-mono text-amber-700 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    {currentWorkflowStep <= 4 ? `Step ${currentWorkflowStep}/4: ${workflowStages[currentWorkflowStep - 1]?.title}` : '✓ Trip Completed'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                  {steps.map((st) => (
-                    <div key={st.step} className="space-y-1 text-center min-w-0">
-                      <div
-                        className={`h-2 sm:h-2.5 rounded-full transition-all duration-300 ${st.step < currentStep
-                            ? 'bg-emerald-500'
-                            : st.step === currentStep
-                              ? 'bg-amber-500 shadow-md shadow-amber-500/50'
-                              : 'bg-slate-200'
-                          }`}
-                      />
-                      <span className={`text-[8px] sm:text-[10px] font-mono block truncate ${st.step === currentStep ? 'text-amber-700 font-bold' : 'text-slate-400'
-                        }`}>
-                        <span className="hidden sm:inline">{st.label}</span>
-                        <span className="inline sm:hidden">{st.short}</span>
-                      </span>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {workflowStages.map((st) => {
+                    const isDone = st.step < currentWorkflowStep;
+                    const isCurrent = st.step === currentWorkflowStep;
+                    return (
+                      <button
+                        key={st.step}
+                        type="button"
+                        onClick={() => openWorkflowStep(st.step)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isDone 
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
+                            : isCurrent
+                              ? 'bg-amber-50 border-amber-400 text-amber-950 ring-2 ring-amber-400 shadow-xs'
+                              : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                            isDone ? 'bg-emerald-200 text-emerald-800' : isCurrent ? 'bg-amber-200 text-amber-900 font-bold' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {st.badge}
+                          </span>
+                          {isDone ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <span className="text-[10px] font-mono text-slate-400 font-bold">#{st.step}</span>
+                          )}
+                        </div>
+                        <div className="font-bold text-xs truncate">{st.title}</div>
+                        <div className="text-[9px] text-slate-500 truncate mt-0.5">{st.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Main Action Buttons */}
+              {/* Main Smartphone Action Buttons */}
               <div className="space-y-2.5 pt-3 border-t border-slate-200">
-                {currentStep < 7 ? (
+                {currentWorkflowStep <= 4 ? (
                   <button
                     type="button"
-                    onClick={handleNextStep}
+                    onClick={() => openWorkflowStep(currentWorkflowStep)}
                     className="w-full py-4 px-6 rounded-2xl font-black text-base sm:text-lg bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 flex items-center justify-center gap-3 shadow-lg shadow-amber-500/20 active:scale-[0.99] transition-all cursor-pointer"
                   >
                     <span className="truncate">
-                      {currentStep === 1
-                        ? 'START TRIP (LEAVE PLANT)'
-                        : currentStep === 4
-                          ? 'ARRIVED AT POURING SITE'
-                          : currentStep === 5
-                            ? 'START UNLOADING / HOOK PUMP'
-                            : currentStep === 6
-                              ? 'COMPLETE DELIVERY & SIGN CHALLAN'
-                              : `ADVANCE: ${steps[currentStep]?.label}`}
+                      {currentWorkflowStep === 1 && 'STEP 1: START TRIP (LOG ODO & GPS)'}
+                      {currentWorkflowStep === 2 && 'STEP 2: ARRIVED AT SITE (SNAP PHOTO)'}
+                      {currentWorkflowStep === 3 && 'STEP 3: COMPLETE SITE WORK (DEPART)'}
+                      {currentWorkflowStep === 4 && 'STEP 4: RETURN TO PLANT & CLOSE TRIP'}
                     </span>
                     <ArrowRight className="w-5 h-5 shrink-0" />
                   </button>
                 ) : (
-                  <div className="w-full py-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold text-center flex items-center justify-center gap-2 text-sm">
+                  <div className="w-full py-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold text-center flex items-center justify-center gap-2 text-sm shadow-xs">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span>TRIP COMPLETED • RETURN TO PLANT FACILITY</span>
+                    <span>TRIP COMPLETED • RETURNED TO PLANT FACILITY ({effectiveActiveTrip.distanceKm || 0} KM)</span>
                   </div>
                 )}
 
@@ -521,6 +730,326 @@ export default function DriverDashboardPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Driver 4-Step Workflow Modal */}
+      <Modal
+        isOpen={showStepModal}
+        onClose={() => setShowStepModal(false)}
+        title={
+          modalStep === 1 ? 'Step 1: Start Trip (Depart Plant)' :
+          modalStep === 2 ? 'Step 2: Arrived at Pouring Site' :
+          modalStep === 3 ? 'Step 3: Complete Site Work & Depart' :
+          'Step 4: Return to Plant & Finalize Trip'
+        }
+      >
+        <div className="space-y-4 text-xs font-sans">
+          {/* Step Error Banner */}
+          {stepError && (
+            <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{stepError}</span>
+            </div>
+          )}
+
+          {/* Active Trip Header */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-slate-900">{effectiveActiveTrip?.customer || 'Customer Site'}</span>
+              <span className="font-mono font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[10px]">
+                TM: {effectiveActiveTrip?.vehicleNo || 'TM Unit'}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-500 flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-slate-400" />
+              <span>{effectiveActiveTrip?.site || 'Site Location'}</span>
+            </div>
+          </div>
+
+          {/* STEP 1: START TRIP */}
+          {modalStep === 1 && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+                  <Gauge className="w-4 h-4 text-emerald-600" />
+                  <span>Starting Odometer Reading (km) *</span>
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 14250"
+                  value={stepForm.startOdometer}
+                  onChange={(e) => setStepForm(prev => ({ ...prev, startOdometer: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-sm font-bold focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Start Odometer Photo */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-blue-600" />
+                  <span>Odometer Photo (Dashboard)</span>
+                </label>
+                <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
+                  <Camera className="w-6 h-6 text-slate-400 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-700">
+                    {stepForm.startOdoPhoto ? '✓ Photo Selected (Tap to retake)' : 'Take Photo or Choose File'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handlePhotoSelect(e, 'startOdoPhoto')}
+                    className="hidden"
+                  />
+                </label>
+                {stepForm.startOdoPhoto && (
+                  <div className="mt-2 text-center">
+                    <img src={stepForm.startOdoPhoto} alt="Odo" className="h-20 mx-auto rounded-lg border object-cover" />
+                  </div>
+                )}
+              </div>
+
+              {/* GPS Capture */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                    <Navigation className="w-3.5 h-3.5 text-cyan-600" />
+                    <span>GPS Telemetry</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => captureGpsForField('startGps')}
+                    className="px-2.5 py-1 bg-cyan-700 hover:bg-cyan-800 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Compass className="w-3 h-3" />
+                    <span>Capture Plant GPS</span>
+                  </button>
+                </div>
+                <div className="font-mono text-[11px] text-slate-600">
+                  {stepForm.startGps || 'GPS not yet captured (Will use Sangli Plant coords)'}
+                </div>
+                {gpsStatus && <div className="text-[10px] text-emerald-700 font-medium">{gpsStatus}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: ARRIVED AT SITE */}
+          {modalStep === 2 && (
+            <div className="space-y-3">
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 font-medium">
+                Confirm your arrival at customer delivery site: <strong>{effectiveActiveTrip?.site}</strong>.
+              </div>
+
+              {/* Site Arrival Photo */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                  <span>Site Arrival Photo (Truck at Site)</span>
+                </label>
+                <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
+                  <Camera className="w-6 h-6 text-slate-400 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-700">
+                    {stepForm.siteArrivalPhoto ? '✓ Arrival Photo Captured' : 'Take Site Photo or Choose File'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handlePhotoSelect(e, 'siteArrivalPhoto')}
+                    className="hidden"
+                  />
+                </label>
+                {stepForm.siteArrivalPhoto && (
+                  <div className="mt-2 text-center">
+                    <img src={stepForm.siteArrivalPhoto} alt="Site Arrival" className="h-20 mx-auto rounded-lg border object-cover" />
+                  </div>
+                )}
+              </div>
+
+              {/* Site GPS Capture */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Site Location Coordinates</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => captureGpsForField('siteArrivalGps')}
+                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Compass className="w-3 h-3" />
+                    <span>Capture Site GPS</span>
+                  </button>
+                </div>
+                <div className="font-mono text-[11px] text-slate-600">
+                  {stepForm.siteArrivalGps || 'GPS not yet captured'}
+                </div>
+                {gpsStatus && <div className="text-[10px] text-emerald-700 font-medium">{gpsStatus}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: COMPLETE SITE WORK */}
+          {modalStep === 3 && (
+            <div className="space-y-3">
+              <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 font-medium">
+                Concrete pouring finished. Capture departure photo / signed Challan before driving back.
+              </div>
+
+              {/* Site Departure Photo */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-indigo-600" />
+                  <span>Site Departure / Signed Slip Photo</span>
+                </label>
+                <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
+                  <Camera className="w-6 h-6 text-slate-400 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-700">
+                    {stepForm.siteDeparturePhoto ? '✓ Departure Photo Captured' : 'Take Slip Photo or Choose File'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handlePhotoSelect(e, 'siteDeparturePhoto')}
+                    className="hidden"
+                  />
+                </label>
+                {stepForm.siteDeparturePhoto && (
+                  <div className="mt-2 text-center">
+                    <img src={stepForm.siteDeparturePhoto} alt="Site Departure" className="h-20 mx-auto rounded-lg border object-cover" />
+                  </div>
+                )}
+              </div>
+
+              {/* Site Departure GPS */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                    <Navigation className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Departure GPS</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => captureGpsForField('siteDepartureGps')}
+                    className="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Compass className="w-3 h-3" />
+                    <span>Capture GPS</span>
+                  </button>
+                </div>
+                <div className="font-mono text-[11px] text-slate-600">
+                  {stepForm.siteDepartureGps || 'GPS not yet captured'}
+                </div>
+                {gpsStatus && <div className="text-[10px] text-indigo-700 font-medium">{gpsStatus}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: RETURN TO PLANT */}
+          {modalStep === 4 && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block">Start Odometer</span>
+                  <span className="font-mono font-black text-slate-800 text-sm">
+                    {effectiveActiveTrip?.startOdometer || stepForm.startOdometer || 0} km
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block">Calculated Trip Distance</span>
+                  <span className="font-mono font-black text-emerald-700 text-sm">
+                    {Number(stepForm.finalOdometer) && Number(effectiveActiveTrip?.startOdometer || stepForm.startOdometer)
+                      ? `${Math.max(0, (Number(stepForm.finalOdometer) - Number(effectiveActiveTrip?.startOdometer || stepForm.startOdometer)).toFixed(1))} km`
+                      : '-- km'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+                  <Gauge className="w-4 h-4 text-emerald-600" />
+                  <span>Final Return Odometer Reading (km) *</span>
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 14285"
+                  value={stepForm.finalOdometer}
+                  onChange={(e) => setStepForm(prev => ({ ...prev, finalOdometer: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Final Return Odo Photo */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-blue-600" />
+                  <span>Return Odometer Photo</span>
+                </label>
+                <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer bg-slate-50/50 transition-colors">
+                  <Camera className="w-6 h-6 text-slate-400 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-700">
+                    {stepForm.finalOdoPhoto ? '✓ Return Photo Captured' : 'Take Photo or Choose File'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handlePhotoSelect(e, 'finalOdoPhoto')}
+                    className="hidden"
+                  />
+                </label>
+                {stepForm.finalOdoPhoto && (
+                  <div className="mt-2 text-center">
+                    <img src={stepForm.finalOdoPhoto} alt="Final Odo" className="h-20 mx-auto rounded-lg border object-cover" />
+                  </div>
+                )}
+              </div>
+
+              {/* Plant Return GPS */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Plant Gate GPS</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => captureGpsForField('finalGps')}
+                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Compass className="w-3 h-3" />
+                    <span>Capture Plant GPS</span>
+                  </button>
+                </div>
+                <div className="font-mono text-[11px] text-slate-600">
+                  {stepForm.finalGps || 'GPS not yet captured'}
+                </div>
+                {gpsStatus && <div className="text-[10px] text-emerald-700 font-medium">{gpsStatus}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* Modal Actions */}
+          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowStepModal(false)}
+              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-100 text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveStep}
+              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>Confirm & Save Step</span>
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />

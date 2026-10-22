@@ -114,19 +114,7 @@ export default function Modal({
 
         {/* Modal Header */}
         <div className="flex items-center justify-between gap-2.5 mb-2.5 sm:mb-3 border-b border-[#D4E4F7] pb-2 pt-0.5 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-[#F5F9FF] hover:bg-[#EAF3FF] active:scale-95 text-black border border-[#D4E4F7] transition-all cursor-pointer shadow-xs shrink-0"
-              title="Back (Esc)"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-[#1D5FA7]" />
-              <span>Back</span>
-            </button>
-
-            <div className="h-4 w-px bg-[#D4E4F7] shrink-0 hidden sm:block" />
-
+          <div className="flex items-center gap-2.5 min-w-0">
             {Icon && (
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1D5FA7] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />

@@ -1768,29 +1768,29 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   {/* DESKTOP EXCEL SPREADSHEET REGISTER VIEW (Visible on >= md screens) - Fitted 100% without horizontal scroll */}
                   <div className="hidden md:block w-full overflow-x-auto">
                     {/* Excel Ledger Top Sub-bar */}
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 border-b border-slate-200 text-xs select-none">
+                    <div className="flex items-center justify-between px-3.5 py-2 bg-gradient-to-r from-[#EAF3FF] to-[#F5F9FF] border-b border-[#D4E4F7] text-xs select-none">
                       <div className="flex items-center gap-2">
-                        <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
-                        <span className="font-bold text-slate-800 text-xs">Excel Sales & Cash Register</span>
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-white border border-slate-300 text-slate-700">
-                          {filteredBills.length} rows
+                        <FileSpreadsheet className="w-4 h-4 text-[#1D5FA7]" />
+                        <span className="font-extrabold text-[#123B6D] text-xs uppercase tracking-wide">Sales & Cash Register</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#1D5FA7] text-white shadow-2xs">
+                          {filteredBills.length} records
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 font-medium">
-                        💡 Click <strong className="text-emerald-700 font-bold">+ Pay</strong> to record cash/UPI receipt • Click <strong className="text-amber-800 font-bold">Print</strong> for thermal memo
+                      <div className="text-[11px] text-slate-700 font-medium">
+                        💡 Click <strong className="text-emerald-700 font-bold">+ Pay</strong> to record receipt • Click <strong className="text-[#1D5FA7] font-bold">Print</strong> for thermal memo
                       </div>
                     </div>
 
                     <table className="w-full text-left text-xs text-slate-800 border-collapse border-b border-slate-200">
                       <thead>
-                        <tr className="bg-slate-50 text-slate-800 font-bold text-[11px] border-b border-slate-300 select-none">
-                          <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200 w-[110px]">Date</th>
-                          <th className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200 w-[120px]">Bill No.</th>
-                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[130px]">Bill Amount</th>
-                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[130px]">Payment Credited</th>
-                          <th className="py-2.5 px-3 border-r border-slate-200 min-w-[200px]">Description</th>
-                          <th className="py-2.5 px-3 text-right whitespace-nowrap border-r border-slate-200 w-[130px]">Balance</th>
-                          <th className="py-2.5 px-2 text-center whitespace-nowrap w-[170px] bg-slate-100/60">Actions</th>
+                        <tr className="bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-extrabold text-[11px] uppercase tracking-wider select-none shadow-xs border-b-2 border-[#123B6D]">
+                          <th className="py-3 px-3 whitespace-nowrap border-r border-white/20 w-[110px] text-white">Date</th>
+                          <th className="py-3 px-3 whitespace-nowrap border-r border-white/20 w-[120px] text-white">Bill No.</th>
+                          <th className="py-3 px-3 text-right whitespace-nowrap border-r border-white/20 w-[130px] text-white">Bill Amount</th>
+                          <th className="py-3 px-3 text-right whitespace-nowrap border-r border-white/20 w-[140px] text-emerald-300 font-black">Payment Credited</th>
+                          <th className="py-3 px-3 border-r border-white/20 min-w-[200px] text-white">Description</th>
+                          <th className="py-3 px-3 text-right whitespace-nowrap border-r border-white/20 w-[130px] text-white">Balance</th>
+                          <th className="py-3 px-2 text-center whitespace-nowrap w-[170px] bg-black/20 text-white">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -2193,14 +2193,14 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 <div className="hidden md:block w-full overflow-hidden">
                   <table className="w-full text-left text-xs text-slate-700 border-collapse">
                     <thead>
-                      <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
-                        <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Voucher No & Date</th>
-                        <th className="py-2.5 px-2 sm:px-2.5">Supplier & Plant Location</th>
-                        <th className="py-2.5 px-2 sm:px-2.5">Inward Material & Qty</th>
-                        <th className="py-2.5 px-2 sm:px-2.5 whitespace-nowrap">Truck & Slip No</th>
-                        <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Voucher Total</th>
-                        <th className="py-2.5 px-2 sm:px-2.5 text-center whitespace-nowrap">Policy Status</th>
-                        <th className="py-2.5 px-2 sm:px-2.5 text-right whitespace-nowrap">Actions</th>
+                      <tr className="bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-extrabold uppercase tracking-wider text-[10px] border-b-2 border-[#123B6D] select-none shadow-xs">
+                        <th className="py-3 px-2 sm:px-2.5 whitespace-nowrap text-white">Voucher No & Date</th>
+                        <th className="py-3 px-2 sm:px-2.5 text-white">Supplier & Plant Location</th>
+                        <th className="py-3 px-2 sm:px-2.5 text-white">Inward Material & Qty</th>
+                        <th className="py-3 px-2 sm:px-2.5 whitespace-nowrap text-white">Truck & Slip No</th>
+                        <th className="py-3 px-2 sm:px-2.5 text-right whitespace-nowrap text-white">Voucher Total</th>
+                        <th className="py-3 px-2 sm:px-2.5 text-center whitespace-nowrap text-white">Policy Status</th>
+                        <th className="py-3 px-2 sm:px-2.5 text-right whitespace-nowrap text-white">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/70">
@@ -2511,24 +2511,13 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   <KeyRound className="w-4.5 h-4.5 text-cyan-300" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base font-black tracking-tight truncate">
+                  <h3 className="text-base font-black tracking-tight truncate text-white">
                     Owner Authorization Required
                   </h3>
                   <p className="text-xs text-blue-200/80 truncate">
                     10-Minute grace period expired for #{targetItemForOtp.item.billNo || targetItemForOtp.item.voucherNo}
                   </p>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setOtpModalOpen(false)}
-                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
@@ -2722,17 +2711,6 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                     </p>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowBillFormModal(false)}
-                  className="p-1.5 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
@@ -3130,15 +3108,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                 <div className="border border-[#D4E4F7] rounded-xl overflow-hidden shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-[#F5F9FF] font-mono font-bold text-[#123B6D] border-b border-[#D4E4F7] text-[10px] uppercase tracking-wider">
+                    <thead className="bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] font-mono font-extrabold text-white border-b-2 border-[#123B6D] text-[10px] uppercase tracking-wider shadow-xs">
                       <tr>
-                        <th className="py-2.5 px-3 w-12 text-center">SN.</th>
-                        <th className="py-2.5 px-3">Material Description / Concrete Grade</th>
-                        <th className="py-2.5 px-3 w-20 text-center">Qty</th>
-                        <th className="py-2.5 px-3 w-20 text-center">Unit</th>
-                        <th className="py-2.5 px-3 w-28 text-right">Rate (₹)</th>
-                        <th className="py-2.5 px-3 w-32 text-right">Total Amount (₹)</th>
-                        <th className="py-2.5 px-2 w-10 text-center"></th>
+                        <th className="py-2.5 px-3 w-12 text-center text-white">SN.</th>
+                        <th className="py-2.5 px-3 text-white">Material Description / Concrete Grade</th>
+                        <th className="py-2.5 px-3 w-20 text-center text-white">Qty</th>
+                        <th className="py-2.5 px-3 w-20 text-center text-white">Unit</th>
+                        <th className="py-2.5 px-3 w-28 text-right text-white">Rate (₹)</th>
+                        <th className="py-2.5 px-3 w-32 text-right text-white">Total Amount (₹)</th>
+                        <th className="py-2.5 px-2 w-10 text-center text-white"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#D4E4F7]">
@@ -3515,30 +3493,19 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 <button
                   type="button"
                   onClick={() => setShowPurchaseFormModal(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 active:scale-95 text-white flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer shadow-2xs shrink-0"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer shadow-2xs shrink-0"
                   title="Go Back"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-slate-300" />
+                  <ArrowLeft className="w-3.5 h-3.5 text-cyan-300" />
                   <span>Back</span>
                 </button>
 
                 <div className="h-4 w-px bg-slate-700 shrink-0 hidden sm:block" />
 
-                <h3 className="text-base font-black tracking-tight flex items-center gap-2 truncate">
+                <h3 className="text-base font-black tracking-tight flex items-center gap-2 truncate text-white">
                   <Truck className="w-5 h-5 text-cyan-400 shrink-0" />
                   <span className="truncate">{editingPurchase ? `Edit Purchase #${purchaseForm.voucherNo}` : 'Record Plant Material Purchase'}</span>
                 </h3>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowPurchaseFormModal(false)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
@@ -3674,19 +3641,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white p-3.5 sm:px-5 flex items-center justify-between border-b border-white/10 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setPaymentModalBill(null)}
-                  className="p-1.5 rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2 truncate">
+                  <h3 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2 truncate text-white">
                     <span>Cash Memo #{paymentModalBill.billNo}</span>
                     <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-white/10 text-slate-200">
                       Payment Register
@@ -3701,7 +3660,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               <button
                 type="button"
                 onClick={() => setPaymentModalBill(null)}
-                className="p-1.5 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="p-1.5 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
                 title="Close"
               >
                 <X className="w-4 h-4" />

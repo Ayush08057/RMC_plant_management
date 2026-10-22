@@ -174,16 +174,27 @@ table,
   background-color: #FFFFFF;
 }
 
-/* Light blue backgrounds for metric badges, tags, and subtle highlights */
-[class*="bg-emerald-50"], [class*="bg-green-50"], [class*="bg-amber-50"], [class*="bg-orange-50"],
-[class*="bg-rose-50"], [class*="bg-red-50"], [class*="bg-purple-50"], [class*="bg-indigo-50"],
-[class*="bg-cyan-50"], [class*="bg-blue-50"] {
-  background-color: #EAF3FF !important;
-}
-
-[class*="bg-emerald-100"], [class*="bg-green-100"], [class*="bg-amber-100"], [class*="bg-orange-100"],
-[class*="bg-rose-100"], [class*="bg-red-100"], [class*="bg-purple-100"], [class*="bg-indigo-100"],
-[class*="bg-cyan-100"], [class*="bg-blue-100"] {
+/* Light blue backgrounds for metric badges, tags, and subtle highlights (never buttons or interactive controls) */
+:not(button):not(button *)[class~="bg-emerald-50"],
+:not(button):not(button *)[class~="bg-green-50"],
+:not(button):not(button *)[class~="bg-amber-50"],
+:not(button):not(button *)[class~="bg-orange-50"],
+:not(button):not(button *)[class~="bg-rose-50"],
+:not(button):not(button *)[class~="bg-red-50"],
+:not(button):not(button *)[class~="bg-purple-50"],
+:not(button):not(button *)[class~="bg-indigo-50"],
+:not(button):not(button *)[class~="bg-cyan-50"],
+:not(button):not(button *)[class~="bg-blue-50"],
+:not(button):not(button *)[class~="bg-emerald-100"],
+:not(button):not(button *)[class~="bg-green-100"],
+:not(button):not(button *)[class~="bg-amber-100"],
+:not(button):not(button *)[class~="bg-orange-100"],
+:not(button):not(button *)[class~="bg-rose-100"],
+:not(button):not(button *)[class~="bg-red-100"],
+:not(button):not(button *)[class~="bg-purple-100"],
+:not(button):not(button *)[class~="bg-indigo-100"],
+:not(button):not(button *)[class~="bg-cyan-100"],
+:not(button):not(button *)[class~="bg-blue-100"] {
   background-color: #EAF3FF !important;
 }
 
@@ -191,6 +202,38 @@ table,
 [class*="bg-blue-600"], [class*="bg-indigo-600"], [class*="bg-cyan-600"] {
   background-color: #1D5FA7 !important;
   color: #FFFFFF !important;
+}
+
+/* Emerald / Green Action Buttons (Approve & Lock Payroll, Confirm, Success) */
+button[class*="bg-emerald-600"],
+button[class*="bg-emerald-700"],
+button[class*="bg-emerald-500"],
+button[class*="bg-green-600"],
+button[class*="bg-green-700"] {
+  background-color: #059669 !important; /* Solid vibrant emerald */
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  border: 1px solid #047857 !important;
+}
+
+button[class*="bg-emerald-600"]:hover,
+button[class*="bg-emerald-700"]:hover,
+button[class*="bg-emerald-500"]:hover,
+button[class*="bg-green-600"]:hover,
+button[class*="bg-green-700"]:hover {
+  background-color: #10b981 !important; /* Bright hover emerald */
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+
+button[class*="bg-emerald-600"] *,
+button[class*="bg-emerald-700"] *,
+button[class*="bg-emerald-500"] *,
+button[class*="bg-green-600"] *,
+button[class*="bg-green-700"] * {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  stroke: #FFFFFF !important; /* Ensure SVG checkmark icon is crisp white */
 }
 
 /* Deep navy buttons or dark badges (strictly solid, never translucent backdrops) */
@@ -215,76 +258,199 @@ button[class~="bg-slate-800"],
 }
 
 /* ========================================================
-   HIGH-CONTRAST BLACK TYPOGRAPHY FOR ALL DASHBOARDS
+   HIGH-CONTRAST DARK TYPOGRAPHY FOR ALL SURFACES
+   Ensures 100% visible, crisp, rich-contrast text across the entire app
    ======================================================== */
+
+/* Global body & light containers default to deep, rich dark slate */
+body,
+.app-shell,
 .app-shell main,
 .app-shell header,
 .app-shell footer,
 .app-shell table,
 .app-shell input,
 .app-shell select,
-.app-shell textarea {
-  color: #000000;
+.app-shell textarea,
+.panel-white,
+.glass-panel,
+.glass-card,
+.bg-white {
+  color: #0f172a;
 }
 
-/* Headings, KPI values, bold titles, table header labels */
-h1, h2, h3, h4, h5, h6,
-.font-black,
-.font-bold,
-.font-semibold,
-[class*="text-slate-900"],
-[class*="text-slate-800"],
-[class*="text-slate-950"],
-[class*="text-gray-900"],
-[class*="text-gray-800"],
-[class*="text-[#123B6D]"] {
-  color: #000000 !important;
+/* Headings, KPI values, bold titles, table header labels on light surfaces */
+.app-shell main h1,
+.app-shell main h2,
+.app-shell main h3,
+.app-shell main h4,
+.app-shell main h5,
+.app-shell main h6,
+.app-shell table th:not([class*="text-white"]):not([class*="text-emerald-"]):not([class*="text-amber-"]):not(thead[class*="bg-"] *):not(tr[class*="bg-"] *):not(thead *),
+.app-shell table td:not([class*="text-white"]):not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-red-"]),
+.bg-white .font-black:not(thead *),
+.bg-white .font-bold:not(thead *),
+.bg-white .font-semibold:not(thead *),
+[class*="text-slate-950"]:not(thead *),
+[class*="text-slate-900"]:not(thead *),
+[class*="text-slate-800"]:not(thead *),
+[class*="text-slate-700"]:not(thead *),
+[class*="text-gray-900"]:not(thead *),
+[class*="text-gray-800"]:not(thead *),
+[class*="text-gray-700"]:not(thead *) {
+  color: #0f172a !important;
 }
 
-/* Secondary descriptions, subtexts, table body content, form labels */
-p,
-label,
-td,
-.app-shell main span:not([class*="text-white"]):not(button *),
-[class*="text-slate-700"],
-[class*="text-slate-600"],
-[class*="text-slate-500"],
-[class*="text-gray-700"],
-[class*="text-gray-600"] {
-  color: #000000 !important;
+/* Make all muted/secondary labels, descriptions, and subtexts dark and readable */
+.app-shell main p:not([class*="text-white"]):not(.app-sidebar *):not(thead *),
+.app-shell main label:not([class*="text-white"]):not(.app-sidebar *):not(thead *),
+.app-shell main span:not([class*="text-white"]):not(button *):not(.app-sidebar *):not(thead *):not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-red-"]),
+.app-shell main [class*="text-slate-600"]:not(.app-sidebar *):not(thead *),
+.app-shell main [class*="text-slate-500"]:not(.app-sidebar *):not(thead *),
+.app-shell main [class*="text-slate-400"]:not(.app-sidebar *):not(thead *),
+.app-shell main [class*="text-gray-600"]:not(.app-sidebar *):not(thead *),
+.app-shell main [class*="text-gray-500"]:not(.app-sidebar *):not(thead *),
+.app-shell main [class*="text-gray-400"]:not(.app-sidebar *):not(thead *) {
+  color: #1e293b !important; /* Deep dark slate - high readability */
 }
 
-/* Unify any residual blue text in dashboard content to crisp black */
-.app-shell main [class*="text-[#1D5FA7]"]:not(button):not([class*="bg-"]):not(svg),
-.app-shell main [class*="text-blue-"]:not(button):not([class*="bg-"]):not(svg) {
-  color: #000000 !important;
+/* Input, select & textarea text visibility */
+input, select, textarea {
+  color: #0f172a !important;
+  font-weight: 500;
+}
+input::placeholder, textarea::placeholder {
+  color: #64748b !important;
 }
 
-/* White text rule preservation for navy sidebar, dark badges, table headers & blue buttons */
-.app-sidebar {
-  color: #FFFFFF;
-}
-.app-sidebar .sidebar-label,
-.app-sidebar [class*="text-white"],
-thead[class*="bg-[#123B6D]"],
-thead[class*="bg-[#123B6D]"] *,
+/* ========================================================
+   HIGH-CONTRAST VISIBILITY FOR DARK HEADERS, MODALS & BUTTONS
+   Only applies to elements on truly dark surfaces without bleeding into nested white cards
+   ======================================================== */
 .text-white,
-[class*="text-white"],
-button[class*="bg-"][class*="text-white"],
-button[class*="bg-"][class*="text-white"] *,
-span[class*="bg-"][class*="text-white"],
-span[class*="bg-"][class*="text-white"] * {
+[class~="text-white"],
+button[class*="bg-blue-600"],
+button[class*="bg-blue-600"] *,
+button[class*="bg-blue-600"] span,
+button[class*="bg-[#1D5FA7]"],
+button[class*="bg-[#1D5FA7]"] *,
+button[class*="bg-[#1D5FA7]"] span,
+button[class*="bg-[#136dec]"],
+button[class*="bg-[#136dec]"] *,
+button[class*="bg-[#136dec]"] span,
+button[class*="bg-slate-900"],
+button[class*="bg-slate-900"] *,
+button[class*="bg-slate-900"] span,
+button[class*="bg-emerald-600"],
+button[class*="bg-emerald-600"] *,
+button[class*="bg-emerald-600"] span,
+.badge-dark {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  stroke: #FFFFFF !important;
+}
+
+/* ABSOLUTE HIGHEST SPECIFICITY FOR ALL TABLE HEADERS (MAIN & COLORED) */
+.app-shell thead.table-header-main th,
+.app-shell thead.table-header-main th *,
+.app-shell thead.table-header-main span,
+.app-shell thead[class*="bg-"] th,
+.app-shell thead[class*="bg-"] th *,
+.app-shell thead[class*="bg-"] span,
+.app-shell table thead.table-header-main th,
+.app-shell table thead.table-header-main th *,
+.app-shell table thead[class*="bg-"] th,
+.app-shell table thead[class*="bg-"] th *,
+.app-shell .table-header-main th,
+.app-shell .table-header-main th *,
+thead.table-header-main th,
+thead.table-header-main th *,
+thead.table-header-main span,
+thead[class*="bg-"] th,
+thead[class*="bg-"] th *,
+thead[class*="bg-"] span,
+thead tr[class*="bg-"] th,
+thead tr[class*="bg-"] th *,
+table thead th.text-white,
+table thead th[class*="text-white"],
+table thead th[class*="text-white"] *,
+.table-header-main,
+.table-header-main th,
+.table-header-main th *,
+.table-header-main th span {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+
+/* Standardized Main Table Header Style */
+.table-header-main {
+  background: linear-gradient(90deg, #123B6D 0%, #164785 50%, #1D5FA7 100%) !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  border-bottom: 2px solid #0B2546 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.table-header-main th {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-bottom: 2px solid #0B2546 !important;
+  background: transparent !important;
+}
+
+.table-header-main th:last-child {
+  border-right: none !important;
+}
+
+.table-header-main th span {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+.app-shell thead th[class*="text-emerald-300"],
+.app-shell thead th[class*="text-emerald-300"] *,
+table thead th[class*="text-emerald-300"],
+table thead th[class*="text-emerald-400"] {
+  color: #6ee7b7 !important; /* Fresh bright mint */
+  -webkit-text-fill-color: #6ee7b7 !important;
+}
+
+/* Explicit high-contrast amber buttons */
+button[class*="bg-amber-"] {
+  background-color: #f59e0b !important;
+  color: #020617 !important;
+}
+button[class*="bg-amber-"] * {
+  color: #020617 !important;
+}
+button[class*="bg-amber-"]:hover {
+  background-color: #fbbf24 !important;
+  color: #020617 !important;
+}
+
+/* Sidebar Specific Typography - Crisp, legible whites & light blues on dark navy */
+.app-sidebar .sidebar-heading,
+.app-sidebar h1, .app-sidebar h2, .app-sidebar h3 {
   color: #FFFFFF !important;
 }
-
-/* Sidebar specific subtle text color overrides */
-.app-sidebar [class*="text-slate-200"] { color: #e2e8f0 !important; }
-.app-sidebar [class*="text-slate-300"] { color: #cbd5e1 !important; }
-.app-sidebar [class*="text-slate-400"] { color: #94a3b8 !important; }
-.app-sidebar [class*="text-slate-500"] { color: #64748b !important; }
-.app-sidebar [class*="text-blue-200"] { color: #bfdbfe !important; }
-.app-sidebar [class*="text-blue-300"] { color: #93c5fd !important; }
-.app-sidebar [class*="text-blue-400"] { color: #60a5fa !important; }
+.app-sidebar [class*="text-slate-100"],
+.app-sidebar [class*="text-slate-200"],
+.app-sidebar [class*="text-slate-300"] {
+  color: #f1f5f9 !important;
+}
+.app-sidebar [class*="text-slate-400"] {
+  color: #cbd5e1 !important;
+}
+.app-sidebar [class*="text-blue-200"],
+.app-sidebar [class*="text-blue-300"] {
+  color: #93c5fd !important;
+}
 
 /* Border color transformations to approved Blue Border */
 [class*="border-emerald-"], [class*="border-green-"], [class*="border-amber-"], [class*="border-orange-"],

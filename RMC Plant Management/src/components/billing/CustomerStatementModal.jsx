@@ -177,145 +177,271 @@ export default function CustomerStatementModal({
         WebkitBackdropFilter: 'blur(8px)',
       }}
     >
-      <div className="cash-memo-modal-container bg-white text-slate-900 w-full max-w-[850px] max-h-[96vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:h-auto print:w-full print:border-none print:m-0 print:p-0 print:overflow-visible print:block my-auto print:my-0">
+      <div className="cash-memo-modal-container bg-white text-slate-900 w-full max-w-[1040px] max-h-[96vh] flex flex-col rounded-2xl shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:h-auto print:w-full print:border-none print:m-0 print:p-0 print:overflow-visible print:block my-auto print:my-0">
         
-        {/* Top Control Bar (Hidden in Print) */}
-        <div className="no-print bg-slate-900 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
+        {/* ========================================================
+            1. PAGE HEADER (Clean, Compact, Minimal ERP Header)
+            ======================================================== */}
+        <div className="no-print bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer"
+              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer shrink-0"
+              title="Return"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back</span>
+              <ArrowLeft className="w-4 h-4 text-slate-700" />
             </button>
 
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-bold tracking-wide">Cash Memo and Billing Statement</h3>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                  Cash Memo &amp; Billing Statement
+                </h1>
+                {selectedCust && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-[#1D5FA7] border border-blue-200 truncate">
+                    {selectedCust}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                View bills, payments received, and outstanding balances.
+              </p>
             </div>
           </div>
 
-          {/* Customer Switcher & Action Controls */}
-          <div className="flex items-center gap-2">
-            {uniqueCustomers.length > 1 && (
-              <div className="relative">
-                <select
-                  value={selectedCust}
-                  onChange={(e) => {
-                    setSelectedCust(e.target.value);
-                    if (onSelectCustomer) onSelectCustomer(e.target.value);
-                  }}
-                  className="bg-slate-800 text-white text-xs rounded-lg px-2.5 py-1.5 pr-7 border border-slate-700 font-bold focus:outline-none focus:border-amber-400 appearance-none cursor-pointer"
-                >
-                  <option value="ALL">All Customers (Combined)</option>
-                  {uniqueCustomers.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            )}
-
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <button
               type="button"
               onClick={handleExportStatement}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-              title="Export statement respecting current date filter"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Export 6-column statement to CSV/Excel"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Export</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Export CSV</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Print official statement"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-3.5 h-3.5 text-white" />
               <span>Print Statement</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
-              title="Close"
-            >
-              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Scrollable Document Area */}
-        <div className="cash-memo-scroll-area p-3 sm:p-5 overflow-y-auto bg-slate-100/70 flex-1 print:bg-white print:p-0 print:overflow-visible print:block print:w-full">
-          
-          {/* DATE PERIOD FILTER (Placed above the table, hidden when printing) */}
-          <div className="no-print bg-white border border-slate-300 rounded-xl p-3 sm:p-4 mb-3 max-w-[780px] mx-auto shadow-xs">
-            <div className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-              <span>Date Period Filter</span>
-              {(appliedFilter.fromDate || appliedFilter.toDate) && (
-                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                  Filter Active • Showing {filteredBills.length} record{filteredBills.length !== 1 ? 's' : ''}
-                </span>
-              )}
+        {/* ========================================================
+            2. DATE FILTER SECTION (One clean row on desktop)
+            ======================================================== */}
+        <div className="no-print bg-slate-50/80 border-b border-slate-200 px-4 sm:px-6 py-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <label className="font-semibold text-slate-700 whitespace-nowrap">
+                From Date:
+              </label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-8 px-2.5 rounded-md border border-slate-300 bg-white text-xs font-mono text-slate-900 focus:outline-none focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]"
+              />
             </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  From Date
-                </label>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  placeholder="DD/MM/YYYY"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-50 focus:bg-white text-xs font-mono text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                />
+            <div className="flex items-center gap-1.5">
+              <label className="font-semibold text-slate-700 whitespace-nowrap">
+                To Date:
+              </label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-8 px-2.5 rounded-md border border-slate-300 bg-white text-xs font-mono text-slate-900 focus:outline-none focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleApplyFilter}
+                className="h-8 px-3.5 rounded-md text-xs font-semibold bg-[#123B6D] hover:bg-[#1D5FA7] text-white transition-colors cursor-pointer shadow-2xs"
+              >
+                Apply Filter
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetFilter}
+                className="h-8 px-3 rounded-md text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+              >
+                <RotateCcw className="w-3 h-3 text-slate-500" />
+                <span>Reset</span>
+              </button>
+            </div>
+
+            {(appliedFilter.fromDate || appliedFilter.toDate) && (
+              <span className="text-[11px] font-medium text-slate-600 sm:ml-auto">
+                Period: <strong className="text-slate-900 font-mono">{appliedFilter.fromDate ? formatDisplayDate(appliedFilter.fromDate) : 'Start'}</strong> to <strong className="text-slate-900 font-mono">{appliedFilter.toDate ? formatDisplayDate(appliedFilter.toDate) : 'End'}</strong>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="cash-memo-scroll-area p-4 sm:p-6 overflow-y-auto flex-1 bg-white print:p-0 print:overflow-visible print:block print:w-full">
+          
+          {/* ========================================================
+              ON-SCREEN STATEMENT INTERFACE (no-print)
+              ======================================================== */}
+          <div className="no-print space-y-4">
+            
+            {/* 3. OPTIONAL COMPACT FINANCIAL SUMMARY */}
+            {/* 3. OPTIONAL COMPACT FINANCIAL SUMMARY */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-gradient-to-br from-white to-[#F5F9FF] rounded-xl border border-[#D4E4F7] p-3 shadow-2xs">
+                <div className="text-[11px] font-extrabold text-[#123B6D] uppercase tracking-wider">
+                  Total Bill Amount
+                </div>
+                <div className="text-base font-black font-mono text-slate-950 mt-0.5">
+                  ₹ {formatCurrency(totalFilteredBilled)}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  To Date
-                </label>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  placeholder="DD/MM/YYYY"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-50 focus:bg-white text-xs font-mono text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                />
+              <div className="bg-gradient-to-br from-white to-emerald-50/70 rounded-xl border border-emerald-200 p-3 shadow-2xs">
+                <div className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider">
+                  Total Payment Credited
+                </div>
+                <div className="text-base font-black font-mono text-emerald-700 mt-0.5">
+                  ₹ {formatCurrency(totalFilteredPaid)}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleApplyFilter}
-                  className="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer active:scale-95"
-                >
-                  Apply Filter
-                </button>
+              <div className="bg-gradient-to-br from-white to-amber-50/70 rounded-xl border border-amber-200 p-3 shadow-2xs">
+                <div className="text-[11px] font-extrabold text-amber-900 uppercase tracking-wider">
+                  Outstanding Balance
+                </div>
+                <div className={`text-base font-black font-mono mt-0.5 ${totalFilteredBalance > 0 ? 'text-amber-950' : 'text-emerald-700'}`}>
+                  ₹ {formatCurrency(totalFilteredBalance)}
+                  {totalFilteredBalance <= 0 && ' ✓'}
+                </div>
+              </div>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={handleResetFilter}
-                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-300 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                >
-                  <RotateCcw className="w-3 h-3 text-slate-500" />
-                  <span>Reset Filter</span>
-                </button>
+            {/* 4. SIX-COLUMN BILLING STATEMENT TABLE */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white border-b-2 border-[#123B6D] text-[11px] font-extrabold uppercase tracking-wider select-none shadow-xs">
+                      <th className="py-3 px-3 whitespace-nowrap w-[110px] border-r border-white/20 text-white">Date</th>
+                      <th className="py-3 px-3 whitespace-nowrap w-[120px] border-r border-white/20 text-white">Bill No.</th>
+                      <th className="py-3 px-3 text-right whitespace-nowrap w-[130px] border-r border-white/20 text-white">Bill Amount</th>
+                      <th className="py-3 px-3 text-right whitespace-nowrap w-[140px] border-r border-white/20 text-emerald-300 font-black">Payment Credited</th>
+                      <th className="py-3 px-3 border-r border-white/20 min-w-[200px] text-white">Description</th>
+                      <th className="py-3 px-3 text-right whitespace-nowrap w-[130px] text-white">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {statementRows.length > 0 ? (
+                      statementRows.map((b, idx) => (
+                        <tr key={b.id || idx} className="hover:bg-slate-50/70 transition-colors">
+                          {/* 1. Date */}
+                          <td className="py-2.5 px-3 whitespace-nowrap font-mono text-slate-800 border-r border-slate-200/80">
+                            {formatDisplayDate(b.date)}
+                          </td>
+
+                          {/* 2. Bill No. */}
+                          <td className="py-2.5 px-3 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-slate-200/80">
+                            {b.billNo}
+                          </td>
+
+                          {/* 3. Bill Amount */}
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200/80">
+                            ₹ {formatCurrency(b.finalAmount)}
+                          </td>
+
+                          {/* 4. Payment Credited */}
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap font-mono font-semibold text-emerald-700 border-r border-slate-200/80">
+                            {Number(b.paymentCredited || 0) > 0 ? `₹ ${formatCurrency(b.paymentCredited)}` : '₹ 0.00'}
+                          </td>
+
+                          {/* 5. Description */}
+                          <td className="py-2 px-3 border-r border-slate-200/80">
+                            {onUpdateDescription ? (
+                              <input
+                                type="text"
+                                value={b.description !== undefined ? b.description : (getBillDescription(b) === '-' ? '' : getBillDescription(b))}
+                                onChange={(e) => onUpdateDescription(b.id, e.target.value)}
+                                placeholder="Type payment description..."
+                                className="w-full px-2 py-1 text-xs font-semibold text-slate-900 bg-slate-50/80 hover:bg-slate-100/90 focus:bg-white rounded border border-slate-200 hover:border-slate-300 focus:border-[#1D5FA7] focus:ring-1 focus:ring-[#1D5FA7] transition-all outline-none"
+                                title="Click to edit payment description manually"
+                              />
+                            ) : (
+                              <div className="font-semibold text-slate-900 truncate" title={getBillDescription(b)}>
+                                {getBillDescription(b)}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 6. Balance */}
+                          <td className={`py-2.5 px-3 text-right whitespace-nowrap font-mono font-bold ${b.statementBalance > 0 ? 'text-slate-900' : 'text-emerald-700'}`}>
+                            ₹ {formatCurrency(b.statementBalance)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-10 px-4 text-center">
+                          <p className="text-slate-600 text-xs font-medium">
+                            No billing records found for the selected dates.
+                          </p>
+                          {(appliedFilter.fromDate || appliedFilter.toDate) && (
+                            <button
+                              type="button"
+                              onClick={handleResetFilter}
+                              className="mt-2 text-xs font-semibold text-[#1D5FA7] hover:underline cursor-pointer"
+                            >
+                              Reset date filter to view all records
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  {statementRows.length > 0 && (
+                    <tfoot className="bg-gradient-to-r from-[#EAF3FF] to-[#F5F9FF] border-t-2 border-[#1D5FA7] text-xs font-bold text-slate-900">
+                      <tr>
+                        <td colSpan={2} className="py-2.5 px-3 text-right uppercase text-[11px] tracking-wider text-[#123B6D] font-extrabold border-r border-[#D4E4F7]">
+                          Total ({statementRows.length} record{statementRows.length !== 1 ? 's' : ''}):
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950 border-r border-[#D4E4F7]">
+                          ₹ {formatCurrency(totalFilteredBilled)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-800 border-r border-[#D4E4F7]">
+                          ₹ {formatCurrency(totalFilteredPaid)}
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-[#D4E4F7] text-center text-[11px] text-slate-600 font-semibold">
+                          Statement Summary
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950">
+                          ₹ {formatCurrency(totalFilteredBalance)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
               </div>
             </div>
           </div>
 
-          {/* Printable Statement Document */}
+          {/* ========================================================
+              5. PRINTABLE STATEMENT DOCUMENT (Strictly for Printing)
+              ======================================================== */}
           <div
             ref={printRef}
-            className="cash-memo-printable bg-white text-black border border-black w-full max-w-[780px] mx-auto text-xs leading-normal font-sans select-text shadow-sm print:shadow-none print:border print:border-black p-4 sm:p-6"
+            className="cash-memo-printable hidden print:block bg-white text-black border border-black w-full max-w-[780px] mx-auto text-xs leading-normal font-sans select-text p-4 sm:p-6"
             style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
           >
             {/* Document Header */}
@@ -400,13 +526,13 @@ export default function CustomerStatementModal({
             <div className="mt-3">
               <table className="w-full border-collapse border border-black text-xs text-left">
                 <thead>
-                  <tr className="border-b-2 border-black bg-slate-100 font-bold text-black text-xs">
-                    <th className="py-2 px-2 border-r border-black w-[13%] whitespace-nowrap">Date</th>
-                    <th className="py-2 px-2 border-r border-black w-[13%] whitespace-nowrap">Bill No.</th>
-                    <th className="py-2 px-2 border-r border-black w-[18%] text-right whitespace-nowrap">Bill Amount</th>
-                    <th className="py-2 px-2 border-r border-black w-[18%] text-right whitespace-nowrap">Payment Credited</th>
-                    <th className="py-2 px-2 border-r border-black w-[22%]">Description</th>
-                    <th className="py-2 px-2 text-right w-[16%] whitespace-nowrap">Balance</th>
+                  <tr className="border-b-2 border-black bg-[#123B6D] text-white print:bg-slate-200 print:text-black font-extrabold text-xs">
+                    <th className="py-2.5 px-2 border-r border-black w-[13%] whitespace-nowrap text-white print:text-black">Date</th>
+                    <th className="py-2.5 px-2 border-r border-black w-[13%] whitespace-nowrap text-white print:text-black">Bill No.</th>
+                    <th className="py-2.5 px-2 border-r border-black w-[18%] text-right whitespace-nowrap text-white print:text-black">Bill Amount</th>
+                    <th className="py-2.5 px-2 border-r border-black w-[18%] text-right whitespace-nowrap text-emerald-300 print:text-black font-black">Payment Credited</th>
+                    <th className="py-2.5 px-2 border-r border-black w-[22%] text-white print:text-black">Description</th>
+                    <th className="py-2.5 px-2 text-right w-[16%] whitespace-nowrap text-white print:text-black">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -533,46 +659,12 @@ export default function CustomerStatementModal({
               </div>
             </div>
 
-          </div>
-        </div>
-
-        {/* Modal Bottom Bar */}
-        <div className="no-print p-3 sm:px-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-1.5 text-slate-500">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Official Cash Memo and Billing Statement • SM CONCRETECH format</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportStatement}
-              className="px-3.5 py-1.5 rounded-lg font-bold bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Export CSV</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-1.5 rounded-lg font-semibold bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 cursor-pointer"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-4 py-1.5 rounded-lg font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Statement</span>
-            </button>
-          </div>
         </div>
 
       </div>
     </div>
-  );
+  </div>
+);
 
   return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

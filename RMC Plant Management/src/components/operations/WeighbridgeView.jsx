@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useLanguage } from '../../context/LanguageContext';
+import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../services/plantOperationsService';
 
 const WEIGHBRIDGE_STORAGE_KEY = 'rmc_weighbridge_v2';
 const INITIAL_WEIGHBRIDGE = [];
@@ -211,6 +212,8 @@ export default function WeighbridgeView() {
       finalNet = 0;
     }
 
+    const isCompletedInward = formType === 'Inward' && slipStatus === 'Completed';
+
     const newSlip = {
       id: `WB-${Date.now()}`,
       slipNo: slipNumber,
@@ -227,15 +230,76 @@ export default function WeighbridgeView() {
       unit: 'Tons',
       status: slipStatus,
       remarks: remarks.trim() || 'Standard weighment recorded',
+      inventoryUpdated: isCompletedInward,
     };
 
     const updated = [newSlip, ...slips];
     saveSlips(updated);
+
+    // Sync inventory if completed inward
+    if (isCompletedInward) {
+      updateSiloInventoryForWeighment(material, finalNet, slipNumber, newSlip.vehicleNo, newSlip.partyName, false);
+    }
+
     setIsNewModalOpen(false);
     showToast(`Weighbridge Slip #${slipNumber} successfully recorded!`);
 
     if (shouldPrint) {
       setActivePrintSlip(newSlip);
+    }
+  };
+
+  // Helper to sync Weighbridge inward weighments with Silo Inventory
+  const updateSiloInventoryForWeighment = (materialName, netKg, slipNo, vehNo, party, isReversal = false) => {
+    try {
+      const netTons = Number(((netKg || 0) / 1000).toFixed(2));
+      if (netTons <= 0) return;
+      const factor = isReversal ? -1 : 1;
+
+      let targetKey = 'agg20';
+      const matLower = (materialName || '').toLowerCase();
+      if (matLower.includes('cement')) targetKey = 'cement';
+      else if (matLower.includes('fly ash') || matLower.includes('pozzocrete')) targetKey = 'flyash';
+      else if (matLower.includes('10mm')) targetKey = 'agg10';
+      else if (matLower.includes('20mm')) targetKey = 'agg20';
+      else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
+      else if (matLower.includes('river sand')) targetKey = 'riverSand';
+
+      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
+      if (siloData[targetKey]) {
+        const cur = Number(siloData[targetKey].stockTons) || 0;
+        siloData[targetKey].stockTons = Math.max(0, Number((cur + factor * netTons).toFixed(2)));
+        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
+      }
+
+      // Sync with Inward slips
+      const rawInward = localStorage.getItem(STORAGE_KEYS.INWARD);
+      let inwardData = rawInward ? JSON.parse(rawInward) : [];
+      if (isReversal) {
+        inwardData = inwardData.filter((r) => r.slipNo !== `#${slipNo}` && r.slipNo !== slipNo);
+      } else {
+        const newInward = {
+          id: `INW-WB-${Date.now()}`,
+          slipNo: `#${slipNo}`,
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          material: materialName,
+          supplier: party,
+          vehicleNo: vehNo,
+          netTons,
+          unit: 'Tons',
+          status: 'Finalized',
+          targetSilo: siloData[targetKey]?.siloName || 'Storage Silo',
+          createdAt: new Date().toISOString(),
+        };
+        inwardData = [newInward, ...inwardData];
+      }
+      localStorage.setItem(STORAGE_KEYS.INWARD, JSON.stringify(inwardData));
+      pushCloudStore('cloud_material_inward', STORAGE_KEYS.INWARD, inwardData);
+    } catch (err) {
+      console.warn('Inventory sync notice for weighbridge:', err.message);
     }
   };
 
@@ -266,21 +330,46 @@ export default function WeighbridgeView() {
           netKg: net,
           status: 'Completed',
           completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          inventoryUpdated: true,
         };
       }
       return s;
     });
 
     saveSlips(updated);
+
+    // If inward, update inventory now that entry is finalized!
+    if (selectedSlipForSecondWeight.type === 'Inward' || !selectedSlipForSecondWeight.type) {
+      updateSiloInventoryForWeighment(
+        selectedSlipForSecondWeight.material,
+        net,
+        selectedSlipForSecondWeight.slipNo,
+        selectedSlipForSecondWeight.vehicleNo,
+        selectedSlipForSecondWeight.partyName,
+        false
+      );
+    }
+
     setIsSecondWeightModalOpen(false);
     showToast(`Vehicle ${selectedSlipForSecondWeight.vehicleNo} tare completed! Net: ${(net / 1000).toFixed(2)} MT.`);
   };
 
   const handleDeleteSlip = (id, slipNo) => {
+    const targetSlip = slips.find((s) => s.id === id);
     if (window.confirm(`Are you sure you want to void weighbridge slip #${slipNo}?`)) {
+      if (targetSlip?.type === 'Inward' && targetSlip?.inventoryUpdated) {
+        updateSiloInventoryForWeighment(
+          targetSlip.material,
+          targetSlip.netKg,
+          targetSlip.slipNo,
+          targetSlip.vehicleNo,
+          targetSlip.partyName,
+          true
+        );
+      }
       const updated = slips.filter((s) => s.id !== id);
       saveSlips(updated);
-      showToast(`Slip #${slipNo} deleted.`);
+      showToast(`Slip #${slipNo} deleted and inventory adjusted.`);
     }
   };
 
@@ -466,17 +555,17 @@ export default function WeighbridgeView() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
-                <th className="py-3 px-3.5">Slip # & Date</th>
-                <th className="py-3 px-3.5">Type</th>
-                <th className="py-3 px-3.5">Vehicle Number</th>
-                <th className="py-3 px-3.5">Party / Customer</th>
-                <th className="py-3 px-3.5">Material</th>
-                <th className="py-3 px-3 text-right">Gross (kg)</th>
-                <th className="py-3 px-3 text-right">Tare (kg)</th>
-                <th className="py-3 px-3 text-right">Net Weight</th>
-                <th className="py-3 px-3.5 text-center">Actions</th>
+            <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
+              <tr>
+                <th className="py-3 px-3.5 text-white border-r border-white/20">Slip # & Date</th>
+                <th className="py-3 px-3.5 text-white border-r border-white/20">Type</th>
+                <th className="py-3 px-3.5 text-white border-r border-white/20">Vehicle Number</th>
+                <th className="py-3 px-3.5 text-white border-r border-white/20">Party / Customer</th>
+                <th className="py-3 px-3.5 text-white border-r border-white/20">Material</th>
+                <th className="py-3 px-3 text-right text-white border-r border-white/20">Gross (kg)</th>
+                <th className="py-3 px-3 text-right text-white border-r border-white/20">Tare (kg)</th>
+                <th className="py-3 px-3 text-right text-white border-r border-white/20">Net Weight</th>
+                <th className="py-3 px-3.5 text-center text-white">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">

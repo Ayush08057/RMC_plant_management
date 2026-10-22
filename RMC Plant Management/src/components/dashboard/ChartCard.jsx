@@ -177,12 +177,12 @@ export default function ChartCard({
           {/* Breakdown Table */}
           <div className="border border-[#D4E4F7] rounded-2xl overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#123B6D] text-white font-mono text-[10px] font-bold uppercase tracking-wider border-b border-[#123B6D]">
+              <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[10.5px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
                 <tr>
-                  <th className="p-2.5 pl-4">Time Interval / Label</th>
-                  <th className="p-2.5 font-right text-right">Recorded {unit}</th>
-                  {secondaryKey && <th className="p-2.5 text-right">{secondaryKey}</th>}
-                  <th className="p-2.5 pr-4 text-right">% of Peak</th>
+                  <th className="p-2.5 pl-4 text-white border-r border-white/20">Time Interval / Label</th>
+                  <th className="p-2.5 text-right text-white border-r border-white/20">Recorded {unit}</th>
+                  {secondaryKey && <th className="p-2.5 text-right text-white border-r border-white/20">{secondaryKey}</th>}
+                  <th className="p-2.5 pr-4 text-right text-white">% of Peak</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D4E4F7] font-mono">

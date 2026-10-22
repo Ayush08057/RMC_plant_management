@@ -4,6 +4,7 @@ import {
   RefreshCw, 
   CheckCircle2, 
   Lock, 
+  Unlock,
   Eye, 
   IndianRupee, 
   Printer, 
@@ -16,7 +17,11 @@ import {
   UserCheck,
   Building2,
   FileCheck2,
-  User
+  User,
+  AlertTriangle,
+  CreditCard,
+  Layers,
+  ChevronRight
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +29,8 @@ import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
+import AdvanceManagementView from './AdvanceManagementView';
+import LoanManagementView from './LoanManagementView';
 
 export default function PayrollPreparationView({ defaultMonth = 'October 2026' }) {
   const { user } = useAuth();
@@ -31,14 +38,20 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
     payrollRecords, 
     generatePayroll, 
     approvePayroll, 
+    reversePayroll,
     addPayrollRecord,
     updatePayrollRecord,
     deletePayrollRecord,
     employees, 
+    advances,
+    loans,
     hrSettings 
   } = useWorkforce();
 
+  // Navigation subtabs: 'sheet' | 'advances' | 'loans' | 'summary'
+  const [activeSubTab, setActiveSubTab] = useState('sheet');
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const [selectedSummaryEmpId, setSelectedSummaryEmpId] = useState('');
   const [showSlipModal, setShowSlipModal] = useState(false);
   const [activeSlip, setActiveSlip] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -64,27 +77,72 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
     remarks: '',
   });
 
-  const canApprove = user?.role === 'Admin' || user?.role === 'Accountant' || user?.role === 'Owner / Director';
-  const canEdit = user?.role === 'Admin' || user?.role === 'Accountant';
+  const canApprove = 
+    user?.role === 'Admin' || 
+    user?.role === 'Accountant' || 
+    user?.role === 'Owner / Director' ||
+    user?.email === 'smconcretech@gmail.com';
+
+  const canEdit = 
+    user?.role === 'Admin' || 
+    user?.role === 'Accountant' ||
+    user?.email === 'smconcretech@gmail.com';
 
   // Current month's records
   const records = payrollRecords.filter((p) => p.monthYear === selectedMonth);
+  const isPayrollLocked = records.length > 0 && records.every((p) => p.status === 'Approved' || p.status === 'Locked');
+
+  // Helper to get active advance balance and scheduled loan EMI for an employee
+  const getEmployeeScheduledDeductions = (empId) => {
+    if (!empId) return { scheduledAdvance: 0, scheduledLoanEmi: 0 };
+    
+    const empAdvances = (advances || []).filter(
+      (a) => a.employeeId === empId && 
+             (a.status === 'Approved' || a.status === 'Partially Recovered' || a.status === 'Active') && 
+             Number(a.balance) > 0
+    );
+    const scheduledAdvance = empAdvances.reduce((sum, a) => {
+      const bal = Number(a.balance) || 0;
+      const monthly = Number(a.monthlyDeduction) > 0 ? Number(a.monthlyDeduction) : bal;
+      return sum + Math.min(bal, monthly);
+    }, 0);
+
+    const empLoans = (loans || []).filter(
+      (l) => l.employeeId === empId && 
+             (l.status === 'Active' || l.status === 'Approved') && 
+             Number(l.outstandingBalance) > 0
+    );
+    const scheduledLoanEmi = empLoans.reduce((sum, l) => {
+      const out = Number(l.outstandingBalance) || 0;
+      const emi = Number(l.emiAmount) || 0;
+      return sum + Math.min(out, emi);
+    }, 0);
+
+    return { scheduledAdvance, scheduledLoanEmi };
+  };
 
   const handleRecalculate = () => {
     setCalculating(true);
     setTimeout(() => {
       generatePayroll(selectedMonth);
       setCalculating(false);
-      setToastMessage(`Payroll recalculated from latest attendance, overtime, advance, and loan ledgers.`);
-    }, 400);
+      setToastMessage(`Payroll recalculated from latest attendance, advance balance, and loan EMI ledgers.`);
+    }, 300);
   };
 
   const handleApprovePayroll = () => {
     approvePayroll(selectedMonth, user);
-    setToastMessage(`Payroll for ${selectedMonth} approved and locked. Salary advance & loan ledgers updated.`);
+    setToastMessage(`Payroll for ${selectedMonth} approved and locked. Advance recoveries and loan EMIs applied.`);
   };
 
-  const isPayrollLocked = records.length > 0 && records.every((p) => p.status === 'Approved' || p.status === 'Locked');
+  const handleUnlockPayroll = () => {
+    if (window.confirm(`Unlock and reverse payroll deductions for ${selectedMonth}? This will restore employee advance and loan balances.`)) {
+      if (typeof reversePayroll === 'function') {
+        reversePayroll(selectedMonth, user);
+        setToastMessage(`Payroll for ${selectedMonth} unlocked. Deductions and loan balances restored.`);
+      }
+    }
+  };
 
   // Live calculations for Add / Edit form
   const curBasic = Number(formData.basicSalary) || 0;
@@ -102,11 +160,14 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
   const curOther = Number(formData.otherDeductions) || 0;
   const curTotalDeduct = curAdvance + curLoan + curOther;
   const curNet = Math.max(0, curGross - curTotalDeduct);
+  const isSalaryInsufficient = curTotalDeduct > curGross;
 
   const handleOpenAdd = () => {
     const firstEmp = employees[0];
     const initialBasic = firstEmp?.salary || 30000;
     const initialOtRate = Math.round((initialBasic / 26 / 8) * 1.5);
+    const { scheduledAdvance, scheduledLoanEmi } = getEmployeeScheduledDeductions(firstEmp?.id);
+
     setFormData({
       employeeId: firstEmp?.id || '',
       basicSalary: initialBasic,
@@ -116,8 +177,8 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
       overtimeHours: 0,
       overtimeRate: initialOtRate,
       allowances: 0,
-      advanceDeduction: 0,
-      loanEmi: 0,
+      advanceDeduction: scheduledAdvance,
+      loanEmi: scheduledLoanEmi,
       otherDeductions: 0,
       status: 'Calculated',
       remarks: '',
@@ -170,9 +231,11 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
       advanceDeduction: curAdvance,
       loanEmi: curLoan,
       otherDeductions: curOther,
+      totalDeductions: curTotalDeduct,
       earnedBasic: curEarnedBasic,
       grossSalary: curGross,
       netPayable: curNet,
+      insufficientSalary: isSalaryInsufficient,
       status: formData.status,
       remarks: formData.remarks,
     });
@@ -195,9 +258,11 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
       advanceDeduction: curAdvance,
       loanEmi: curLoan,
       otherDeductions: curOther,
+      totalDeductions: curTotalDeduct,
       earnedBasic: curEarnedBasic,
       grossSalary: curGross,
       netPayable: curNet,
+      insufficientSalary: isSalaryInsufficient,
       status: formData.status,
       remarks: formData.remarks,
     });
@@ -217,13 +282,24 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
     }
   };
 
+  // Summary Metrics for the current cycle
+  const totalGrossCycle = records.reduce((sum, r) => sum + (Number(r.grossSalary) || 0), 0);
+  const totalAdvanceCycle = records.reduce((sum, r) => sum + (Number(r.advanceDeduction) || 0), 0);
+  const totalLoanEmiCycle = records.reduce((sum, r) => sum + (Number(r.loanEmi) || 0), 0);
+  const totalDeductionsCycle = totalAdvanceCycle + totalLoanEmiCycle;
+  const totalNetCycle = records.reduce((sum, r) => sum + (Number(r.netPayable) || 0), 0);
+  const insufficientCount = records.filter((r) => r.insufficientSalary).length;
+
+  // Single employee selected for detailed breakdown in Deduction Summary
+  const summaryEmpRecord = records.find((r) => r.employeeId === selectedSummaryEmpId) || records[0];
+
   const columns = [
     {
-      header: 'Employee ID',
+      header: 'Emp ID',
       accessor: 'employeeId',
-      width: '110px',
+      width: '9%',
       render: (row) => (
-        <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200/80 font-mono font-bold text-xs inline-block whitespace-nowrap shadow-2xs">
+        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/80 font-mono font-bold text-[11px] inline-block whitespace-nowrap shadow-2xs">
           {row.employeeId}
         </span>
       ),
@@ -231,18 +307,20 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
     {
       header: 'Staff Name',
       accessor: 'employeeName',
-      width: '180px',
+      width: '16%',
       render: (row) => {
         const initials = row.employeeName 
           ? row.employeeName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) 
           : 'EM';
         return (
-          <div className="flex items-center gap-2.5 whitespace-nowrap">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 text-slate-950 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">
               {initials}
             </div>
-            <div className="min-w-0">
-              <span className="font-bold text-slate-900 text-xs block leading-tight truncate">{row.employeeName}</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-slate-900 text-xs block leading-tight truncate" title={row.employeeName}>
+                {row.employeeName}
+              </span>
               <span className="text-[10px] text-slate-500 font-mono block truncate">{row.role || 'Staff'}</span>
             </div>
           </div>
@@ -250,115 +328,122 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
       },
     },
     {
-      header: 'Basic Salary',
+      header: 'Basic Pay',
       accessor: 'basicSalary',
-      width: '110px',
+      width: '10%',
       render: (row) => (
-        <span className="font-mono text-xs text-slate-800 font-bold whitespace-nowrap">
+        <span className="font-mono text-xs text-slate-800 font-semibold whitespace-nowrap">
           ₹ {(row.basicSalary || 0).toLocaleString('en-IN')}
         </span>
       ),
     },
     {
-      header: 'Duty Days (P+L)',
-      accessor: 'dutyDays',
-      width: '125px',
-      render: (row) => {
-        const duty = (row.presentDays || 0) + (row.leaveDays || 0);
-        const total = row.workingDays || 26;
-        const isFull = duty >= total;
-        return (
-          <span className={`px-2.5 py-1 rounded-lg font-mono text-xs font-bold border inline-block whitespace-nowrap shadow-2xs ${
-            isFull ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-800 border-slate-200'
-          }`}>
-            {duty} / {total} Days
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Overtime Pay',
-      accessor: 'otAmount',
-      width: '110px',
-      render: (row) => (
-        <div className="whitespace-nowrap">
-          <span className="font-mono text-xs text-purple-700 font-bold block">
-            ₹ {(row.otAmount || 0).toLocaleString('en-IN')}
-          </span>
-          <span className="text-[10px] text-purple-600 font-mono block">
-            ({row.overtimeHours || 0}h OT)
-          </span>
-        </div>
-      ),
-    },
-    {
-      header: 'Adv / Loan Deduct',
-      accessor: 'deductions',
-      width: '130px',
-      render: (row) => {
-        const sumDeduct = (Number(row.advanceDeduction) || 0) + (Number(row.loanEmi) || 0) + (Number(row.otherDeductions) || 0);
-        return (
-          <span className={`font-mono text-xs font-bold whitespace-nowrap ${sumDeduct > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-            {sumDeduct > 0 ? `- ₹ ${sumDeduct.toLocaleString('en-IN')}` : '₹ 0'}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Gross Salary',
+      header: 'Gross Pay',
       accessor: 'grossSalary',
-      width: '110px',
+      width: '10%',
       render: (row) => (
-        <span className="font-mono text-xs text-slate-900 font-black whitespace-nowrap">
+        <span className="font-mono text-xs text-slate-900 font-bold whitespace-nowrap">
           ₹ {(row.grossSalary || 0).toLocaleString('en-IN')}
         </span>
       ),
     },
     {
+      header: 'Advance Deduct',
+      accessor: 'advanceDeduction',
+      width: '11%',
+      render: (row) => {
+        const adv = Number(row.advanceDeduction) || 0;
+        return (
+          <span className={`font-mono text-xs font-bold whitespace-nowrap ${adv > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+            {adv > 0 ? `- ₹ ${adv.toLocaleString('en-IN')}` : '₹ 0'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Loan EMI',
+      accessor: 'loanEmi',
+      width: '10%',
+      render: (row) => {
+        const emi = Number(row.loanEmi) || 0;
+        return (
+          <span className={`font-mono text-xs font-bold whitespace-nowrap ${emi > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+            {emi > 0 ? `- ₹ ${emi.toLocaleString('en-IN')}` : '₹ 0'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Total Deduct',
+      accessor: 'totalDeductions',
+      width: '10%',
+      render: (row) => {
+        const total = (Number(row.advanceDeduction) || 0) + (Number(row.loanEmi) || 0) + (Number(row.otherDeductions) || 0);
+        return (
+          <span className={`font-mono text-xs font-bold whitespace-nowrap ${total > 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+            {total > 0 ? `- ₹ ${total.toLocaleString('en-IN')}` : '₹ 0'}
+          </span>
+        );
+      },
+    },
+    {
       header: 'Net Payable',
       accessor: 'netPayable',
-      width: '130px',
+      width: '12%',
       render: (row) => (
-        <span className="px-3 py-1 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 border border-emerald-200 font-mono text-xs sm:text-sm font-black shadow-2xs inline-block whitespace-nowrap">
-          ₹ {(row.netPayable || 0).toLocaleString('en-IN')}
-        </span>
+        <div className="whitespace-nowrap">
+          <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-xs font-black shadow-2xs inline-block">
+            ₹ {(row.netPayable || 0).toLocaleString('en-IN')}
+          </span>
+          {row.insufficientSalary && (
+            <span className="text-[10px] text-amber-600 block font-medium flex items-center gap-0.5 mt-0.5">
+              <AlertTriangle className="w-2.5 h-2.5" /> Capped
+            </span>
+          )}
+        </div>
       ),
     },
-    { header: 'Status', accessor: 'status', type: 'status', width: '100px' },
+    {
+      header: 'Status',
+      accessor: 'status',
+      type: 'status',
+      width: '8%',
+      render: (row) => <StatusBadge status={row.status || 'Draft'} />,
+    },
     {
       header: 'Actions',
       align: 'right',
-      width: '110px',
+      width: '8%',
       render: (row) => (
-        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
           <button
             type="button"
             onClick={() => {
               setActiveSlip(row);
               setShowSlipModal(true);
             }}
-            className="p-1.5 rounded-lg bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
+            className="p-1 rounded-md bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
             title="View Details & Digital Payslip"
           >
-            <Eye className="w-4 h-4" />
+            <Eye className="w-3.5 h-3.5" />
           </button>
           {canEdit && !isPayrollLocked && (
             <>
               <button
                 type="button"
                 onClick={() => handleOpenEdit(row)}
-                className="p-1.5 rounded-lg bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
+                className="p-1 rounded-md bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
                 title="Edit Salary & Deductions"
               >
-                <Edit3 className="w-4 h-4" />
+                <Edit3 className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteRecord(row.id, row.employeeName)}
-                className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
+                className="p-1 rounded-md bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
                 title="Delete Payroll Record"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
           )}
@@ -369,77 +454,447 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
 
   return (
     <div className="space-y-4">
-      {/* Control Header */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
+      {/* Sub-View Navigation Segmented Control */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 p-2 rounded-2xl bg-slate-100/90 border border-slate-200">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('sheet')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'sheet'
+                ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5 text-amber-600" />
+            <span>Payroll Sheet</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('advances')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'advances'
+                ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Salary Advances</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('loans')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'loans'
+                ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+            <span>Company Loans</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('summary')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'summary'
+                ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <Calculator className="w-3.5 h-3.5 text-purple-600" />
+            <span>Deduction Summary</span>
+          </button>
+        </div>
+
+        {/* Cycle selector shown on Sheet & Summary */}
+        {(activeSubTab === 'sheet' || activeSubTab === 'summary') && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-600 font-bold">Payroll Cycle:</span>
+            <span className="text-xs text-slate-500 font-semibold hidden sm:inline">Payroll Cycle:</span>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-1.5 rounded-xl text-xs bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer shadow-2xs"
+              className="px-2.5 py-1 rounded-xl text-xs bg-white border border-slate-200 text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 cursor-pointer shadow-2xs"
             >
               <option value="October 2026">October 2026 (Active)</option>
               <option value="September 2026">September 2026</option>
               <option value="August 2026">August 2026</option>
             </select>
           </div>
-
-          {isPayrollLocked ? (
-            <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1 font-mono">
-              <Lock className="w-3.5 h-3.5 text-emerald-600" />
-              <span>PAYROLL APPROVED & LOCKED</span>
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 font-mono">
-              <Clock className="w-3.5 h-3.5 text-amber-600" />
-              <span>DRAFT CALCULATION</span>
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {canEdit && !isPayrollLocked && (
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Salary Record</span>
-            </button>
-          )}
-
-
-          {canApprove && !isPayrollLocked && (
-            <button
-              type="button"
-              onClick={handleApprovePayroll}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Approve & Lock Payroll</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Connected Payroll Table */}
-      <DataTable
-        title={`Staff Payroll Sheet - ${selectedMonth}`}
-        subtitle="Gross wages, overtime computation, company advances, loan EMIs, and net direct disbursement."
-        icon={Receipt}
-        columns={columns}
-        data={records}
-        emptyMessage="No salary records calculated or added for this cycle. Click 'Add Salary Record' to enter manual wages, or 'Recalculate from HR Data' to sync attendance."
-      />
+      {/* Subtab 1: ADVANCES MANAGEMENT */}
+      {activeSubTab === 'advances' && <AdvanceManagementView />}
+
+      {/* Subtab 2: LOANS MANAGEMENT */}
+      {activeSubTab === 'loans' && <LoanManagementView />}
+
+      {/* Subtab 3: PAYROLL DEDUCTION SUMMARY */}
+      {activeSubTab === 'summary' && (
+        <div className="space-y-4">
+          {/* Header Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Gross Wages</span>
+              <span className="text-lg font-bold text-slate-900 font-mono mt-1 block">
+                ₹ {totalGrossCycle.toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-slate-500">{records.length} employee(s)</span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Advance Deductions</span>
+              <span className="text-lg font-bold text-amber-700 font-mono mt-1 block">
+                - ₹ {totalAdvanceCycle.toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-slate-500">Recovered from salary</span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Loan EMI Deductions</span>
+              <span className="text-lg font-bold text-rose-600 font-mono mt-1 block">
+                - ₹ {totalLoanEmiCycle.toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-slate-500">Company loan repayments</span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Net Salary Payable</span>
+              <span className="text-lg font-bold text-emerald-700 font-mono mt-1 block">
+                ₹ {totalNetCycle.toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-slate-500">Total direct disbursement</span>
+            </div>
+          </div>
+
+          {/* Warning Banner if any employee has insufficient earnings */}
+          {insufficientCount > 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5 text-xs">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-bold">Insufficient Salary Notice:</strong> {insufficientCount} employee(s) have scheduled advance/loan deductions exceeding their gross pay. Deductions were safely capped to prevent negative net payable amounts. Review before locking.
+              </div>
+            </div>
+          )}
+
+          {/* Side-by-Side: Dedicated Table & Single Employee Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Left 2 Cols: All Employees Deduction Summary Table */}
+            <div className="lg:col-span-2 p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Monthly Deduction Ledger</h3>
+                  <p className="text-[11px] text-slate-500">Advance recoveries and loan EMIs for {selectedMonth}</p>
+                </div>
+                <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
+                  {records.length} Employees
+                </span>
+              </div>
+
+              {records.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 text-xs">
+                  No payroll records calculated for {selectedMonth}. Switch to "Payroll Sheet" and click "Recalculate".
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs font-mono">
+                    <thead>
+                      <tr className="text-slate-500 border-b border-slate-200 text-left text-[11px]">
+                        <th className="pb-2 font-semibold">Employee</th>
+                        <th className="pb-2 font-semibold">Monthly Salary</th>
+                        <th className="pb-2 font-semibold">Advance Deduct</th>
+                        <th className="pb-2 font-semibold">Loan EMI</th>
+                        <th className="pb-2 font-semibold">Total Deduct</th>
+                        <th className="pb-2 font-semibold text-right">Net Payable</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {records.map((r) => {
+                        const totalDed = (Number(r.advanceDeduction) || 0) + (Number(r.loanEmi) || 0) + (Number(r.otherDeductions) || 0);
+                        const isSelected = (summaryEmpRecord?.employeeId === r.employeeId);
+                        return (
+                          <tr
+                            key={r.id}
+                            onClick={() => setSelectedSummaryEmpId(r.employeeId)}
+                            className={`cursor-pointer transition-colors ${
+                              isSelected ? 'bg-amber-50/70' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <td className="py-2.5">
+                              <span className="font-bold text-slate-900 block truncate">{r.employeeName}</span>
+                              <span className="text-[10px] text-slate-400 block">{r.employeeId} • {r.role || 'Staff'}</span>
+                            </td>
+                            <td className="py-2.5 text-slate-800">
+                              ₹ {(r.grossSalary || r.basicSalary || 0).toLocaleString('en-IN')}
+                            </td>
+                            <td className="py-2.5 text-amber-700 font-semibold">
+                              {Number(r.advanceDeduction) > 0 ? `- ₹ ${Number(r.advanceDeduction).toLocaleString('en-IN')}` : '₹ 0'}
+                            </td>
+                            <td className="py-2.5 text-rose-600 font-semibold">
+                              {Number(r.loanEmi) > 0 ? `- ₹ ${Number(r.loanEmi).toLocaleString('en-IN')}` : '₹ 0'}
+                            </td>
+                            <td className="py-2.5 text-rose-700 font-bold">
+                              {totalDed > 0 ? `- ₹ ${totalDed.toLocaleString('en-IN')}` : '₹ 0'}
+                            </td>
+                            <td className="py-2.5 text-right font-black text-emerald-700">
+                              ₹ {(r.netPayable || 0).toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Right 1 Col: Section 4 Prompt Deduction Breakdown Card */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div className="pb-2 border-b border-slate-100">
+                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Payroll Deduction Summary</span>
+                <h4 className="font-bold text-slate-900 text-sm mt-0.5">
+                  {summaryEmpRecord?.employeeName || 'Selected Employee'}
+                </h4>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {summaryEmpRecord ? `${summaryEmpRecord.employeeId} • ${summaryEmpRecord.role}` : 'Select an employee from the table'}
+                </span>
+              </div>
+
+              {summaryEmpRecord ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-slate-200 overflow-hidden font-mono text-xs">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px]">
+                          <th className="py-2 px-3 text-left font-bold">Description</th>
+                          <th className="py-2 px-3 text-right font-bold">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-2 px-3 text-slate-700">Monthly Salary</td>
+                          <td className="py-2 px-3 text-right font-bold text-slate-900">
+                            ₹ {(summaryEmpRecord.grossSalary || summaryEmpRecord.basicSalary || 0).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-3 text-slate-700">Advance Deduction</td>
+                          <td className="py-2 px-3 text-right font-bold text-amber-700">
+                            ₹ {(Number(summaryEmpRecord.advanceDeduction) || 0).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-3 text-slate-700">Loan EMI</td>
+                          <td className="py-2 px-3 text-right font-bold text-rose-600">
+                            ₹ {(Number(summaryEmpRecord.loanEmi) || 0).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        <tr className="bg-slate-50 font-bold">
+                          <td className="py-2 px-3 text-slate-900">Total Deduction</td>
+                          <td className="py-2 px-3 text-right text-rose-700">
+                            ₹ {((Number(summaryEmpRecord.advanceDeduction) || 0) + (Number(summaryEmpRecord.loanEmi) || 0)).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        <tr className="bg-emerald-50 text-emerald-900 font-bold border-t border-emerald-200">
+                          <td className="py-2.5 px-3">Net Salary Payable</td>
+                          <td className="py-2.5 px-3 text-right font-black text-sm text-emerald-700">
+                            ₹ {(Number(summaryEmpRecord.netPayable) || 0).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-1">
+                    <div className="font-semibold text-slate-800">Formula Applied:</div>
+                    <div>Total Deduction = Advance Deduction + Loan EMI</div>
+                    <div>Net Salary = Monthly Salary − Total Deduction</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSlip(summaryEmpRecord);
+                      setShowSlipModal(true);
+                    }}
+                    className="w-full py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>View Digital Payslip</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="p-4 text-center text-slate-400 text-xs">
+                  Select an employee from the table to view the deduction calculation breakdown.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subtab 4: PAYROLL SHEET (MAIN) */}
+      {activeSubTab === 'sheet' && (
+        <div className="space-y-4">
+          {/* Action Header */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              {isPayrollLocked ? (
+                <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1 font-mono">
+                  <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>PAYROLL APPROVED & LOCKED</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 font-mono">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>DRAFT CALCULATION</span>
+                </span>
+              )}
+              {insufficientCount > 0 && (
+                <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{insufficientCount} Capped Deduction(s)</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRecalculate}
+                disabled={calculating || isPayrollLocked}
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all active:scale-95 disabled:opacity-50"
+                title="Recalculate from attendance, advances, and loans"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${calculating ? 'animate-spin' : ''}`} />
+                <span>Sync Attendance & Advances</span>
+              </button>
+
+              {canEdit && !isPayrollLocked && (
+                <button
+                  type="button"
+                  onClick={handleOpenAdd}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Salary Record</span>
+                </button>
+              )}
+
+              {canApprove && !isPayrollLocked && (
+                <button
+                  type="button"
+                  onClick={handleApprovePayroll}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-white shrink-0 stroke-white" />
+                  <span>Approve & Lock Payroll</span>
+                </button>
+              )}
+
+              {canApprove && isPayrollLocked && (
+                <button
+                  type="button"
+                  onClick={handleUnlockPayroll}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <Unlock className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Unlock / Reverse</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Connected Payroll Table */}
+          <DataTable
+            title={`Staff Payroll Sheet - ${selectedMonth}`}
+            subtitle="Gross earnings, overtime, salary advance recoveries, loan EMIs, and net payable disbursement"
+            icon={Receipt}
+            columns={columns}
+            data={records}
+            compact={true}
+            emptyMessage="No salary records calculated or added for this cycle. Click 'Add Salary Record' to enter manual wages, or 'Sync Attendance & Advances' to generate automatically."
+            renderMobileCard={(row) => {
+              const sumDeduct = (Number(row.advanceDeduction) || 0) + (Number(row.loanEmi) || 0) + (Number(row.otherDeductions) || 0);
+              return (
+                <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
+                      <div className="text-xs font-mono text-amber-700 font-bold">{row.employeeId} • {row.role || 'Staff'}</div>
+                    </div>
+                    <StatusBadge status={row.status || 'Draft'} />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono pt-1.5 border-t border-slate-100">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Gross Pay</span>
+                      <span className="text-slate-900 font-bold">₹ {(row.grossSalary || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Advance Deduct</span>
+                      <span className="text-amber-700 font-bold">₹ {(Number(row.advanceDeduction) || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Loan EMI</span>
+                      <span className="text-rose-600 font-bold">₹ {(Number(row.loanEmi) || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Net Payable</span>
+                      <span className="text-emerald-700 font-black text-sm">₹ {(row.netPayable || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSlip(row);
+                        setShowSlipModal(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Payslip</span>
+                    </button>
+                    {canEdit && !isPayrollLocked && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(row)}
+                          className="p-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-xs cursor-pointer"
+                          title="Edit"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRecord(row.id, row.employeeName)}
+                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs cursor-pointer"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            }}
+          />
+        </div>
+      )}
 
       {/* Modal: Add Salary Record */}
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         title="Add Employee Salary Record"
-        subtitle={`Manual entry of monthly pay, overtime, and deductions for ${selectedMonth}`}
+        subtitle={`Enter monthly pay, advance deduction, and loan EMI for ${selectedMonth}`}
         icon={Plus}
       >
         <form onSubmit={handleSaveAdd} className="space-y-4 text-xs">
@@ -450,11 +905,14 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
               onChange={(e) => {
                 const emp = employees.find((em) => em.id === e.target.value);
                 const basic = emp?.salary || 30000;
+                const { scheduledAdvance, scheduledLoanEmi } = getEmployeeScheduledDeductions(e.target.value);
                 setFormData({
                   ...formData,
                   employeeId: e.target.value,
                   basicSalary: basic,
                   overtimeRate: Math.round((basic / 26 / 8) * 1.5),
+                  advanceDeduction: scheduledAdvance,
+                  loanEmi: scheduledLoanEmi,
                 });
               }}
               required
@@ -552,7 +1010,7 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 type="number"
                 value={formData.advanceDeduction}
                 onChange={(e) => setFormData({ ...formData, advanceDeduction: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 rounded-xl font-mono focus:border-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-amber-700 font-bold rounded-xl font-mono focus:border-amber-500"
               />
             </div>
             <div>
@@ -561,7 +1019,7 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 type="number"
                 value={formData.loanEmi}
                 onChange={(e) => setFormData({ ...formData, loanEmi: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 rounded-xl font-mono focus:border-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 font-bold rounded-xl font-mono focus:border-amber-500"
               />
             </div>
             <div>
@@ -570,40 +1028,62 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 type="number"
                 value={formData.otherDeductions}
                 onChange={(e) => setFormData({ ...formData, otherDeductions: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 rounded-xl font-mono focus:border-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-mono focus:border-amber-500"
               />
             </div>
           </div>
 
-          {/* Live Preview Box */}
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-2 font-mono">
-            <div className="flex justify-between text-slate-600">
-              <span>Earned Basic:</span>
-              <span className="text-slate-900 font-bold">₹ {curEarnedBasic.toLocaleString('en-IN')}</span>
+          {/* Section 4 Required: Payroll Deduction Summary Preview */}
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
+              Payroll Deduction Summary
+            </span>
+            <div className="rounded-lg border border-slate-200 overflow-hidden font-mono text-xs bg-white">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 text-[10px]">
+                    <th className="py-1 px-2.5 text-left font-semibold">Description</th>
+                    <th className="py-1 px-2.5 text-right font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="py-1 px-2.5 text-slate-600">Monthly Salary</td>
+                    <td className="py-1 px-2.5 text-right font-bold text-slate-900">₹ {curGross.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2.5 text-slate-600">Advance Deduction</td>
+                    <td className="py-1 px-2.5 text-right font-bold text-amber-700">₹ {curAdvance.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2.5 text-slate-600">Loan EMI</td>
+                    <td className="py-1 px-2.5 text-right font-bold text-rose-600">₹ {curLoan.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr className="bg-slate-50 font-bold">
+                    <td className="py-1 px-2.5 text-slate-800">Total Deduction</td>
+                    <td className="py-1 px-2.5 text-right text-rose-700">₹ {curTotalDeduct.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr className="bg-emerald-50 text-emerald-900 font-bold border-t border-emerald-200">
+                    <td className="py-1.5 px-2.5">Net Salary Payable</td>
+                    <td className="py-1.5 px-2.5 text-right text-emerald-700 text-sm font-black">₹ {curNet.toLocaleString('en-IN')}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Overtime ({curOtHours}h @ ₹{curOtRate}/h):</span>
-              <span className="text-purple-700 font-bold">+ ₹ {curOtAmount.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Gross Earnings:</span>
-              <span className="text-amber-700 font-bold">₹ {curGross.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Total Deductions:</span>
-              <span className="text-rose-600 font-bold">- ₹ {curTotalDeduct.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between text-emerald-700 text-sm font-bold pt-2 border-t border-slate-200">
-              <span>Net Take-Home Pay:</span>
-              <span>₹ {curNet.toLocaleString('en-IN')}</span>
-            </div>
+
+            {isSalaryInsufficient && (
+              <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2 text-[11px]">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Warning: Deductions exceed gross pay. Net payable will be ₹0 (cannot be negative).</span>
+              </div>
+            )}
           </div>
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowAddModal(false)}
-              className="px-4 py-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 font-semibold"
+              className="px-4 py-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 font-semibold cursor-pointer"
             >
               Cancel
             </button>
@@ -622,7 +1102,7 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title="Edit Salary & Deduction Values"
-        subtitle={`Adjust wages, overtime, and deductions for ${editingRecord?.employeeName} (${editingRecord?.employeeId})`}
+        subtitle={`Adjust wages, advance recovery, and loan EMI for ${editingRecord?.employeeName} (${editingRecord?.employeeId})`}
         icon={Edit3}
       >
         <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
@@ -719,7 +1199,7 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 type="number"
                 value={formData.advanceDeduction}
                 onChange={(e) => setFormData({ ...formData, advanceDeduction: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 rounded-xl font-mono focus:border-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-amber-700 font-bold rounded-xl font-mono focus:border-amber-500"
               />
             </div>
             <div>
@@ -728,7 +1208,7 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 type="number"
                 value={formData.loanEmi}
                 onChange={(e) => setFormData({ ...formData, loanEmi: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 rounded-xl font-mono focus:border-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 font-bold rounded-xl font-mono focus:border-amber-500"
               />
             </div>
             <div>
@@ -737,40 +1217,62 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 type="number"
                 value={formData.otherDeductions}
                 onChange={(e) => setFormData({ ...formData, otherDeductions: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-rose-700 rounded-xl font-mono focus:border-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-mono focus:border-amber-500"
               />
             </div>
           </div>
 
-          {/* Live Preview Box */}
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-2 font-mono">
-            <div className="flex justify-between text-slate-600">
-              <span>Earned Basic:</span>
-              <span className="text-slate-900 font-bold">₹ {curEarnedBasic.toLocaleString('en-IN')}</span>
+          {/* Section 4 Required: Payroll Deduction Summary Preview */}
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
+              Payroll Deduction Summary
+            </span>
+            <div className="rounded-lg border border-slate-200 overflow-hidden font-mono text-xs bg-white">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 text-[10px]">
+                    <th className="py-1 px-2.5 text-left font-semibold">Description</th>
+                    <th className="py-1 px-2.5 text-right font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="py-1 px-2.5 text-slate-600">Monthly Salary</td>
+                    <td className="py-1 px-2.5 text-right font-bold text-slate-900">₹ {curGross.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2.5 text-slate-600">Advance Deduction</td>
+                    <td className="py-1 px-2.5 text-right font-bold text-amber-700">₹ {curAdvance.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2.5 text-slate-600">Loan EMI</td>
+                    <td className="py-1 px-2.5 text-right font-bold text-rose-600">₹ {curLoan.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr className="bg-slate-50 font-bold">
+                    <td className="py-1 px-2.5 text-slate-800">Total Deduction</td>
+                    <td className="py-1 px-2.5 text-right text-rose-700">₹ {curTotalDeduct.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr className="bg-emerald-50 text-emerald-900 font-bold border-t border-emerald-200">
+                    <td className="py-1.5 px-2.5">Net Salary Payable</td>
+                    <td className="py-1.5 px-2.5 text-right text-emerald-700 text-sm font-black">₹ {curNet.toLocaleString('en-IN')}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Overtime ({curOtHours}h @ ₹{curOtRate}/h):</span>
-              <span className="text-purple-700 font-bold">+ ₹ {curOtAmount.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Gross Earnings:</span>
-              <span className="text-amber-700 font-bold">₹ {curGross.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Total Deductions:</span>
-              <span className="text-rose-600 font-bold">- ₹ {curTotalDeduct.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between text-emerald-700 text-sm font-bold pt-2 border-t border-slate-200">
-              <span>Net Take-Home Pay:</span>
-              <span>₹ {curNet.toLocaleString('en-IN')}</span>
-            </div>
+
+            {isSalaryInsufficient && (
+              <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2 text-[11px]">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Warning: Deductions exceed gross pay. Net payable will be ₹0 (cannot be negative).</span>
+              </div>
+            )}
           </div>
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowEditModal(false)}
-              className="px-4 py-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 font-semibold"
+              className="px-4 py-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 font-semibold cursor-pointer"
             >
               Cancel
             </button>
@@ -905,19 +1407,21 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
                 </div>
                 <div className="flex justify-between text-slate-600 text-xs">
                   <span>Salary Advance Recovery:</span>
-                  <span className="font-semibold text-rose-600">- ₹ {(Number(activeSlip.advanceDeduction) || 0).toLocaleString('en-IN')}</span>
+                  <span className="font-semibold text-amber-700">- ₹ {(Number(activeSlip.advanceDeduction) || 0).toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between text-slate-600 text-xs">
                   <span>Company Loan EMI:</span>
                   <span className="font-semibold text-rose-600">- ₹ {(Number(activeSlip.loanEmi) || 0).toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex justify-between text-slate-600 text-xs">
-                  <span>Other / Tax Deductions:</span>
-                  <span className="font-semibold text-rose-600">- ₹ {(Number(activeSlip.otherDeductions) || 0).toLocaleString('en-IN')}</span>
-                </div>
+                {Number(activeSlip.otherDeductions || 0) > 0 && (
+                  <div className="flex justify-between text-slate-600 text-xs">
+                    <span>Other Deductions:</span>
+                    <span className="font-semibold text-slate-700">- ₹ {(Number(activeSlip.otherDeductions) || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-slate-900 text-xs font-bold pt-2 border-t border-slate-100">
                   <span>Total Deductions:</span>
-                  <span className="text-sm font-black text-rose-600">
+                  <span className="text-sm font-black text-rose-700">
                     - ₹ {((Number(activeSlip.advanceDeduction) || 0) + (Number(activeSlip.loanEmi) || 0) + (Number(activeSlip.otherDeductions) || 0)).toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -935,7 +1439,14 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
               </div>
             </div>
 
-            {/* Remarks section if available */}
+            {/* Remarks or Capped Warning */}
+            {activeSlip.insufficientSalary && (
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Notice: Deductions were capped to available gross earnings to prevent a negative salary.</span>
+              </div>
+            )}
+
             {activeSlip.remarks && (
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                 <span className="font-bold text-slate-700 block mb-0.5">Remarks / Audit Note:</span>

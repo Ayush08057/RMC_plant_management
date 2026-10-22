@@ -124,8 +124,9 @@ export default function DeliveryChallansView() {
   }, [challans]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All'); // 'All', 'In Transit', 'Delivered'
+  const [statusFilter, setStatusFilter] = useState('All'); // 'All', 'In Transit', 'Delivered', 'Non-Bill'
   const [printingChallan, setPrintingChallan] = useState(null);
+  const [printFormat, setPrintFormat] = useState('a4'); // 'a4' | 'thermal'
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [validationError, setValidationError] = useState('');
 
@@ -167,6 +168,49 @@ export default function DeliveryChallansView() {
     return () => window.removeEventListener('storage', refreshFleet);
   }, []);
 
+  // Listen for batch sheet pre-fill triggers
+  useEffect(() => {
+    try {
+      const rawPrefill = sessionStorage.getItem('rmc_pending_challan_prefill');
+      if (rawPrefill) {
+        const p = JSON.parse(rawPrefill);
+        if (p && (Date.now() - (p.timestamp || 0) < 60000)) {
+          const nextNumber = challans.length + 1421;
+          const isNb = p.billingType === 'Non-Bill';
+          const prefix = isNb ? 'NBC' : 'DC';
+          setForm(prev => ({
+            ...prev,
+            challanNo: `${prefix}-25-26/${nextNumber}`,
+            customerName: p.customerName || prev.customerName,
+            site: p.site || prev.site,
+            vehicleNo: p.vehicleNo || prev.vehicleNo,
+            driverName: p.driverName || prev.driverName,
+            grade: p.grade || prev.grade,
+            quantity: p.quantity || prev.quantity,
+            slump: p.slump || prev.slump,
+            batchSheetNo: p.batchSheetNo || '',
+            billingType: isNb ? 'Non-Bill' : 'Billable',
+            isNonBill: isNb
+          }));
+          setShowCreateModal(true);
+        }
+        sessionStorage.removeItem('rmc_pending_challan_prefill');
+      }
+    } catch {}
+  }, [challans.length]);
+
+  const handleBillingTypeChange = (newType) => {
+    const isNb = newType === 'Non-Bill';
+    const nextNumber = challans.length + 1421;
+    const prefix = isNb ? 'NBC' : 'DC';
+    setForm(prev => ({
+      ...prev,
+      billingType: newType,
+      isNonBill: isNb,
+      challanNo: `${prefix}-25-26/${nextNumber}`
+    }));
+  };
+
   const [form, setForm] = useState(() => {
     const initialFleet = getFleetVehicles();
     return {
@@ -200,6 +244,9 @@ export default function DeliveryChallansView() {
       quantity: currentFleet[0]?.capacity || 6.0,
       slump: '125 ± 25 mm',
       receiverName: '',
+      billingType: 'Billable',
+      isNonBill: false,
+      poNumber: '',
     });
     setValidationError('');
     setShowCreateModal(true);
@@ -236,12 +283,16 @@ export default function DeliveryChallansView() {
     }
     setValidationError('');
 
+    const isNonBill = form.billingType === 'Non-Bill';
+
     const newChallan = {
       id: `DC-${Date.now()}`,
       ...form,
       customerName: form.customerName.trim(),
       site: form.site.trim() || 'Site Location Not Specified',
       driverName: form.driverName.trim() || 'Driver Assumed',
+      billingType: form.billingType || 'Billable',
+      isNonBill,
       status: 'In Transit',
       createdAt: new Date().toISOString()
     };
@@ -287,7 +338,8 @@ export default function DeliveryChallansView() {
     const matchesStatus = 
       statusFilter === 'All' ? true :
       statusFilter === 'In Transit' ? c.status === 'In Transit' :
-      statusFilter === 'Delivered' ? c.status === 'Delivered' : true;
+      statusFilter === 'Delivered' ? c.status === 'Delivered' :
+      statusFilter === 'Non-Bill' ? (c.isNonBill || c.billingType === 'Non-Bill') : true;
 
     return matchesSearch && matchesStatus;
   });
@@ -342,7 +394,7 @@ export default function DeliveryChallansView() {
 
           {/* Quick Filter Pills */}
           <div className="flex items-center gap-1 shrink-0 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            {['All', 'In Transit', 'Delivered'].map((tab) => (
+            {['All', 'In Transit', 'Delivered', 'Non-Bill'].map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -384,15 +436,15 @@ export default function DeliveryChallansView() {
       {/* Challans Table - Maximized Screen Space */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-x-auto">
         <table className="w-full min-w-[800px] text-left text-xs">
-          <thead>
-            <tr className="bg-slate-100/90 text-slate-900 font-black uppercase text-[10px] border-b border-slate-200">
-              <th className="py-2.5 px-3">{t('Challan # & Time')}</th>
-              <th className="py-2.5 px-3">{t('Customer & Site Location')}</th>
-              <th className="py-2.5 px-3">{t('Mixer Fleet & Driver')}</th>
-              <th className="py-2.5 px-3">{t('Mix Grade')}</th>
-              <th className="py-2.5 px-3 text-right">{t('Quantity')}</th>
-              <th className="py-2.5 px-3 text-center">{t('Delivery Status')}</th>
-              <th className="py-2.5 px-3 text-right">{t('Actions')}</th>
+          <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
+            <tr>
+              <th className="py-3 px-3 text-white border-r border-white/20">{t('Challan # & Time')}</th>
+              <th className="py-3 px-3 text-white border-r border-white/20">{t('Customer & Site Location')}</th>
+              <th className="py-3 px-3 text-white border-r border-white/20">{t('Mixer Fleet & Driver')}</th>
+              <th className="py-3 px-3 text-white border-r border-white/20">{t('Mix Grade')}</th>
+              <th className="py-3 px-3 text-right text-white border-r border-white/20">{t('Quantity')}</th>
+              <th className="py-3 px-3 text-center text-white border-r border-white/20">{t('Delivery Status')}</th>
+              <th className="py-3 px-3 text-right text-white">{t('Actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -407,7 +459,14 @@ export default function DeliveryChallansView() {
               filtered.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-2.5 px-3 whitespace-nowrap">
-                    <div className="font-mono font-black text-slate-900">{c.challanNo}</div>
+                    <div className="font-mono font-black text-slate-900 flex items-center gap-1.5">
+                      <span>{c.challanNo}</span>
+                      {c.isNonBill && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                          NB
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
                       <Clock className="w-2.5 h-2.5 text-slate-400" />
                       <span>{c.date} • {c.departureTime}</span>
@@ -533,6 +592,42 @@ export default function DeliveryChallansView() {
             {/* Modal Form */}
             <form onSubmit={(e) => handleSave(e, false)} noValidate className="p-5 space-y-4">
               
+              {/* Challan Classification: Billable vs Non-Bill */}
+              <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-800 block">
+                    Classification & Billing Sequence:
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {form.billingType === 'Non-Bill' ? 'NBC sequence (Excluded from Invoicing)' : 'Standard DC Commercial Delivery'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleBillingTypeChange('Billable')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      form.billingType !== 'Non-Bill'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Commercial (DC)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBillingTypeChange('Non-Bill')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      form.billingType === 'Non-Bill'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Non-Bill (NBC)
+                  </button>
+                </div>
+              </div>
+
               {/* SECTION 1: CUSTOMER & DESTINATION SITE */}
               <div className="space-y-2 bg-slate-50/70 p-3 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between">
@@ -790,6 +885,51 @@ export default function DeliveryChallansView() {
                 </div>
               </div>
 
+              {/* Billing Classification: Billable vs Non-Bill */}
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Billing Classification</span>
+                  </label>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${form.billingType === 'Non-Bill' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}`}>
+                    {form.billingType === 'Non-Bill' ? 'NB: Non-Tax / Sample / Trial' : 'Commercial Billable'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, billingType: 'Billable', isNonBill: false }))}
+                    className={`p-2 rounded-lg text-left text-xs font-bold border transition-all cursor-pointer ${
+                      form.billingType !== 'Non-Bill'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500 shadow-2xs'
+                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 font-bold text-slate-900">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Billable (Standard GST)</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-normal">Customer will be billed via GST Invoice / Cash Memo</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, billingType: 'Non-Bill', isNonBill: true }))}
+                    className={`p-2 rounded-lg text-left text-xs font-bold border transition-all cursor-pointer ${
+                      form.billingType === 'Non-Bill'
+                        ? 'bg-amber-50 border-amber-500 text-amber-950 ring-1 ring-amber-500 shadow-2xs'
+                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 font-bold text-amber-900">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Non-Bill (NB / Sample / Internal)</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-normal">Strictly marked NB. Cannot generate tax invoice or cash memo.</p>
+                  </button>
+                </div>
+              </div>
+
               {/* FOOTER ACTIONS */}
               <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-200">
                 <button 
@@ -824,71 +964,228 @@ export default function DeliveryChallansView() {
         document.body
       )}
 
-      {/* Printable Challan Modal */}
+      {/* Printable Challan Modal (A4 & 80mm Thermal Dual Format) */}
       {printingChallan && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 print:p-0 print:bg-white print:static print:block">
-          <div className="bg-white text-black max-w-lg w-full rounded-2xl p-5 border border-black space-y-3 font-mono text-[11px] print:border-none print:shadow-none print:p-0 print:max-w-none">
-            <div className="flex justify-between items-center no-print border-b pb-2">
-              <span className="font-bold flex items-center gap-1.5 text-emerald-800">
-                <Truck className="w-4 h-4" />
-                <span>Delivery Challan & Gate Pass Ticket</span>
-              </span>
-              <div className="flex gap-2">
+        <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto print:p-0 print:bg-white print:static print:block">
+          <div className={`bg-white text-black rounded-2xl p-5 border border-slate-300 shadow-2xl transition-all print:border-none print:shadow-none print:p-0 print:max-w-none ${
+            printFormat === 'thermal' ? 'max-w-sm w-full font-mono text-xs' : 'max-w-3xl w-full font-sans text-xs'
+          }`}>
+            {/* Header controls (No print) */}
+            <div className="flex flex-wrap justify-between items-center no-print border-b border-slate-200 pb-3 mb-4 gap-2">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-emerald-700" />
+                <span className="font-bold text-slate-800 text-sm">Print Delivery Challan</span>
+              </div>
+              
+              {/* Dual Format Switcher */}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-300">
+                <button
+                  type="button"
+                  onClick={() => setPrintFormat('a4')}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    printFormat === 'a4' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-black'
+                  }`}
+                >
+                  📄 A4 Official Gate Pass
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintFormat('thermal')}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    printFormat === 'thermal' ? 'bg-white text-indigo-800 shadow-2xs' : 'text-slate-600 hover:text-black'
+                  }`}
+                >
+                  🧾 80mm Thermal Slip
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={() => window.print()} 
-                  className="px-3.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer"
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
                 >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Ticket</span>
+                  <Printer className="w-4 h-4" />
+                  <span>Print Document</span>
                 </button>
                 <button 
                   onClick={() => setPrintingChallan(null)} 
-                  className="px-2 py-1 text-slate-600 hover:text-black rounded"
+                  className="p-1.5 text-slate-500 hover:text-black rounded-lg hover:bg-slate-100 cursor-pointer"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            <div className="text-center border-b border-black pb-2">
-              <h2 className="text-base font-black tracking-wider">SM CONCRETECH</h2>
-              <p className="text-[10px] text-gray-700">A/P Tanang, Sangli - 416410 • Mobile: +91 9421858683</p>
-              <div className="font-bold border border-black py-0.5 mt-1 uppercase text-[10px] bg-slate-50">
-                Computerized Delivery Challan & Gate Pass
+            {/* FORMAT 1: 80mm THERMAL SLIP */}
+            {printFormat === 'thermal' && (
+              <div className="p-3 border border-black space-y-2 font-mono text-[11px] leading-snug print:border-none">
+                <div className="text-center border-b border-dashed border-black pb-2">
+                  <h2 className="text-sm font-black tracking-wider">SM CONCRETE TECH</h2>
+                  <p className="text-[9px]">A/P Tanang, Sangli - 416410</p>
+                  <p className="text-[9px]">Ph: +91 9421858683</p>
+                  <div className="font-bold border border-black py-0.5 mt-1 uppercase text-[9px] bg-slate-100">
+                    {printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'NON-BILL GATE PASS' : 'DELIVERY CHALLAN & GATE PASS'}
+                  </div>
+                </div>
+
+                {(printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill') && (
+                  <div className="border border-black p-1 text-center font-black text-[9px] bg-black text-white">
+                    *** NON-BILL / SAMPLE / INTERNAL USE ***
+                  </div>
+                )}
+
+                <div className="space-y-1 border-b border-dashed border-black pb-2 text-[10px]">
+                  <div><strong>Challan #: </strong>{printingChallan.challanNo}</div>
+                  <div><strong>Date/Time: </strong>{printingChallan.date} {printingChallan.departureTime}</div>
+                  <div><strong>Customer: </strong>{printingChallan.customerName}</div>
+                  <div><strong>Site: </strong>{printingChallan.site}</div>
+                  <div><strong>Mix Grade: </strong><span className="font-black">{printingChallan.grade}</span></div>
+                  <div><strong>Qty: </strong><span className="font-black text-xs">{printingChallan.quantity} m³</span></div>
+                  <div><strong>Transit Mixer: </strong>{printingChallan.vehicleNo}</div>
+                  <div><strong>Driver: </strong>{printingChallan.driverName}</div>
+                  <div><strong>Slump: </strong>{printingChallan.slump || '125 ± 25 mm'}</div>
+                </div>
+
+                <div className="text-[8px] leading-tight text-gray-700">
+                  Notice: No water to be added on site. Adding water voids concrete strength warranty.
+                </div>
+
+                <div className="grid grid-cols-2 pt-6 text-center text-[9px]">
+                  <div className="border-t border-dotted border-black pt-1">
+                    Driver Sign
+                  </div>
+                  <div className="border-t border-dotted border-black pt-1">
+                    Receiver Sign
+                  </div>
+                </div>
+
+                <div className="text-center text-[8px] text-gray-500 pt-1 border-t border-dashed border-gray-300">
+                  *** SM CONCRETE TECH ERP ***
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-1.5 border-b border-black pb-2 text-[10px]">
-              <div><strong>Challan #: </strong><span className="font-black">{printingChallan.challanNo}</span></div>
-              <div><strong>Date: </strong>{printingChallan.date} {printingChallan.departureTime}</div>
-              <div><strong>Customer: </strong><span className="font-bold">{printingChallan.customerName}</span></div>
-              <div><strong>Concrete Grade: </strong><span className="font-bold">{printingChallan.grade}</span></div>
-              <div><strong>Delivery Site: </strong>{printingChallan.site}</div>
-              <div><strong>Transit Mixer: </strong><span className="font-bold">{printingChallan.vehicleNo}</span></div>
-              <div><strong>Dispatched Qty: </strong><span className="font-black text-xs">{printingChallan.quantity} m³</span></div>
-              <div><strong>Driver: </strong>{printingChallan.driverName}</div>
-              <div><strong>Target Slump: </strong>{printingChallan.slump || '125 ± 25 mm'}</div>
-              <div><strong>Site Contact: </strong>{printingChallan.receiverName || 'Site Incharge'}</div>
-            </div>
+            {/* FORMAT 2: A4 OFFICIAL DOCUMENT */}
+            {printFormat === 'a4' && (
+              <div className="p-6 border border-slate-300 rounded-xl space-y-4 print:border-none print:p-0">
+                {/* Official Company Header */}
+                <div className="border-b-2 border-emerald-800 pb-3 flex justify-between items-start">
+                  <div>
+                    <h1 className="text-xl font-black text-emerald-950 tracking-wider">SM CONCRETE TECH</h1>
+                    <p className="text-xs text-slate-600 font-medium">Ready Mix Concrete Manufacturing & Pumping Solutions</p>
+                    <p className="text-[11px] text-slate-600">A/P Tanang, Tal. Miraj, Dist. Sangli, Maharashtra - 416410</p>
+                    <p className="text-[11px] text-slate-600">Email: smconcretetech@gmail.com | Helpline: +91 9421858683</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-xs bg-slate-100 px-2 py-1 rounded border border-slate-300 inline-block mb-1">
+                      GSTIN: 27AAFFS1234F1Z5
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">State Code: 27 (Maharashtra)</div>
+                    <div className="text-[10px] text-slate-500 font-mono">PAN: AAFFS1234F</div>
+                  </div>
+                </div>
 
-            <div className="p-2 border border-black text-[9px] leading-tight bg-slate-50">
-              <strong>Notice to Customer:</strong> Do not add water to the transit mixer drum at the site without written authorisation from the QA/QC engineer. Adding excess water reduces compressive strength and voids concrete structural warranty.
-            </div>
+                {/* Document Title Banner */}
+                <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-1.5 rounded-lg">
+                  <span className="font-black text-xs uppercase tracking-widest">
+                    {printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'Delivery Challan & Gate Pass (Non-Bill Delivery)' : 'Official Delivery Challan & Dispatch Gate Pass'}
+                  </span>
+                  <span className="font-mono text-xs font-bold text-amber-400">
+                    Challan No: {printingChallan.challanNo}
+                  </span>
+                </div>
 
-            <div className="grid grid-cols-2 pt-8 text-center text-[10px]">
-              <div className="border-t border-dotted border-black pt-1">
-                <div className="font-bold">Driver Signature</div>
-                <div className="text-[9px] text-gray-600">({printingChallan.driverName})</div>
+                {/* Non-Bill Prominent Banner */}
+                {(printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill') && (
+                  <div className="bg-amber-100 border-2 border-amber-500 text-amber-950 px-3 py-1.5 rounded-lg font-black text-xs text-center uppercase tracking-wide">
+                    ⚠️ NON-BILL DELIVERY / SAMPLE / TRIAL RUN — STRICTLY NOT FOR TAX INVOICE GENERATION
+                  </div>
+                )}
+
+                {/* Metadata Grid */}
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                  <div className="space-y-1">
+                    <div><span className="text-slate-500">Customer / Client: </span><strong className="text-slate-900 font-bold">{printingChallan.customerName}</strong></div>
+                    <div><span className="text-slate-500">Unloading Site: </span><strong className="text-slate-800">{printingChallan.site}</strong></div>
+                    <div><span className="text-slate-500">Site Receiver Contact: </span><span>{printingChallan.receiverName || 'Site Engineer / Incharge'}</span></div>
+                  </div>
+                  <div className="space-y-1">
+                    <div><span className="text-slate-500">Dispatch Date & Time: </span><strong>{printingChallan.date} at {printingChallan.departureTime}</strong></div>
+                    <div><span className="text-slate-500">Transit Mixer Reg #: </span><strong className="font-mono text-indigo-900">{printingChallan.vehicleNo}</strong></div>
+                    <div><span className="text-slate-500">Designated Driver: </span><strong>{printingChallan.driverName}</strong></div>
+                  </div>
+                </div>
+
+                {/* Dispatched Material Details Table */}
+                <table className="w-full border-collapse border border-slate-300 text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-800 font-bold text-left border-b border-slate-300">
+                      <th className="p-2 border-r border-slate-300 w-12 text-center">#</th>
+                      <th className="p-2 border-r border-slate-300">Concrete Mix Specification</th>
+                      <th className="p-2 border-r border-slate-300">Target Slump</th>
+                      <th className="p-2 border-r border-slate-300 text-center">Billing Classification</th>
+                      <th className="p-2 text-right">Dispatched Volume</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-slate-300">
+                      <td className="p-2.5 border-r border-slate-300 text-center font-mono">1</td>
+                      <td className="p-2.5 border-r border-slate-300">
+                        <div className="font-bold text-slate-900">{printingChallan.grade}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">Standard Ready Mix Concrete (IS 456 / IS 10262)</div>
+                      </td>
+                      <td className="p-2.5 border-r border-slate-300 font-mono">{printingChallan.slump || '125 ± 25 mm'}</td>
+                      <td className="p-2.5 border-r border-slate-300 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                        }`}>
+                          {printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'Non-Bill (NB)' : 'Commercial Billable'}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-right font-mono font-black text-sm text-slate-900">
+                        {Number(printingChallan.quantity).toFixed(2)} m³
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 font-bold">
+                      <td colSpan="4" className="p-2 text-right border-r border-slate-300">Total Dispatched Concrete Volume:</td>
+                      <td className="p-2 text-right font-mono font-black text-sm text-emerald-900">{Number(printingChallan.quantity).toFixed(2)} m³</td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+                {/* Technical Quality & Handling Terms */}
+                <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-lg text-[10px] text-amber-950 leading-relaxed">
+                  <strong>Quality & Handling Disclaimer:</strong>
+                  <ul className="list-disc list-inside mt-0.5 space-y-0.5">
+                    <li>Concrete must be completely unloaded and placed within 120 minutes from the batching time indicated on this challan.</li>
+                    <li>Strictly <strong>NO WATER</strong> should be added to the mixer drum at site without written authorization from our QA/QC Engineer. Any additional water reduces characteristic compressive strength and voids structural concrete quality warranties.</li>
+                    <li>Test cubes must be cast strictly in accordance with IS 516 standards by certified site personnel.</li>
+                  </ul>
+                </div>
+
+                {/* 3-Signature Verification Block */}
+                <div className="grid grid-cols-3 gap-6 pt-10 text-center text-xs">
+                  <div className="border-t border-slate-400 pt-2">
+                    <div className="font-bold text-slate-800">Batching Plant Incharge</div>
+                    <div className="text-[10px] text-slate-500">SM Concrete Tech</div>
+                  </div>
+                  <div className="border-t border-slate-400 pt-2">
+                    <div className="font-bold text-slate-800">Transit Mixer Driver</div>
+                    <div className="text-[10px] text-slate-500">({printingChallan.driverName})</div>
+                  </div>
+                  <div className="border-t border-slate-400 pt-2">
+                    <div className="font-bold text-slate-800">Customer Receiver / Engineer</div>
+                    <div className="text-[10px] text-slate-500">Name & Contact Signature</div>
+                  </div>
+                </div>
+
+                <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-200">
+                  This is a computer-generated delivery document registered in SM Concrete Tech Cloud Operations System.
+                </div>
               </div>
-              <div className="border-t border-dotted border-black pt-1">
-                <div className="font-bold">Customer Site Receiver</div>
-                <div className="text-[9px] text-gray-600">(Name & Mobile)</div>
-              </div>
-            </div>
-
-            <div className="text-center text-[8px] text-gray-500 pt-1 border-t border-gray-300">
-              Generated by SM CONCRETECH Cloud Dispatch System • Official Gate Pass
-            </div>
+            )}
           </div>
         </div>,
         document.body

@@ -39,7 +39,22 @@ export default function PlantDashboardView({ onNavigateTab }) {
     }
   });
 
-  const todayProductionM3 = batches.reduce((acc, b) => acc + (parseFloat(b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0);
+  const [siloInventory] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('rmc_silo_inventory_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return [
+      { id: 'silo-1', name: 'Cement Silo 1 (OPC 53)', current: 65, capacity: 100, unit: 'MT' },
+      { id: 'silo-2', name: 'Fly Ash Silo 2 (Dirk Pozzocrete)', current: 42, capacity: 80, unit: 'MT' },
+      { id: 'bin-1', name: '20mm Aggregates (Bin A)', current: 140, capacity: 200, unit: 'MT' },
+      { id: 'bin-2', name: 'Crush Sand (Bin C)', current: 185, capacity: 250, unit: 'MT' }
+    ];
+  });
+
+  const todayProductionM3 = batches.reduce((acc, b) => acc + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0);
   const monthProductionM3 = todayProductionM3;
   const activeTripsCount = trips.filter(t => t.status === 'Active' || t.status === 'En Route' || t.status === 'Pouring').length;
   const idleMixersCount = trips.filter(t => t.status === 'Available' || t.status === 'In Yard').length;
@@ -57,10 +72,15 @@ export default function PlantDashboardView({ onNavigateTab }) {
     dest: t.destinationSite || t.site || t.customerName || '--'
   }));
 
-  const cementTons = inwardRecords.filter(r => (r.material || '').toLowerCase().includes('cement')).reduce((acc, r) => acc + (parseFloat(r.netTons || 0) || 0), 0);
-  const flyAshTons = inwardRecords.filter(r => (r.material || '').toLowerCase().includes('fly ash')).reduce((acc, r) => acc + (parseFloat(r.netTons || 0) || 0), 0);
-  const aggTons = inwardRecords.filter(r => (r.material || '').toLowerCase().includes('aggregate') || (r.material || '').includes('20mm')).reduce((acc, r) => acc + (parseFloat(r.netTons || 0) || 0), 0);
-  const sandTons = inwardRecords.filter(r => (r.material || '').toLowerCase().includes('sand')).reduce((acc, r) => acc + (parseFloat(r.netTons || 0) || 0), 0);
+  const cementSilo = siloInventory.find(s => s.id === 'silo-1' || (s.name || '').toLowerCase().includes('cement')) || { current: 65, capacity: 100 };
+  const flyAshSilo = siloInventory.find(s => s.id === 'silo-2' || (s.name || '').toLowerCase().includes('fly ash')) || { current: 42, capacity: 80 };
+  const aggBin = siloInventory.find(s => s.id === 'bin-1' || (s.name || '').toLowerCase().includes('aggregate') || (s.name || '').includes('20mm')) || { current: 140, capacity: 200 };
+  const sandBin = siloInventory.find(s => s.id === 'bin-2' || (s.name || '').toLowerCase().includes('sand')) || { current: 185, capacity: 250 };
+
+  const cementTons = cementSilo.current;
+  const flyAshTons = flyAshSilo.current;
+  const aggTons = aggBin.current;
+  const sandTons = sandBin.current;
 
   return (
     <div className="w-full space-y-2.5 sm:space-y-3 text-xs text-slate-800 pb-8">
@@ -302,14 +322,14 @@ export default function PlantDashboardView({ onNavigateTab }) {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-100/80 text-slate-800 text-[10px] uppercase font-black tracking-wider border-b border-slate-200">
+            <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
               <tr>
-                <th className="py-2 px-3">Mixer ID</th>
-                <th className="py-2 px-3">Vehicle Reg No</th>
-                <th className="py-2 px-3">Driver</th>
-                <th className="py-2 px-3">Current Status</th>
-                <th className="py-2 px-3">Grade</th>
-                <th className="py-2 px-3">Destination Site</th>
+                <th className="py-3 px-3 text-white border-r border-white/20">Mixer ID</th>
+                <th className="py-3 px-3 text-white border-r border-white/20">Vehicle Reg No</th>
+                <th className="py-3 px-3 text-white border-r border-white/20">Driver</th>
+                <th className="py-3 px-3 text-white border-r border-white/20">Current Status</th>
+                <th className="py-3 px-3 text-white border-r border-white/20">Grade</th>
+                <th className="py-3 px-3 text-white">Destination Site</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

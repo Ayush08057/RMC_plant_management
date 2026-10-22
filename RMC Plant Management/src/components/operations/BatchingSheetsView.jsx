@@ -90,6 +90,7 @@ export default function BatchingSheetsView() {
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
     mixGrade: 'M25',
     volume: 6.0,
+    batchCapacity: 0.5, // 0.5 m³ pan mixer capacity
     customerName: '',
     site: '',
     vehicleNo: 'MH-10-CR-1212',
@@ -97,36 +98,51 @@ export default function BatchingSheetsView() {
     operatorName: 'Rajesh Mane',
     targetSlump: '120 ± 25 mm',
     actualSlump: '125 mm',
-    moisturePercent: 2.0,
+    moisturePercent: 2.0, // Aggregate surface moisture %
+    absorptionPercent: 1.0, // Aggregate water absorption %
     qcStatus: 'Approved',
+    productionStatus: 'Planned',
+    stockDeducted: false,
     remarks: 'Standard transit mixer load dispatched on schedule.',
     materials: [],
   });
 
-  // Automatically update recipe targets when mixGrade or volume changes
-  const updateMaterialsForGradeAndVolume = (grade, vol) => {
+  // Automatically update recipe targets with IS:456 & IS:10262 moisture compensation
+  const updateMaterialsForGradeAndVolume = (grade, vol, moisturePct = 2.0, absorptionPct = 1.0) => {
     const preset = MIX_DESIGN_PRESETS[grade] || MIX_DESIGN_PRESETS['M25'];
     const v = Number(vol) || 1;
+    const m = Math.max(0, Number(moisturePct) || 0);
+    const a = Math.max(0, Number(absorptionPct) || 0);
+    const freeMoisturePct = Math.max(0, m - a); // Effective surface moisture contributing to water
+
+    const drySand = preset.sand * v;
+    const moistSandTarget = Math.round(drySand * (1 + m / 100)); // Sand scale weighs moist aggregate
+    const waterAddedBySand = Math.round(drySand * (freeMoisturePct / 100)); // Water contributed by moist sand
+    const designWater = preset.water * v;
+    const correctedWaterTarget = Math.max(30, Math.round(designWater - waterAddedBySand)); // Deduct surface water from batch water
+
     return [
-      { name: 'Cement (OPC 53)', target: Math.round(preset.cement * v), actual: Math.round(preset.cement * v + (Math.random() * 8 - 4)), unit: 'kg' },
-      { name: 'Fly Ash (Pozzocrete)', target: Math.round(preset.flyash * v), actual: Math.round(preset.flyash * v + (Math.random() * 4 - 2)), unit: 'kg' },
-      { name: '20mm Coarse Aggregate', target: Math.round(preset.agg20 * v), actual: Math.round(preset.agg20 * v + (Math.random() * 16 - 8)), unit: 'kg' },
-      { name: '10mm Coarse Aggregate', target: Math.round(preset.agg10 * v), actual: Math.round(preset.agg10 * v + (Math.random() * 12 - 6)), unit: 'kg' },
-      { name: 'Crushed M-Sand', target: Math.round(preset.sand * v), actual: Math.round(preset.sand * v + (Math.random() * 18 - 9)), unit: 'kg' },
-      { name: 'Water', target: Math.round(preset.water * v), actual: Math.round(preset.water * v + (Math.random() * 4 - 2)), unit: 'L' },
-      { name: 'Admixture (PCE)', target: Number((preset.admixture * v).toFixed(1)), actual: Number((preset.admixture * v + (Math.random() * 0.2 - 0.1)).toFixed(1)), unit: 'kg' },
+      { name: 'Cement (OPC 53)', target: Math.round(preset.cement * v), actual: Math.round(preset.cement * v + (Math.random() * 8 - 4)), unit: 'kg', tolerancePct: 2 },
+      { name: 'Fly Ash (Pozzocrete)', target: Math.round(preset.flyash * v), actual: Math.round(preset.flyash * v + (Math.random() * 4 - 2)), unit: 'kg', tolerancePct: 2 },
+      { name: '20mm Coarse Aggregate', target: Math.round(preset.agg20 * v), actual: Math.round(preset.agg20 * v + (Math.random() * 16 - 8)), unit: 'kg', tolerancePct: 3 },
+      { name: '10mm Coarse Aggregate', target: Math.round(preset.agg10 * v), actual: Math.round(preset.agg10 * v + (Math.random() * 12 - 6)), unit: 'kg', tolerancePct: 3 },
+      { name: 'Crushed M-Sand', target: moistSandTarget, actual: Math.round(moistSandTarget + (Math.random() * 18 - 9)), unit: 'kg', tolerancePct: 3, moistureCompensated: true },
+      { name: 'Water', target: correctedWaterTarget, actual: Math.round(correctedWaterTarget + (Math.random() * 4 - 2)), unit: 'L', tolerancePct: 2, moistureCompensated: true },
+      { name: 'Admixture (PCE)', target: Number((preset.admixture * v).toFixed(1)), actual: Number((preset.admixture * v + (Math.random() * 0.2 - 0.1)).toFixed(1)), unit: 'kg', tolerancePct: 2 },
     ];
   };
 
   const handleOpenCreateModal = () => {
     const defaultGrade = 'M25';
     const defaultVol = 6.0;
+    const defaultCap = 0.5;
     setForm({
       sheetNo: `25-26/${sheets.length + 1043}`,
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       mixGrade: defaultGrade,
       volume: defaultVol,
+      batchCapacity: defaultCap,
       customerName: '',
       site: '',
       vehicleNo: 'MH-10-CR-1212',
@@ -148,7 +164,7 @@ export default function BatchingSheetsView() {
       ...prev,
       mixGrade: grade,
       targetSlump: preset ? preset.slump : prev.targetSlump,
-      materials: updateMaterialsForGradeAndVolume(grade, prev.volume),
+      materials: updateMaterialsForGradeAndVolume(grade, prev.volume, prev.moisturePercent, prev.absorptionPercent),
     }));
   };
 
@@ -157,8 +173,94 @@ export default function BatchingSheetsView() {
     setForm((prev) => ({
       ...prev,
       volume: numVol,
-      materials: updateMaterialsForGradeAndVolume(prev.mixGrade, numVol),
+      materials: updateMaterialsForGradeAndVolume(prev.mixGrade, numVol, prev.moisturePercent, prev.absorptionPercent),
     }));
+  };
+
+  const handleMoistureChange = (moistureVal, absorptionVal) => {
+    const m = Number(moistureVal) || 0;
+    const a = absorptionVal !== undefined ? Number(absorptionVal) || 0 : form.absorptionPercent;
+    setForm((prev) => ({
+      ...prev,
+      moisturePercent: m,
+      absorptionPercent: a,
+      materials: updateMaterialsForGradeAndVolume(prev.mixGrade, prev.volume, m, a),
+    }));
+  };
+
+  const handleFinalizeProduction = (sheet) => {
+    if (!sheet) return;
+    if (sheet.stockDeducted) {
+      showToast(`Stock already deducted for batch #${sheet.sheetNo}.`);
+      return;
+    }
+
+    try {
+      const siloKey = 'rmc_silo_inventory_v2';
+      const rawSilo = localStorage.getItem(siloKey);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : null;
+      if (siloData) {
+        (sheet.materials || []).forEach((m) => {
+          const act = Number(m.actual) || Number(m.target) || 0;
+          const tons = act / 1000;
+          const nameLower = (m.name || '').toLowerCase();
+          if (nameLower.includes('cement') && siloData.cement) {
+            siloData.cement.stockTons = Math.max(0, Number((Number(siloData.cement.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('fly ash') && siloData.flyash) {
+            siloData.flyash.stockTons = Math.max(0, Number((Number(siloData.flyash.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('20mm') && siloData.agg20) {
+            siloData.agg20.stockTons = Math.max(0, Number((Number(siloData.agg20.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('10mm') && siloData.agg10) {
+            siloData.agg10.stockTons = Math.max(0, Number((Number(siloData.agg10.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('sand') && siloData.sand) {
+            siloData.sand.stockTons = Math.max(0, Number((Number(siloData.sand.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('admixture') && siloData.admixturePce) {
+            siloData.admixturePce.stockLiters = Math.max(0, Number((Number(siloData.admixturePce.stockLiters || 0) - act).toFixed(1)));
+          }
+        });
+        localStorage.setItem(siloKey, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', siloKey, siloData);
+      }
+
+      const updated = sheets.map(s => s.id === sheet.id ? {
+        ...s,
+        stockDeducted: true,
+        productionStatus: 'Completed',
+        finalizedAt: new Date().toISOString()
+      } : s);
+      setSheets(updated);
+      if (selectedSheet?.id === sheet.id) {
+        setSelectedSheet({
+          ...selectedSheet,
+          stockDeducted: true,
+          productionStatus: 'Completed',
+          finalizedAt: new Date().toISOString()
+        });
+      }
+      showToast(`✓ Production for Sheet #${sheet.sheetNo} finalized! Raw materials deducted from Silo inventory.`);
+    } catch (err) {
+      console.warn('Production stock deduction notice:', err.message);
+    }
+  };
+
+  const handleCreateChallanFromBatch = (sheet) => {
+    if (!sheet) return;
+    const prefill = {
+      customerName: sheet.customerName || '',
+      site: sheet.site || '',
+      vehicleNo: sheet.vehicleNo || '',
+      driverName: sheet.driverName || '',
+      grade: `${sheet.mixGrade || 'M25'} Concrete`,
+      quantity: Number(sheet.volume) || 6.0,
+      slump: sheet.actualSlump || sheet.targetSlump || '125 ± 25 mm',
+      batchSheetNo: sheet.sheetNo,
+      billingType: 'Billable',
+      timestamp: Date.now()
+    };
+    try {
+      sessionStorage.setItem('rmc_pending_challan_prefill', JSON.stringify(prefill));
+    } catch {}
+    showToast(`✓ Prefilled delivery challan for Sheet #${sheet.sheetNo}! Switch to Delivery Challans tab to issue.`);
   };
 
   const handleMaterialActualChange = (idx, value) => {
@@ -174,18 +276,43 @@ export default function BatchingSheetsView() {
       return;
     }
 
+    const batchCap = Number(form.batchCapacity) > 0 ? Number(form.batchCapacity) : 0.5;
+    const vol = Number(form.volume) || 1;
+    const count = Math.ceil(vol / batchCap);
+    const perBatchVol = Number((vol / count).toFixed(3));
+
+    // Generate individual batch rows with planned vs actuals
+    const batches = [];
+    for (let i = 1; i <= count; i++) {
+      batches.push({
+        batchNo: i,
+        batchSequence: `Batch ${i} of ${count}`,
+        volumeM3: perBatchVol,
+        status: 'Completed',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        materials: (form.materials || []).map((m) => ({
+          name: m.name,
+          target: Math.round(m.target / count),
+          actual: Math.round(m.actual / count),
+          unit: m.unit,
+        })),
+      });
+    }
+
     const newSheet = {
       id: `BS-${Date.now()}`,
       ...form,
       customerName: form.customerName.trim(),
       site: (form.site || 'Main Delivery Zone').trim(),
-      batchesCount: Math.ceil(Number(form.volume) || 1),
+      batchCapacity: batchCap,
+      batchesCount: count,
+      batches,
       createdAt: new Date().toISOString(),
     };
 
     const updated = [newSheet, ...sheets];
     setSheets(updated);
-    showToast(`✓ Batching Sheet #${newSheet.sheetNo} generated successfully!`);
+    showToast(`✓ Batching Sheet #${newSheet.sheetNo} generated (${count} batches of ${perBatchVol} m³)!`);
     setShowCreateModal(false);
     setSelectedSheet(newSheet);
   };
@@ -336,14 +463,14 @@ export default function BatchingSheetsView() {
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-xs text-slate-700 border-collapse table-fixed">
-            <thead>
-              <tr className="bg-slate-100/90 text-slate-900 font-black uppercase tracking-wider text-[10px] border-b-2 border-slate-200/90 select-none">
-                <th className="py-3 px-3 w-[13%]">Sheet # & Time</th>
-                <th className="py-3 px-3 w-[18%]">Customer & Project Site</th>
-                <th className="py-3 px-3 w-[11%]">Grade & Volume</th>
-                <th className="py-3 px-3 w-[36%]">Batched Materials (SCADA Actuals)</th>
-                <th className="py-3 px-3 w-[12%]">Mixer & Driver</th>
-                <th className="py-3 px-3 w-[10%] text-right">Actions</th>
+            <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
+              <tr>
+                <th className="py-3 px-3 w-[13%] text-white border-r border-white/20">Sheet # & Time</th>
+                <th className="py-3 px-3 w-[18%] text-white border-r border-white/20">Customer & Project Site</th>
+                <th className="py-3 px-3 w-[11%] text-white border-r border-white/20">Grade & Volume</th>
+                <th className="py-3 px-3 w-[36%] text-white border-r border-white/20">Batched Materials (SCADA Actuals)</th>
+                <th className="py-3 px-3 w-[12%] text-white border-r border-white/20">Mixer & Driver</th>
+                <th className="py-3 px-3 w-[10%] text-right text-white">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80">
@@ -444,6 +571,15 @@ export default function BatchingSheetsView() {
 
                         <button
                           type="button"
+                          onClick={() => handleCreateChallanFromBatch(s)}
+                          className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold transition-colors cursor-pointer"
+                          title="Generate Delivery Challan from Batch"
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => setPrintingSheet(s)}
                           className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-colors cursor-pointer"
                           title="Print Batch Sheet Ticket"
@@ -527,7 +663,7 @@ export default function BatchingSheetsView() {
                   1. Batch Order & Recipe Selection
                 </span>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">Sheet Number</label>
                     <input
@@ -566,6 +702,22 @@ export default function BatchingSheetsView() {
                   </div>
 
                   <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Mixer Capacity (m³)
+                    </label>
+                    <select
+                      value={form.batchCapacity}
+                      onChange={(e) => setForm({ ...form, batchCapacity: Number(e.target.value) || 0.5 })}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-300 font-mono font-bold text-slate-900 text-xs"
+                    >
+                      <option value="0.35">0.35 m³ (Small Pan)</option>
+                      <option value="0.5">0.50 m³ (Standard Pan)</option>
+                      <option value="0.75">0.75 m³ (Twin-Shaft)</option>
+                      <option value="1.0">1.00 m³ (High-Cap Twin)</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">Target Slump</label>
                     <input
                       type="text"
@@ -574,6 +726,16 @@ export default function BatchingSheetsView() {
                       className="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-medium"
                     />
                   </div>
+                </div>
+
+                {/* Dynamic Batch Count Banner */}
+                <div className="p-2.5 bg-blue-50/80 rounded-xl border border-blue-200 flex items-center justify-between text-xs">
+                  <span className="text-blue-900 font-semibold">
+                    Dynamic SCADA Production Plan:
+                  </span>
+                  <span className="font-mono font-black text-blue-950">
+                    {Math.ceil((Number(form.volume) || 1) / (Number(form.batchCapacity) || 0.5))} Batches @ {((Number(form.volume) || 1) / Math.ceil((Number(form.volume) || 1) / (Number(form.batchCapacity) || 0.5))).toFixed(3)} m³/batch
+                  </span>
                 </div>
 
                 {/* Grade Selector Pills */}
@@ -658,15 +820,58 @@ export default function BatchingSheetsView() {
                 </div>
               </div>
 
-              {/* Step 3: Material Consumption Breakdown (Target vs Actual) */}
+              {/* Step 3: Moisture Compensation & SCADA Batch Weights */}
               <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="font-bold text-xs text-slate-900">
-                    3. SCADA Material Weights for {form.volume} m³ ({form.mixGrade})
-                  </span>
+                  <div>
+                    <span className="font-bold text-xs text-slate-900 block">
+                      3. IS:456 & IS:10262 Aggregate Moisture Compensation & Recipe Weights
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Auto-adjusts moist aggregate batching and deducts surface water from water batch
+                    </span>
+                  </div>
                   <span className="text-[10px] text-emerald-800 font-mono font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                    Auto-Calibrated
+                    IS:4926 Calibrated
                   </span>
+                </div>
+
+                {/* Moisture Adjustment Controls */}
+                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200 grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center">
+                  <div>
+                    <label className="text-[10px] font-bold text-amber-900 block mb-0.5">
+                      M-Sand Surface Moisture (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="10"
+                      value={form.moisturePercent}
+                      onChange={(e) => handleMoistureChange(e.target.value, form.absorptionPercent)}
+                      className="w-full px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-xs font-mono font-bold text-amber-950"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-amber-900 block mb-0.5">
+                      Aggregate Absorption (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="5"
+                      value={form.absorptionPercent}
+                      onChange={(e) => handleMoistureChange(form.moisturePercent, e.target.value)}
+                      className="w-full px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-xs font-mono font-bold text-amber-950"
+                    />
+                  </div>
+                  <div className="text-[10px] text-amber-800 bg-amber-100/60 p-2 rounded-lg border border-amber-300/80 font-mono">
+                    Free Moisture: <strong>{Math.max(0, (form.moisturePercent - form.absorptionPercent)).toFixed(1)}%</strong>
+                    <span className="block text-[9px] text-amber-700 font-sans">
+                      Deducted from water; added to moist aggregate scale
+                    </span>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -676,16 +881,24 @@ export default function BatchingSheetsView() {
                         <th className="py-2 px-3 text-left">Material Component</th>
                         <th className="py-2 px-3 text-right">Target Proportions</th>
                         <th className="py-2 px-3 text-right">Actual Batched Weight</th>
-                        <th className="py-2 px-3 text-right">Variance (%)</th>
+                        <th className="py-2 px-3 text-right">Tolerance & Variance</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {form.materials.map((m, idx) => {
                         const diff = m.target > 0 ? (((m.actual - m.target) / m.target) * 100) : 0;
-                        const isOk = Math.abs(diff) <= 2.0;
+                        const tol = m.tolerancePct || (m.name.includes('Aggregate') || m.name.includes('Sand') ? 3.0 : 2.0);
+                        const isOk = Math.abs(diff) <= tol;
                         return (
                           <tr key={m.name} className="hover:bg-slate-50/60">
-                            <td className="py-2 px-3 font-semibold text-slate-900">{m.name}</td>
+                            <td className="py-2 px-3 font-semibold text-slate-900 flex items-center gap-1.5">
+                              <span>{m.name}</span>
+                              {m.moistureCompensated && (
+                                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                  Moist Adj
+                                </span>
+                              )}
+                            </td>
                             <td className="py-2 px-3 text-right font-mono text-slate-600">
                               {m.target} {m.unit}
                             </td>
@@ -701,9 +914,9 @@ export default function BatchingSheetsView() {
                             </td>
                             <td className="py-2 px-3 text-right">
                               <span className={`font-mono font-bold text-[10px] px-1.5 py-0.5 rounded ${
-                                isOk ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'
+                                isOk ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                               }`}>
-                                {diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`}
+                                {diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`} (Limit ±{tol}%)
                               </span>
                             </td>
                           </tr>
@@ -846,6 +1059,33 @@ export default function BatchingSheetsView() {
                 </table>
               </div>
 
+              {/* Individual Multi-Batch Breakdown (Section 3B) */}
+              {selectedSheet.batches && selectedSheet.batches.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="font-bold text-xs text-slate-900 block">
+                      Individual Multi-Batch Drops ({selectedSheet.batches.length} Batches)
+                    </span>
+                    <span className="text-[10px] font-mono text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {selectedSheet.batchCapacity || 0.5} m³ / batch
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {selectedSheet.batches.map((b) => (
+                      <div key={b.batchNo} className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono space-y-0.5">
+                        <div className="flex items-center justify-between text-slate-700 font-bold">
+                          <span>{b.batchSequence}</span>
+                          <span className="text-emerald-700 font-black">{b.volumeM3} m³</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Time: {b.timestamp || selectedSheet.time}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-200 text-xs text-blue-900 flex items-center justify-between">
                 <span>Batch Operator: <strong>{selectedSheet.operatorName || 'Rajesh Mane'}</strong></span>
                 <span>QC Verification: <strong className="text-emerald-700">✓ IS:4926 Certified</strong></span>
@@ -853,22 +1093,53 @@ export default function BatchingSheetsView() {
             </div>
 
             {/* Footer */}
-            <div className="p-3 sm:px-5 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedSheet(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => setPrintingSheet(selectedSheet)}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1D5FA7] text-white hover:bg-[#123B6D] flex items-center gap-1.5 shadow-sm"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print Official Slip</span>
-              </button>
+            <div className="p-3 sm:px-5 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSheet(null)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCreateChallanFromBatch(selectedSheet)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 flex items-center gap-1.5 transition-all shadow-2xs"
+                  title="Generate delivery challan pre-filled with this batch details"
+                >
+                  <Truck className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Create Challan</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!selectedSheet.stockDeducted ? (
+                  <button
+                    type="button"
+                    onClick={() => handleFinalizeProduction(selectedSheet)}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
+                    title="Deduct consumed raw materials from Silo inventory"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Finalize & Deduct Stock</span>
+                  </button>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-[10px] flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                    <span>Stock Deducted</span>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPrintingSheet(selectedSheet)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#1D5FA7] text-white hover:bg-[#123B6D] flex items-center gap-1.5 shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Official Slip</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>,

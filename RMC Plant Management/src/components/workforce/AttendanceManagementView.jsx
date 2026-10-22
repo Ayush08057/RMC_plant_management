@@ -1048,29 +1048,29 @@ export default function AttendanceManagementView({
             {/* Desktop Table View */}
             <div className="hidden md:block w-full max-w-full overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-xs border-collapse table-fixed">
-                <thead className="bg-slate-50/90 text-slate-500 font-sans font-semibold border-b border-slate-200 select-none uppercase tracking-wider text-[10.5px]">
+                <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
                   <tr>
-                    <th className="py-3 px-4 sm:px-5 font-semibold text-slate-600 w-[27%]">
-                      <div className="flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <th className="py-3 px-4 sm:px-5 font-bold text-white w-[27%] border-r border-white/20">
+                      <div className="flex items-center gap-1.5 text-white">
+                        <Users className="w-3.5 h-3.5 text-white/80" />
                         <span>Employee Details</span>
                       </div>
                     </th>
-                    <th className="py-3 px-4 font-semibold text-slate-600 w-[23%]">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <th className="py-3 px-4 font-bold text-white w-[23%] border-r border-white/20">
+                      <div className="flex items-center gap-1.5 text-white">
+                        <Clock className="w-3.5 h-3.5 text-white/80" />
                         <span>Punch In / Out • Status</span>
                       </div>
                     </th>
-                    <th className="py-3 px-4 font-semibold text-slate-600 w-[21%]">
-                      <div className="flex items-center gap-1.5">
-                        <Activity className="w-3.5 h-3.5 text-slate-400" />
+                    <th className="py-3 px-4 font-bold text-white w-[21%] border-r border-white/20">
+                      <div className="flex items-center gap-1.5 text-white">
+                        <Activity className="w-3.5 h-3.5 text-white/80" />
                         <span>Duty Hours (9h Shift)</span>
                       </div>
                     </th>
-                    <th className="py-3 px-4 sm:px-5 font-semibold text-slate-600 w-[29%]">
-                      <div className="flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                    <th className="py-3 px-4 sm:px-5 font-bold text-white w-[29%]">
+                      <div className="flex items-center gap-1.5 text-white">
+                        <FileText className="w-3.5 h-3.5 text-white/80" />
                         <span>Today's Work Report</span>
                       </div>
                     </th>

@@ -20,6 +20,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import defaultLogo from '../../assets/logo.png';
 import Modal from './Modal';
 
 export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen = true }) {
@@ -227,9 +228,9 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
   return (
     <>
-      <header className="sticky top-0 z-40 h-14 w-full bg-white border-b border-[#D4E4F7] shadow-2xs flex items-center justify-between px-3 sm:px-4 lg:px-6 gap-2 sm:gap-4 shrink-0">
+      <header className="sticky top-0 z-40 h-14 w-full bg-gradient-to-r from-white via-[#F8FAFF] to-[#EAF3FF]/80 backdrop-blur-md border-b border-[#D4E4F7] shadow-2xs flex items-center justify-between px-2 sm:px-4 lg:px-6 gap-1.5 sm:gap-4 shrink-0">
         {/* Left: Sidebar Toggle & Workspace Selector */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 max-w-[55%] sm:max-w-none">
           {/* Mobile-only menu toggle (hidden on desktop) */}
           <button
             type="button"
@@ -242,7 +243,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </button>
 
           {/* Plant / Company Selector */}
-          <div className="relative shrink-0" ref={companyDropdownRef}>
+          <div className="relative min-w-0" ref={companyDropdownRef}>
             <button
               type="button"
               id="company-selector-button"
@@ -254,18 +255,22 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 setShowPlantPicker((prev) => !prev);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] border border-[#D4E4F7] text-black transition-colors cursor-pointer shadow-2xs"
+              className="flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] border border-[#D4E4F7] text-black transition-colors cursor-pointer shadow-2xs min-w-0"
               title={`Active: ${selectedCompany.name} • Click to switch, add, or delete company`}
             >
-              <div className="w-6 h-6 rounded-md bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0 overflow-hidden">
-                {selectedCompany?.logo ? (
-                  <img src={selectedCompany.logo} alt={selectedCompany.name} className="w-full h-full object-cover scale-[1.04]" />
-                ) : (
-                  <Factory className="w-3.5 h-3.5" />
-                )}
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0 overflow-hidden">
+                <img 
+                  src={selectedCompany?.logo || defaultLogo} 
+                  alt={selectedCompany.name} 
+                  className="w-full h-full object-cover scale-[1.04]" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = defaultLogo;
+                  }}
+                />
               </div>
-              <div className="text-left min-w-0 max-w-[120px] xs:max-w-[150px] sm:max-w-[200px] md:max-w-none">
-                <span className="text-xs sm:text-sm font-bold text-black block leading-tight truncate">
+              <div className="text-left min-w-0">
+                <span className="text-xs sm:text-sm font-bold text-black block leading-tight truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[180px] md:max-w-none">
                   {selectedCompany.name}
                 </span>
                 <span className="text-[11px] text-slate-700 font-normal hidden sm:flex items-center gap-1">
@@ -273,7 +278,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                   <span className="truncate max-w-[120px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
                 </span>
               </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-[#1D5FA7] transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-[#1D5FA7] shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Plant Picker Dropdown */}
@@ -321,11 +326,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                               ? 'bg-[#1D5FA7] border-[#1D5FA7] text-white shadow-xs'
                               : 'bg-[#F5F9FF] border-[#D4E4F7] text-[#1D5FA7]'
                           }`}>
-                            {company.logo ? (
-                              <img src={company.logo} alt={company.name} className="w-full h-full object-cover scale-[1.04]" />
-                            ) : (
-                              <Factory className="w-4 h-4" />
-                            )}
+                            <img 
+                              src={company.logo || defaultLogo} 
+                              alt={company.name} 
+                              className="w-full h-full object-cover scale-[1.04]" 
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = defaultLogo;
+                              }}
+                            />
                           </div>
                           <div className="min-w-0 flex-1 pr-1">
                             <div className="flex items-center gap-1.5">
@@ -386,29 +395,32 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
         </div>
 
         {/* Right: Language Switcher, Notifications & Sign Out */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
 
-          {/* Distinct Language Options (English & Marathi Separate) */}
+          {/* Distinct Language Options (English & Marathi Separate with Mobile Shortcut) */}
           <div className="flex items-center bg-[#F5F9FF] p-0.5 rounded-lg border border-[#D4E4F7] text-xs font-bold shrink-0">
             <button
               type="button"
               onClick={() => setLanguage('en')}
-              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+              className={`px-1.5 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer text-[11px] sm:text-xs ${
                 language === 'en'
                   ? 'bg-[#1D5FA7] text-white shadow-2xs font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
+              title="English"
             >
-              English
+              <span className="sm:hidden">EN</span>
+              <span className="hidden sm:inline">English</span>
             </button>
             <button
               type="button"
               onClick={() => setLanguage('mr')}
-              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+              className={`px-1.5 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer text-[11px] sm:text-xs ${
                 language === 'mr'
                   ? 'bg-[#1D5FA7] text-white shadow-2xs font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
+              title="मराठी"
             >
               मराठी
             </button>
@@ -427,11 +439,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 setShowNotifications((prev) => !prev);
                 setShowPlantPicker(false);
               }}
-              className="p-2 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-black hover:bg-[#EAF3FF] relative cursor-pointer shadow-2xs transition-colors shrink-0"
+              className="p-1.5 sm:p-2 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-black hover:bg-[#EAF3FF] relative cursor-pointer shadow-2xs transition-colors shrink-0"
             >
-              <Bell className="w-4 h-4 text-[#1D5FA7]" />
+              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1D5FA7]" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#246BCE]" />
+                <span className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 w-2 h-2 rounded-full bg-[#246BCE]" />
               )}
             </button>
 
@@ -519,7 +531,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           <button
             type="button"
             onClick={logout}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] hover:border-[#1D5FA7] text-xs font-bold transition-colors cursor-pointer shadow-2xs shrink-0"
+            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] hover:border-[#1D5FA7] text-xs font-bold transition-colors cursor-pointer shadow-2xs shrink-0"
             title={t('Sign Out of active session')}
             aria-label={t('Sign Out')}
           >

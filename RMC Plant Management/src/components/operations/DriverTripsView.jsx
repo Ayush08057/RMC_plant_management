@@ -89,6 +89,28 @@ export default function DriverTripsView() {
     pushCloudStore('cloud_driver_trips', STORAGE_KEY, trips);
   }, [trips]);
 
+  // Helper to calculate turnaround minutes from actual departure and return times
+  const calculateTurnaroundMinutes = (departureTimeStr, returnTimeStr) => {
+    try {
+      if (!departureTimeStr) return 0;
+      const now = new Date();
+      const depParts = departureTimeStr.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
+      if (!depParts) return 0;
+      let depHour = parseInt(depParts[1], 10);
+      const depMin = parseInt(depParts[2], 10);
+      const depAmPm = depParts[3];
+      if (depAmPm && depAmPm.toUpperCase() === 'PM' && depHour < 12) depHour += 12;
+      if (depAmPm && depAmPm.toUpperCase() === 'AM' && depHour === 12) depHour = 0;
+
+      const depDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), depHour, depMin);
+      const diffMs = Math.max(0, now.getTime() - depDate.getTime());
+      const diffMins = Math.round(diffMs / (1000 * 60));
+      return diffMins > 0 ? diffMins : 15;
+    } catch {
+      return 45;
+    }
+  };
+
   // Stage advancement
   const advanceTripStage = (tripId) => {
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -105,7 +127,18 @@ export default function DriverTripsView() {
         return { ...t, status: 'Returning', pourEndTime: nowStr };
       }
       if (t.status === 'Returning') {
-        return { ...t, status: 'Completed', plantReturnTime: nowStr, turnaroundMins: 120 };
+        const actualTurnaround = calculateTurnaroundMinutes(t.departureTime, nowStr);
+        const finalOdo = t.finalOdometer || (Number(t.startOdometer) ? Number(t.startOdometer) + (Number(t.distanceKm) || 15) : null);
+        const diffKm = t.startOdometer && finalOdo ? Math.max(0, Number(finalOdo) - Number(t.startOdometer)) : (t.distanceKm || 15);
+        return { 
+          ...t, 
+          status: 'Completed', 
+          plantReturnTime: nowStr, 
+          turnaroundMins: actualTurnaround,
+          finalOdometer: finalOdo,
+          distanceKm: diffKm,
+          tripDistanceKm: diffKm
+        };
       }
       return t;
     }));
@@ -118,17 +151,35 @@ export default function DriverTripsView() {
       return;
     }
 
+    // Prevent duplicate active trips for the same vehicle
+    const vehicleTrimmed = (newTrip.vehicleNo || '').trim().toUpperCase();
+    if (vehicleTrimmed) {
+      const activeForVehicle = trips.find(t => 
+        t.status !== 'Completed' && 
+        (t.vehicleNo || '').trim().toUpperCase() === vehicleTrimmed
+      );
+      if (activeForVehicle) {
+        alert(`Vehicle ${vehicleTrimmed} is already on an active trip (#${activeForVehicle.id || activeForVehicle.tripId})! Return or complete that trip before dispatching again.`);
+        return;
+      }
+    }
+
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const sOdo = Number(newTrip.startOdometer) || 12450;
     const createdTrip = {
       id: `TRP-${Math.floor(1000 + Math.random() * 9000)}`,
       ...newTrip,
+      vehicleNo: vehicleTrimmed,
+      startOdometer: sOdo,
+      finalOdometer: null,
       departureTime: nowStr,
       siteArrivalTime: null,
       pourStartTime: null,
       pourEndTime: null,
       plantReturnTime: null,
       status: 'Departed',
-      turnaroundMins: null
+      turnaroundMins: null,
+      createdAt: new Date().toISOString()
     };
 
     setTrips([createdTrip, ...trips]);
@@ -139,11 +190,13 @@ export default function DriverTripsView() {
       driverPhone: '+91 98221 44012',
       clientName: '',
       siteName: '',
+      startOdometer: '',
       distanceKm: 15,
       grade: 'M25',
       quantityM3: 6.0,
       challanNo: `DC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-      remarks: ''
+      remarks: '',
+      sitePhoto: null
     });
   };
 
@@ -235,12 +288,12 @@ export default function DriverTripsView() {
 
   return (
     <div className="space-y-1.5 sm:space-y-2 max-w-7xl mx-auto pb-4">
-      {/* 1. Compact 1-Row Summary Stats Strip */}
+      {/* 1. Compact 1-Row Summary Stats Strip: In-Transit: Completed: Delivered: Turnaround: */}
 
       <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#D4E4F7] shadow-2xs flex flex-wrap items-center justify-between gap-1.5 sm:gap-3 text-xs">
         <div className="flex items-center gap-1.5">
           <Truck size={13} className="text-blue-600" />
-          <span className="text-slate-500 text-[11px]">{t('In Transit')}:</span>
+          <span className="text-slate-500 text-[11px]">{t('In-Transit')}:</span>
           <span className="font-bold text-slate-900 text-xs">{activeTripsCount} <span className="font-normal text-slate-500 text-[10px]">{language === 'mr' ? 'गाड्या' : 'mixers'}</span></span>
         </div>
         <div className="h-3 w-px bg-slate-200 hidden sm:block" />
@@ -270,7 +323,7 @@ export default function DriverTripsView() {
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder={t('Search vehicle, driver...')}
+            placeholder={t('Search trip, mixer, driver, site...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-7 pr-2 py-1 h-7 bg-slate-50/70 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#136dec] focus:bg-white text-slate-800 placeholder-slate-400"
@@ -535,6 +588,36 @@ export default function DriverTripsView() {
                     value={newTrip.distanceKm}
                     onChange={(e) => setNewTrip({ ...newTrip, distanceKm: parseFloat(e.target.value) || 0 })}
                     className="w-full border border-slate-200 rounded-lg py-1.5 px-2 text-xs text-slate-800 focus:ring-1 focus:ring-[#136dec]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Starting Odometer (km)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="e.g. 12450"
+                    value={newTrip.startOdometer || ''}
+                    onChange={(e) => setNewTrip({ ...newTrip, startOdometer: parseFloat(e.target.value) || '' })}
+                    className="w-full border border-slate-200 rounded-lg py-1.5 px-2 text-xs text-slate-800 focus:ring-1 focus:ring-[#136dec]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Site Challan / Pour Photo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => setNewTrip(prev => ({ ...prev, sitePhoto: reader.result }));
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full border border-slate-200 rounded-lg py-1 px-2 text-[10px] bg-slate-50 text-slate-700"
                   />
                 </div>
               </div>

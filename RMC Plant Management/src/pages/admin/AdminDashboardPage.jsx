@@ -57,6 +57,8 @@ import AuditLogsView from '../../components/workforce/AuditLogsView';
 import HrSettingsView from '../../components/workforce/HrSettingsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
+import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
+import LoanManagementView from '../../components/workforce/LoanManagementView';
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -577,6 +579,14 @@ export default function AdminDashboardPage() {
       title: 'Payroll Preparation',
       badge: 'PAYROLL',
     },
+    advances: {
+      title: 'Salary Advance Management',
+      badge: 'ADVANCES',
+    },
+    loans: {
+      title: 'Employee Loan Portfolio',
+      badge: 'LOANS',
+    },
     reports: {
       title: 'HR & Operational Reports',
       badge: 'REPORTS',
@@ -627,6 +637,8 @@ export default function AdminDashboardPage() {
       {activeTab === 'billing' && <BillingManagementView />}
       {activeTab === 'approvals' && <ApprovalsView />}
       {activeTab === 'payroll' && <PayrollPreparationView />}
+      {activeTab === 'advances' && <AdvanceManagementView />}
+      {activeTab === 'loans' && <LoanManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
       {activeTab === 'documents' && <EmployeeDocumentsView />}
       {activeTab === 'audit' && <AuditLogsView />}

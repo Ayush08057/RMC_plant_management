@@ -206,7 +206,7 @@ export default function DataTable({
         {/* DESKTOP TABLE VIEW - STRICT 100% CONTAINER FIT WITH PROPER ALIGNMENT */}
         <div className={`hidden md:block w-full max-w-full ${noScroll ? 'overflow-x-hidden' : 'overflow-x-auto'}`}>
           <table className={`w-full ${tableMinWidth ? tableMinWidth : 'w-full'} text-left text-xs sm:text-sm text-black border-collapse ${tableFixed || noScroll ? 'table-fixed' : 'table-auto'}`}>
-            <thead className="bg-[#123B6D] text-white font-mono font-bold uppercase text-[11px] sm:text-xs tracking-wider border-b border-[#123B6D] select-none">
+            <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono font-bold uppercase text-[11px] sm:text-xs tracking-wider border-b-2 border-[#0B2546] select-none shadow-xs">
               <tr>
                 {columns.map((col, idx) => {
                   const colStyle = {
@@ -217,16 +217,24 @@ export default function DataTable({
                   const isFirst = idx === 0;
                   const isLast = idx === columns.length - 1;
                   const alignClass = col.align === 'right' || isLast ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left';
+                  const isDense = compact || columns.length >= 8;
 
                   return (
                     <th
                       key={idx}
-                      style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                      className={`${compact ? 'py-1.5 px-2 text-[10px] sm:text-[11px]' : 'py-2.5 px-3 text-[11px] sm:text-xs'} font-mono font-extrabold uppercase tracking-wider text-white bg-[#123B6D] border-b border-[#123B6D] overflow-hidden ${isFirst ? (compact ? 'pl-2.5 sm:pl-3' : 'pl-3.5 sm:pl-4') : ''
-                        } ${isLast ? (compact ? 'pr-2.5 sm:pr-3' : 'pr-3.5 sm:pr-4') : ''
+                      style={{
+                        ...(Object.keys(colStyle).length > 0 ? colStyle : {}),
+                        color: '#FFFFFF',
+                      }}
+                      className={`${isDense ? 'py-2 px-1.5 sm:px-2 text-[10px] sm:text-[11px]' : 'py-3 px-3.5 text-[11px] sm:text-xs'} font-bold uppercase text-white border-r border-white/20 last:border-r-0 overflow-hidden ${isFirst ? (isDense ? 'pl-2 sm:pl-2.5' : 'pl-4 sm:pl-4.5') : ''
+                        } ${isLast ? (isDense ? 'pr-2 sm:pr-2.5' : 'pr-4 sm:pr-4.5') : ''
                         } ${alignClass} ${col.headerClassName || ''}`}
                     >
-                      <span className="font-mono font-bold text-white block truncate" title={typeof col.header === 'string' ? t(col.header) : undefined}>
+                      <span
+                        style={{ color: '#FFFFFF' }}
+                        className={`${isDense ? 'font-sans font-bold tracking-tight text-[10.5px] sm:text-[11px]' : 'font-mono font-bold tracking-wider text-[11px] sm:text-xs'} text-white block truncate drop-shadow-xs`}
+                        title={typeof col.header === 'string' ? t(col.header) : undefined}
+                      >
                         {typeof col.header === 'string' ? t(col.header) : col.header}
                       </span>
                     </th>
@@ -281,13 +289,14 @@ export default function DataTable({
                       const isFirst = cIdx === 0;
                       const isLast = cIdx === columns.length - 1;
                       const alignClass = col.align === 'right' || isLast ? 'text-right justify-end' : col.align === 'center' ? 'text-center justify-center' : 'text-left justify-start';
+                      const isDense = compact || columns.length >= 8;
 
                       return (
                         <td
                           key={cIdx}
                           style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                          className={`${compact ? 'py-1 px-2 text-xs' : 'py-1.5 px-3'} align-middle min-w-0 ${isFirst ? (compact ? 'pl-2.5 sm:pl-3' : 'pl-3.5 sm:pl-4') : ''
-                            } ${isLast ? (compact ? 'pr-2.5 sm:pr-3' : 'pr-3.5 sm:pr-4') : ''
+                          className={`${isDense ? 'py-1 px-1.5 sm:px-2 text-xs' : 'py-1.5 px-3'} align-middle min-w-0 ${isFirst ? (isDense ? 'pl-2 sm:pl-2.5' : 'pl-3.5 sm:pl-4') : ''
+                            } ${isLast ? (isDense ? 'pr-2 sm:pr-2.5' : 'pr-3.5 sm:pr-4') : ''
                             } ${col.className || ''}`}
                         >
                           <div className={`w-full min-w-0 flex items-center ${alignClass}`}>

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { SYSTEM_ROLE_PROFILES, ROLE_ROUTES } from '../../data/mockUsers';
+import defaultLogo from '../../assets/logo.png';
 
 export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }) {
   const navigate = useNavigate();
@@ -61,7 +62,15 @@ export default function DashboardHeader({ title, subtitle, roleTheme = 'amber' }
           <div className="flex items-center gap-3">
             <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 group">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-xs transition-transform group-hover:scale-105">
-                <img src="/logo.png" alt="SM ConcreTech" className="w-full h-full object-cover scale-[1.04]" />
+                <img 
+                  src={defaultLogo} 
+                  alt="SM ConcreTech" 
+                  className="w-full h-full object-cover scale-[1.04]" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = defaultLogo;
+                  }}
+                />
               </div>
               <div>
                 <div className="flex items-center gap-2">

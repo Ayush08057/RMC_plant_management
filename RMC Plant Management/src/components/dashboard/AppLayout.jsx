@@ -27,6 +27,9 @@ export default function AppLayout({
   );
   const [loginToast, setLoginToast] = useState(null);
 
+  const isAccountant = user?.role === ROLES.ACCOUNTANT || (location?.pathname && location.pathname.startsWith('/accountant'));
+  const defaultPlantOp = isAccountant ? 'material-inward' : 'plant-dashboard';
+
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('rmc_login_toast');

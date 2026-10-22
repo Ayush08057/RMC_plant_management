@@ -73,6 +73,18 @@ service cloud.firestore {
       );
     }
 
+    function isOperationalStaff() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        isManager() ||
+        isHR() ||
+        isAccountant() ||
+        isQuality() ||
+        isDispatcher() ||
+        getUserRole() == 'Driver'
+      );
+    }
+
     // Checks whether the target record belongs to the authenticated user
     function isOwner(empOrUserId) {
       return isAuthenticated() && (
@@ -300,7 +312,7 @@ service cloud.firestore {
     // =========================================================================
     match /hrSettings/{settingId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() || isHR();
+      allow write: if isOperationalStaff();
     }
 
     // =========================================================================
@@ -370,7 +382,7 @@ service cloud.firestore {
     }
     match /hrSettings_CMP-SM-001/{settingId} {
       allow read: if isSameCompany('CMP-SM-001');
-      allow write: if isAdmin() || isHR();
+      allow write: if isSameCompany('CMP-SM-001') && isOperationalStaff();
     }
 
     // --- sm-concretech Partition ---
@@ -436,7 +448,7 @@ service cloud.firestore {
     }
     match /hrSettings_sm-concretech/{settingId} {
       allow read: if isSameCompany('sm-concretech');
-      allow write: if isAdmin() || isHR();
+      allow write: if isSameCompany('sm-concretech') && isOperationalStaff();
     }
 
     // --- sm-concretech-unit-2 Partition ---
@@ -502,7 +514,7 @@ service cloud.firestore {
     }
     match /hrSettings_sm-concretech-unit-2/{settingId} {
       allow read: if isSameCompany('sm-concretech-unit-2');
-      allow write: if isAdmin() || isHR();
+      allow write: if isSameCompany('sm-concretech-unit-2') && isOperationalStaff();
     }
 
     // --- sm-infra-projects Partition ---
@@ -568,7 +580,7 @@ service cloud.firestore {
     }
     match /hrSettings_sm-infra-projects/{settingId} {
       allow read: if isSameCompany('sm-infra-projects');
-      allow write: if isAdmin() || isHR();
+      allow write: if isSameCompany('sm-infra-projects') && isOperationalStaff();
     }
 
     // =========================================================================

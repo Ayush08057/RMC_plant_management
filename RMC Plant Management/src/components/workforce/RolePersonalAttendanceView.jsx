@@ -369,15 +369,15 @@ export default function RolePersonalAttendanceView({
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#EAF3FF] text-black font-semibold border-b border-[#D4E4F7] text-[10.5px] uppercase tracking-wider">
+                <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono text-[11px] font-bold uppercase tracking-wider border-b-2 border-[#0B2546]">
                   <tr>
-                    <th className="py-2.5 px-3 sm:px-4">Date</th>
-                    <th className="py-2.5 px-3">Punch In</th>
-                    <th className="py-2.5 px-3">Punch Out</th>
-                    <th className="py-2.5 px-3">Total Hours</th>
-                    <th className="py-2.5 px-3">Biometric Selfie</th>
-                    <th className="py-2.5 px-3">GPS Verification</th>
-                    <th className="py-2.5 px-3 sm:px-4">Duty Status</th>
+                    <th className="py-3 px-3 sm:px-4 text-white border-r border-white/20">Date</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Punch In</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Punch Out</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Total Hours</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">Biometric Selfie</th>
+                    <th className="py-3 px-3 text-white border-r border-white/20">GPS Verification</th>
+                    <th className="py-3 px-3 sm:px-4 text-white">Duty Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D4E4F7] font-medium text-black">

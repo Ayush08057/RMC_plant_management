@@ -133,7 +133,7 @@ export default function AccountantDashboardPage() {
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
                 isAccountantClockedIn && !isAccountantShiftEnded
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                  : 'bg-white hover:bg-[#EAF3FF] text-slate-700 border border-[#D4E4F7]'
+                  : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
               }`}
               title="Mark or View Daily Attendance"
             >
@@ -143,15 +143,17 @@ export default function AccountantDashboardPage() {
             <button
               type="button"
               onClick={() => setActiveTab('billing')}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#136dec] hover:bg-[#115ec9] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Navigate to Cash Memo & Billing Desk"
             >
-              <ReceiptText className="w-3.5 h-3.5" />
+              <ReceiptText className="w-3.5 h-3.5 text-[#1D5FA7]" />
               <span>Cash Memo / Billing</span>
             </button>
             <button
               type="button"
               onClick={() => setShowPaymentModal(true)}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-slate-700 border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Record Client Payment Receipt"
             >
               <CreditCard className="w-3.5 h-3.5 text-[#1D5FA7]" />
               <span>Record Payment</span>

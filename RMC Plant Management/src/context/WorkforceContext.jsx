@@ -11,6 +11,7 @@ import {
 } from '../data/mockWorkforceData';
 import { MOCK_PLANTS } from '../data/mockDashboardData';
 import { DEFAULT_COMPANIES } from '../data/companies';
+import defaultLogo from '../assets/logo.png';
 import { useAuth } from './AuthContext';
 import { 
   COLLECTIONS, 
@@ -44,7 +45,12 @@ function getInitialCompanies() {
     const stored = localStorage.getItem(STORAGE_COMPANIES_KEY);
     if (stored) {
       const companies = JSON.parse(stored);
-      if (Array.isArray(companies) && companies.length > 0) return companies;
+      if (Array.isArray(companies) && companies.length > 0) {
+        return companies.map((c) => ({
+          ...c,
+          logo: c.logo || defaultLogo,
+        }));
+      }
     }
   } catch (error) {
     console.error('Failed to load company directory:', error);
@@ -1865,74 +1871,105 @@ export const WorkforceProvider = ({ children }) => {
   /* -------------------------------------------------------------
    * 6. ADVANCE MANAGEMENT
    * ------------------------------------------------------------- */
-  const requestAdvance = (advData) => {
+  const recordAdvance = (advData) => {
     const emp = data.employees.find((e) => e.id === advData.employeeId);
     const amount = Number(advData.advanceAmount);
-    if (!amount || amount <= 0) throw new Error('Please enter a valid advance amount');
+    if (!amount || amount <= 0) throw new Error('Please enter a valid advance amount (greater than 0).');
+    if (!advData.employeeId) throw new Error('Please select an employee.');
+
+    const advDate = advData.date || advData.requestDate || new Date().toISOString().split('T')[0];
+    const initialStatus = advData.status || 'Approved';
+    const approvedAmt = initialStatus === 'Approved' ? amount : (advData.approvedAmount ? Number(advData.approvedAmount) : 0);
+    const initialBalance = approvedAmt > 0 ? approvedAmt : amount;
 
     const newAdvance = {
-      id: `ADV-${Date.now()}`,
+      id: advData.id || `ADV-${Date.now()}`,
       employeeId: advData.employeeId,
-      employeeName: emp?.name || advData.employeeName,
-      role: emp?.role || 'Staff',
-      plant: emp?.plant || 'Main Plant Unit #01',
+      employeeName: emp?.name || advData.employeeName || advData.employeeId,
+      role: emp?.role || advData.role || 'Staff',
+      plant: emp?.plant || advData.plant || 'Main Plant Unit #01',
       advanceAmount: amount,
-      approvedAmount: 0,
-      recoveredAmount: 0,
-      balance: amount,
-      requestDate: new Date().toISOString().split('T')[0],
-      reason: advData.reason,
-      status: 'Pending',
-      remarks: 'Awaiting Accountant approval',
-      reviewedBy: null,
+      approvedAmount: approvedAmt,
+      recoveredAmount: Number(advData.recoveredAmount) || 0,
+      balance: initialBalance,
+      date: advDate,
+      requestDate: advDate,
+      reason: advData.reason || advData.description || 'Employee salary advance',
+      monthlyDeduction: Number(advData.monthlyDeduction) > 0 ? Number(advData.monthlyDeduction) : initialBalance,
+      status: initialStatus,
+      repaymentHistory: Array.isArray(advData.repaymentHistory) ? advData.repaymentHistory : [],
+      remarks: advData.remarks || `Advance recorded by ${user?.name || 'Authorized Staff'}`,
+      reviewedBy: user?.name ? `${user.name} (${user.role})` : 'Authorized Staff',
     };
 
-    saveDocumentWithId(COLLECTIONS.ADVANCES, newAdvance.id, newAdvance).catch(() => {});
+    saveDocumentWithId(COLLECTIONS.ADVANCES, newAdvance.id, newAdvance).catch((err) => {
+      console.warn('Firestore advance record notice:', err.message);
+    });
 
-    setData((prev) => ({
-      ...prev,
-      advances: [newAdvance, ...prev.advances],
-    }));
+    setData((prev) => {
+      const nextAdvances = [newAdvance, ...prev.advances];
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.advances = nextAdvances;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on advance save:', err);
+      }
+      return {
+        ...prev,
+        advances: nextAdvances,
+      };
+    });
 
-    addAuditLog(`Requested Salary Advance`, 'Advance Management', `${emp?.name} - ₹ ${amount.toLocaleString('en-IN')}`);
+    addAuditLog(`Recorded Salary Advance`, 'Advance Management', `${newAdvance.employeeName} - ₹ ${amount.toLocaleString('en-IN')}`);
     addNotification({
-      title: 'Salary Advance Requested',
-      desc: `${emp?.name} requested advance of ₹ ${amount.toLocaleString('en-IN')}.`,
-      type: 'warning',
+      title: 'Salary Advance Recorded',
+      desc: `Salary advance of ₹ ${amount.toLocaleString('en-IN')} recorded for ${newAdvance.employeeName}.`,
+      type: 'info',
       category: 'advance',
     });
 
     return newAdvance;
   };
 
+  const requestAdvance = (advData) => {
+    // If called by an authorized user without status specified, record as Approved directly
+    const isAuthUser = user?.role === 'Admin' || user?.role === 'Accountant' || user?.role === 'Plant Manager' || user?.role === 'Owner / Director';
+    return recordAdvance({
+      ...advData,
+      status: advData.status || (isAuthUser ? 'Approved' : 'Pending'),
+    });
+  };
+
   const reviewAdvance = (id, status, approvedAmount = null, reviewerUser = null) => {
     const reviewerName = reviewerUser ? `${reviewerUser.name} (${reviewerUser.role})` : user?.name || 'Accountant';
     const targetAdv = data.advances.find((a) => a.id === id);
-    const appAmt = status === 'Approved' ? (approvedAmount !== null ? Number(approvedAmount) : targetAdv.advanceAmount) : 0;
+    const appAmt = status === 'Approved' ? (approvedAmount !== null ? Number(approvedAmount) : (targetAdv?.advanceAmount || 0)) : 0;
 
-    updateDocument(COLLECTIONS.ADVANCES, id, {
+    const updatedFields = {
       status,
       approvedAmount: appAmt,
-      balance: appAmt,
+      balance: Math.max(0, appAmt - (Number(targetAdv?.recoveredAmount) || 0)),
       remarks: status === 'Approved' ? `Approved for payroll deduction by ${reviewerName}` : 'Rejected',
       reviewedBy: reviewerName,
-    }).catch(() => {});
+    };
 
-    setData((prev) => ({
-      ...prev,
-      advances: prev.advances.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status,
-              approvedAmount: appAmt,
-              balance: appAmt,
-              remarks: status === 'Approved' ? `Approved for payroll deduction by ${reviewerName}` : 'Rejected',
-              reviewedBy: reviewerName,
-            }
-          : a
-      ),
-    }));
+    updateDocument(COLLECTIONS.ADVANCES, id, updatedFields).catch(() => {});
+
+    setData((prev) => {
+      const nextAdvances = prev.advances.map((a) => (a.id === id ? { ...a, ...updatedFields } : a));
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.advances = nextAdvances;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+      return {
+        ...prev,
+        advances: nextAdvances,
+      };
+    });
 
     addAuditLog(`Reviewed Advance (${id})`, 'Advance Management', `Decision: ${status} (₹ ${appAmt}) by ${reviewerName}`);
     addNotification({
@@ -1944,12 +1981,33 @@ export const WorkforceProvider = ({ children }) => {
   };
 
   const updateAdvance = (id, fields) => {
-    updateDocument(COLLECTIONS.ADVANCES, id, fields).catch(() => {});
+    const target = data.advances.find((a) => a.id === id);
+    const totalAmt = fields.approvedAmount !== undefined ? Number(fields.approvedAmount) : (fields.advanceAmount !== undefined ? Number(fields.advanceAmount) : (target?.approvedAmount || target?.advanceAmount || 0));
+    const recAmt = fields.recoveredAmount !== undefined ? Number(fields.recoveredAmount) : (target?.recoveredAmount || 0);
+    const newBal = Math.max(0, totalAmt - recAmt);
+    const newStatus = fields.status || (newBal === 0 && recAmt > 0 ? 'Fully Recovered' : (recAmt > 0 ? 'Partially Recovered' : (target?.status || 'Approved')));
 
-    setData((prev) => ({
-      ...prev,
-      advances: prev.advances.map((a) => (a.id === id ? { ...a, ...fields } : a)),
-    }));
+    const finalFields = {
+      ...fields,
+      balance: newBal,
+      status: newStatus,
+    };
+
+    updateDocument(COLLECTIONS.ADVANCES, id, finalFields).catch(() => {});
+
+    setData((prev) => {
+      const nextAdvances = prev.advances.map((a) => (a.id === id ? { ...a, ...finalFields } : a));
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.advances = nextAdvances;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+      return {
+        ...prev,
+        advances: nextAdvances,
+      };
+    });
     addAuditLog(`Updated Advance (${id})`, 'Advance Management', `Parameters updated.`);
   };
 
@@ -1981,45 +2039,88 @@ export const WorkforceProvider = ({ children }) => {
   /* -------------------------------------------------------------
    * 7. LOAN MANAGEMENT
    * ------------------------------------------------------------- */
-  const requestLoan = (loanData) => {
+  const recordLoan = (loanData) => {
     const emp = data.employees.find((e) => e.id === loanData.employeeId);
     const loanAmount = Number(loanData.loanAmount);
-    const totalEmis = Number(loanData.totalEmis) || 10;
-    const emiAmount = Number(loanData.emiAmount) || Math.round(loanAmount / totalEmis);
+    if (!loanAmount || loanAmount <= 0) throw new Error('Please enter a valid loan amount (greater than 0).');
+    if (!loanData.employeeId) throw new Error('Please select an employee.');
+
+    let emiAmount = Number(loanData.monthlyEmi || loanData.emiAmount);
+    let totalEmis = Number(loanData.totalEmis);
+
+    if (emiAmount > 0) {
+      totalEmis = totalEmis || Math.max(1, Math.ceil(loanAmount / emiAmount));
+    } else if (totalEmis > 0) {
+      emiAmount = Math.round(loanAmount / totalEmis);
+    } else {
+      totalEmis = 10;
+      emiAmount = Math.round(loanAmount / 10);
+    }
+
+    // EMI must not exceed total loan amount
+    emiAmount = Math.min(loanAmount, emiAmount);
+
+    const startDate = loanData.startDate || loanData.loanDate || new Date().toISOString().split('T')[0];
+    const initialStatus = loanData.status || 'Active';
 
     const newLoan = {
-      id: `LON-${Date.now()}`,
+      id: loanData.id || `LON-${Date.now()}`,
       employeeId: loanData.employeeId,
-      employeeName: emp?.name || loanData.employeeName,
-      role: emp?.role || 'Staff',
+      employeeName: emp?.name || loanData.employeeName || loanData.employeeId,
+      role: emp?.role || loanData.role || 'Staff',
+      plant: emp?.plant || loanData.plant || 'Main Plant Unit #01',
       loanAmount,
-      loanDate: new Date().toISOString().split('T')[0],
       emiAmount,
       totalEmis,
-      paidEmis: 0,
-      remainingEmis: totalEmis,
-      outstandingBalance: loanAmount,
-      reason: loanData.reason,
-      status: 'Pending',
-      approvedBy: null,
+      paidEmis: Number(loanData.paidEmis) || 0,
+      remainingEmis: Number(loanData.remainingEmis) ?? totalEmis,
+      amountRepaid: Number(loanData.amountRepaid) || 0,
+      outstandingBalance: Number(loanData.outstandingBalance) ?? loanAmount,
+      startDate,
+      loanDate: startDate,
+      reason: loanData.reason || loanData.description || 'Employee company loan assistance',
+      status: initialStatus,
+      repaymentHistory: Array.isArray(loanData.repaymentHistory) ? loanData.repaymentHistory : [],
+      approvedBy: user?.name ? `${user.name} (${user.role})` : 'Authorized Staff',
     };
 
-    saveDocumentWithId(COLLECTIONS.LOANS, newLoan.id, newLoan).catch(() => {});
+    saveDocumentWithId(COLLECTIONS.LOANS, newLoan.id, newLoan).catch((err) => {
+      console.warn('Firestore loan record notice:', err.message);
+    });
 
-    setData((prev) => ({
-      ...prev,
-      loans: [newLoan, ...prev.loans],
-    }));
+    setData((prev) => {
+      const nextLoans = [newLoan, ...prev.loans];
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.loans = nextLoans;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {
+        console.error('Failed to update local storage on loan save:', err);
+      }
+      return {
+        ...prev,
+        loans: nextLoans,
+      };
+    });
 
-    addAuditLog(`Applied for Employee Loan`, 'Loan Management', `${emp?.name} - ₹ ${loanAmount.toLocaleString('en-IN')}`);
+    addAuditLog(`Recorded Company Loan`, 'Loan Management', `${newLoan.employeeName} - ₹ ${loanAmount.toLocaleString('en-IN')}`);
     addNotification({
-      title: 'Employee Loan Application',
-      desc: `${emp?.name} applied for company loan of ₹ ${loanAmount.toLocaleString('en-IN')} (${totalEmis} EMIs).`,
+      title: 'Employee Loan Recorded',
+      desc: `Company loan of ₹ ${loanAmount.toLocaleString('en-IN')} assigned to ${newLoan.employeeName} (EMI: ₹ ${emiAmount.toLocaleString('en-IN')}/mo).`,
       type: 'info',
       category: 'loan',
     });
 
     return newLoan;
+  };
+
+  const requestLoan = (loanData) => {
+    const isAuthUser = user?.role === 'Admin' || user?.role === 'Accountant' || user?.role === 'Plant Manager' || user?.role === 'Owner / Director';
+    return recordLoan({
+      ...loanData,
+      status: loanData.status || (isAuthUser ? 'Active' : 'Pending'),
+    });
   };
 
   const reviewLoan = (id, status, reviewerUser = null) => {
@@ -2028,23 +2129,61 @@ export const WorkforceProvider = ({ children }) => {
 
     updateDocument(COLLECTIONS.LOANS, id, { status: newStatus, approvedBy: reviewerName }).catch(() => {});
 
-    setData((prev) => ({
-      ...prev,
-      loans: prev.loans.map((l) =>
-        l.id === id ? { ...l, status: newStatus, approvedBy: reviewerName } : l
-      ),
-    }));
+    setData((prev) => {
+      const nextLoans = prev.loans.map((l) => (l.id === id ? { ...l, status: newStatus, approvedBy: reviewerName } : l));
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.loans = nextLoans;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+      return {
+        ...prev,
+        loans: nextLoans,
+      };
+    });
 
     addAuditLog(`Reviewed Employee Loan (${id})`, 'Loan Management', `Status set to ${status} by ${reviewerName}`);
   };
 
   const updateLoan = (id, fields) => {
-    updateDocument(COLLECTIONS.LOANS, id, fields).catch(() => {});
+    const target = data.loans.find((l) => l.id === id);
+    const loanAmt = fields.loanAmount !== undefined ? Number(fields.loanAmount) : (target?.loanAmount || 0);
+    const emiAmt = fields.emiAmount !== undefined ? Number(fields.emiAmount) : (target?.emiAmount || 0);
+    const totalEmis = fields.totalEmis !== undefined ? Number(fields.totalEmis) : (target?.totalEmis || 1);
+    const paidEmis = fields.paidEmis !== undefined ? Number(fields.paidEmis) : (target?.paidEmis || 0);
+    const amountRepaid = fields.amountRepaid !== undefined ? Number(fields.amountRepaid) : (paidEmis * emiAmt);
+    const outBal = Math.max(0, loanAmt - amountRepaid);
+    const remEmis = Math.max(0, totalEmis - paidEmis);
+    const newStatus = fields.status || (outBal === 0 ? 'Closed' : 'Active');
 
-    setData((prev) => ({
-      ...prev,
-      loans: prev.loans.map((l) => (l.id === id ? { ...l, ...fields } : l)),
-    }));
+    const finalFields = {
+      ...fields,
+      loanAmount: loanAmt,
+      emiAmount: emiAmt,
+      totalEmis,
+      paidEmis,
+      remainingEmis: remEmis,
+      amountRepaid,
+      outstandingBalance: outBal,
+      status: newStatus,
+    };
+
+    updateDocument(COLLECTIONS.LOANS, id, finalFields).catch(() => {});
+
+    setData((prev) => {
+      const nextLoans = prev.loans.map((l) => (l.id === id ? { ...l, ...finalFields } : l));
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.loans = nextLoans;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+      return {
+        ...prev,
+        loans: nextLoans,
+      };
+    });
     addAuditLog(`Updated Loan (${id})`, 'Loan Management', `Parameters updated.`);
   };
 
@@ -2109,27 +2248,69 @@ export const WorkforceProvider = ({ children }) => {
         const payableDays = Math.min(workingDaysStandard, presentDays + leaveDays);
         const earnedBasic = Math.round(dailyRate * payableDays);
 
-        // Advance Deductions
-        const activeAdv = data.advances.find(
-          (a) => a.employeeId === emp.id && (a.status === 'Approved' || a.status === 'Partially Recovered') && a.balance > 0
+        // 1. Fetch employee's outstanding advance balance & scheduled deduction
+        const empAdvances = (data.advances || []).filter(
+          (a) => a.employeeId === emp.id &&
+                 (a.status === 'Approved' || a.status === 'Partially Recovered' || a.status === 'Active') &&
+                 Number(a.balance) > 0
         );
-        const advanceDeduction = activeAdv ? Math.min(activeAdv.balance, 5000) : 0;
+        let scheduledAdvanceDeduction = 0;
+        empAdvances.forEach((adv) => {
+          const bal = Number(adv.balance) || 0;
+          const monthlyDed = Number(adv.monthlyDeduction) > 0 ? Number(adv.monthlyDeduction) : bal;
+          scheduledAdvanceDeduction += Math.min(bal, monthlyDed);
+        });
 
-        // Loan EMI
-        const activeLoan = data.loans.find(
-          (l) => l.employeeId === emp.id && l.status === 'Active' && l.remainingEmis > 0
+        // 2. Fetch employee's scheduled monthly loan EMI
+        const empLoans = (data.loans || []).filter(
+          (l) => l.employeeId === emp.id &&
+                 (l.status === 'Active' || l.status === 'Approved') &&
+                 Number(l.outstandingBalance) > 0
         );
-        const loanEmi = activeLoan ? activeLoan.emiAmount : 0;
+        let scheduledLoanEmi = 0;
+        empLoans.forEach((loan) => {
+          const outBal = Number(loan.outstandingBalance) || 0;
+          const emi = Number(loan.emiAmount) || 0;
+          scheduledLoanEmi += Math.min(outBal, emi);
+        });
 
-        // Gross & Net Calculation (zero dummy deduction)
+        // 3. Gross Earnings and Available Salary
         const allowances = 0;
         const otherDeductions = 0;
         const grossSalary = earnedBasic + otAmount + allowances;
+        const availableSalary = Math.max(0, grossSalary - otherDeductions);
+        const totalDesiredDeductions = scheduledAdvanceDeduction + scheduledLoanEmi;
+
+        let advanceDeduction = scheduledAdvanceDeduction;
+        let loanEmi = scheduledLoanEmi;
+        let insufficientSalary = false;
+        let insufficientSalaryWarning = '';
+
+        // Safeguard: Check if salary is insufficient to cover advance & loan deductions
+        if (totalDesiredDeductions > availableSalary) {
+          insufficientSalary = true;
+          insufficientSalaryWarning = `Employee gross earnings (₹ ${grossSalary.toLocaleString('en-IN')}) are insufficient for full deductions (Advance: ₹ ${scheduledAdvanceDeduction.toLocaleString('en-IN')}, Loan EMI: ₹ ${scheduledLoanEmi.toLocaleString('en-IN')}). Deductions capped to prevent negative salary.`;
+          if (availableSalary <= 0) {
+            advanceDeduction = 0;
+            loanEmi = 0;
+          } else {
+            advanceDeduction = Math.min(scheduledAdvanceDeduction, availableSalary);
+            loanEmi = Math.min(scheduledLoanEmi, Math.max(0, availableSalary - advanceDeduction));
+          }
+        }
+
+        // 4. Formula: Total Deduction = Advance Deduction + Loan EMI
+        // Net Salary = Gross Salary - Total Deduction - Other Existing Deductions
         const totalDeductions = advanceDeduction + loanEmi + otherDeductions;
         const netPayable = Math.max(0, grossSalary - totalDeductions);
 
+        // Check if an existing record for this month already exists to preserve approved status/id
+        const existingRecord = (data.payrollRecords || []).find(
+          (p) => p.monthYear === monthYear && p.employeeId === emp.id
+        );
+
         return {
-          id: `PAY-${monthYear.replace(/\s+/g, '')}-${emp.id}`,
+          id: existingRecord?.id || `PAY-${monthYear.replace(/\s+/g, '')}-${emp.id}`,
           monthYear,
           employeeId: emp.id,
           employeeName: emp.name,
@@ -2148,19 +2329,33 @@ export const WorkforceProvider = ({ children }) => {
           advanceDeduction,
           loanEmi,
           otherDeductions,
+          totalDeductions,
           earnedBasic,
           grossSalary,
           netPayable,
-          status: 'Calculated',
-          approvedBy: null,
-          approvedAt: null,
+          insufficientSalary,
+          insufficientSalaryWarning,
+          deductionsApplied: existingRecord?.deductionsApplied || false,
+          status: existingRecord?.status || 'Calculated',
+          approvedBy: existingRecord?.approvedBy || null,
+          approvedAt: existingRecord?.approvedAt || null,
         };
       });
 
-    setData((prev) => ({
-      ...prev,
-      payrollRecords: computedRecords,
-    }));
+    setData((prev) => {
+      const otherMonthRecords = (prev.payrollRecords || []).filter((p) => p.monthYear !== monthYear);
+      const nextPayroll = [...computedRecords, ...otherMonthRecords];
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.payrollRecords = nextPayroll;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+      return {
+        ...prev,
+        payrollRecords: nextPayroll,
+      };
+    });
 
     addAuditLog(`Calculated Payroll Sheet`, 'Payroll Preparation', `Generated ${computedRecords.length} payslips for ${monthYear}`);
     addNotification({
@@ -2213,27 +2408,41 @@ export const WorkforceProvider = ({ children }) => {
       advanceDeduction,
       loanEmi,
       otherDeductions,
+      totalDeductions,
       earnedBasic,
       grossSalary,
       netPayable,
+      insufficientSalary: totalDeductions > grossSalary,
+      deductionsApplied: recordData.deductionsApplied || false,
       status: recordData.status || 'Calculated',
       approvedBy: recordData.approvedBy || null,
       approvedAt: recordData.approvedAt || null,
       remarks: recordData.remarks || '',
     };
 
-    setData((prev) => ({
-      ...prev,
-      payrollRecords: [newRecord, ...prev.payrollRecords.filter((p) => p.id !== newRecord.id)],
-    }));
+    saveDocumentWithId(COLLECTIONS.PAYROLL, newRecord.id, newRecord).catch(() => {});
+
+    setData((prev) => {
+      const nextPayroll = [newRecord, ...prev.payrollRecords.filter((p) => p.id !== newRecord.id)];
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.payrollRecords = nextPayroll;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+      return {
+        ...prev,
+        payrollRecords: nextPayroll,
+      };
+    });
+
     addAuditLog(`Added Payroll Record`, 'Payroll Preparation', `Record for ${newRecord.employeeName} (${newRecord.monthYear})`);
     return newRecord;
   };
 
   const updatePayrollRecord = (id, fields) => {
-    setData((prev) => ({
-      ...prev,
-      payrollRecords: prev.payrollRecords.map((p) => {
+    setData((prev) => {
+      const nextPayroll = prev.payrollRecords.map((p) => {
         if (p.id !== id) return p;
         const merged = { ...p, ...fields };
         const basicSalary = Number(merged.basicSalary) || 0;
@@ -2253,7 +2462,7 @@ export const WorkforceProvider = ({ children }) => {
         const totalDeductions = advanceDeduction + loanEmi + otherDeductions;
         const netPayable = fields.netPayable !== undefined ? Number(fields.netPayable) : Math.max(0, grossSalary - totalDeductions);
 
-        return {
+        const updated = {
           ...merged,
           basicSalary,
           workingDays,
@@ -2267,12 +2476,30 @@ export const WorkforceProvider = ({ children }) => {
           advanceDeduction,
           loanEmi,
           otherDeductions,
+          totalDeductions,
           earnedBasic,
           grossSalary,
           netPayable,
+          insufficientSalary: totalDeductions > grossSalary,
         };
-      }),
-    }));
+
+        updateDocument(COLLECTIONS.PAYROLL, id, updated).catch(() => {});
+        return updated;
+      });
+
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.payrollRecords = nextPayroll;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+
+      return {
+        ...prev,
+        payrollRecords: nextPayroll,
+      };
+    });
+
     addAuditLog(`Updated Payroll Record (${id})`, 'Payroll Preparation', `Record parameters updated`);
   };
 
@@ -2284,11 +2511,72 @@ export const WorkforceProvider = ({ children }) => {
     }
 
     setData((prev) => {
+      const targetRecord = prev.payrollRecords.find((p) => p.id === id);
+      let updatedAdvances = [...prev.advances];
+      let updatedLoans = [...prev.loans];
+
+      // If the deleted record had deductions already applied, reverse them safely!
+      if (targetRecord && targetRecord.deductionsApplied) {
+        if (targetRecord.advanceDeduction > 0) {
+          updatedAdvances = updatedAdvances.map((adv) => {
+            if (adv.employeeId === targetRecord.employeeId) {
+              const histEntry = (adv.repaymentHistory || []).find((h) => h.payrollId === id || h.monthYear === targetRecord.monthYear);
+              if (histEntry) {
+                const restoredAmt = Number(histEntry.amount) || 0;
+                const newRec = Math.max(0, (Number(adv.recoveredAmount) || 0) - restoredAmt);
+                const newBal = (Number(adv.balance) || 0) + restoredAmt;
+                const newHist = (adv.repaymentHistory || []).filter((h) => h !== histEntry);
+                const updatedAdv = {
+                  ...adv,
+                  recoveredAmount: newRec,
+                  balance: newBal,
+                  status: newRec === 0 ? 'Approved' : 'Partially Recovered',
+                  repaymentHistory: newHist,
+                };
+                updateDocument(COLLECTIONS.ADVANCES, adv.id, updatedAdv).catch(() => {});
+                return updatedAdv;
+              }
+            }
+            return adv;
+          });
+        }
+
+        if (targetRecord.loanEmi > 0) {
+          updatedLoans = updatedLoans.map((l) => {
+            if (l.employeeId === targetRecord.employeeId) {
+              const histEntry = (l.repaymentHistory || []).find((h) => h.payrollId === id || h.monthYear === targetRecord.monthYear);
+              if (histEntry) {
+                const restoredAmt = Number(histEntry.amount) || 0;
+                const newRepaid = Math.max(0, (Number(l.amountRepaid) || 0) - restoredAmt);
+                const newPaidEmis = Math.max(0, (Number(l.paidEmis) || 1) - 1);
+                const newRemaining = Math.min(Number(l.totalEmis) || 1, (Number(l.remainingEmis) || 0) + 1);
+                const newBal = (Number(l.outstandingBalance) || 0) + restoredAmt;
+                const newHist = (l.repaymentHistory || []).filter((h) => h !== histEntry);
+                const updatedLoan = {
+                  ...l,
+                  amountRepaid: newRepaid,
+                  paidEmis: newPaidEmis,
+                  remainingEmis: newRemaining,
+                  outstandingBalance: newBal,
+                  status: 'Active',
+                  repaymentHistory: newHist,
+                };
+                updateDocument(COLLECTIONS.LOANS, l.id, updatedLoan).catch(() => {});
+                return updatedLoan;
+              }
+            }
+            return l;
+          });
+        }
+      }
+
       const nextPayroll = prev.payrollRecords.filter((p) => p.id !== id);
       try {
         const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
         const stored = JSON.parse(localStorage.getItem(key) || '{}');
         stored.payrollRecords = nextPayroll;
+        stored.advances = updatedAdvances;
+        stored.loans = updatedLoans;
         localStorage.setItem(key, JSON.stringify(stored));
       } catch (err) {
         console.error('Failed to update local storage on payroll delete:', err);
@@ -2296,6 +2584,8 @@ export const WorkforceProvider = ({ children }) => {
       return {
         ...prev,
         payrollRecords: nextPayroll,
+        advances: updatedAdvances,
+        loans: updatedLoans,
       };
     });
     addAuditLog(`Deleted Payroll Record (${id})`, 'Payroll Preparation', `Record removed.`);
@@ -2305,59 +2595,114 @@ export const WorkforceProvider = ({ children }) => {
     const approverName = approverUser ? `${approverUser.name} (${approverUser.role})` : user?.name || 'Accountant';
 
     setData((prev) => {
-      // Mark payroll approved
-      const updatedPayroll = prev.payrollRecords.map((p) =>
-        p.monthYear === monthYear
-          ? {
-              ...p,
-              status: 'Approved',
-              approvedBy: approverName,
-              approvedAt: new Date().toISOString(),
-            }
-          : p
-      );
-
-      // Deduct advance balances
       let updatedAdvances = [...prev.advances];
-      prev.payrollRecords
-        .filter((p) => p.monthYear === monthYear && p.advanceDeduction > 0)
-        .forEach((p) => {
+      let updatedLoans = [...prev.loans];
+
+      // Mark payroll approved and apply deductions strictly only to unapplied records
+      const updatedPayroll = prev.payrollRecords.map((p) => {
+        if (p.monthYear !== monthYear) return p;
+
+        // Prevent duplicate repayments if the same payroll is processed again
+        if (p.deductionsApplied) {
+          return {
+            ...p,
+            status: 'Approved',
+            approvedBy: approverName,
+            approvedAt: p.approvedAt || new Date().toISOString(),
+          };
+        }
+
+        // Apply advance deduction to employee's active advances
+        if (Number(p.advanceDeduction) > 0) {
+          let remDeduct = Number(p.advanceDeduction);
           updatedAdvances = updatedAdvances.map((adv) => {
-            if (adv.employeeId === p.employeeId && adv.balance > 0) {
-              const newRecovered = adv.recoveredAmount + p.advanceDeduction;
-              const newBalance = Math.max(0, adv.balance - p.advanceDeduction);
-              return {
+            if (adv.employeeId === p.employeeId && Number(adv.balance) > 0 && remDeduct > 0) {
+              const deductThis = Math.min(Number(adv.balance), remDeduct);
+              remDeduct -= deductThis;
+              const newRecovered = (Number(adv.recoveredAmount) || 0) + deductThis;
+              const newBalance = Math.max(0, (Number(adv.balance) || 0) - deductThis);
+              const historyEntry = {
+                id: `REPAY-ADV-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                date: new Date().toISOString().split('T')[0],
+                payrollId: p.id,
+                monthYear,
+                amount: deductThis,
+                balanceAfter: newBalance,
+                type: 'Payroll Deduction',
+                notes: `Advance deduction for ${monthYear}`,
+              };
+              const updatedAdv = {
                 ...adv,
                 recoveredAmount: newRecovered,
                 balance: newBalance,
                 status: newBalance === 0 ? 'Fully Recovered' : 'Partially Recovered',
+                repaymentHistory: [historyEntry, ...(adv.repaymentHistory || [])],
               };
+              updateDocument(COLLECTIONS.ADVANCES, adv.id, updatedAdv).catch(() => {});
+              return updatedAdv;
             }
             return adv;
           });
-        });
+        }
 
-      // Deduct loan EMIs
-      let updatedLoans = [...prev.loans];
-      prev.payrollRecords
-        .filter((p) => p.monthYear === monthYear && p.loanEmi > 0)
-        .forEach((p) => {
+        // Apply loan EMI to employee's active loans
+        if (Number(p.loanEmi) > 0) {
+          let remEmiDeduct = Number(p.loanEmi);
           updatedLoans = updatedLoans.map((l) => {
-            if (l.employeeId === p.employeeId && l.status === 'Active' && l.remainingEmis > 0) {
-              const newPaid = l.paidEmis + 1;
-              const newRemaining = Math.max(0, l.remainingEmis - 1);
-              const newBalance = Math.max(0, l.outstandingBalance - l.emiAmount);
-              return {
+            if (l.employeeId === p.employeeId && (l.status === 'Active' || l.status === 'Approved') && Number(l.outstandingBalance) > 0 && remEmiDeduct > 0) {
+              const deductThis = Math.min(Number(l.outstandingBalance), remEmiDeduct);
+              remEmiDeduct -= deductThis;
+              const newPaid = (Number(l.paidEmis) || 0) + 1;
+              const newRemaining = Math.max(0, (Number(l.totalEmis) || 1) - newPaid);
+              const newAmountRepaid = (Number(l.amountRepaid) || 0) + deductThis;
+              const newBalance = Math.max(0, (Number(l.outstandingBalance) || 0) - deductThis);
+              const historyEntry = {
+                id: `REPAY-LON-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                date: new Date().toISOString().split('T')[0],
+                payrollId: p.id,
+                monthYear,
+                amount: deductThis,
+                balanceAfter: newBalance,
+                emiNumber: newPaid,
+                type: 'Payroll EMI',
+                notes: `EMI #${newPaid} deducted via payroll for ${monthYear}`,
+              };
+              const updatedLoan = {
                 ...l,
                 paidEmis: newPaid,
                 remainingEmis: newRemaining,
+                amountRepaid: newAmountRepaid,
                 outstandingBalance: newBalance,
-                status: newRemaining === 0 ? 'Closed' : 'Active',
+                status: newBalance === 0 ? 'Closed' : 'Active',
+                repaymentHistory: [historyEntry, ...(l.repaymentHistory || [])],
               };
+              updateDocument(COLLECTIONS.LOANS, l.id, updatedLoan).catch(() => {});
+              return updatedLoan;
             }
             return l;
           });
-        });
+        }
+
+        const approvedRecord = {
+          ...p,
+          status: 'Approved',
+          deductionsApplied: true,
+          approvedBy: approverName,
+          approvedAt: new Date().toISOString(),
+        };
+
+        saveDocumentWithId(COLLECTIONS.PAYROLL, p.id, approvedRecord).catch(() => {});
+        return approvedRecord;
+      });
+
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.payrollRecords = updatedPayroll;
+        stored.advances = updatedAdvances;
+        stored.loans = updatedLoans;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
 
       return {
         ...prev,
@@ -2370,8 +2715,112 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Approved Consolidated Payroll`, 'Payroll Preparation', `${monthYear} finalized and locked by ${approverName}`);
     addNotification({
       title: 'Payroll Approved & Locked',
-      desc: `Consolidated payroll for ${monthYear} was approved by ${approverName}. Ledger deductions applied.`,
+      desc: `Consolidated payroll for ${monthYear} was approved by ${approverName}. Ledger deductions and repayments recorded.`,
       type: 'success',
+      category: 'payroll',
+    });
+  };
+
+  const reversePayroll = (monthYear, reverserUser = null) => {
+    const reverserName = reverserUser ? `${reverserUser.name} (${reverserUser.role})` : user?.name || 'Accountant';
+
+    setData((prev) => {
+      let updatedAdvances = [...prev.advances];
+      let updatedLoans = [...prev.loans];
+
+      // Revert advance and loan deductions for records of this monthYear
+      const updatedPayroll = prev.payrollRecords.map((p) => {
+        if (p.monthYear !== monthYear) return p;
+
+        if (p.deductionsApplied) {
+          // Revert advance deduction
+          if (Number(p.advanceDeduction) > 0) {
+            updatedAdvances = updatedAdvances.map((adv) => {
+              if (adv.employeeId === p.employeeId) {
+                const histEntry = (adv.repaymentHistory || []).find((h) => h.payrollId === p.id || h.monthYear === monthYear);
+                if (histEntry) {
+                  const restoredAmt = Number(histEntry.amount) || 0;
+                  const newRec = Math.max(0, (Number(adv.recoveredAmount) || 0) - restoredAmt);
+                  const newBal = (Number(adv.balance) || 0) + restoredAmt;
+                  const newHist = (adv.repaymentHistory || []).filter((h) => h !== histEntry);
+                  const updatedAdv = {
+                    ...adv,
+                    recoveredAmount: newRec,
+                    balance: newBal,
+                    status: newRec === 0 ? 'Approved' : 'Partially Recovered',
+                    repaymentHistory: newHist,
+                  };
+                  updateDocument(COLLECTIONS.ADVANCES, adv.id, updatedAdv).catch(() => {});
+                  return updatedAdv;
+                }
+              }
+              return adv;
+            });
+          }
+
+          // Revert loan deduction
+          if (Number(p.loanEmi) > 0) {
+            updatedLoans = updatedLoans.map((l) => {
+              if (l.employeeId === p.employeeId) {
+                const histEntry = (l.repaymentHistory || []).find((h) => h.payrollId === p.id || h.monthYear === monthYear);
+                if (histEntry) {
+                  const restoredAmt = Number(histEntry.amount) || 0;
+                  const newRepaid = Math.max(0, (Number(l.amountRepaid) || 0) - restoredAmt);
+                  const newPaidEmis = Math.max(0, (Number(l.paidEmis) || 1) - 1);
+                  const newRemaining = Math.min(Number(l.totalEmis) || 1, (Number(l.remainingEmis) || 0) + 1);
+                  const newBal = (Number(l.outstandingBalance) || 0) + restoredAmt;
+                  const newHist = (l.repaymentHistory || []).filter((h) => h !== histEntry);
+                  const updatedLoan = {
+                    ...l,
+                    amountRepaid: newRepaid,
+                    paidEmis: newPaidEmis,
+                    remainingEmis: newRemaining,
+                    outstandingBalance: newBal,
+                    status: 'Active',
+                    repaymentHistory: newHist,
+                  };
+                  updateDocument(COLLECTIONS.LOANS, l.id, updatedLoan).catch(() => {});
+                  return updatedLoan;
+                }
+              }
+              return l;
+            });
+          }
+        }
+
+        const reversedRecord = {
+          ...p,
+          status: 'Calculated',
+          deductionsApplied: false,
+          approvedBy: null,
+          approvedAt: null,
+        };
+        updateDocument(COLLECTIONS.PAYROLL, p.id, reversedRecord).catch(() => {});
+        return reversedRecord;
+      });
+
+      try {
+        const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored.payrollRecords = updatedPayroll;
+        stored.advances = updatedAdvances;
+        stored.loans = updatedLoans;
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch (err) {}
+
+      return {
+        ...prev,
+        payrollRecords: updatedPayroll,
+        advances: updatedAdvances,
+        loans: updatedLoans,
+      };
+    });
+
+    addAuditLog(`Reversed Consolidated Payroll`, 'Payroll Preparation', `${monthYear} unlocked and deductions rolled back by ${reverserName}`);
+    addNotification({
+      title: 'Payroll Reversed & Unlocked',
+      desc: `Payroll for ${monthYear} was unlocked by ${reverserName}. Deductions and repayment balances restored.`,
+      type: 'warning',
       category: 'payroll',
     });
   };
@@ -2673,12 +3122,14 @@ export const WorkforceProvider = ({ children }) => {
     reviewLeave,
 
     // Advance Actions
+    recordAdvance,
     requestAdvance,
     updateAdvance,
     deleteAdvance,
     reviewAdvance,
 
     // Loan Actions
+    recordLoan,
     requestLoan,
     updateLoan,
     deleteLoan,
@@ -2690,6 +3141,7 @@ export const WorkforceProvider = ({ children }) => {
     updatePayrollRecord,
     deletePayrollRecord,
     approvePayroll,
+    reversePayroll,
 
     // Approvals
     approveRequest,

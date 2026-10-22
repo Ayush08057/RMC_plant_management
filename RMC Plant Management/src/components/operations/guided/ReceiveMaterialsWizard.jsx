@@ -16,9 +16,10 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 import { pushCloudStore } from '../../../services/cloudSyncService';
+import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../../services/plantOperationsService';
 import HelpModal from './HelpModal';
 
-const INWARD_STORAGE_KEY = 'rmc_material_inward_v2';
+const INWARD_STORAGE_KEY = STORAGE_KEYS?.INWARD || 'rmc_material_inward_v2';
 
 const MATERIALS_LIST = [
   { id: 'cement', name: 'Cement (OPC 53)', unit: 'MT', defaultSilo: 'Cement Silo 1' },
@@ -83,6 +84,16 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
   };
 
   const handleSave = () => {
+    const finalGross = Number(grossWeight) > 0 
+      ? Number(grossWeight) 
+      : Number(((Number(quantity) || 0) + (Number(tareWeight) || 0)).toFixed(2));
+    const finalTare = Number(tareWeight) > 0 
+      ? Number(tareWeight) 
+      : (finalGross > Number(quantity) ? Number((finalGross - Number(quantity)).toFixed(2)) : 0);
+    const finalNet = Number(grossWeight) > 0 && Number(tareWeight) > 0
+      ? Number(Math.max(0, Number(grossWeight) - Number(tareWeight)).toFixed(2))
+      : Number((Number(quantity) || 0).toFixed(2));
+
     const slipNumber = `WB-${Math.floor(1000 + Math.random() * 9000)}`;
     const challanNumber = challanNo || `CH-${Math.floor(1000 + Math.random() * 9000)}`;
     const todayDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -96,8 +107,10 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       time: todayTime,
       material: selectedMaterial.name,
       supplier: supplierName,
-      quantity: Number(quantity),
-      netTons: Number(quantity),
+      grossWeight: finalGross,
+      tareWeight: finalTare,
+      quantity: finalNet,
+      netTons: finalNet,
       unit: selectedMaterial.unit,
       vehicleNo: vehicleNo || 'MH-10-AQ-9080',
       targetSilo: selectedMaterial.defaultSilo,
@@ -112,8 +125,8 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       localStorage.setItem(INWARD_STORAGE_KEY, JSON.stringify(updated));
       pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updated);
 
-      // Also create corresponding Weighbridge receipt so history is logged in Weighbridge view
-      const wbKey = 'rmc_weighbridge_v2';
+      // Create corresponding Weighbridge receipt with real measured weights
+      const wbKey = STORAGE_KEYS?.WEIGHBRIDGE || 'rmc_weighbridge_v2';
       const existingWbRaw = localStorage.getItem(wbKey);
       const existingWb = existingWbRaw ? JSON.parse(existingWbRaw) : [];
       const newWb = {
@@ -124,15 +137,37 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
         vehicleNo: inwardRecord.vehicleNo,
         material: inwardRecord.material,
         party: inwardRecord.supplier,
-        gross: Number((Number(quantity) + 12.5).toFixed(2)),
-        tare: 12.5,
-        net: Number(Number(quantity).toFixed(2)),
+        gross: finalGross,
+        tare: finalTare,
+        net: finalNet,
         unit: 'Tons',
-        status: 'Approved'
+        status: 'Completed',
+        inventoryUpdated: true,
+        createdAt: new Date().toISOString()
       };
       const updatedWb = [newWb, ...existingWb];
       localStorage.setItem(wbKey, JSON.stringify(updatedWb));
       pushCloudStore('cloud_weighbridge', wbKey, updatedWb);
+
+      // Update Silo stock ledger with net intake
+      let targetKey = 'agg20';
+      const matLower = (selectedMaterial.name || '').toLowerCase();
+      if (matLower.includes('cement')) targetKey = 'cement';
+      else if (matLower.includes('fly ash') || matLower.includes('pozzocrete')) targetKey = 'flyash';
+      else if (matLower.includes('10mm')) targetKey = 'agg10';
+      else if (matLower.includes('20mm')) targetKey = 'agg20';
+      else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
+      else if (matLower.includes('river sand')) targetKey = 'riverSand';
+
+      const siloKey = STORAGE_KEYS?.SILO_INVENTORY || 'rmc_silo_inventory_v2';
+      const rawSilo = localStorage.getItem(siloKey);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
+      if (siloData[targetKey]) {
+        const cur = Number(siloData[targetKey].stockTons) || 0;
+        siloData[targetKey].stockTons = Math.max(0, Number((cur + finalNet).toFixed(2)));
+        localStorage.setItem(siloKey, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', siloKey, siloData);
+      }
     } catch (e) {
       console.warn('Error saving material inward:', e);
     }
@@ -301,16 +336,92 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
                   <p className="text-xs text-slate-500">{language === 'mr' ? 'वजन काट्यावरील (Weighbridge) निव्वळ वजन टाका:' : 'Enter net weight measured at weighbridge:'}</p>
                 </div>
 
+                {/* Gross, Tare & Net Weighbridge Entries */}
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                        {language === 'mr' ? 'एकूण वजन (Gross MT):' : 'Gross Weight (MT):'}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 38.50"
+                        value={grossWeight}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGrossWeight(val);
+                          const g = parseFloat(val) || 0;
+                          const t = parseFloat(tareWeight) || 0;
+                          if (g > 0 && t > 0) {
+                            setQuantity(Math.max(0, parseFloat((g - t).toFixed(2))));
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 border rounded-lg font-mono font-bold text-xs bg-white focus:outline-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                        {language === 'mr' ? 'रिकामे वजन (Tare MT):' : 'Tare Weight (MT):'}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 14.20"
+                        value={tareWeight}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTareWeight(val);
+                          const g = parseFloat(grossWeight) || 0;
+                          const t = parseFloat(val) || 0;
+                          if (g > 0 && t > 0) {
+                            setQuantity(Math.max(0, parseFloat((g - t).toFixed(2))));
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 border rounded-lg font-mono font-bold text-xs bg-white focus:outline-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-900 block">
+                        {language === 'mr' ? 'निव्वळ वजन (Net = Gross - Tare):' : 'Net Quantity (Gross - Tare):'}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {language === 'mr' ? 'किंवा खालील बटनांवरून निवडा' : 'or enter direct net weight below'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={quantity}
+                        onChange={(e) => setQuantity(Number(e.target.value))}
+                        className="w-24 px-2 py-1 border rounded-lg font-mono font-black text-sm text-right text-emerald-800 bg-white focus:outline-emerald-500"
+                      />
+                      <span className="font-bold text-xs text-slate-700">{selectedMaterial.unit}</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Quick weight pills */}
                 <div>
-                  <span className="text-[11px] font-bold text-slate-600 block mb-1">{language === 'mr' ? '१-क्लिकने वजन निवडा (टन):' : '1-Click Select (MT):'}</span>
+                  <span className="text-[11px] font-bold text-slate-600 block mb-1">
+                    {language === 'mr' ? '१-क्लिकने वजन निवडा (टन):' : 'Quick Presets (Net MT):'}
+                  </span>
                   <div className="flex gap-1.5 mb-2">
                     {[20, 25, 30, 35, 40].map((w) => (
                       <button
                         key={w}
                         type="button"
-                        onClick={() => setQuantity(w)}
-                        className={`flex-1 py-1.5 rounded-lg font-mono font-black text-xs transition-all cursor-pointer ${
+                        onClick={() => {
+                          setQuantity(w);
+                          if (tareWeight && !grossWeight) {
+                            setGrossWeight(parseFloat((w + parseFloat(tareWeight)).toFixed(2)));
+                          }
+                        }}
+                        className={`flex-1 py-1 rounded-lg font-mono font-black text-xs transition-all cursor-pointer ${
                           Number(quantity) === w
                             ? 'bg-amber-600 text-white shadow-xs'
                             : 'bg-slate-100 border text-slate-700 hover:bg-slate-200'
@@ -319,18 +430,6 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
                         {w} MT
                       </button>
                     ))}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-600">{language === 'mr' ? 'अचूक वजन:' : 'Exact Net Weight:'}</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={quantity}
-                      onChange={e => setQuantity(Number(e.target.value))}
-                      className="w-32 px-3 py-1.5 border rounded-lg font-mono font-black text-sm focus:outline-amber-500 bg-white"
-                    />
-                    <span className="font-bold text-xs">{selectedMaterial.unit}</span>
                   </div>
                 </div>
 

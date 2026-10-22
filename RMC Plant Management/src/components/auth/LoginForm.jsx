@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_ROUTES } from '../../data/mockUsers';
+import defaultLogo from '../../assets/logo.png';
 
 export default function LoginForm() {
   const navigate = useNavigate();
@@ -131,7 +132,7 @@ export default function LoginForm() {
             <div className="relative group mb-3">
               <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl shadow-lg flex items-center justify-center transition-transform duration-300 group-hover:scale-105 overflow-hidden">
                 <img
-                  src="/logo.png"
+                  src={defaultLogo}
                   alt="SM ConcreTech Logo"
                   className="w-full h-full object-cover scale-[1.04]"
                   onError={(e) => {

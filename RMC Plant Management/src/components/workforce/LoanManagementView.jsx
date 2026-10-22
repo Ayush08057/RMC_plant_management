@@ -3,14 +3,15 @@ import {
   CreditCard, 
   Plus, 
   CheckCircle2, 
-  XCircle, 
-  FileText, 
   Calendar, 
   IndianRupee, 
   Percent,
-  Layers,
+  History,
+  TrendingDown,
   Edit3,
-  Trash2
+  Trash2,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -21,48 +22,96 @@ import Toast from '../dashboard/Toast';
 
 export default function LoanManagementView({ employeeFilter = null }) {
   const { user } = useAuth();
-  const { loans, employees, requestLoan, reviewLoan, updateLoan, deleteLoan } = useWorkforce();
-  const [showApplyModal, setShowApplyModal] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const { loans, employees, recordLoan, reviewLoan, updateLoan, deleteLoan } = useWorkforce();
+  
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingLoan, setEditingLoan] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
+  const [editingLoan, setEditingLoan] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const [form, setForm] = useState({
-    employeeId: user?.employeeId || employees[0]?.id || '',
+    employeeId: employees[0]?.id || '',
     loanAmount: 60000,
-    totalEmis: 12,
+    monthlyEmi: 5000,
+    startDate: todayStr,
     reason: '',
   });
 
-  const canApprove = user?.role === 'Admin' || user?.role === 'Owner / Director' || user?.role === 'Accountant';
+  const isAuthorized = 
+    user?.role === 'Admin' || 
+    user?.role === 'Owner / Director' || 
+    user?.role === 'Accountant' || 
+    user?.role === 'Plant Manager' ||
+    user?.email === 'smconcretech@gmail.com';
 
   const filteredLoans = loans.filter((l) => {
     if (employeeFilter) return l.employeeId === employeeFilter;
     return true;
   });
 
-  const calculatedEmi = Math.round(Number(form.loanAmount) / Number(form.totalEmis || 1));
+  // Calculate tenure (months) based on loan amount & EMI
+  const loanAmtNum = Number(form.loanAmount) || 0;
+  const emiAmtNum = Number(form.monthlyEmi) || 0;
+  const calculatedTenure = emiAmtNum > 0 ? Math.max(1, Math.ceil(loanAmtNum / emiAmtNum)) : 12;
 
-  const handleApply = (e) => {
+  const handleOpenAdd = () => {
+    setForm({
+      employeeId: employeeFilter || employees[0]?.id || '',
+      loanAmount: 60000,
+      monthlyEmi: 5000,
+      startDate: new Date().toISOString().split('T')[0],
+      reason: '',
+    });
+    setShowAddModal(true);
+  };
+
+  const handleSaveLoan = (e) => {
     e.preventDefault();
+    if (!form.employeeId) {
+      alert('Please select an employee.');
+      return;
+    }
+    const loanAmt = Number(form.loanAmount);
+    if (!loanAmt || loanAmt <= 0) {
+      alert('Please enter a valid loan amount (greater than 0).');
+      return;
+    }
+    let emi = Number(form.monthlyEmi);
+    if (!emi || emi <= 0) {
+      alert('Please enter a valid monthly EMI amount.');
+      return;
+    }
+    if (emi > loanAmt) {
+      emi = loanAmt;
+    }
     if (!form.reason.trim()) {
-      alert('Please specify reason for company loan.');
+      alert('Please provide a reason/description for the loan.');
       return;
     }
 
     try {
-      requestLoan({
+      const selectedEmp = employees.find((e) => e.id === form.employeeId);
+      const tenure = Math.ceil(loanAmt / emi);
+
+      recordLoan({
         employeeId: form.employeeId,
-        loanAmount: Number(form.loanAmount),
-        totalEmis: Number(form.totalEmis),
-        emiAmount: calculatedEmi,
-        reason: form.reason,
+        employeeName: selectedEmp?.name,
+        role: selectedEmp?.role,
+        plant: selectedEmp?.plant,
+        loanAmount: loanAmt,
+        emiAmount: emi,
+        totalEmis: tenure,
+        startDate: form.startDate || todayStr,
+        reason: form.reason.trim(),
+        status: isAuthorized ? 'Active' : 'Pending',
       });
 
-      setShowApplyModal(false);
-      setToastMessage(`Loan application for ₹ ${Number(form.loanAmount).toLocaleString('en-IN')} submitted.`);
+      setShowAddModal(false);
+      setToastMessage(`Company loan of ₹ ${loanAmt.toLocaleString('en-IN')} assigned to ${selectedEmp?.name || form.employeeId}.`);
     } catch (err) {
       alert(err.message);
     }
@@ -70,101 +119,161 @@ export default function LoanManagementView({ employeeFilter = null }) {
 
   const handleApprove = (loanId) => {
     reviewLoan(loanId, 'Approved', user);
-    setToastMessage('Loan approved and active. Monthly EMI scheduled in payroll ledger.');
+    setToastMessage('Loan approved and activated. Monthly EMI scheduled in payroll ledger.');
+  };
+
+  const handleOpenHistory = (loan) => {
+    setSelectedLoan(loan);
+    setShowHistoryModal(true);
   };
 
   // Metrics
-  const activeLoans = loans.filter((l) => l.status === 'Active');
-  const totalPrincipal = activeLoans.reduce((sum, l) => sum + (Number(l.loanAmount) || 0), 0);
-  const totalOutstanding = activeLoans.reduce((sum, l) => sum + (Number(l.outstandingBalance) || 0), 0);
+  const activeLoans = loans.filter((l) => l.status === 'Active' || l.status === 'Approved');
+  const totalPrincipal = loans.reduce((sum, l) => sum + (Number(l.loanAmount) || 0), 0);
+  const totalRepaid = loans.reduce((sum, l) => sum + (Number(l.amountRepaid) || (Number(l.paidEmis) || 0) * (Number(l.emiAmount) || 0)), 0);
+  const totalOutstanding = loans.reduce((sum, l) => sum + (Number(l.outstandingBalance) || 0), 0);
   const monthlyEmiRunRate = activeLoans.reduce((sum, l) => sum + (Number(l.emiAmount) || 0), 0);
 
   const columns = [
     {
       header: 'Loan ID',
       accessor: 'id',
-      render: (row) => <span className="font-mono text-amber-400 font-bold">{row.id}</span>,
+      width: '10%',
+      render: (row) => {
+        const displayId = row.id?.startsWith('LOAN-') && row.id.length > 11 
+          ? `LOAN-${row.id.replace('LOAN-', '').slice(-6)}` 
+          : row.id;
+        return (
+          <span 
+            className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200/90 font-mono font-bold text-[11px] inline-block whitespace-nowrap shadow-2xs cursor-default" 
+            title={`Full Loan Ref: ${row.id}`}
+          >
+            {displayId}
+          </span>
+        );
+      },
     },
     {
       header: 'Employee',
       accessor: 'employeeName',
-      render: (row) => (
-        <div>
-          <span className="font-bold text-slate-900 text-xs block">{row.employeeName}</span>
-          <span className="text-[10px] text-slate-500 font-mono">{row.employeeId}</span>
-        </div>
-      ),
-    },
-    {
-      header: 'Sanctioned Loan',
-      accessor: 'loanAmount',
-      render: (row) => (
-        <span className="font-mono font-bold text-slate-900">
-          ₹ {row.loanAmount.toLocaleString('en-IN')}
-        </span>
-      ),
-    },
-    {
-      header: 'Monthly EMI',
-      accessor: 'emiAmount',
-      render: (row) => (
-        <span className="font-mono font-bold text-emerald-700">
-          ₹ {row.emiAmount.toLocaleString('en-IN')}
-        </span>
-      ),
-    },
-    {
-      header: 'Tenure Progress',
-      accessor: 'emis',
-      render: (row) => (
-        <div>
-          <span className="font-mono text-xs text-slate-700 font-semibold">
-            {row.paidEmis} / {row.totalEmis} Paid
-          </span>
-          <div className="w-24 h-1.5 rounded-full bg-slate-200 overflow-hidden mt-1">
-            <div
-              className="h-full bg-emerald-500"
-              style={{ width: `${Math.min(100, (row.paidEmis / row.totalEmis) * 100)}%` }}
-            />
+      width: '18%',
+      render: (row) => {
+        const initials = row.employeeName 
+          ? row.employeeName.trim().split(' ').map(n => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2) 
+          : 'EM';
+        return (
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#123B6D] to-[#1D5FA7] text-white font-bold text-[10px] flex items-center justify-center shrink-0 shadow-2xs">
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-slate-900 text-xs block leading-tight truncate capitalize" title={row.employeeName}>
+                {row.employeeName}
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono block truncate">
+                {row.employeeId || 'EMP'} • {row.role || 'Staff'}
+              </span>
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
-      header: 'Outstanding Balance',
-      accessor: 'outstandingBalance',
+      header: 'Date',
+      accessor: 'startDate',
+      width: '9%',
       render: (row) => (
-        <span className="font-mono font-bold text-amber-700">
-          ₹ {row.outstandingBalance.toLocaleString('en-IN')}
+        <span className="font-mono text-xs text-slate-700 whitespace-nowrap">
+          {row.startDate || row.loanDate || '—'}
         </span>
       ),
     },
-    { header: 'Status', accessor: 'status', type: 'status' },
     {
-      header: 'Schedule',
-      accessor: 'action',
+      header: 'Total Loan',
+      accessor: 'loanAmount',
+      align: 'right',
+      width: '11%',
       render: (row) => (
-        <div className="flex items-center gap-1.5">
+        <span className="font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
+          ₹ {(Number(row.loanAmount) || 0).toLocaleString('en-IN')}
+        </span>
+      ),
+    },
+    {
+      header: 'EMI',
+      accessor: 'emiAmount',
+      align: 'right',
+      width: '10%',
+      render: (row) => (
+        <span className="font-mono font-bold text-emerald-700 text-xs whitespace-nowrap">
+          ₹ {(Number(row.emiAmount) || 0).toLocaleString('en-IN')}
+        </span>
+      ),
+    },
+    {
+      header: 'Repaid',
+      accessor: 'amountRepaid',
+      align: 'right',
+      width: '11%',
+      render: (row) => {
+        const repaid = Number(row.amountRepaid) || ((Number(row.paidEmis) || 0) * (Number(row.emiAmount) || 0));
+        return (
+          <span className="font-mono text-xs font-semibold text-blue-700 whitespace-nowrap">
+            ₹ {repaid.toLocaleString('en-IN')}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Balance',
+      accessor: 'outstandingBalance',
+      align: 'right',
+      width: '11%',
+      render: (row) => {
+        const bal = Number(row.outstandingBalance) || 0;
+        return (
+          <span className={`font-mono text-xs font-bold whitespace-nowrap ${bal > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+            ₹ {bal.toLocaleString('en-IN')}
+          </span>
+        );
+      },
+    },
+    { 
+      header: 'Status', 
+      accessor: 'status', 
+      type: 'status',
+      align: 'center',
+      width: '9%',
+      render: (row) => <StatusBadge status={row.status} size="xs" />
+    },
+    {
+      header: 'Actions',
+      accessor: 'action',
+      align: 'right',
+      width: '11%',
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              setSelectedLoan(row);
-              setShowScheduleModal(true);
-            }}
-            className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs text-[11px] font-semibold cursor-pointer"
+            onClick={() => handleOpenHistory(row)}
+            className="p-1.5 rounded-lg bg-blue-50/80 hover:bg-blue-100 text-[#1D5FA7] border border-blue-200/80 transition-colors cursor-pointer shadow-2xs"
+            title="View Monthly Repayment History"
           >
-            Amortization
+            <History className="w-3.5 h-3.5" />
           </button>
-          {canApprove && row.status === 'Pending' && (
+          
+          {isAuthorized && row.status === 'Pending' && (
             <button
               type="button"
               onClick={() => handleApprove(row.id)}
-              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer transition-colors"
+              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+              title="Sanction & Approve Loan"
             >
-              Sanction
+              <CheckCircle2 className="w-3.5 h-3.5" />
             </button>
           )}
-          {canApprove && (
+
+          {isAuthorized && (
             <>
               <button
                 type="button"
@@ -172,7 +281,7 @@ export default function LoanManagementView({ employeeFilter = null }) {
                   setEditingLoan({ ...row });
                   setShowEditModal(true);
                 }}
-                className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-500 hover:text-amber-700 border border-slate-200 transition-colors"
+                className="p-1.5 rounded-lg bg-amber-50/80 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-colors cursor-pointer shadow-2xs"
                 title="Edit Loan"
               >
                 <Edit3 className="w-3.5 h-3.5" />
@@ -180,7 +289,7 @@ export default function LoanManagementView({ employeeFilter = null }) {
               <button
                 type="button"
                 onClick={async () => {
-                  if (window.confirm(`Delete loan record for ${row.employeeName}?`)) {
+                  if (window.confirm(`Permanently delete loan record ${row.id} for ${row.employeeName}?`)) {
                     try {
                       await deleteLoan(row.id);
                       setToastMessage(`Loan record ${row.id} deleted.`);
@@ -190,7 +299,7 @@ export default function LoanManagementView({ employeeFilter = null }) {
                     }
                   }
                 }}
-                className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors"
+                className="p-1.5 rounded-lg bg-rose-50/80 hover:bg-rose-100 text-rose-700 border border-rose-200/80 transition-colors cursor-pointer shadow-2xs"
                 title="Delete Loan"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -203,302 +312,396 @@ export default function LoanManagementView({ employeeFilter = null }) {
   ];
 
   return (
-    <div className="space-y-3">
-      {/* Metrics Banner: Ultra-Compact Tiles for Max Table View Space */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        {/* Card 1: Active Loans */}
-        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-blue-700 uppercase font-bold tracking-wider block truncate">Active Loans</span>
-            <div className="text-xs sm:text-sm font-black text-slate-900 font-mono tracking-tight mt-0.5">
-              {activeLoans.length}
+    <div className="space-y-4">
+      {/* Metrics Banner */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Loan Book</span>
+            <div className="w-6 h-6 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600">
+              <IndianRupee className="w-3.5 h-3.5" />
             </div>
-            <div className="text-[9px] text-slate-400 font-medium truncate mt-0.5">Company assisted</div>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
-            <CreditCard className="w-3.5 h-3.5" />
-          </div>
-        </div>
-
-        {/* Card 2: Total Principal */}
-        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-emerald-700 uppercase font-bold tracking-wider block truncate">Total Principal</span>
-            <div className="text-xs sm:text-sm font-black text-emerald-800 font-mono tracking-tight mt-0.5">
+          <div className="my-1">
+            <span className="text-lg font-bold text-slate-900 font-mono tracking-tight block">
               ₹ {totalPrincipal.toLocaleString('en-IN')}
-            </div>
-            <div className="text-[9px] text-emerald-700 font-medium truncate mt-0.5">Disbursed funds</div>
+            </span>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-            <IndianRupee className="w-3.5 h-3.5" />
-          </div>
+          <span className="text-[10px] text-slate-500">{loans.length} total loans</span>
         </div>
 
-        {/* Card 3: Outstanding Loan Book */}
-        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-amber-700 uppercase font-bold tracking-wider block truncate">Outstanding Book</span>
-            <div className="text-xs sm:text-sm font-black text-amber-800 font-mono tracking-tight mt-0.5">
+        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Repaid</span>
+            <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="my-1">
+            <span className="text-lg font-bold text-blue-700 font-mono tracking-tight block">
+              ₹ {totalRepaid.toLocaleString('en-IN')}
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-500">EMI deductions collected</span>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Remaining Balance</span>
+            <div className="w-6 h-6 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+              <TrendingDown className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="my-1">
+            <span className="text-lg font-bold text-amber-800 font-mono tracking-tight block">
               ₹ {totalOutstanding.toLocaleString('en-IN')}
-            </div>
-            <div className="text-[9px] text-amber-700 font-medium truncate mt-0.5">To recover</div>
+            </span>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
-            <Percent className="w-3.5 h-3.5" />
-          </div>
+          <span className="text-[10px] text-slate-500">Outstanding loan balance</span>
         </div>
 
-        {/* Card 4: Monthly EMI Recovery */}
-        <div className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-teal-700 uppercase font-bold tracking-wider block truncate">Monthly EMI</span>
-            <div className="text-xs sm:text-sm font-black text-teal-800 font-mono tracking-tight mt-0.5">
-              ₹ {monthlyEmiRunRate.toLocaleString('en-IN')}
+        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Monthly Run Rate</span>
+            <div className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+              <CreditCard className="w-3.5 h-3.5" />
             </div>
-            <div className="text-[9px] text-teal-700 font-medium truncate mt-0.5">Payroll run</div>
           </div>
-          <div className="w-7 h-7 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700 shrink-0">
-            <Calendar className="w-3.5 h-3.5" />
+          <div className="my-1">
+            <span className="text-lg font-bold text-emerald-700 font-mono tracking-tight block">
+              ₹ {monthlyEmiRunRate.toLocaleString('en-IN')}
+            </span>
           </div>
+          <span className="text-[10px] text-slate-500">Expected monthly EMI</span>
         </div>
       </div>
 
-      {/* Action Bar: Light, Clean & Spatially Balanced */}
-      <div className="p-4.5 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center shrink-0 shadow-2xs">
-            <CreditCard className="w-5 h-5 text-emerald-700" />
+      {/* Action Header */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+            <CreditCard className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <span>Employee Loan Portfolio & EMI Schedules</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-mono">
-                Company Assisted
-              </span>
+              <span>Employee Loan & Monthly EMI Management</span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-              Interest-free company loans with automatic monthly salary deductions and tenure tracking.
+            <p className="text-xs text-slate-500">
+              Assign company loans with automatic monthly EMI deductions in payroll.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowApplyModal(true)}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:shadow transition-all shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Apply for Loan</span>
-        </button>
+        {isAuthorized && (
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all shrink-0 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Loan</span>
+          </button>
+        )}
       </div>
 
       {/* Table */}
       <DataTable
-        title="Employee Loan Ledger & Amortization Table"
-        subtitle="Tracking sanctioned loans, monthly EMI deductions, and tenure fulfillment"
+        title="Employee Loan Ledger & Repayment Status"
+        subtitle="Sanctioned loans, configured monthly EMIs, total repaid, and remaining balance"
         icon={CreditCard}
         columns={columns}
         data={filteredLoans}
-        renderMobileCard={(row) => (
-          <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2">
-            <div className="flex items-start justify-between gap-2 min-w-0">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
-                <div className="text-xs font-mono text-cyan-700 font-bold">{row.id} • {row.loanDate}</div>
+        emptyMessage="No employee loans registered yet. Click 'Add Loan' to assign a company loan."
+        renderMobileCard={(row) => {
+          const repaid = Number(row.amountRepaid) || ((Number(row.paidEmis) || 0) * (Number(row.emiAmount) || 0));
+          return (
+            <div className="w-full max-w-full overflow-hidden min-w-0 space-y-2">
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-900 truncate">{row.employeeName}</div>
+                  <div className="text-xs font-mono text-amber-700 font-bold">{row.id} • {row.startDate || row.loanDate}</div>
+                </div>
+                <StatusBadge status={row.status} />
               </div>
-              <StatusBadge status={row.status} />
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1 border-t border-slate-200">
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Sanctioned:</span>
-                <span className="text-slate-900 font-bold">₹ {row.loanAmount.toLocaleString('en-IN')}</span>
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1.5 border-t border-slate-100">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Loan:</span>
+                  <span className="text-slate-900 font-bold">₹ {(Number(row.loanAmount) || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Monthly EMI:</span>
+                  <span className="text-emerald-700 font-bold">₹ {(Number(row.emiAmount) || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Amount Repaid:</span>
+                  <span className="text-blue-700 font-semibold">₹ {repaid.toLocaleString('en-IN')}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Remaining Balance:</span>
+                  <span className="text-amber-800 font-bold">₹ {(Number(row.outstandingBalance) || 0).toLocaleString('en-IN')}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Monthly EMI:</span>
-                <span className="text-emerald-700 font-bold">₹ {row.emiAmount.toLocaleString('en-IN')}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">EMIs Paid:</span>
-                <span className="text-slate-700 font-semibold">{row.paidEmis} of {row.totalEmis}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Balance:</span>
-                <span className="text-amber-700 font-bold">₹ {row.outstandingBalance.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
 
-            <div className="pt-2 border-t border-slate-200 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedLoan(row);
-                  setShowScheduleModal(true);
-                }}
-                className="w-full py-1.5 rounded-lg bg-white text-slate-800 border border-slate-200 text-xs font-semibold"
-              >
-                View EMI Schedule
-              </button>
+              <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => handleOpenHistory(row)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <History className="w-3.5 h-3.5 text-blue-600" />
+                  <span>View History</span>
+                </button>
+                {isAuthorized && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLoan({ ...row });
+                        setShowEditModal(true);
+                      }}
+                      className="p-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-xs cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (window.confirm(`Delete loan record ${row.id} for ${row.employeeName}?`)) {
+                          await deleteLoan(row.id);
+                          setToastMessage(`Loan record ${row.id} deleted.`);
+                        }
+                      }}
+                      className="p-1 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        }}
       />
 
-      {/* Apply Loan Modal */}
+      {/* Modal: Add Loan */}
       <Modal
-        isOpen={showApplyModal}
-        onClose={() => setShowApplyModal(false)}
-        title="Apply for Company Loan"
-        subtitle="Apply for staff loan assistance with structured EMI salary deduction."
-        icon={CreditCard}
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Record Employee Loan"
+        subtitle="Assign a structured company loan with automatic monthly EMI deductions."
+        icon={Plus}
       >
-        <form onSubmit={handleApply} className="space-y-4 text-xs">
+        <form onSubmit={handleSaveLoan} className="space-y-4 text-xs">
+          <div>
+            <label className="text-slate-700 font-semibold block mb-1">Employee Name *</label>
+            <select
+              required
+              value={form.employeeId}
+              onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+            >
+              <option value="">-- Select Employee --</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} ({e.id}) - {e.role}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Employee</label>
-              <select
-                value={form.employeeId}
-                onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-emerald-500"
-              >
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-slate-400 font-semibold block mb-1">Loan Amount (₹) *</label>
+              <label className="text-slate-700 font-semibold block mb-1">Total Loan Amount (₹) *</label>
               <input
                 type="number"
                 required
-                min={10000}
-                max={200000}
+                min={1000}
+                max={2000000}
                 value={form.loanAmount}
                 onChange={(e) => setForm({ ...form, loanAmount: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono focus:border-emerald-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                placeholder="e.g. 50000"
+              />
+            </div>
+            <div>
+              <label className="text-slate-700 font-semibold block mb-1">Monthly EMI (₹) *</label>
+              <input
+                type="number"
+                required
+                min={100}
+                max={form.loanAmount || 2000000}
+                value={form.monthlyEmi}
+                onChange={(e) => setForm({ ...form, monthlyEmi: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                placeholder="e.g. 5000"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Tenure (Number of EMIs)</label>
-              <select
-                value={form.totalEmis}
-                onChange={(e) => setForm({ ...form, totalEmis: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white focus:border-emerald-500"
-              >
-                <option value={6}>6 Months</option>
-                <option value={10}>10 Months</option>
-                <option value={12}>12 Months</option>
-                <option value={18}>18 Months</option>
-                <option value={24}>24 Months</option>
-              </select>
+              <label className="text-slate-700 font-semibold block mb-1">Loan Start Date *</label>
+              <input
+                type="date"
+                required
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
             </div>
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Calculated Monthly EMI</label>
-              <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-emerald-400 font-mono font-bold">
-                ₹ {calculatedEmi.toLocaleString('en-IN')} / mo
+              <label className="text-slate-700 font-semibold block mb-1">Calculated Tenure</label>
+              <div className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 font-mono font-bold flex items-center justify-between">
+                <span>{calculatedTenure} Months</span>
+                <span className="text-[10px] text-slate-500 font-normal">({calculatedTenure} EMIs)</span>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="text-slate-400 font-semibold block mb-1">Reason for Loan *</label>
+            <label className="text-slate-700 font-semibold block mb-1">Description / Reason *</label>
             <textarea
               required
               rows={3}
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              placeholder="e.g. Home tin roof repair or sibling wedding support."
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white placeholder-slate-500 focus:border-emerald-500"
+              placeholder="e.g. Housing renovation, family medical assistance, personal vehicle purchase..."
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 space-y-1">
+            <span className="font-bold block text-[11px]">Automatic EMI Payroll Deduction</span>
+            <p className="text-[11px] text-emerald-800 leading-relaxed">
+              The monthly EMI of ₹ {emiAmtNum.toLocaleString('en-IN')} will be automatically deducted each payroll cycle until the loan balance reaches ₹0. Repayments are strictly capped to never exceed the remaining balance.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setShowApplyModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+              onClick={() => setShowAddModal(false)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950"
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer shadow-xs transition-all active:scale-95"
             >
-              Submit Loan Application
+              Record Loan
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* EMI Schedule Modal */}
+      {/* Modal: View Monthly Repayment History */}
       <Modal
-        isOpen={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-        title={selectedLoan ? `EMI Amortization Schedule (${selectedLoan.id})` : 'Schedule'}
-        subtitle="Deductions mapped directly to monthly payroll preparation cycle."
-        icon={Calendar}
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        title="Monthly Loan Repayment History"
+        subtitle={`Tracking installments and amortization for ${selectedLoan?.employeeName || 'Staff'} (${selectedLoan?.id})`}
+        icon={History}
+        maxWidth="max-w-2xl"
       >
         {selectedLoan && (
           <div className="space-y-4 text-xs">
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 flex items-center justify-between font-mono">
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Principal</span>
-                <span className="text-white font-bold text-sm">₹ {selectedLoan.loanAmount.toLocaleString('en-IN')}</span>
+            {/* Summary Card */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">{selectedLoan.employeeName}</h4>
+                  <span className="text-slate-500 font-mono text-[11px]">{selectedLoan.employeeId} • {selectedLoan.role || 'Staff'}</span>
+                </div>
+                <StatusBadge status={selectedLoan.status} />
               </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Monthly EMI</span>
-                <span className="text-emerald-400 font-bold text-sm">₹ {selectedLoan.emiAmount.toLocaleString('en-IN')}</span>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+                <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 uppercase block">Total Loan</span>
+                  <span className="font-bold text-slate-900 text-sm">₹ {(Number(selectedLoan.loanAmount) || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 uppercase block">Monthly EMI</span>
+                  <span className="font-bold text-emerald-700 text-sm">₹ {(Number(selectedLoan.emiAmount) || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 uppercase block">Amount Repaid</span>
+                  <span className="font-bold text-blue-700 text-sm">
+                    ₹ {(Number(selectedLoan.amountRepaid) || ((Number(selectedLoan.paidEmis) || 0) * (Number(selectedLoan.emiAmount) || 0))).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 uppercase block">Remaining Balance</span>
+                  <span className="font-bold text-amber-800 text-sm">₹ {(Number(selectedLoan.outstandingBalance) || 0).toLocaleString('en-IN')}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Remaining EMIs</span>
-                <span className="text-amber-400 font-bold text-sm">{selectedLoan.remainingEmis} of {selectedLoan.totalEmis}</span>
+
+              <div className="text-[11px] text-slate-500 pt-1 flex items-center justify-between">
+                <span>Start Date: <strong className="text-slate-800 font-mono">{selectedLoan.startDate || selectedLoan.loanDate || 'N/A'}</strong></span>
+                <span>Tenure: <strong className="text-slate-800 font-mono">{selectedLoan.paidEmis || 0} of {selectedLoan.totalEmis || 1} EMIs Paid</strong></span>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1.5 text-slate-300">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-800 font-semibold text-slate-400 text-[11px]">
-                <span>Cycle</span>
-                <span>Deduction Type</span>
-                <span>Amount</span>
-                <span>Status</span>
-              </div>
-              {Array.from({ length: Math.min(6, selectedLoan.totalEmis) }).map((_, idx) => {
-                const isPaid = idx < selectedLoan.paidEmis;
-                return (
-                  <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/60 font-mono text-[11px]">
-                    <span className="text-slate-300">Month #{idx + 1}</span>
-                    <span className="text-slate-400">Payroll Direct Debit</span>
-                    <span className="text-emerald-400 font-bold">₹ {selectedLoan.emiAmount.toLocaleString('en-IN')}</span>
-                    <span className={isPaid ? 'text-emerald-400' : 'text-amber-400'}>
-                      {isPaid ? 'Paid ✓' : 'Scheduled'}
-                    </span>
-                  </div>
-                );
-              })}
+            {/* Repayment History Table */}
+            <div className="space-y-2">
+              <h5 className="font-bold text-slate-800 text-xs">Monthly Repayment Ledger:</h5>
+              {Array.isArray(selectedLoan.repaymentHistory) && selectedLoan.repaymentHistory.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-[11px] font-mono">
+                    <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                      <tr>
+                        <th className="py-2 px-3 text-left font-semibold">#</th>
+                        <th className="py-2 px-3 text-left font-semibold">Date</th>
+                        <th className="py-2 px-3 text-left font-semibold">Payroll Cycle / Ref</th>
+                        <th className="py-2 px-3 text-left font-semibold">EMI Amount Repaid</th>
+                        <th className="py-2 px-3 text-left font-semibold">Remaining Loan Balance</th>
+                        <th className="py-2 px-3 text-right font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {selectedLoan.repaymentHistory.map((rep, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="py-2 px-3 text-slate-400">EMI #{rep.emiNumber || (idx + 1)}</td>
+                          <td className="py-2 px-3 text-slate-600">{rep.date}</td>
+                          <td className="py-2 px-3 font-semibold text-slate-900">{rep.monthYear || rep.payrollId}</td>
+                          <td className="py-2 px-3 font-bold text-emerald-700">₹ {Number(rep.amount).toLocaleString('en-IN')}</td>
+                          <td className="py-2 px-3 font-bold text-amber-800">₹ {Number(rep.balanceAfter).toLocaleString('en-IN')}</td>
+                          <td className="py-2 px-3 text-right text-emerald-700 font-semibold">Repaid ✓</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-center space-y-1">
+                  <Clock className="w-5 h-5 text-slate-400 mx-auto" />
+                  <p className="font-semibold text-slate-700">No repayments recorded yet.</p>
+                  <p className="text-[11px]">Monthly EMI of ₹ {(Number(selectedLoan.emiAmount) || 0).toLocaleString('en-IN')} will be deducted automatically when monthly payroll is processed.</p>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setShowScheduleModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200"
+                onClick={() => setShowHistoryModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 cursor-pointer"
               >
-                Close Schedule
+                Close History
               </button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Edit Loan Modal */}
+      {/* Modal: Edit Loan */}
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title="Edit Staff Company Loan"
-        subtitle="Modify loan amount, EMI schedule, recovered installments, or status."
+        subtitle="Modify loan principal, monthly EMI, repayments, or status."
         icon={Edit3}
       >
         {editingLoan && (
@@ -506,19 +709,24 @@ export default function LoanManagementView({ employeeFilter = null }) {
             onSubmit={(e) => {
               e.preventDefault();
               const loanAmt = Number(editingLoan.loanAmount);
-              const totalEmis = Number(editingLoan.totalEmis);
-              const emiAmt = Math.round(loanAmt / (totalEmis || 1));
+              const emiAmt = Number(editingLoan.emiAmount);
               const paidEmis = Number(editingLoan.paidEmis || 0);
-              const balance = Math.max(0, loanAmt - (paidEmis * emiAmt));
+              const amtRepaid = editingLoan.amountRepaid !== undefined 
+                ? Number(editingLoan.amountRepaid) 
+                : paidEmis * emiAmt;
+              const totalEmis = Number(editingLoan.totalEmis) || Math.max(1, Math.ceil(loanAmt / (emiAmt || 1)));
+              const remBal = Math.max(0, loanAmt - amtRepaid);
 
               updateLoan(editingLoan.id, {
                 loanAmount: loanAmt,
-                totalEmis: totalEmis,
                 emiAmount: emiAmt,
-                paidEmis: paidEmis,
-                balance: balance,
-                status: editingLoan.status,
+                totalEmis,
+                paidEmis,
+                amountRepaid: amtRepaid,
+                outstandingBalance: remBal,
+                startDate: editingLoan.startDate || editingLoan.loanDate,
                 reason: editingLoan.reason,
+                status: editingLoan.status,
               });
               setShowEditModal(false);
               setToastMessage('Loan record updated.');
@@ -526,58 +734,57 @@ export default function LoanManagementView({ employeeFilter = null }) {
             className="space-y-3.5 text-xs"
           >
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Employee</label>
+              <label className="text-slate-700 font-semibold block mb-1">Employee</label>
               <input
                 type="text"
                 disabled
                 value={`${editingLoan.employeeName || ''} (${editingLoan.employeeId || ''})`}
-                className="w-full px-3 py-2 rounded-xl bg-slate-100 text-slate-600 border border-slate-300 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-mono"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Loan Principal (₹)</label>
+                <label className="text-slate-700 font-semibold block mb-1">Loan Principal (₹) *</label>
                 <input
                   type="number"
+                  required
                   value={editingLoan.loanAmount}
                   onChange={(e) => setEditingLoan({ ...editingLoan, loanAmount: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
-                  required
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Total EMIs</label>
+                <label className="text-slate-700 font-semibold block mb-1">Monthly EMI (₹) *</label>
                 <input
                   type="number"
-                  value={editingLoan.totalEmis}
-                  onChange={(e) => setEditingLoan({ ...editingLoan, totalEmis: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
                   required
+                  value={editingLoan.emiAmount}
+                  onChange={(e) => setEditingLoan({ ...editingLoan, emiAmount: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Paid EMIs</label>
+                <label className="text-slate-700 font-semibold block mb-1">Amount Repaid So Far (₹)</label>
                 <input
                   type="number"
-                  value={editingLoan.paidEmis ?? 0}
-                  onChange={(e) => setEditingLoan({ ...editingLoan, paidEmis: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
+                  value={editingLoan.amountRepaid ?? (Number(editingLoan.paidEmis || 0) * Number(editingLoan.emiAmount || 0))}
+                  onChange={(e) => setEditingLoan({ ...editingLoan, amountRepaid: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Status</label>
+                <label className="text-slate-700 font-semibold block mb-1">Status</label>
                 <select
                   value={editingLoan.status}
                   onChange={(e) => setEditingLoan({ ...editingLoan, status: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 >
-                  <option value="Pending">Pending</option>
-                  <option value="Approved">Approved</option>
                   <option value="Active">Active</option>
+                  <option value="Pending">Pending</option>
                   <option value="Closed">Closed</option>
                   <option value="Rejected">Rejected</option>
                 </select>
@@ -585,26 +792,26 @@ export default function LoanManagementView({ employeeFilter = null }) {
             </div>
 
             <div>
-              <label className="text-slate-400 font-semibold block mb-1">Reason / Notes</label>
+              <label className="text-slate-700 font-semibold block mb-1">Reason / Description</label>
               <textarea
                 rows={2}
                 value={editingLoan.reason || ''}
                 onChange={(e) => setEditingLoan({ ...editingLoan, reason: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-white"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="px-4 py-2 rounded-xl font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                className="px-4 py-2 rounded-xl font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl font-bold bg-amber-400 text-slate-950 hover:bg-amber-300"
+                className="px-4 py-2 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer shadow-xs"
               >
                 Save Changes
               </button>

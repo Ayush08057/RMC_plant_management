@@ -41,6 +41,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { ROLES, ROLE_ROUTES } from '../../data/mockUsers';
+import defaultLogo from '../../assets/logo.png';
 
 const ALL_PLANT_OPERATIONS_ITEMS = [
   { 
@@ -167,6 +168,8 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               { id: 'attendance', label: 'Attendance System', icon: Clock },
               { id: 'shifts', label: 'Shifts & Roster', icon: Calendar },
               { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
+              { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
+              { id: 'loans', label: 'Company Loans', icon: CreditCard },
             ]
           },
           { id: 'billing', label: 'Cash Memos & Billing', icon: Receipt },
@@ -377,9 +380,13 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                 title={activeCompany?.name || "SM CONCRETECH"}
               >
                 <img 
-                  src={activeCompany?.logo || "/logo.png"} 
+                  src={activeCompany?.logo || defaultLogo} 
                   alt={activeCompany?.name || "SM ConcreTech"} 
                   className="w-full h-full object-contain" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = defaultLogo;
+                  }}
                 />
               </Link>
             </div>
@@ -508,20 +515,24 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               <Link to={ROLE_ROUTES[user?.role] || '/'} className="flex items-center gap-3 min-w-0 flex-1 group">
                 <div className="w-12 h-12 rounded-2xl bg-white p-1 flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-white/10 group-hover:scale-105 transition-transform">
                   <img 
-                    src={activeCompany?.logo || "/logo.png"} 
+                    src={activeCompany?.logo || defaultLogo} 
                     alt={activeCompany?.name || "SM ConcreTech"} 
                     className="w-full h-full object-contain" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = defaultLogo;
+                    }}
                   />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-bold tracking-wide text-white truncate uppercase">
                     {activeCompany?.name || "SM CONCRETE TECH"}
                   </div>
-                  <div className="flex items-center gap-1 text-xs font-medium text-blue-200/90 truncate mt-0.5">
-                    <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
+                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-100 truncate mt-0.5">
+                    <MapPin className="w-3 h-3 text-[#38bdf8] shrink-0" />
                     <span className="truncate">{activeCompany?.location || "Tanang, Sangli"}</span>
                   </div>
-                  <div className="text-[11px] font-medium text-blue-200/80 truncate mt-0.5">
+                  <div className="text-[11px] font-bold text-[#93c5fd] truncate mt-0.5 uppercase tracking-wide">
                     {t(user?.role === ROLES.ADMIN ? 'Admin' : (user?.role || 'Admin'))}
                   </div>
                 </div>
