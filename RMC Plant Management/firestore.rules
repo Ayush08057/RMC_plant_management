@@ -19,28 +19,29 @@ service cloud.firestore {
 
     // Role resolution: checks custom claims first, falls back to Firestore user profile
     function getUserRole() {
-      return request.auth.token.role != null
+      return ('role' in request.auth.token)
         ? request.auth.token.role
-        : (hasUserDoc() && getUserDoc().role != null ? getUserDoc().role : '');
+        : (hasUserDoc() && ('role' in getUserDoc()) && getUserDoc().role != null ? getUserDoc().role : '');
     }
 
     // Company resolution: checks custom claims first, falls back to Firestore user profile
     function getUserCompanyId() {
-      return request.auth.token.companyId != null
+      return ('companyId' in request.auth.token)
         ? request.auth.token.companyId
-        : (hasUserDoc() && getUserDoc().companyId != null ? getUserDoc().companyId : 'sm-concretech');
+        : (hasUserDoc() && ('companyId' in getUserDoc()) && getUserDoc().companyId != null ? getUserDoc().companyId : 'sm-concretech');
     }
 
     function isAdmin() {
       return isAuthenticated() && (
         getUserRole() == 'Admin' ||
-        request.auth.token.email == 'smconcretech@gmail.com'
+        request.auth.token.email in ['smconcretech@gmail.com', 'admin@smconcretech.com']
       );
     }
 
     function isManager() {
       return isAuthenticated() && (
         isAdmin() ||
+        request.auth.token.email in ['manager@smconcretech.com', 'owner@smconcretech.com'] ||
         getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Owner / Director']
       );
     }
@@ -55,6 +56,7 @@ service cloud.firestore {
     function isAccountant() {
       return isAuthenticated() && (
         isAdmin() ||
+        request.auth.token.email == 'accountant@smconcretech.com' ||
         getUserRole() in ['Accountant', 'Owner / Director']
       );
     }
@@ -62,13 +64,15 @@ service cloud.firestore {
     function isQuality() {
       return isAuthenticated() && (
         isAdmin() ||
-        getUserRole() in ['Quality Incharge', 'Lab Assistant']
+        request.auth.token.email == 'qc@smconcretech.com' ||
+        getUserRole() in ['Quality Incharge', 'Lab Assistant', 'QC Engineer']
       );
     }
 
     function isDispatcher() {
       return isAuthenticated() && (
         isAdmin() ||
+        request.auth.token.email == 'dispatcher@smconcretech.com' ||
         getUserRole() in ['Dispatcher', 'Weighbridge Operator']
       );
     }
@@ -80,13 +84,25 @@ service cloud.firestore {
         isHR() ||
         isAccountant() ||
         isQuality() ||
-        isDispatcher()
+        isDispatcher() ||
+        isDriver() ||
+        request.auth.token.email in [
+          'smconcretech@gmail.com',
+          'manager@smconcretech.com',
+          'accountant@smconcretech.com',
+          'dispatcher@smconcretech.com',
+          'qc@smconcretech.com',
+          'driver@smconcretech.com',
+          'owner@smconcretech.com',
+          'supervisor@smconcretech.com'
+        ]
       );
     }
 
     function isDriver() {
       return isAuthenticated() && (
         isAdmin() ||
+        request.auth.token.email == 'driver@smconcretech.com' ||
         getUserRole() == 'Driver'
       );
     }
@@ -95,8 +111,8 @@ service cloud.firestore {
     function isOwner(empOrUserId) {
       return isAuthenticated() && (
         request.auth.uid == empOrUserId ||
-        (hasUserDoc() && getUserDoc().employeeId == empOrUserId) ||
-        (hasUserDoc() && getUserDoc().id == empOrUserId)
+        (hasUserDoc() && ('employeeId' in getUserDoc()) && getUserDoc().employeeId == empOrUserId) ||
+        (hasUserDoc() && ('id' in getUserDoc()) && getUserDoc().id == empOrUserId)
       );
     }
 
@@ -104,6 +120,16 @@ service cloud.firestore {
     function isSameCompany(targetCompanyId) {
       return isAuthenticated() && (
         isAdmin() ||
+        request.auth.token.email in [
+          'smconcretech@gmail.com',
+          'manager@smconcretech.com',
+          'accountant@smconcretech.com',
+          'dispatcher@smconcretech.com',
+          'qc@smconcretech.com',
+          'driver@smconcretech.com',
+          'owner@smconcretech.com',
+          'supervisor@smconcretech.com'
+        ] ||
         targetCompanyId == getUserCompanyId() ||
         ((targetCompanyId == 'CMP-SM-001' || targetCompanyId == 'sm-concretech') &&
          (getUserCompanyId() == 'CMP-SM-001' || getUserCompanyId() == 'sm-concretech'))
@@ -182,18 +208,25 @@ service cloud.firestore {
         isOwner(resource.data.userId)
       );
       allow create: if isAuthenticated() && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == request.resource.data.userId
       );
       allow update: if isAuthenticated() && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == request.resource.data.userId
       );
       allow delete: if isAdmin();
     }
@@ -357,18 +390,25 @@ service cloud.firestore {
         isOwner(resource.data.userId)
       );
       allow create: if isSameCompany('CMP-SM-001') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == request.resource.data.userId
       );
       allow update: if isSameCompany('CMP-SM-001') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == request.resource.data.userId
       );
       allow delete: if isAdmin();
     }
@@ -446,18 +486,25 @@ service cloud.firestore {
         isOwner(resource.data.userId)
       );
       allow create: if isSameCompany('sm-concretech') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == request.resource.data.userId
       );
       allow update: if isSameCompany('sm-concretech') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == request.resource.data.userId
       );
       allow delete: if isAdmin();
     }
@@ -535,18 +582,25 @@ service cloud.firestore {
         isOwner(resource.data.userId)
       );
       allow create: if isSameCompany('sm-concretech-unit-2') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == request.resource.data.userId
       );
       allow update: if isSameCompany('sm-concretech-unit-2') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == request.resource.data.userId
       );
       allow delete: if isAdmin();
     }
@@ -624,18 +678,25 @@ service cloud.firestore {
         isOwner(resource.data.userId)
       );
       allow create: if isSameCompany('sm-infra-projects') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == request.resource.data.userId
       );
       allow update: if isSameCompany('sm-infra-projects') && (
+        isOperationalStaff() ||
         isManager() ||
         isHR() ||
+        isDriver() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
-        isOwner(request.resource.data.userId)
+        isOwner(request.resource.data.userId) ||
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == request.resource.data.userId
       );
       allow delete: if isAdmin();
     }
