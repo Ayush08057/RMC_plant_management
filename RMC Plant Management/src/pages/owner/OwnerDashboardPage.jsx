@@ -135,7 +135,7 @@ export default function OwnerDashboardPage() {
       {activeTab === 'billing' && <BillingManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
 
-      {activeTab === 'dashboard' && (
+      {(!['employees', 'attendance', 'payroll', 'advances', 'loans', 'approvals', 'audit', 'billing', 'reports'].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* Executive Workforce Intelligence Strip */}
           <section className="p-4.5 rounded-3xl bg-gradient-to-r from-rose-50/90 via-white to-purple-50/90 border border-rose-200/90 flex flex-wrap items-center justify-between gap-3 shadow-xs">

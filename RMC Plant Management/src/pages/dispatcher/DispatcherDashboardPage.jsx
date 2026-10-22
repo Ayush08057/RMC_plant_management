@@ -315,7 +315,7 @@ export default function DispatcherDashboardPage() {
       {activeTab === 'daily-work' && <DailyWorkView />}
       {activeTab === 'leaves' && <LeaveManagementView />}
 
-      {activeTab === 'dashboard' && (
+      {(!['attendance', 'daily-work', 'leaves'].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
           {/* 4 Primary KPI Cards */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   PackageCheck,
   ClipboardList,
@@ -431,20 +432,20 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
       />
 
       {/* Today's Work Summary Modal */}
-      {activeWizard === 'todaysWork' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+      {activeWizard === 'todaysWork' && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-pop-in">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-slate-200 text-slate-800 rounded-xl">
-                  <Calendar className="w-5 h-5" />
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200/90 bg-gradient-to-r from-slate-900 via-[#0c2340] to-slate-900 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-400 flex items-center justify-center shrink-0 shadow-xs">
+                  <Calendar className="w-5 h-5 stroke-[2.2]" />
                 </div>
                 <div>
-                  <h2 className="text-base font-black text-slate-900">
+                  <h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
                     {t('viewTodaysWorkTitle', "Today's Work Summary")}
                   </h2>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-300 font-normal">
                     {t('viewTodaysWorkDesc', "Summary of all concrete dispatched and materials received today.")}
                   </p>
                 </div>
@@ -452,7 +453,7 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
               <button
                 type="button"
                 onClick={() => setActiveWizard(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -460,7 +461,7 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 bg-slate-50/50 flex-1">
               <TodaysWorkView
                 onOpenWizard={(wiz) => setActiveWizard(wiz)}
                 onNavigateModule={(tab) => {
@@ -470,7 +471,8 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* General Help Modal */}

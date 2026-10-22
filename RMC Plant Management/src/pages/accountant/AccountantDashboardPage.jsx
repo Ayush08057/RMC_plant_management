@@ -178,7 +178,10 @@ export default function AccountantDashboardPage() {
       {activeTab === 'loans' && <LoanManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
 
-      {activeTab === 'dashboard' && (
+      {(![
+        'attendance', 'billing', 'purchases', 'otp_audit', 'payroll',
+        'advances', 'loans', 'reports'
+      ].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-4 pb-6 min-w-0">
           
           {/* Accountant Daily Duty & Attendance Quick Card */}

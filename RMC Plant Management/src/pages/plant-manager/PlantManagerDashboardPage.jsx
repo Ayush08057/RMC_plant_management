@@ -35,6 +35,14 @@ import LeaveManagementView from '../../components/workforce/LeaveManagementView'
 import HrReportsView from '../../components/workforce/HrReportsView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
 import SimplePlantManagerHome from '../../components/operations/guided/SimplePlantManagerHome';
+import BillingManagementView from '../../components/billing/BillingManagementView';
+import ApprovalsView from '../../components/workforce/ApprovalsView';
+import PayrollPreparationView from '../../components/workforce/PayrollPreparationView';
+import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
+import LoanManagementView from '../../components/workforce/LoanManagementView';
+import EmployeeDocumentsView from '../../components/workforce/EmployeeDocumentsView';
+import AuditLogsView from '../../components/workforce/AuditLogsView';
+import HrSettingsView from '../../components/workforce/HrSettingsView';
 
 const CURRENT_PLANT_NAME = 'Main Plant Unit #01';
 const CURRENT_PLANT_ID = 'PLANT-001';
@@ -369,15 +377,29 @@ export default function PlantManagerDashboardPage() {
       {activeTab === 'daily-work' && <DailyWorkView />}
       {activeTab === 'leaves' && <LeaveManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
+      {activeTab === 'billing' && <BillingManagementView />}
+      {activeTab === 'payroll' && <PayrollPreparationView />}
+      {activeTab === 'advances' && <AdvanceManagementView />}
+      {activeTab === 'loans' && <LoanManagementView />}
+      {activeTab === 'approvals' && <ApprovalsView />}
+      {activeTab === 'documents' && <EmployeeDocumentsView />}
+      {activeTab === 'audit' && <AuditLogsView />}
+      {activeTab === 'settings' && <HrSettingsView />}
 
-      {activeTab === 'dashboard' && viewMode === 'simple' && (
+      {(![
+        'employees', 'attendance', 'shifts', 'daily-work', 'leaves', 'reports',
+        'billing', 'payroll', 'advances', 'loans', 'approvals', 'documents', 'audit', 'settings'
+      ].includes(activeTab) || activeTab === 'dashboard') && viewMode === 'simple' && (
         <SimplePlantManagerHome
           onNavigateTab={setActiveTab}
           onSwitchToAdvanced={() => setViewMode('advanced')}
         />
       )}
 
-      {activeTab === 'dashboard' && viewMode === 'advanced' && (
+      {(![
+        'employees', 'attendance', 'shifts', 'daily-work', 'leaves', 'reports',
+        'billing', 'payroll', 'advances', 'loans', 'approvals', 'documents', 'audit', 'settings'
+      ].includes(activeTab) || activeTab === 'dashboard') && viewMode === 'advanced' && (
         <div className="space-y-4 sm:space-y-5">
           {/* Header Switcher back to Simple Mode */}
           <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">

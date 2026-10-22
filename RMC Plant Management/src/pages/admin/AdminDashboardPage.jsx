@@ -644,7 +644,10 @@ export default function AdminDashboardPage() {
       {activeTab === 'audit' && <AuditLogsView />}
       {activeTab === 'settings' && <HrSettingsView />}
 
-      {activeTab === 'dashboard' && (
+      {(![
+        'employees', 'attendance', 'shifts', 'billing', 'approvals',
+        'payroll', 'advances', 'loans', 'reports', 'documents', 'audit', 'settings'
+      ].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-3 pb-4">
           {/* 4 Primary Phase 1 KPI Cards — Unified Royal Executive Theme */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 shrink-0">

@@ -276,7 +276,8 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
     }
   };
 
-  const navItems = getNavItemsForRole(user?.role);
+  const effectiveNavRole = activePortal?.role || user?.role || ROLES.ADMIN;
+  const navItems = getNavItemsForRole(effectiveNavRole);
 
   // Auto-expand group containing the activeTab
   useEffect(() => {

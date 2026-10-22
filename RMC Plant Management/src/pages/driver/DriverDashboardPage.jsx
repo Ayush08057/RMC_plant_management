@@ -501,7 +501,7 @@ export default function DriverDashboardPage() {
         </section>
       )}
 
-      {activeTab === 'dashboard' && (
+      {(!['attendance', 'shifts', 'daily-work', 'leaves', 'advances', 'documents', 'profile'].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="space-y-6">
           {/* Quick Mobile Attendance Punch Terminal */}
           <section>
