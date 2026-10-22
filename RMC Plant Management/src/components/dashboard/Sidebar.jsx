@@ -158,6 +158,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ADMIN:
         return [
           { id: 'dashboard', label: 'System Administration', icon: ShieldCheck },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { 
             id: 'employees_group', 
             label: 'Employees', 
@@ -198,7 +199,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
           },
           { id: 'daily-work', label: 'Daily Work', icon: Gauge },
           { id: 'leaves', label: 'Leave Reviews', icon: FileCheck2 },
-          { id: 'reports', label: 'Plant Reports', icon: FileText },
+          { id: 'reports', label: 'Crew & HR Reports', icon: FileText },
         ];
 
       case ROLES.ACCOUNTANT:

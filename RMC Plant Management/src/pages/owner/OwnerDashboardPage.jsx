@@ -32,6 +32,10 @@ import PayrollPreparationView from '../../components/workforce/PayrollPreparatio
 import HrReportsView from '../../components/workforce/HrReportsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
+import ApprovalsView from '../../components/workforce/ApprovalsView';
+import AuditLogsView from '../../components/workforce/AuditLogsView';
+import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
+import LoanManagementView from '../../components/workforce/LoanManagementView';
 
 export default function OwnerDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -124,6 +128,10 @@ export default function OwnerDashboardPage() {
         />
       )}
       {activeTab === 'payroll' && <PayrollPreparationView />}
+      {activeTab === 'advances' && <AdvanceManagementView />}
+      {activeTab === 'loans' && <LoanManagementView />}
+      {activeTab === 'approvals' && <ApprovalsView />}
+      {activeTab === 'audit' && <AuditLogsView />}
       {activeTab === 'billing' && <BillingManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
 
