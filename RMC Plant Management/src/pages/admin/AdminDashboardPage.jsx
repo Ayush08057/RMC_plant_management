@@ -654,7 +654,7 @@ export default function AdminDashboardPage() {
               subtext={`${employees.filter((e) => e.status === 'Active').length} Active Duty`}
               trend={`${employees.length} Enrolled`}
               trendType="up"
-              color="blue"
+              color="indigo"
               icon={Users}
               onClick={() => setActiveKpiModal('workforce')}
             />
@@ -670,7 +670,7 @@ export default function AdminDashboardPage() {
               }
               trend="Biometric Sync"
               trendType="up"
-              color="blue"
+              color="emerald"
               icon={Building2}
               onClick={() => {
                 setAttendanceViewTab(todayAttendanceRecords.length > 0 ? 'TODAY' : (previousDatesList.length > 0 ? 'PREVIOUS' : 'TODAY'));
@@ -683,7 +683,7 @@ export default function AdminDashboardPage() {
               subtext="Leaves, advances & work"
               trend="Action Needed"
               trendType={pendingApprovals.length > 0 ? 'down' : 'up'}
-              color="blue"
+              color="amber"
               icon={ShieldCheck}
               onClick={() => setActiveKpiModal('approvals')}
             />
@@ -693,7 +693,7 @@ export default function AdminDashboardPage() {
               subtext="October 2026 Ready"
               trend="Audited"
               trendType="up"
-              color="blue"
+              color="purple"
               icon={KeyRound}
               onClick={() => setActiveKpiModal('payroll')}
             />
