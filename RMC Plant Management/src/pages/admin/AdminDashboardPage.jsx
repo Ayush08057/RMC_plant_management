@@ -28,6 +28,7 @@ import {
   Lock,
   Radio,
   MapPin,
+  ExternalLink,
   Smartphone,
   UserCheck,
   Clock,
@@ -1540,32 +1541,60 @@ export default function AdminDashboardPage() {
                     });
 
                     if (filtered.length > 0) {
-                      return filtered.map((rec, idx) => (
-                        <div key={rec.id || idx} className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 text-xs">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 shrink-0">
-                              {rec.employeeId || rec.id}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="font-bold text-slate-900 truncate">{rec.employeeName || rec.name}</div>
-                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                <span>In: {formatToIndian12Hr(rec.punchIn || rec.checkIn || rec.inTime) || '08:00 AM'}</span>
-                                <span>• Out: {formatToIndian12Hr(rec.punchOut || rec.checkOut || rec.outTime) || 'On Duty'}</span>
-                                {rec.plant && <span>• {rec.plant}</span>}
+                      return filtered.map((rec, idx) => {
+                        const hasGps = Boolean(rec.gpsLocation?.lat && rec.gpsLocation?.lng);
+                        return (
+                          <div key={rec.id || idx} className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 text-xs flex-wrap sm:flex-nowrap">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 shrink-0">
+                                {rec.employeeId || rec.id}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                  <span>{rec.employeeName || rec.name}</span>
+                                  {rec.role && <span className="text-[10px] font-semibold text-slate-500">({rec.role})</span>}
+                                </div>
+                                <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>In: {formatToIndian12Hr(rec.punchIn || rec.checkIn || rec.inTime) || '08:00 AM'}</span>
+                                  </span>
+                                  <span>• Out: {formatToIndian12Hr(rec.punchOut || rec.checkOut || rec.outTime) || 'On Duty'}</span>
+                                  {rec.plant && <span>• {rec.plant}</span>}
+                                </div>
+                                {hasGps && (
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <a
+                                      href={`https://www.google.com/maps?q=${rec.gpsLocation.lat},${rec.gpsLocation.lng}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md transition-colors"
+                                      title="Open live punch location on Google Maps"
+                                    >
+                                      <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                                      <span>GPS: {rec.gpsLocation.lat.toFixed(4)}, {rec.gpsLocation.lng.toFixed(4)}</span>
+                                      <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+                                    </a>
+                                    {rec.geofenceStatus && (
+                                      <span className="text-[9.5px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                        {rec.geofenceStatus}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {rec.lateStatus && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  Late Arrival
+                                </span>
+                              )}
+                              <StatusBadge status={rec.status || 'Present'} size="xs" />
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {rec.lateStatus && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                Late Arrival
-                              </span>
-                            )}
-                            <StatusBadge status={rec.status || 'Present'} size="xs" />
-                          </div>
-                        </div>
-                      ));
+                        );
+                      });
                     }
 
                     if (todayAttendanceRecords.length === 0) {

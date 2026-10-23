@@ -229,24 +229,15 @@ export default function RolePersonalAttendanceView({
                 )}
               </div>
               {Boolean(userTodayRecord) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Reset today's attendance record for ${officialProfile.name} to punch in with real live time?`)) {
-                      if (resetTodayAttendance) {
-                        resetTodayAttendance(targetEmpId);
-                      }
-                      setToastMessage(`Today's record reset. You can now punch in with the real current time!`);
-                      setTimeout(() => setToastMessage(null), 3500);
-                      onPunched();
-                    }
-                  }}
-                  className="px-2 py-0.5 rounded-lg bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs mt-0.5"
-                  title="Reset today's record to clock in with live time"
-                >
-                  <RotateCcw className="w-3 h-3 text-[#1D5FA7]" />
-                  <span>Reset / Punch In with Real Time</span>
-                </button>
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold mt-0.5">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  <span>Punch Locked (1 punch/day)</span>
+                  {userTodayRecord?.gpsLocation?.lat && (
+                    <span className="text-slate-500 font-mono">
+                      • 📍 {userTodayRecord.gpsLocation.lat.toFixed(4)}, {userTodayRecord.gpsLocation.lng.toFixed(4)}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </section>
