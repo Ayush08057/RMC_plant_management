@@ -28,6 +28,7 @@ import {
   Lock,
   Radio,
   MapPin,
+  Navigation,
   ExternalLink,
   Smartphone,
   UserCheck,
@@ -59,6 +60,7 @@ import HrSettingsView from '../../components/workforce/HrSettingsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
 import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
 import LoanManagementView from '../../components/workforce/LoanManagementView';
+import LiveEmployeeLocationRadar from '../../components/workforce/LiveEmployeeLocationRadar';
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -570,6 +572,11 @@ export default function AdminDashboardPage() {
       title: 'Attendance & Live Duty',
       badge: 'LIVE TERMINAL',
     },
+    'live-tracking': {
+      title: 'Employee Live GPS Locations',
+      subtitle: 'Real-time GPS coordinates, geofence status & live positions of punched-in staff',
+      badge: 'LIVE GPS',
+    },
     shifts: {
       title: 'Shifts & Roster Management',
       badge: 'ROSTER',
@@ -631,6 +638,7 @@ export default function AdminDashboardPage() {
           onMobileAttendanceReset={() => setTriggerMobileAttendance(false)}
         />
       )}
+      {activeTab === 'live-tracking' && <LiveEmployeeLocationRadar />}
       {activeTab === 'shifts' && <ShiftManagementView />}
       {activeTab === 'billing' && <BillingManagementView />}
       {activeTab === 'approvals' && <ApprovalsView />}
@@ -643,10 +651,38 @@ export default function AdminDashboardPage() {
       {activeTab === 'settings' && <HrSettingsView />}
 
       {(![
-        'employees', 'attendance', 'shifts', 'billing', 'approvals',
+        'employees', 'attendance', 'live-tracking', 'shifts', 'billing', 'approvals',
         'payroll', 'advances', 'loans', 'reports', 'documents', 'audit', 'settings'
       ].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-3 pb-4">
+          {/* Quick Action Ribbon: Live Employee GPS Tracker */}
+          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-3 sm:p-4 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shrink-0">
+                <MapPin className="w-5 h-5 text-emerald-400 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-black tracking-tight text-white">Employee Live Location Radar</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold font-mono">
+                    {todayAttendanceRecords.filter((a) => a.status === 'Present').length} PUNCHED IN
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  View real-time GPS locations, map positions & geofence status of employees after clock-in.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('live-tracking')}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Track Live Locations</span>
+            </button>
+          </div>
+
           {/* 4 Primary Phase 1 KPI Cards — Unified Royal Executive Theme */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 shrink-0">
             <KPICard

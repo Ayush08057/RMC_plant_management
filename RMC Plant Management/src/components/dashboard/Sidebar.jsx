@@ -157,6 +157,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ADMIN:
         return [
           { id: 'dashboard', label: 'System Administration', icon: ShieldCheck },
+          { id: 'live-tracking', label: 'Live GPS Tracking', icon: MapPin },
           { 
             id: 'employees_group', 
             label: 'Employees', 
@@ -165,6 +166,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             children: [
               { id: 'employees', label: 'Directory Records', icon: Users },
               { id: 'attendance', label: 'Attendance System', icon: Clock },
+              { id: 'live-tracking', label: 'Employee Locations', icon: MapPin },
               { id: 'shifts', label: 'Shifts & Roster', icon: Calendar },
               { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
               { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
