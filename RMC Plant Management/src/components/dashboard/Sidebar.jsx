@@ -118,7 +118,6 @@ const PORTAL_LINKS = [
   { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
   { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervisor', path: '/site-supervisor', icon: HardHat, colorClass: 'bg-[#0d9488]' },
   { role: ROLES.DRIVER, label: 'Driver Portal', path: '/driver', icon: Truck, colorClass: 'bg-[#f43f5e]' },
-  { role: ROLES.OWNER_DIRECTOR, label: 'Owner / Director', path: '/owner', icon: Users, colorClass: 'bg-[#4f46e5]' },
 ];
 
 export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle, activeTab, onSelectTab }) {
@@ -158,7 +157,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ADMIN:
         return [
           { id: 'dashboard', label: 'System Administration', icon: ShieldCheck },
-          ...(plantOpsGroup ? [plantOpsGroup] : []),
           { 
             id: 'employees_group', 
             label: 'Employees', 
@@ -258,17 +256,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
           { id: 'attendance', label: 'Mobile Punch-In', icon: Clock },
           { id: 'daily-work', label: 'Trip Logs & TM Dispatches', icon: Truck },
           { id: 'leaves', label: 'Leave Requests', icon: Calendar },
-        ];
-
-      case ROLES.OWNER_DIRECTOR:
-        return [
-          { id: 'dashboard', label: 'Executive Cockpit', icon: Building2 },
-          ...(plantOpsGroup ? [plantOpsGroup] : []),
-          { id: 'attendance', label: 'Executive Attendance', icon: Clock },
-          { id: 'billing', label: 'Revenue & Cash Flow', icon: IndianRupee },
-          { id: 'payroll', label: 'Workforce & Payroll Costs', icon: Users },
-          { id: 'approvals', label: 'High-Value Authorizations', icon: FileCheck2 },
-          { id: 'audit', label: 'Governance & Audits', icon: ShieldCheck },
         ];
 
       default:

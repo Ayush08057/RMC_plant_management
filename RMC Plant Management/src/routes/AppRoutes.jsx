@@ -22,7 +22,6 @@ import DispatcherDashboardPage from '../pages/dispatcher/DispatcherDashboardPage
 import QcDashboardPage from '../pages/qc/QcDashboardPage';
 import SiteSupervisorDashboardPage from '../pages/site-supervisor/SiteSupervisorDashboardPage';
 import DriverDashboardPage from '../pages/driver/DriverDashboardPage';
-import OwnerDashboardPage from '../pages/owner/OwnerDashboardPage';
 
 /**
  * Root Redirector: determines where to land when hitting "/"
@@ -128,14 +127,6 @@ export default function AppRoutes() {
         }
       />
 
-      <Route
-        path="/owner"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.OWNER_DIRECTOR]}>
-            <OwnerDashboardPage />
-          </ProtectedRoute>
-        }
-      />
 
       {/* Catch-all 404 */}
       <Route path="*" element={<NotFoundPage />} />

@@ -57,7 +57,6 @@ import EmployeeDocumentsView from '../../components/workforce/EmployeeDocumentsV
 import AuditLogsView from '../../components/workforce/AuditLogsView';
 import HrSettingsView from '../../components/workforce/HrSettingsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
-import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
 import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
 import LoanManagementView from '../../components/workforce/LoanManagementView';
 
@@ -125,6 +124,13 @@ export default function AdminDashboardPage() {
     const prevMap = {};
 
     (attendance || []).forEach((a) => {
+      const isSysAdmin = 
+        (a.role || '').toLowerCase() === 'admin' ||
+        a.employeeId === 'ADM-001' ||
+        a.employeeId === 'USR-ADMIN-001' ||
+        (a.employeeName || '').toLowerCase().includes('system admin');
+      if (isSysAdmin) return;
+
       let recDate = a.date;
       if (!recDate && a.createdAt) {
         try {
@@ -618,20 +624,11 @@ export default function AdminDashboardPage() {
     >
       {activeTab === 'employees' && <EmployeeManagementView />}
       {activeTab === 'attendance' && (
-        <RolePersonalAttendanceView
-          defaultRole="Admin"
-          defaultEmpId="ADM-001"
-          defaultDepartment="Executive Administration"
-          canSwitchToTeamView={true}
-          teamViewComponent={
-            <AttendanceManagementView 
-              triggerMarkAttendance={triggerMarkAttendance}
-              triggerMobileAttendance={triggerMobileAttendance}
-              onMarkAttendanceReset={() => setTriggerMarkAttendance(false)}
-              onMobileAttendanceReset={() => setTriggerMobileAttendance(false)}
-            />
-          }
-          onPunched={() => setToastMessage('Administrator attendance verified and recorded!')}
+        <AttendanceManagementView 
+          triggerMarkAttendance={triggerMarkAttendance}
+          triggerMobileAttendance={triggerMobileAttendance}
+          onMarkAttendanceReset={() => setTriggerMarkAttendance(false)}
+          onMobileAttendanceReset={() => setTriggerMobileAttendance(false)}
         />
       )}
       {activeTab === 'shifts' && <ShiftManagementView />}

@@ -1,9 +1,11 @@
 import React from 'react';
 import { ShieldCheck, UserCheck, Sparkles, ChevronRight } from 'lucide-react';
-import { SYSTEM_ADMIN, SYSTEM_ROLE_PROFILES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { ROLES, SYSTEM_ADMIN, SYSTEM_ROLE_PROFILES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 
 export default function DemoUserPicker({ onSelectUser, activeRole }) {
-  const rolePresets = OFFICIAL_ROLE_ACCOUNTS.map((acc) => ({
+  const rolePresets = OFFICIAL_ROLE_ACCOUNTS
+    .filter((acc) => acc.role !== ROLES.OWNER_DIRECTOR)
+    .map((acc) => ({
     role: acc.role,
     label: acc.name.split(' ')[0],
     email: acc.email,

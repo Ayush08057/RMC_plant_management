@@ -109,21 +109,19 @@ export default function AttendanceManagementView({
       }
     });
 
-    // 1. NON-ADMIN RESTRICTION: System Admin is an executive root account and must NEVER be visible to Plant Manager or any non-admin!
-    if (!isAdmin) {
-      list = list.filter((e) => {
-        const empRole = (e.role || '').toLowerCase();
-        const empId = (e.employeeId || e.id || '').toUpperCase();
-        const empName = (e.name || '').toLowerCase();
-        const isSysAdmin =
-          empRole === 'admin' ||
-          empRole.includes('executive administration') ||
-          empId === 'ADM-001' ||
-          empId === 'USR-ADMIN-001' ||
-          empName.includes('system admin');
-        return !isSysAdmin;
-      });
-    }
+    // System Admin is an executive root account and is excluded from employee attendance tracking
+    list = list.filter((e) => {
+      const empRole = (e.role || '').toLowerCase();
+      const empId = (e.employeeId || e.id || '').toUpperCase();
+      const empName = (e.name || '').toLowerCase();
+      const isSysAdmin =
+        empRole === 'admin' ||
+        empRole.includes('executive administration') ||
+        empId === 'ADM-001' ||
+        empId === 'USR-ADMIN-001' ||
+        empName.includes('system admin');
+      return !isSysAdmin;
+    });
 
     // 2. PLANT MANAGER SCOPE: The plant manager should only be visible the related information of the plant manager only and his role only!
     if (isPlantManager) {
@@ -470,8 +468,15 @@ export default function AttendanceManagementView({
     setIsEditingExistingReport(false);
   };
 
-  // Date and Plant Records matching selection
+  // Date and Plant Records matching selection (excluding Admin)
   const dateRecords = attendance.filter((a) => {
+    const isSysAdmin = 
+      (a.role || '').toLowerCase() === 'admin' ||
+      a.employeeId === 'ADM-001' ||
+      a.employeeId === 'USR-ADMIN-001' ||
+      (a.employeeName || '').toLowerCase().includes('system admin');
+    if (isSysAdmin) return false;
+
     const matchesDate = a.date === selectedDate;
     const matchesPlant = selectedPlant === 'All Plants' || a.plant === selectedPlant;
     return matchesDate && matchesPlant;
@@ -893,9 +898,22 @@ export default function AttendanceManagementView({
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>{row.geofenceStatus || 'Verified'}</span>
           </span>
-          <span className="text-slate-500 text-[10px] block font-normal mt-0.5 leading-snug">
-            {row.gpsLocation?.address || 'Plant Site Zone'}
-          </span>
+          {row.gpsLocation?.lat && row.gpsLocation?.lng ? (
+            <a
+              href={`https://www.google.com/maps?q=${row.gpsLocation.lat},${row.gpsLocation.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 hover:underline text-[10px] font-mono inline-flex items-center gap-1 mt-0.5"
+              title="Open coordinates in Google Maps"
+            >
+              <MapPin className="w-2.5 h-2.5 shrink-0 text-blue-500" />
+              <span>{row.gpsLocation.lat}, {row.gpsLocation.lng}</span>
+            </a>
+          ) : (
+            <span className="text-slate-500 text-[10px] block font-normal mt-0.5 leading-snug">
+              {row.gpsLocation?.address || 'Plant Site Zone'}
+            </span>
+          )}
         </div>
       ),
     },
