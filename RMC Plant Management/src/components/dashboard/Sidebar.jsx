@@ -118,6 +118,7 @@ const PORTAL_LINKS = [
   { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
   { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervisor', path: '/site-supervisor', icon: HardHat, colorClass: 'bg-[#0d9488]' },
   { role: ROLES.DRIVER, label: 'Driver Portal', path: '/driver', icon: Truck, colorClass: 'bg-[#f43f5e]' },
+  { role: ROLES.OWNER_DIRECTOR, label: 'Owner / Director', path: '/owner', icon: Building2, colorClass: 'bg-[#be123c]' },
 ];
 
 export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle, activeTab, onSelectTab }) {
@@ -258,6 +259,28 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
           { id: 'attendance', label: 'Mobile Punch-In', icon: Clock },
           { id: 'daily-work', label: 'Trip Logs & TM Dispatches', icon: Truck },
           { id: 'leaves', label: 'Leave Requests', icon: Calendar },
+        ];
+
+      case ROLES.OWNER_DIRECTOR:
+        return [
+          { id: 'dashboard', label: 'Executive Cockpit', icon: LayoutDashboard },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
+          { 
+            id: 'workforce_group', 
+            label: 'Executive Workforce', 
+            icon: Users,
+            children: [
+              { id: 'attendance', label: 'Daily Attendance', icon: Clock },
+              { id: 'employees', label: 'Employees Directory', icon: Users },
+              { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
+              { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
+              { id: 'loans', label: 'Company Loans', icon: CreditCard },
+            ]
+          },
+          { id: 'billing', label: 'Cash Memos & Billing', icon: Receipt },
+          { id: 'approvals', label: 'Approvals Hub', icon: FileCheck2 },
+          { id: 'reports', label: 'Executive HR Reports', icon: FileText },
+          { id: 'audit', label: 'Executive Audit Logs', icon: FileText },
         ];
 
       default:
