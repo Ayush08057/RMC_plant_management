@@ -31,11 +31,20 @@ export default function ApprovalsView() {
   const [remarks, setRemarks] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Filter approvals by category
-  const filteredApprovals = pendingApprovals.filter((item) => {
-    if (selectedCategory === 'all') return true;
-    return item.category === selectedCategory;
-  });
+  // Filter approvals by category (guaranteed strictly deduplicated)
+  const filteredApprovals = React.useMemo(() => {
+    const list = (pendingApprovals || []).filter((item) => {
+      if (selectedCategory === 'all') return true;
+      return item.category === selectedCategory;
+    });
+    const seen = new Set();
+    return list.filter((item) => {
+      const key = item.id || `${item.category}_${item.employeeId}_${item.date}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [pendingApprovals, selectedCategory]);
 
   const handleOpenAction = (item, type) => {
     setActionItem(item);

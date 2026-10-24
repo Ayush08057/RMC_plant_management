@@ -124,6 +124,72 @@ export const sanitizeAttendance = (attList) => {
   return Array.from(map.values());
 };
 
+export const sanitizeDailyWork = (list) => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map();
+  list.forEach((w) => {
+    if (!w) return;
+    const empId = (w.employeeId || '').toString().trim().toUpperCase();
+    const dateStr = w.date || '';
+    const key = w.id || `${empId}_${dateStr}`;
+    if (!map.has(key)) {
+      map.set(key, w);
+    } else {
+      map.set(key, { ...map.get(key), ...w });
+    }
+  });
+  return Array.from(map.values());
+};
+
+export const sanitizeLeaves = (list) => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map();
+  list.forEach((l) => {
+    if (!l) return;
+    const empId = (l.employeeId || '').toString().trim().toUpperCase();
+    const key = l.id || `${empId}_${l.fromDate}_${l.toDate}`;
+    if (!map.has(key)) {
+      map.set(key, l);
+    } else {
+      map.set(key, { ...map.get(key), ...l });
+    }
+  });
+  return Array.from(map.values());
+};
+
+export const sanitizeAdvances = (list) => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map();
+  list.forEach((a) => {
+    if (!a) return;
+    const empId = (a.employeeId || '').toString().trim().toUpperCase();
+    const dateStr = a.requestDate || a.date || '';
+    const key = a.id || `${empId}_${dateStr}_${a.advanceAmount}`;
+    if (!map.has(key)) {
+      map.set(key, a);
+    } else {
+      map.set(key, { ...map.get(key), ...a });
+    }
+  });
+  return Array.from(map.values());
+};
+
+export const sanitizeLoans = (list) => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map();
+  list.forEach((l) => {
+    if (!l) return;
+    const empId = (l.employeeId || '').toString().trim().toUpperCase();
+    const key = l.id || `${empId}_${l.loanDate}_${l.loanAmount}`;
+    if (!map.has(key)) {
+      map.set(key, l);
+    } else {
+      map.set(key, { ...map.get(key), ...l });
+    }
+  });
+  return Array.from(map.values());
+};
+
 function createEmptyCompanyData(companyId) {
   return {
     employees: [],
@@ -156,11 +222,11 @@ function loadCompanyData(companyId) {
         plants: Array.isArray(parsed.plants) ? parsed.plants : (companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : []),
         employees: Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [],
         attendance: Array.isArray(parsed.attendance) ? sanitizeAttendance(parsed.attendance) : [],
-        leaves: Array.isArray(parsed.leaves) ? parsed.leaves : [],
-        advances: Array.isArray(parsed.advances) ? parsed.advances : [],
-        loans: Array.isArray(parsed.loans) ? parsed.loans : [],
+        leaves: Array.isArray(parsed.leaves) ? sanitizeLeaves(parsed.leaves) : [],
+        advances: Array.isArray(parsed.advances) ? sanitizeAdvances(parsed.advances) : [],
+        loans: Array.isArray(parsed.loans) ? sanitizeLoans(parsed.loans) : [],
         documents: Array.isArray(parsed.documents) ? parsed.documents : [],
-        dailyWork: Array.isArray(parsed.dailyWork) ? parsed.dailyWork : [],
+        dailyWork: Array.isArray(parsed.dailyWork) ? sanitizeDailyWork(parsed.dailyWork) : [],
         payrollRecords: Array.isArray(parsed.payrollRecords) ? parsed.payrollRecords : [],
       };
     }
@@ -266,6 +332,10 @@ export const WorkforceProvider = ({ children }) => {
         ...data,
         employees: sanitizeEmployees(data.employees),
         attendance: sanitizeAttendance(data.attendance),
+        dailyWork: sanitizeDailyWork(data.dailyWork),
+        leaves: sanitizeLeaves(data.leaves),
+        advances: sanitizeAdvances(data.advances),
+        loans: sanitizeLoans(data.loans),
       };
       localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(sanitizedData));
     } catch (err) {
@@ -334,6 +404,14 @@ export const WorkforceProvider = ({ children }) => {
           finalItems = sanitizeEmployees(cloudItems);
         } else if (stateKey === 'attendance' && Array.isArray(cloudItems)) {
           finalItems = sanitizeAttendance(cloudItems);
+        } else if (stateKey === 'dailyWork' && Array.isArray(cloudItems)) {
+          finalItems = sanitizeDailyWork(cloudItems);
+        } else if (stateKey === 'leaves' && Array.isArray(cloudItems)) {
+          finalItems = sanitizeLeaves(cloudItems);
+        } else if (stateKey === 'advances' && Array.isArray(cloudItems)) {
+          finalItems = sanitizeAdvances(cloudItems);
+        } else if (stateKey === 'loans' && Array.isArray(cloudItems)) {
+          finalItems = sanitizeLoans(cloudItems);
         }
         if (isCurrentCompany && Array.isArray(finalItems)) {
           setData((prev) => ({
@@ -1764,31 +1842,58 @@ export const WorkforceProvider = ({ children }) => {
              e.employeeId === workData.employeeId || 
              e.id?.toLowerCase() === workData.employeeId?.toLowerCase()
     );
+    const targetDate = workData.date || new Date().toISOString().split('T')[0];
+    const targetEmpId = (workData.employeeId || emp?.id || '').toString().trim().toUpperCase();
+    const canonicalEmpId = (emp?.employeeId || emp?.id || targetEmpId).toString().trim().toUpperCase();
+    const docId = `WRK-${targetDate.replace(/-/g, '')}-${canonicalEmpId.replace(/[^A-Z0-9_-]/g, '')}`;
+
+    const existingIndex = (data.dailyWork || []).findIndex((w) => {
+      const wDate = w.date;
+      const wEmpId = (w.employeeId || '').toString().trim().toUpperCase();
+      return (w.id === docId) || (wDate === targetDate && (wEmpId === canonicalEmpId || (emp && (wEmpId === (emp.employeeId || '').toUpperCase() || wEmpId === (emp.id || '').toUpperCase()))));
+    });
+
     const newWork = {
-      id: `WRK-${Date.now()}`,
+      ...(existingIndex >= 0 ? data.dailyWork[existingIndex] : {}),
+      id: existingIndex >= 0 ? (data.dailyWork[existingIndex].id || docId) : docId,
       employeeId: workData.employeeId,
       userId: user?.uid || user?.id || null,
       companyId: activeCompanyId,
       employeeName: emp?.name || workData.employeeName || workData.employeeId,
-      date: workData.date || new Date().toISOString().split('T')[0],
+      date: targetDate,
       workDescription: workData.workDescription,
       department: emp?.department || workData.department || 'Operations',
       workType: workData.workType || 'Operational Duty',
       hoursWorked: Number(workData.hoursWorked) || 8,
       remarks: workData.remarks || '',
-      status: workData.status || 'Submitted',
-      supervisorRemarks: null,
-      reviewedBy: null,
-      createdAt: new Date().toISOString(),
+      status: workData.status || (existingIndex >= 0 ? data.dailyWork[existingIndex].status : 'Submitted'),
+      supervisorRemarks: existingIndex >= 0 ? data.dailyWork[existingIndex].supervisorRemarks : null,
+      reviewedBy: existingIndex >= 0 ? data.dailyWork[existingIndex].reviewedBy : null,
+      createdAt: existingIndex >= 0 ? (data.dailyWork[existingIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     await saveDocumentWithId(COLLECTIONS.DAILY_WORK, newWork.id, newWork);
 
-    setData((prev) => ({
-      ...prev,
-      dailyWork: [newWork, ...prev.dailyWork],
-    }));
+    setData((prev) => {
+      const prevList = prev.dailyWork || [];
+      const pIdx = prevList.findIndex((w) => {
+        const wDate = w.date;
+        const wEmpId = (w.employeeId || '').toString().trim().toUpperCase();
+        return (w.id === newWork.id) || (wDate === targetDate && (wEmpId === canonicalEmpId || (emp && (wEmpId === (emp.employeeId || '').toUpperCase() || wEmpId === (emp.id || '').toUpperCase()))));
+      });
+      let updated;
+      if (pIdx >= 0) {
+        updated = [...prevList];
+        updated[pIdx] = { ...prevList[pIdx], ...newWork };
+      } else {
+        updated = [newWork, ...prevList];
+      }
+      return {
+        ...prev,
+        dailyWork: sanitizeDailyWork(updated),
+      };
+    });
 
     addAuditLog(`Submitted Daily Work Log`, 'Daily Work', `${emp?.name || newWork.employeeName} (${newWork.workType})`);
     addNotification({
@@ -2948,13 +3053,24 @@ export const WorkforceProvider = ({ children }) => {
    * 9. UNIVERSAL APPROVALS HUB
    * ------------------------------------------------------------- */
   const pendingApprovals = useMemo(() => {
-    const items = [];
+    const map = new Map();
+
+    const addItem = (item, dedupeKey) => {
+      if (!map.has(dedupeKey)) {
+        map.set(dedupeKey, item);
+      } else {
+        const existing = map.get(dedupeKey);
+        map.set(dedupeKey, { ...existing, ...item });
+      }
+    };
 
     // Leaves
-    data.leaves
+    (data.leaves || [])
       .filter((l) => l.status === 'Pending')
       .forEach((l) => {
-        items.push({
+        const empId = (l.employeeId || '').toString().trim().toUpperCase();
+        const key = l.id || `leave_${empId}_${l.fromDate}_${l.toDate}`;
+        addItem({
           id: l.id,
           type: 'Leave Application',
           requester: l.employeeName,
@@ -2963,30 +3079,35 @@ export const WorkforceProvider = ({ children }) => {
           details: `${l.leaveType} (${l.days} Days: ${l.fromDate} to ${l.toDate}) - ${l.reason}`,
           status: 'Pending',
           category: 'leave',
-        });
+        }, key);
       });
 
     // Advances
-    data.advances
+    (data.advances || [])
       .filter((a) => a.status === 'Pending')
       .forEach((a) => {
-        items.push({
+        const empId = (a.employeeId || '').toString().trim().toUpperCase();
+        const aDate = a.requestDate || a.date;
+        const key = a.id || `advance_${empId}_${aDate}_${a.advanceAmount}`;
+        addItem({
           id: a.id,
           type: 'Salary Advance',
           requester: a.employeeName,
           employeeId: a.employeeId,
-          date: a.requestDate,
-          details: `Requested: ₹ ${a.advanceAmount.toLocaleString('en-IN')} - ${a.reason}`,
+          date: aDate,
+          details: `Requested: ₹ ${Number(a.advanceAmount).toLocaleString('en-IN')} - ${a.reason}`,
           status: 'Pending',
           category: 'advance',
-        });
+        }, key);
       });
 
     // Daily Work
-    data.dailyWork
+    (data.dailyWork || [])
       .filter((w) => w.status === 'Submitted')
       .forEach((w) => {
-        items.push({
+        const empId = (w.employeeId || '').toString().trim().toUpperCase();
+        const key = `work_${empId}_${w.date}`;
+        addItem({
           id: w.id,
           type: 'Daily Work Log',
           requester: w.employeeName,
@@ -2995,30 +3116,34 @@ export const WorkforceProvider = ({ children }) => {
           details: `${w.workType} (${w.hoursWorked} hrs) - ${w.workDescription}`,
           status: 'Pending',
           category: 'work',
-        });
+        }, key);
       });
 
     // Loans
-    data.loans
+    (data.loans || [])
       .filter((l) => l.status === 'Pending')
       .forEach((l) => {
-        items.push({
+        const empId = (l.employeeId || '').toString().trim().toUpperCase();
+        const key = l.id || `loan_${empId}_${l.loanDate}_${l.loanAmount}`;
+        addItem({
           id: l.id,
           type: 'Company Loan',
           requester: l.employeeName,
           employeeId: l.employeeId,
           date: l.loanDate,
-          details: `Loan: ₹ ${l.loanAmount.toLocaleString('en-IN')} (${l.totalEmis} EMIs of ₹ ${l.emiAmount.toLocaleString('en-IN')}) - ${l.reason}`,
+          details: `Loan: ₹ ${Number(l.loanAmount).toLocaleString('en-IN')} (${l.totalEmis} EMIs of ₹ ${Number(l.emiAmount).toLocaleString('en-IN')}) - ${l.reason}`,
           status: 'Pending',
           category: 'loan',
-        });
+        }, key);
       });
 
     // Employee Registrations awaiting Admin verification
-    data.employees
+    (data.employees || [])
       .filter((e) => e.status === EMPLOYEE_STATUS.PENDING_APPROVAL)
       .forEach((e) => {
-        items.push({
+        const empKey = (e.employeeId || e.id || e.email || e.mobile || e.name || '').toString().trim().toUpperCase();
+        const key = `registration_${empKey}`;
+        addItem({
           id: e.id,
           type: 'Employee Verification',
           requester: e.name,
@@ -3028,10 +3153,10 @@ export const WorkforceProvider = ({ children }) => {
           status: 'Pending Approval',
           category: 'registration',
           employee: e,
-        });
+        }, key);
       });
 
-    return items;
+    return Array.from(map.values());
   }, [data.leaves, data.advances, data.dailyWork, data.loans, data.employees]);
 
   const approveRequest = (category, id, action, remarks = '') => {
@@ -3175,10 +3300,10 @@ export const WorkforceProvider = ({ children }) => {
     shifts: data.shifts,
     plants: data.plants || MOCK_PLANTS,
     attendance: sanitizeAttendance(data.attendance),
-    dailyWork: data.dailyWork,
-    leaves: data.leaves,
-    advances: data.advances,
-    loans: data.loans,
+    dailyWork: sanitizeDailyWork(data.dailyWork),
+    leaves: sanitizeLeaves(data.leaves),
+    advances: sanitizeAdvances(data.advances),
+    loans: sanitizeLoans(data.loans),
     payrollRecords: data.payrollRecords,
     documents: data.documents,
     auditLogs: data.auditLogs,
