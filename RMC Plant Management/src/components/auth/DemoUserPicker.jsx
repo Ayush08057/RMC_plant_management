@@ -4,7 +4,6 @@ import { ROLES, SYSTEM_ADMIN, SYSTEM_ROLE_PROFILES, OFFICIAL_ROLE_ACCOUNTS } fro
 
 export default function DemoUserPicker({ onSelectUser, activeRole }) {
   const rolePresets = OFFICIAL_ROLE_ACCOUNTS
-    .filter((acc) => acc.role !== ROLES.OWNER_DIRECTOR)
     .map((acc) => ({
     role: acc.role,
     label: acc.name.split(' ')[0],

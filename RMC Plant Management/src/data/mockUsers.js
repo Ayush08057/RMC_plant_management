@@ -26,7 +26,7 @@ export const ROLE_ROUTES = {
   [ROLES.QC_ENGINEER]: '/qc',
   [ROLES.SITE_SUPERVISOR]: '/site-supervisor',
   [ROLES.DRIVER]: '/driver',
-  [ROLES.OWNER_DIRECTOR]: '/admin',
+  [ROLES.OWNER_DIRECTOR]: '/owner',
 };
 
 export function getRoleRoute(role) {
@@ -40,7 +40,7 @@ export function getRoleRoute(role) {
   if (rLower.includes('qc') || rLower.includes('quality') || rLower.includes('lab')) return '/qc';
   if (rLower.includes('supervisor') || rLower.includes('site')) return '/site-supervisor';
   if (rLower.includes('driver') || rLower.includes('mixer')) return '/driver';
-  if (rLower.includes('owner') || rLower.includes('director')) return '/admin';
+  if (rLower.includes('owner') || rLower.includes('director')) return '/owner';
   return '/plant-manager';
 }
 
@@ -181,15 +181,13 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Executive Leadership',
     badge: 'EXEC',
     avatar: 'OD',
-    portalRoute: '/admin',
+    portalRoute: '/owner',
     phone: '+91 9820000008',
   }),
 ];
 
-// Generic Role Profiles for Role Testing (Owner/Director dashboard excluded from user-facing navigation)
-export const SYSTEM_ROLE_PROFILES = OFFICIAL_ROLE_ACCOUNTS
-  .filter((acc) => acc.role !== ROLES.OWNER_DIRECTOR)
-  .map((acc) => ({
+// Generic Role Profiles for Role Testing
+export const SYSTEM_ROLE_PROFILES = OFFICIAL_ROLE_ACCOUNTS.map((acc) => ({
   role: acc.role,
   title: acc.name,
   route: acc.portalRoute,

@@ -1,4 +1,4 @@
-import defaultLogo from '../assets/logo.png';
+const defaultLogo = '/logo.png';
 
 export const DEFAULT_COMPANIES = [
   {
