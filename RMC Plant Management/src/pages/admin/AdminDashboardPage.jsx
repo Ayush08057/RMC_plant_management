@@ -120,9 +120,9 @@ export default function AdminDashboardPage() {
     return `${year}-${month}-${day}`;
   }, []);
 
-  // Partition attendance records: Today's live records vs Previous days' records
+  // Partition attendance records: Today's live records vs Previous days' records (strictly deduplicated per employee)
   const { todayAttendanceRecords, previousAttendanceByDate, previousDatesList } = useMemo(() => {
-    const todayList = [];
+    const todayMap = new Map();
     const prevMap = {};
 
     (attendance || []).forEach((a) => {
@@ -144,19 +144,56 @@ export default function AdminDashboardPage() {
         if (match) recDate = `${match[1]}-${match[2]}-${match[3]}`;
       }
 
+      // Canonical employee key to guarantee strictly 1 record per staff member
+      const empKey = (a.employeeId || a.id || a.userId || a.employeeName || '').toString().trim().toUpperCase();
+      if (!empKey) return;
+
       if (recDate === todayLocalDateStr) {
-        todayList.push(a);
+        if (!todayMap.has(empKey)) {
+          todayMap.set(empKey, a);
+        } else {
+          // Merge duplicates if already present, keeping the most complete punch
+          const existing = todayMap.get(empKey);
+          todayMap.set(empKey, {
+            ...existing,
+            ...a,
+            punchIn: existing.punchIn || a.punchIn,
+            punchOut: existing.punchOut || a.punchOut,
+            workingHours: (existing.workingHours !== null && existing.workingHours !== undefined) ? existing.workingHours : a.workingHours,
+            gpsLocation: existing.gpsLocation || a.gpsLocation,
+            selfieUrl: existing.selfieUrl || a.selfieUrl,
+            status: (existing.status === 'Present' || a.status === 'Present') ? 'Present' : (a.status || existing.status),
+          });
+        }
       } else {
         const dKey = recDate || 'Previous Dates';
-        if (!prevMap[dKey]) prevMap[dKey] = [];
-        prevMap[dKey].push(a);
+        if (!prevMap[dKey]) prevMap[dKey] = new Map();
+        if (!prevMap[dKey].has(empKey)) {
+          prevMap[dKey].set(empKey, a);
+        } else {
+          const existing = prevMap[dKey].get(empKey);
+          prevMap[dKey].set(empKey, {
+            ...existing,
+            ...a,
+            punchIn: existing.punchIn || a.punchIn,
+            punchOut: existing.punchOut || a.punchOut,
+            workingHours: (existing.workingHours !== null && existing.workingHours !== undefined) ? existing.workingHours : a.workingHours,
+            status: (existing.status === 'Present' || a.status === 'Present') ? 'Present' : (a.status || existing.status),
+          });
+        }
       }
     });
 
-    const datesList = Object.keys(prevMap).sort((a, b) => b.localeCompare(a));
+    const todayList = Array.from(todayMap.values());
+    const finalPrevMap = {};
+    Object.keys(prevMap).forEach((dKey) => {
+      finalPrevMap[dKey] = Array.from(prevMap[dKey].values());
+    });
+    const datesList = Object.keys(finalPrevMap).sort((a, b) => b.localeCompare(a));
+
     return {
       todayAttendanceRecords: todayList,
-      previousAttendanceByDate: prevMap,
+      previousAttendanceByDate: finalPrevMap,
       previousDatesList: datesList,
     };
   }, [attendance, todayLocalDateStr]);

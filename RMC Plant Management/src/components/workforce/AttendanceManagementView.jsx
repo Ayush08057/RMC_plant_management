@@ -82,19 +82,44 @@ export default function AttendanceManagementView({
   const isPlantManager = user?.role === 'Plant Manager' || user?.role === 'Plant Incharge';
   const effectiveFilter = employeeFilter || (!isAdmin ? (user?.employeeId || user?.id || (isPlantManager ? 'PM-001' : null)) : null);
 
-  // Master list of real workforce employees scoped strictly to role permissions
+  // Master list of real workforce employees scoped strictly to role permissions (strictly deduplicated)
   const allEmployeesList = useMemo(() => {
-    let list = employees && employees.length > 0 ? [...employees] : [];
+    const empMap = new Map();
 
-    // Ensure official role accounts are available as fallback
+    (employees || []).forEach((e) => {
+      const key = (e.employeeId || e.id || '').toString().trim().toUpperCase();
+      if (!key) return;
+      empMap.set(key, { ...e, employeeId: e.employeeId || e.id });
+    });
+
+    // Ensure official role accounts are available as fallback without duplicating existing profiles
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
-      const id = (official.employeeId || official.id || '').toUpperCase();
-      const exists = list.some((e) => {
-        const eId = (e.employeeId || e.id || '').toUpperCase();
-        return eId === id;
-      });
-      if (!exists) {
-        list.push({
+      const offEmpId = (official.employeeId || official.id || '').toString().trim().toUpperCase();
+      const offId = (official.id || '').toString().trim().toUpperCase();
+      const offEmail = (official.email || '').toString().trim().toLowerCase();
+      const offName = (official.name || '').toString().trim().toLowerCase();
+
+      let alreadyExists = empMap.has(offEmpId) || (offId && empMap.has(offId));
+      if (!alreadyExists) {
+        for (const existing of empMap.values()) {
+          const eId = (existing.id || '').toString().trim().toUpperCase();
+          const eEmpId = (existing.employeeId || '').toString().trim().toUpperCase();
+          const eEmail = (existing.email || '').toString().trim().toLowerCase();
+          const eName = (existing.name || '').toString().trim().toLowerCase();
+          if (
+            (offEmpId && (eEmpId === offEmpId || eId === offEmpId)) ||
+            (offId && (eEmpId === offId || eId === offId)) ||
+            (offEmail && eEmail === offEmail) ||
+            (offName && eName === offName)
+          ) {
+            alreadyExists = true;
+            break;
+          }
+        }
+      }
+
+      if (!alreadyExists && offEmpId) {
+        empMap.set(offEmpId, {
           id: official.employeeId || official.id,
           employeeId: official.employeeId || official.id,
           name: official.name,
@@ -108,6 +133,18 @@ export default function AttendanceManagementView({
         });
       }
     });
+
+    let list = Array.from(empMap.values());
+
+    // Deduplicate to guarantee strictly 1 profile per distinct person
+    const uniquePersons = new Map();
+    list.forEach((e) => {
+      const canonicalKey = (e.employeeId || e.id || e.name || '').toString().trim().toUpperCase();
+      if (!uniquePersons.has(canonicalKey)) {
+        uniquePersons.set(canonicalKey, e);
+      }
+    });
+    list = Array.from(uniquePersons.values());
 
     // System Admin is an executive root account and is excluded from employee attendance tracking
     list = list.filter((e) => {
@@ -468,23 +505,48 @@ export default function AttendanceManagementView({
     setIsEditingExistingReport(false);
   };
 
-  // Date and Plant Records matching selection (excluding Admin)
-  const dateRecords = attendance.filter((a) => {
-    const isSysAdmin = 
-      (a.role || '').toLowerCase() === 'admin' ||
-      a.employeeId === 'ADM-001' ||
-      a.employeeId === 'USR-ADMIN-001' ||
-      (a.employeeName || '').toLowerCase().includes('system admin');
-    if (isSysAdmin) return false;
+  // Date and Plant Records matching selection (excluding Admin) - strictly deduplicated per employee
+  const dateRecords = useMemo(() => {
+    const map = new Map();
+    (attendance || []).forEach((a) => {
+      const isSysAdmin = 
+        (a.role || '').toLowerCase() === 'admin' ||
+        a.employeeId === 'ADM-001' ||
+        a.employeeId === 'USR-ADMIN-001' ||
+        (a.employeeName || '').toLowerCase().includes('system admin');
+      if (isSysAdmin) return;
 
-    const matchesDate = a.date === selectedDate;
-    const matchesPlant = selectedPlant === 'All Plants' || a.plant === selectedPlant;
-    return matchesDate && matchesPlant;
-  });
+      const matchesDate = a.date === selectedDate;
+      const matchesPlant = selectedPlant === 'All Plants' || a.plant === selectedPlant;
+      if (!matchesDate || !matchesPlant) return;
 
-  const filteredAttendance = dateRecords.filter((a) => {
-    return selectedStatus === 'All' || a.status === selectedStatus;
-  });
+      const empKey = (a.employeeId || a.id || a.employeeName || '').toString().trim().toUpperCase();
+      if (!empKey) return;
+
+      if (!map.has(empKey)) {
+        map.set(empKey, a);
+      } else {
+        const existing = map.get(empKey);
+        map.set(empKey, {
+          ...existing,
+          ...a,
+          punchIn: existing.punchIn || a.punchIn,
+          punchOut: existing.punchOut || a.punchOut,
+          workingHours: (existing.workingHours !== null && existing.workingHours !== undefined) ? existing.workingHours : a.workingHours,
+          gpsLocation: existing.gpsLocation || a.gpsLocation,
+          selfieUrl: existing.selfieUrl || a.selfieUrl,
+          status: (existing.status === 'Present' || a.status === 'Present') ? 'Present' : (a.status || existing.status),
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [attendance, selectedDate, selectedPlant]);
+
+  const filteredAttendance = useMemo(() => {
+    return dateRecords.filter((a) => {
+      return selectedStatus === 'All' || a.status === selectedStatus;
+    });
+  }, [dateRecords, selectedStatus]);
 
   // Dynamic Real-time Attendance Metrics
   const presentCount = dateRecords.filter((a) => a.status === 'Present').length;
@@ -499,10 +561,12 @@ export default function AttendanceManagementView({
   const fiveRolesAttendanceDirectory = useMemo(() => {
     return staffFiveRolesList.map((emp) => {
       const record = attendance.find((a) => {
-        const aId = (a.employeeId || '').toUpperCase();
-        const empId = (emp.id || '').toUpperCase();
-        const empEmpId = (emp.employeeId || '').toUpperCase();
-        return (aId === empId || aId === empEmpId) && a.date === selectedDate;
+        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        const aName = (a.employeeName || '').toString().trim().toLowerCase();
+        const empId = (emp.id || '').toString().trim().toUpperCase();
+        const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
+        const empName = (emp.name || '').toString().trim().toLowerCase();
+        return (aId === empId || aId === empEmpId || (aName && empName && aName === empName)) && a.date === selectedDate;
       });
 
       const hasIn = Boolean(record?.punchIn);

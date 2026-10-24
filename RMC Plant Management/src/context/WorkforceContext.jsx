@@ -92,6 +92,38 @@ export const sanitizeEmployees = (empList) => {
   return empList.filter((e) => !isDummyEmployee(e));
 };
 
+export const sanitizeAttendance = (attList) => {
+  if (!Array.isArray(attList)) return [];
+  const map = new Map();
+  attList.forEach((item) => {
+    if (!item) return;
+    const dateStr = item.date || (item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '');
+    const empId = (item.employeeId || item.id || item.userId || item.employeeName || '').toString().trim().toUpperCase();
+    if (!empId) return;
+
+    const key = `${dateStr}_${empId}`;
+    if (!map.has(key)) {
+      map.set(key, item);
+    } else {
+      const existing = map.get(key);
+      const merged = {
+        ...existing,
+        ...item,
+        punchIn: item.punchIn || existing.punchIn,
+        punchOut: item.punchOut || existing.punchOut,
+        workingHours: (item.workingHours !== null && item.workingHours !== undefined) ? item.workingHours : existing.workingHours,
+        gpsLocation: item.gpsLocation || existing.gpsLocation,
+        selfieUrl: item.selfieUrl || existing.selfieUrl,
+        geofenceStatus: item.geofenceStatus || existing.geofenceStatus,
+        status: (item.status === 'Present' || existing.status === 'Present') ? 'Present' : (item.status || existing.status),
+        lateStatus: item.lateStatus || existing.lateStatus,
+      };
+      map.set(key, merged);
+    }
+  });
+  return Array.from(map.values());
+};
+
 function createEmptyCompanyData(companyId) {
   return {
     employees: [],
@@ -123,7 +155,7 @@ function loadCompanyData(companyId) {
         shifts: Array.isArray(parsed.shifts) ? parsed.shifts : (companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : []),
         plants: Array.isArray(parsed.plants) ? parsed.plants : (companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : []),
         employees: Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [],
-        attendance: Array.isArray(parsed.attendance) ? parsed.attendance : [],
+        attendance: Array.isArray(parsed.attendance) ? sanitizeAttendance(parsed.attendance) : [],
         leaves: Array.isArray(parsed.leaves) ? parsed.leaves : [],
         advances: Array.isArray(parsed.advances) ? parsed.advances : [],
         loans: Array.isArray(parsed.loans) ? parsed.loans : [],
@@ -233,6 +265,7 @@ export const WorkforceProvider = ({ children }) => {
       const sanitizedData = {
         ...data,
         employees: sanitizeEmployees(data.employees),
+        attendance: sanitizeAttendance(data.attendance),
       };
       localStorage.setItem(`${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`, JSON.stringify(sanitizedData));
     } catch (err) {
@@ -281,6 +314,9 @@ export const WorkforceProvider = ({ children }) => {
             }
             cloudItems = sanitizeEmployees(cloudItems);
           }
+          if (stateKey === 'attendance' && Array.isArray(cloudItems)) {
+            cloudItems = sanitizeAttendance(cloudItems);
+          }
           if (isCurrentCompany && Array.isArray(cloudItems)) {
             setData((prev) => ({
               ...prev,
@@ -296,6 +332,8 @@ export const WorkforceProvider = ({ children }) => {
         let finalItems = cloudItems;
         if (stateKey === 'employees' && Array.isArray(cloudItems)) {
           finalItems = sanitizeEmployees(cloudItems);
+        } else if (stateKey === 'attendance' && Array.isArray(cloudItems)) {
+          finalItems = sanitizeAttendance(cloudItems);
         }
         if (isCurrentCompany && Array.isArray(finalItems)) {
           setData((prev) => ({
@@ -1368,9 +1406,16 @@ export const WorkforceProvider = ({ children }) => {
       }
     }
 
-    const existingIndex = data.attendance.findIndex(
-      (a) => a.date === today && (a.employeeId === emp.id || a.employeeId === emp.employeeId || a.employeeId === targetId)
-    );
+    const canonicalEmpId = (emp.employeeId || emp.id || targetId).toString().trim().toUpperCase();
+    const docId = `ATT-${today.replace(/-/g, '')}-${canonicalEmpId.replace(/[^A-Z0-9_-]/g, '')}`;
+
+    const existingIndex = data.attendance.findIndex((a) => {
+      const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+      const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+      const aName = (a.employeeName || '').toString().trim().toLowerCase();
+      const empName = (emp.name || '').toString().trim().toLowerCase();
+      return (a.id === docId) || (aDate === today && (aEmpId === canonicalEmpId || (aName && empName && aName === empName)));
+    });
 
     // Prevent duplicate punch-ins unless explicitly overridden (e.g. by Admin reset)
     if (existingIndex >= 0 && data.attendance[existingIndex]?.punchIn && !options.allowOverride) {
@@ -1380,7 +1425,8 @@ export const WorkforceProvider = ({ children }) => {
     const actualPunchIn = options.time ? formatToIndian12Hr(options.time) : nowTime;
 
     const newRecord = {
-      id: existingIndex >= 0 ? data.attendance[existingIndex].id : `ATT-${today.replace(/-/g, '')}-${emp.employeeId || emp.id}`,
+      ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
+      id: existingIndex >= 0 ? (data.attendance[existingIndex].id || docId) : docId,
       date: today,
       employeeId: emp.employeeId || emp.id,
       userId: user?.uid || user?.id || null,
@@ -1389,15 +1435,15 @@ export const WorkforceProvider = ({ children }) => {
       role: emp.role,
       plant: emp.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
       punchIn: actualPunchIn, // Always record the actual real punch in time
-      punchOut: null, // Starting shift - punch out is null until clocked out
-      workingHours: null,
+      punchOut: existingIndex >= 0 ? data.attendance[existingIndex].punchOut : null, // Starting shift - punch out is null until clocked out
+      workingHours: existingIndex >= 0 ? data.attendance[existingIndex].workingHours : null,
       status: 'Present',
       lateStatus,
       lateMinutes,
       overtimeHours: 0,
       remarks: options.remarks || 'Clocked in via RMC Mobile/Web Console',
       selfieUrl: options.selfieUrl || (existingIndex >= 0 ? data.attendance[existingIndex].selfieUrl : null),
-      gpsLocation: options.gpsLocation || null,
+      gpsLocation: options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null),
       geofenceStatus: options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available'),
       createdAt: existingIndex >= 0 ? (data.attendance[existingIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1407,14 +1453,22 @@ export const WorkforceProvider = ({ children }) => {
     await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
 
     setData((prev) => {
+      const prevList = prev.attendance || [];
+      const pIdx = prevList.findIndex((a) => {
+        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        const aName = (a.employeeName || '').toString().trim().toLowerCase();
+        const empName = (emp.name || '').toString().trim().toLowerCase();
+        return (a.id === newRecord.id) || (aDate === today && (aEmpId === canonicalEmpId || (aName && empName && aName === empName)));
+      });
       let updatedAttendance;
-      if (existingIndex >= 0) {
-        updatedAttendance = [...prev.attendance];
-        updatedAttendance[existingIndex] = newRecord;
+      if (pIdx >= 0) {
+        updatedAttendance = [...prevList];
+        updatedAttendance[pIdx] = { ...prevList[pIdx], ...newRecord };
       } else {
-        updatedAttendance = [newRecord, ...prev.attendance];
+        updatedAttendance = [newRecord, ...prevList];
       }
-      return { ...prev, attendance: updatedAttendance };
+      return { ...prev, attendance: sanitizeAttendance(updatedAttendance) };
     });
 
     addAuditLog(`Punch In (${emp.name})`, 'Attendance', `In: ${actualPunchIn} (${newRecord.geofenceStatus})`);
@@ -1432,23 +1486,30 @@ export const WorkforceProvider = ({ children }) => {
     const today = new Date().toISOString().split('T')[0];
     const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
     const targetId = employeeId || defaultId;
+    const cleanTargetId = targetId.toString().trim().toUpperCase();
 
-    const recordIndex = data.attendance.findIndex(
-      (a) => a.date === today && (
-        a.employeeId === targetId || 
-        a.employeeId?.toLowerCase() === targetId?.toLowerCase()
-      )
-    );
+    const matchingRecords = (data.attendance || []).filter((a) => {
+      const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+      const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+      return aDate === today && (aEmpId === cleanTargetId || a.id?.toUpperCase().includes(cleanTargetId));
+    });
 
-    if (recordIndex >= 0) {
-      const recId = data.attendance[recordIndex].id;
-      try {
-        await removeDocument(COLLECTIONS.ATTENDANCE, recId);
-      } catch (err) {
-        console.error(`Error deleting attendance record ${recId}:`, err);
+    if (matchingRecords.length > 0) {
+      for (const rec of matchingRecords) {
+        if (rec.id) {
+          try {
+            await removeDocument(COLLECTIONS.ATTENDANCE, rec.id);
+          } catch (err) {
+            console.error(`Error deleting attendance record ${rec.id}:`, err);
+          }
+        }
       }
       setData((prev) => {
-        const nextAttendance = prev.attendance.filter((_, idx) => idx !== recordIndex);
+        const nextAttendance = (prev.attendance || []).filter((a) => {
+          const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+          const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+          return !(aDate === today && (aEmpId === cleanTargetId || a.id?.toUpperCase().includes(cleanTargetId)));
+        });
         try {
           const key = `${STORAGE_WORKFORCE_KEY}_${activeCompanyId}`;
           const stored = JSON.parse(localStorage.getItem(key) || '{}');
@@ -1459,7 +1520,7 @@ export const WorkforceProvider = ({ children }) => {
         }
         return {
           ...prev,
-          attendance: nextAttendance,
+          attendance: sanitizeAttendance(nextAttendance),
         };
       });
       addAuditLog(`Reset Attendance (${targetId})`, 'Attendance', `Cleared today's attendance record for fresh live clock-in`);
@@ -1538,9 +1599,16 @@ export const WorkforceProvider = ({ children }) => {
     await saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord);
 
     setData((prev) => {
-      const copy = [...prev.attendance];
-      copy[recordIndex] = updatedRecord;
-      return { ...prev, attendance: copy };
+      const prevList = prev.attendance || [];
+      const pIdx = prevList.findIndex((a) => a.id === updatedRecord.id || (a.date === today && (a.employeeId === emp.id || a.employeeId === emp.employeeId || a.employeeId === targetId)));
+      let copy;
+      if (pIdx >= 0) {
+        copy = [...prevList];
+        copy[pIdx] = updatedRecord;
+      } else {
+        copy = [updatedRecord, ...prevList];
+      }
+      return { ...prev, attendance: sanitizeAttendance(copy) };
     });
 
     addAuditLog(`Punch Out (${emp.name})`, 'Attendance', `Out: ${nowTime} | Worked: ${workingHours}h | OT: ${overtimeHours}h`);
@@ -1562,17 +1630,19 @@ export const WorkforceProvider = ({ children }) => {
     );
 
     const recordDate = attData.date || new Date().toISOString().split('T')[0];
-    const targetEmpId = attData.employeeId;
+    const targetEmpId = (attData.employeeId || '').toString().trim().toUpperCase();
+    const canonicalEmpId = (emp?.employeeId || emp?.id || targetEmpId).toString().trim().toUpperCase();
+    const docId = `ATT-${recordDate.replace(/-/g, '')}-${canonicalEmpId.replace(/[^A-Z0-9_-]/g, '')}`;
 
-    const existingIndex = data.attendance.findIndex(
-      (a) => a.date === recordDate && (
-        a.employeeId === targetEmpId ||
-        a.employeeId?.toLowerCase() === targetEmpId?.toLowerCase() ||
-        (emp && (a.employeeId === emp.id || a.employeeId === emp.employeeId))
-      )
-    );
+    const existingIndex = data.attendance.findIndex((a) => {
+      const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+      const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+      const aName = (a.employeeName || '').toString().trim().toLowerCase();
+      const empName = (emp?.name || attData.employeeName || '').toString().trim().toLowerCase();
+      return (a.id === docId) || (aDate === recordDate && (aEmpId === canonicalEmpId || (aName && empName && aName === empName)));
+    });
 
-    const recordId = existingIndex >= 0 ? data.attendance[existingIndex].id : `ATT-${Date.now().toString().slice(-6)}`;
+    const recordId = existingIndex >= 0 ? (data.attendance[existingIndex].id || docId) : docId;
 
     const newRecord = {
       ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
@@ -1584,11 +1654,11 @@ export const WorkforceProvider = ({ children }) => {
       employeeName: emp?.name || attData.employeeName || attData.employeeId,
       role: emp?.role || attData.role || 'Staff',
       plant: emp?.plant || attData.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
-      punchIn: attData.punchIn ? formatToIndian12Hr(attData.punchIn) : null,
-      punchOut: attData.punchOut ? formatToIndian12Hr(attData.punchOut) : null,
-      workingHours: attData.workingHours !== undefined ? attData.workingHours : null,
+      punchIn: attData.punchIn ? formatToIndian12Hr(attData.punchIn) : (existingIndex >= 0 ? data.attendance[existingIndex].punchIn : null),
+      punchOut: attData.punchOut ? formatToIndian12Hr(attData.punchOut) : (existingIndex >= 0 ? data.attendance[existingIndex].punchOut : null),
+      workingHours: attData.workingHours !== undefined ? attData.workingHours : (existingIndex >= 0 ? data.attendance[existingIndex].workingHours : null),
       overtimeHours: attData.overtimeHours || 0,
-      status: attData.status || 'Present',
+      status: attData.status || (existingIndex >= 0 ? data.attendance[existingIndex].status : 'Present'),
       lateStatus: attData.lateStatus || false,
       lateMinutes: attData.lateMinutes || 0,
       remarks: attData.remarks || 'Admin Manual Entry',
@@ -1600,14 +1670,22 @@ export const WorkforceProvider = ({ children }) => {
     await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
 
     setData((prev) => {
+      const prevList = prev.attendance || [];
+      const pIdx = prevList.findIndex((a) => {
+        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        const aName = (a.employeeName || '').toString().trim().toLowerCase();
+        const empName = (emp?.name || attData.employeeName || '').toString().trim().toLowerCase();
+        return (a.id === newRecord.id) || (aDate === recordDate && (aEmpId === canonicalEmpId || (aName && empName && aName === empName)));
+      });
       let updated;
-      if (existingIndex >= 0) {
-        updated = [...prev.attendance];
-        updated[existingIndex] = newRecord;
+      if (pIdx >= 0) {
+        updated = [...prevList];
+        updated[pIdx] = { ...prevList[pIdx], ...newRecord };
       } else {
-        updated = [newRecord, ...prev.attendance];
+        updated = [newRecord, ...prevList];
       }
-      return { ...prev, attendance: updated };
+      return { ...prev, attendance: sanitizeAttendance(updated) };
     });
     addAuditLog(`Attendance Saved (${newRecord.employeeName})`, 'Attendance', `${newRecord.date} | In: ${newRecord.punchIn || '--'} | Out: ${newRecord.punchOut || '--'}`);
     return newRecord;
@@ -3096,7 +3174,7 @@ export const WorkforceProvider = ({ children }) => {
     employees: sanitizeEmployees(data.employees),
     shifts: data.shifts,
     plants: data.plants || MOCK_PLANTS,
-    attendance: data.attendance,
+    attendance: sanitizeAttendance(data.attendance),
     dailyWork: data.dailyWork,
     leaves: data.leaves,
     advances: data.advances,
