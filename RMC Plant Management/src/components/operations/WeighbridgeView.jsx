@@ -20,7 +20,8 @@ import {
   Radio,
   Zap,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Droplet
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useLanguage } from '../../context/LanguageContext';
@@ -97,6 +98,27 @@ export default function WeighbridgeView() {
   const [scaleSimulationActive, setScaleSimulationActive] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  // Chemical barrel intake state (220L standard)
+  const [chemicalBarrels, setChemicalBarrels] = useState(5);
+  const [barrelCapacity, setBarrelCapacity] = useState(220);
+  const [partialLiters, setPartialLiters] = useState(0);
+
+  // Live Silo Stock state
+  const [siloStock, setSiloStock] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return INITIAL_SILO_STOCK;
+  });
+
+  useEffect(() => {
+    const unsubSilo = subscribeCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, INITIAL_SILO_STOCK, (data) => {
+      if (data && typeof data === 'object') setSiloStock(data);
+    });
+    return () => unsubSilo();
+  }, []);
+
   // 2nd Tare Weight entry state
   const [secondTareKg, setSecondTareKg] = useState('');
 
@@ -125,8 +147,19 @@ export default function WeighbridgeView() {
     setTimeout(() => setToastMessage(''), 3500);
   };
 
+  // Calculated Chemical Barrel Volume
+  const calculatedChemVolume = useMemo(() => {
+    const full = Math.max(0, parseInt(chemicalBarrels, 10) || 0);
+    const cap = Math.max(0, Number(barrelCapacity) || 220);
+    const part = Math.max(0, Number(partialLiters) || 0);
+    return full * cap + part;
+  }, [chemicalBarrels, barrelCapacity, partialLiters]);
+
   // Live Calculated Net Weight for the New Modal
   const calculatedNetKg = useMemo(() => {
+    if (weightMode === 'chemical_barrels') {
+      return calculatedChemVolume;
+    }
     if (weightMode === 'direct_net') {
       return Number(directNetKg) || 0;
     }
@@ -134,7 +167,7 @@ export default function WeighbridgeView() {
     const t = Number(tareKg) || 0;
     if (isPendingTare) return 0;
     return Math.max(0, g - t);
-  }, [weightMode, directNetKg, grossKg, tareKg, isPendingTare]);
+  }, [weightMode, directNetKg, grossKg, tareKg, isPendingTare, calculatedChemVolume]);
 
   const calculatedNetTons = useMemo(() => {
     return (calculatedNetKg / 1000).toFixed(2);
@@ -185,16 +218,72 @@ export default function WeighbridgeView() {
     setIsNewModalOpen(true);
   };
 
+  const handleOpenChemicalModal = () => {
+    setFormType('Inward');
+    setWeightMode('chemical_barrels');
+    setVehicleNo('CHEM-DELIVERY');
+    setPartyName('Fosroc Chemicals India');
+    setMaterial('Chemical Admixture (PCE)');
+    setDriverName('Chemical Delivery Agent');
+    setChemicalBarrels(5);
+    setBarrelCapacity(220);
+    setPartialLiters(0);
+    setIsPendingTare(false);
+    setRemarks('Standard 220L chemical barrels delivery');
+    setIsNewModalOpen(true);
+  };
 
   // Helper to sync Weighbridge inward weighments with Silo Inventory
   const updateSiloInventoryForWeighment = (materialName, netKg, slipNo, vehNo, party, isReversal = false) => {
     try {
+      const factor = isReversal ? -1 : 1;
+      const matLower = (materialName || '').toLowerCase();
+
+      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
+
+      // Handle Chemical Admixtures (in Litres)
+      if (matLower.includes('chemical') || matLower.includes('admixture') || matLower.includes('pce') || matLower.includes('retarder')) {
+        const liters = Number(netKg) || 0;
+        const curL = Number(siloData.admixturePce?.stockLiters) || 3200;
+        siloData.admixturePce.stockLiters = Math.max(0, curL + factor * liters);
+        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
+        setSiloStock({ ...siloData });
+
+        const rawChem = localStorage.getItem(STORAGE_KEYS.CHEMICAL_BARRELS);
+        let chemData = rawChem ? JSON.parse(rawChem) : [];
+        if (isReversal) {
+          chemData = chemData.filter((c) => c.entryNo !== `#${slipNo}` && c.entryNo !== slipNo);
+        } else {
+          chemData = [
+            {
+              id: `CHEM-WB-${Date.now()}`,
+              entryNo: `#${slipNo}`,
+              date: new Date().toISOString().split('T')[0],
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              chemicalName: materialName,
+              supplier: party,
+              barrelCapacity: 220,
+              fullBarrels: Math.floor(liters / 220) || 1,
+              partialLiters: liters % 220,
+              totalVolumeLiters: liters,
+              recordedBy: 'Weighbridge Operator',
+              remarks: 'Recorded via Weighbridge Terminal',
+            },
+            ...chemData,
+          ];
+        }
+        localStorage.setItem(STORAGE_KEYS.CHEMICAL_BARRELS, JSON.stringify(chemData));
+        pushCloudStore('cloud_chemical_barrels', STORAGE_KEYS.CHEMICAL_BARRELS, chemData);
+        return;
+      }
+
+      // Handle Solid Aggregates / Sand / Cement (in Tons)
       const netTons = Number(((netKg || 0) / 1000).toFixed(2));
       if (netTons <= 0) return;
-      const factor = isReversal ? -1 : 1;
 
       let targetKey = 'agg20';
-      const matLower = (materialName || '').toLowerCase();
       if (matLower.includes('cement')) targetKey = 'cement';
       else if (matLower.includes('fly ash') || matLower.includes('pozzocrete')) targetKey = 'flyash';
       else if (matLower.includes('10mm')) targetKey = 'agg10';
@@ -202,13 +291,12 @@ export default function WeighbridgeView() {
       else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
       else if (matLower.includes('river sand')) targetKey = 'riverSand';
 
-      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
-      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
       if (siloData[targetKey]) {
         const cur = Number(siloData[targetKey].stockTons) || 0;
         siloData[targetKey].stockTons = Math.max(0, Number((cur + factor * netTons).toFixed(2)));
         localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
         pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
+        setSiloStock({ ...siloData });
       }
 
       // Sync with Inward slips
@@ -242,7 +330,7 @@ export default function WeighbridgeView() {
 
   const handleSubmitNewWeighment = (e, shouldPrint = false) => {
     e.preventDefault();
-    if (!vehicleNo.trim()) {
+    if (!vehicleNo.trim() && weightMode !== 'chemical_barrels') {
       showToast('Please enter a vehicle registration number.');
       return;
     }
@@ -256,8 +344,16 @@ export default function WeighbridgeView() {
     let finalTare = Number(tareKg) || 0;
     let finalNet = calculatedNetKg;
     let slipStatus = 'Completed';
+    let slipUnit = 'Tons';
+    let barrelDetails = null;
 
-    if (weightMode === 'direct_net') {
+    if (weightMode === 'chemical_barrels') {
+      finalNet = calculatedChemVolume;
+      finalGross = finalNet;
+      finalTare = 0;
+      slipUnit = 'Litres';
+      barrelDetails = `${chemicalBarrels} Barrels × ${barrelCapacity}L` + (partialLiters > 0 ? ` (+${partialLiters}L)` : '');
+    } else if (weightMode === 'direct_net') {
       finalNet = Number(directNetKg) || 0;
       finalGross = finalNet;
       finalTare = 0;
@@ -275,14 +371,15 @@ export default function WeighbridgeView() {
       type: formType,
       date: dateStr,
       time: timeStr,
-      vehicleNo: vehicleNo.trim().toUpperCase(),
+      vehicleNo: (vehicleNo || 'CHEM-DELIVERY').trim().toUpperCase(),
       partyName: partyName.trim() || 'General Party / Counter Sale',
       material,
       driverName: driverName.trim() || 'Plant Driver',
       grossKg: finalGross,
       tareKg: finalTare,
       netKg: finalNet,
-      unit: 'Tons',
+      unit: slipUnit,
+      barrelDetails,
       status: slipStatus,
       remarks: remarks.trim() || 'Standard weighment recorded',
       inventoryUpdated: isCompletedInward,
@@ -477,6 +574,40 @@ export default function WeighbridgeView() {
         </div>
       </div>
 
+      {/* Live Plant Material Stock Status Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">Cement Silo #01</div>
+          <div className="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5">
+            {siloStock?.cement?.stockTons ?? 85.4} MT
+          </div>
+        </div>
+        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">20mm Aggregate</div>
+          <div className="text-xs sm:text-sm font-black text-emerald-800 font-mono mt-0.5">
+            {siloStock?.agg20?.stockTons ?? 148.0} MT
+          </div>
+        </div>
+        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">10mm Aggregate</div>
+          <div className="text-xs sm:text-sm font-black text-blue-800 font-mono mt-0.5">
+            {siloStock?.agg10?.stockTons ?? 110.0} MT
+          </div>
+        </div>
+        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">M-Sand (वाळू)</div>
+          <div className="text-xs sm:text-sm font-black text-indigo-800 font-mono mt-0.5">
+            {siloStock?.sand?.stockTons ?? 180.5} MT
+          </div>
+        </div>
+        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
+          <div className="text-[10px] text-purple-700 font-bold uppercase truncate">Chemical (२२०L)</div>
+          <div className="text-xs sm:text-sm font-black text-purple-900 font-mono mt-0.5">
+            {(Number(siloStock?.admixturePce?.stockLiters || 3200) + Number(siloStock?.retarder?.stockLiters || 1100)).toLocaleString('en-IN')} L
+          </div>
+        </div>
+      </div>
+
       {/* Main Table Toolbar & Primary Action */}
       <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-2xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -533,13 +664,13 @@ export default function WeighbridgeView() {
 
           {/* Search & Main Add Weighment CTA */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-60">
+            <div className="relative flex-1 sm:w-52">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={isMarathi ? 'पावती, गाडी, ग्राहक शोधा...' : 'Search slip, truck, party...'}
+                placeholder={isMarathi ? 'पावती, गाडी शोधा...' : 'Search slip, truck...'}
                 className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
               />
             </div>
@@ -552,6 +683,17 @@ export default function WeighbridgeView() {
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>{isMarathi ? 'नवीन वजन पावती' : 'New Weighment Slip'}</span>
+            </button>
+
+            {/* QUICK CHEMICAL BARRELS BUTTON */}
+            <button
+              type="button"
+              onClick={handleOpenChemicalModal}
+              className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 active:scale-95"
+              title="Record incoming 220L chemical barrels"
+            >
+              <Droplet className="w-3.5 h-3.5" />
+              <span>{isMarathi ? 'केमिकल (२२०L)' : 'Chemical Barrels'}</span>
             </button>
           </div>
         </div>
@@ -674,6 +816,15 @@ export default function WeighbridgeView() {
                           >
                             + Weigh Tare
                           </button>
+                        ) : s.unit === 'Litres' ? (
+                          <div>
+                            <span className="font-black text-purple-700 text-xs block font-mono">
+                              {Number(s.netKg || 0).toLocaleString('en-IN')} L
+                            </span>
+                            <span className="text-[10px] text-purple-600 font-sans font-medium block">
+                              {s.barrelDetails || 'Chemical Barrels'}
+                            </span>
+                          </div>
                         ) : (
                           <div>
                             <span className="font-black text-emerald-700 text-xs block">
@@ -871,7 +1022,7 @@ export default function WeighbridgeView() {
                   </div>
 
                   {/* Mode switcher tabs */}
-                  <div className="flex items-center p-0.5 rounded-lg bg-blue-100 border border-blue-200 text-[10px]">
+                  <div className="flex items-center p-0.5 rounded-lg bg-blue-100 border border-blue-200 text-[10px] flex-wrap gap-1">
                     <button
                       type="button"
                       onClick={() => setWeightMode('gross_tare')}
@@ -879,7 +1030,7 @@ export default function WeighbridgeView() {
                         weightMode === 'gross_tare' ? 'bg-white text-blue-900 shadow-2xs' : 'text-blue-700 hover:text-blue-900'
                       }`}
                     >
-                      Gross & Tare (Auto Net)
+                      Gross & Tare (काटा १ & २)
                     </button>
                     <button
                       type="button"
@@ -888,7 +1039,20 @@ export default function WeighbridgeView() {
                         weightMode === 'direct_net' ? 'bg-white text-blue-900 shadow-2xs' : 'text-blue-700 hover:text-blue-900'
                       }`}
                     >
-                      Direct Net (निव्वळ वजन)
+                      Direct Net (निव्वळ)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeightMode('chemical_barrels');
+                        setMaterial('Chemical Admixture (PCE)');
+                      }}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        weightMode === 'chemical_barrels' ? 'bg-purple-700 text-white shadow-2xs' : 'text-purple-800 hover:text-purple-950'
+                      }`}
+                    >
+                      <Droplet className="w-3 h-3" />
+                      <span>Chemical Barrels (२२०L)</span>
                     </button>
                   </div>
                 </div>
@@ -983,6 +1147,53 @@ export default function WeighbridgeView() {
                       </label>
                     </div>
                   </>
+                ) : weightMode === 'chemical_barrels' ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Full Barrels (२२०L बॅरल्स संख्या) *
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={chemicalBarrels}
+                          onChange={(e) => setChemicalBarrels(Math.max(1, parseInt(e.target.value) || 0))}
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-sm font-black text-slate-900 focus:border-purple-600 focus:outline-none"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Capacity / Barrel (प्रति बॅरल लिटर)
+                        </label>
+                        <input
+                          type="number"
+                          value={barrelCapacity}
+                          onChange={(e) => setBarrelCapacity(Number(e.target.value) || 220)}
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-sm font-bold text-slate-900 focus:border-purple-600 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Partial Litres (शिल्लक लिटर)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={partialLiters}
+                          onChange={(e) => setPartialLiters(Number(e.target.value) || 0)}
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-sm font-bold text-slate-900 focus:border-purple-600 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Formula Calculation Note */}
+                    <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-xs flex items-center justify-between font-mono">
+                      <span>हिशोब: ({chemicalBarrels} Barrels × {barrelCapacity} L) + {partialLiters} L</span>
+                      <strong className="text-sm font-black text-purple-800">{calculatedChemVolume.toLocaleString('en-IN')} Litres</strong>
+                    </div>
+                  </div>
                 ) : (
                   <div>
                     {/* Direct Net Weight */}
@@ -1020,19 +1231,29 @@ export default function WeighbridgeView() {
                 )}
 
                 {/* REAL-TIME CALCULATED NET WEIGHT BANNER */}
-                <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between shadow-xs">
+                <div className={`p-3 rounded-xl text-white flex items-center justify-between shadow-xs ${
+                  weightMode === 'chemical_barrels' ? 'bg-gradient-to-r from-purple-700 to-indigo-800' : 'bg-gradient-to-r from-emerald-600 to-teal-700'
+                }`}>
                   <div>
                     <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-200 block">
-                      Calculated Net Weight (निव्वळ माल वजन)
+                      {weightMode === 'chemical_barrels' ? 'Total Chemical Intake (एकूण लिटर आवक)' : 'Calculated Net Weight (निव्वळ माल वजन)'}
                     </span>
                     <div className="text-lg font-black font-mono tracking-tight">
-                      {isPendingTare ? 'PENDING TARE WEIGHMENT' : `${calculatedNetKg.toLocaleString('en-IN')} KG`}
+                      {isPendingTare
+                        ? 'PENDING TARE WEIGHMENT'
+                        : weightMode === 'chemical_barrels'
+                          ? `${calculatedChemVolume.toLocaleString('en-IN')} LITRES`
+                          : `${calculatedNetKg.toLocaleString('en-IN')} KG`}
                     </div>
                   </div>
                   {!isPendingTare && (
                     <div className="text-right">
-                      <span className="text-[10px] uppercase font-bold text-emerald-200 block">Metric Tons</span>
-                      <span className="text-xl font-black font-mono text-amber-300">{calculatedNetTons} MT</span>
+                      <span className="text-[10px] uppercase font-bold text-emerald-200 block">
+                        {weightMode === 'chemical_barrels' ? 'Barrel Package' : 'Metric Tons'}
+                      </span>
+                      <span className="text-xl font-black font-mono text-amber-300">
+                        {weightMode === 'chemical_barrels' ? `${chemicalBarrels} × ${barrelCapacity}L` : `${calculatedNetTons} MT`}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1292,32 +1513,51 @@ export default function WeighbridgeView() {
 
               {/* The Certified Weight Breakdown Box */}
               <div className="p-3 rounded-xl bg-slate-100 border border-slate-300 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-slate-700">1. GROSS WEIGHT (भरलेली गाडी):</span>
-                  <span className="font-bold text-slate-900">
-                    {Number(activePrintSlip.grossKg).toLocaleString('en-IN')} KG
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-slate-700">2. TARE WEIGHT (रिकामी गाडी):</span>
-                  <span className="font-bold text-slate-900">
-                    {activePrintSlip.status === 'Pending Tare'
-                      ? 'PENDING'
-                      : `${Number(activePrintSlip.tareKg).toLocaleString('en-IN')} KG`}
-                  </span>
-                </div>
-                <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm">
-                  <span className="font-black text-slate-900 uppercase">3. NET WEIGHT (निव्वळ वजन):</span>
-                  <span className="font-black text-emerald-800 text-base">
-                    {activePrintSlip.status === 'Pending Tare'
-                      ? 'PENDING'
-                      : `${Number(activePrintSlip.netKg).toLocaleString('en-IN')} KG`}
-                  </span>
-                </div>
-                {activePrintSlip.status !== 'Pending Tare' && (
-                  <div className="text-right text-xs font-bold text-emerald-700">
-                    = {((activePrintSlip.netKg || 0) / 1000).toFixed(2)} METRIC TONS
-                  </div>
+                {activePrintSlip.unit === 'Litres' ? (
+                  <>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-slate-700">PACKAGE TYPE (पॅकेजिंग):</span>
+                      <span className="font-bold text-purple-900">
+                        {activePrintSlip.barrelDetails || 'Chemical 220L Barrels'}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm">
+                      <span className="font-black text-slate-900 uppercase">CERTIFIED VOLUME (एकूण लिटर):</span>
+                      <span className="font-black text-purple-900 text-base">
+                        {Number(activePrintSlip.netKg).toLocaleString('en-IN')} LITRES
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-slate-700">1. GROSS WEIGHT (भरलेली गाडी):</span>
+                      <span className="font-bold text-slate-900">
+                        {Number(activePrintSlip.grossKg).toLocaleString('en-IN')} KG
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-slate-700">2. TARE WEIGHT (रिकामी गाडी):</span>
+                      <span className="font-bold text-slate-900">
+                        {activePrintSlip.status === 'Pending Tare'
+                          ? 'PENDING'
+                          : `${Number(activePrintSlip.tareKg).toLocaleString('en-IN')} KG`}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm">
+                      <span className="font-black text-slate-900 uppercase">3. NET WEIGHT (निव्वळ वजन):</span>
+                      <span className="font-black text-emerald-800 text-base">
+                        {activePrintSlip.status === 'Pending Tare'
+                          ? 'PENDING'
+                          : `${Number(activePrintSlip.netKg).toLocaleString('en-IN')} KG`}
+                      </span>
+                    </div>
+                    {activePrintSlip.status !== 'Pending Tare' && (
+                      <div className="text-right text-xs font-bold text-emerald-700">
+                        = {((activePrintSlip.netKg || 0) / 1000).toFixed(2)} METRIC TONS
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
