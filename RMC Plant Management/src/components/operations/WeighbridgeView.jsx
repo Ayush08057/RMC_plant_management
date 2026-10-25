@@ -21,7 +21,9 @@ import {
   Zap,
   ArrowRight,
   ShieldCheck,
-  Droplet
+  Droplet,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useLanguage } from '../../context/LanguageContext';
@@ -103,7 +105,8 @@ export default function WeighbridgeView() {
   const [barrelCapacity, setBarrelCapacity] = useState(220);
   const [partialLiters, setPartialLiters] = useState(0);
 
-  // Live Silo Stock state
+  // Live Silo Stock state & Reducible strip toggle
+  const [isStockReduced, setIsStockReduced] = useState(false);
   const [siloStock, setSiloStock] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
@@ -569,39 +572,79 @@ export default function WeighbridgeView() {
         </div>
       </div>
 
-      {/* Live Plant Material Stock Status Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">Cement Silo #01</div>
-          <div className="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5">
-            {siloStock?.cement?.stockTons ?? 85.4} MT
+      {/* Live Plant Material Stock Status Strip (Reducible / Collapsible) */}
+      {isStockReduced ? (
+        <div className="bg-white p-2.5 px-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between text-xs">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[10px] text-slate-500 font-bold uppercase font-mono">Live Silo Stock:</span>
+            <span className="font-mono font-bold text-slate-900">Cement: {siloStock?.cement?.stockTons ?? 85.4} MT</span>
+            <span className="text-slate-300">•</span>
+            <span className="font-mono font-bold text-emerald-800">20mm: {siloStock?.agg20?.stockTons ?? 148.0} MT</span>
+            <span className="text-slate-300">•</span>
+            <span className="font-mono font-bold text-blue-800">10mm: {siloStock?.agg10?.stockTons ?? 110.0} MT</span>
+            <span className="text-slate-300">•</span>
+            <span className="font-mono font-bold text-indigo-800">M-Sand: {siloStock?.sand?.stockTons ?? 180.5} MT</span>
+            <span className="text-slate-300">•</span>
+            <span className="font-mono font-bold text-purple-800">Chemical: {(Number(siloStock?.admixturePce?.stockLiters || 3200) + Number(siloStock?.retarder?.stockLiters || 1100)).toLocaleString('en-IN')} L</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsStockReduced(false)}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer shrink-0"
+            title="Expand silo boxes"
+          >
+            <span>Expand Stock</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] text-slate-500 font-mono font-bold uppercase">Plant Storage Silos Stock</span>
+            <button
+              type="button"
+              onClick={() => setIsStockReduced(true)}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
+              title="Reduce stock strip"
+            >
+              <span>Reduce Stock</span>
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="text-[10px] text-slate-500 font-bold uppercase truncate">Cement Silo #01</div>
+              <div className="text-xs sm:text-sm font-black text-slate-900 font-mono mt-0.5">
+                {siloStock?.cement?.stockTons ?? 85.4} MT
+              </div>
+            </div>
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="text-[10px] text-slate-500 font-bold uppercase truncate">20mm Aggregate</div>
+              <div className="text-xs sm:text-sm font-black text-emerald-800 font-mono mt-0.5">
+                {siloStock?.agg20?.stockTons ?? 148.0} MT
+              </div>
+            </div>
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="text-[10px] text-slate-500 font-bold uppercase truncate">10mm Aggregate</div>
+              <div className="text-xs sm:text-sm font-black text-blue-800 font-mono mt-0.5">
+                {siloStock?.agg10?.stockTons ?? 110.0} MT
+              </div>
+            </div>
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="text-[10px] text-slate-500 font-bold uppercase truncate">M-Sand (वाळू)</div>
+              <div className="text-xs sm:text-sm font-black text-indigo-800 font-mono mt-0.5">
+                {siloStock?.sand?.stockTons ?? 180.5} MT
+              </div>
+            </div>
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
+              <div className="text-[10px] text-purple-700 font-bold uppercase truncate">Chemical (२२०L)</div>
+              <div className="text-xs sm:text-sm font-black text-purple-900 font-mono mt-0.5">
+                {(Number(siloStock?.admixturePce?.stockLiters || 3200) + Number(siloStock?.retarder?.stockLiters || 1100)).toLocaleString('en-IN')} L
+              </div>
+            </div>
           </div>
         </div>
-        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">20mm Aggregate</div>
-          <div className="text-xs sm:text-sm font-black text-emerald-800 font-mono mt-0.5">
-            {siloStock?.agg20?.stockTons ?? 148.0} MT
-          </div>
-        </div>
-        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">10mm Aggregate</div>
-          <div className="text-xs sm:text-sm font-black text-blue-800 font-mono mt-0.5">
-            {siloStock?.agg10?.stockTons ?? 110.0} MT
-          </div>
-        </div>
-        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] text-slate-500 font-bold uppercase truncate">M-Sand (वाळू)</div>
-          <div className="text-xs sm:text-sm font-black text-indigo-800 font-mono mt-0.5">
-            {siloStock?.sand?.stockTons ?? 180.5} MT
-          </div>
-        </div>
-        <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-          <div className="text-[10px] text-purple-700 font-bold uppercase truncate">Chemical (२२०L)</div>
-          <div className="text-xs sm:text-sm font-black text-purple-900 font-mono mt-0.5">
-            {(Number(siloStock?.admixturePce?.stockLiters || 3200) + Number(siloStock?.retarder?.stockLiters || 1100)).toLocaleString('en-IN')} L
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Main Table Toolbar & Primary Action */}
       <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-2xs space-y-3">

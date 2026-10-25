@@ -35,6 +35,8 @@ import {
   Clock,
   ArrowRight,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Factory,
   XCircle,
   Calendar,
@@ -67,6 +69,7 @@ export default function AdminDashboardPage() {
   const [triggerMarkAttendance, setTriggerMarkAttendance] = useState(false);
   const [triggerMobileAttendance, setTriggerMobileAttendance] = useState(false);
   const [activeKpiModal, setActiveKpiModal] = useState(null);
+  const [kpisReduced, setKpisReduced] = useState(false);
   const { 
     employees, 
     plants,
@@ -716,58 +719,110 @@ export default function AdminDashboardPage() {
             </button>
           </div>
 
-          {/* 4 Primary Phase 1 KPI Cards — Unified Royal Executive Theme */}
-          <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 shrink-0">
-            <KPICard
-              title="Total Workforce"
-              value={employees.length}
-              subtext={`${employees.filter((e) => e.status === 'Active').length} Active Duty`}
-              trend={`${employees.length} Enrolled`}
-              trendType="up"
-              color="indigo"
-              icon={Users}
-              onClick={() => setActiveKpiModal('workforce')}
-            />
-            <KPICard
-              title="Today's Attendance"
-              value={`${todayAttendanceRecords.filter((a) => a.status === 'Present').length} Present`}
-              subtext={
-                todayAttendanceRecords.length > 0
-                  ? `${todayAttendanceRecords.filter((a) => a.lateStatus).length} Late Arrivals Today`
-                  : previousDatesList.length > 0
-                    ? `0 marked today • ${previousDatesList.length} past dates`
-                    : 'Awaiting shift clock-ins'
-              }
-              trend="Biometric Sync"
-              trendType="up"
-              color="emerald"
-              icon={Building2}
-              onClick={() => {
-                setAttendanceViewTab(todayAttendanceRecords.length > 0 ? 'TODAY' : (previousDatesList.length > 0 ? 'PREVIOUS' : 'TODAY'));
-                setActiveKpiModal('attendance');
-              }}
-            />
-            <KPICard
-              title="Pending Approvals"
-              value={`${pendingApprovals.length} Requests`}
-              subtext="Leaves, advances & work"
-              trend="Action Needed"
-              trendType={pendingApprovals.length > 0 ? 'down' : 'up'}
-              color="amber"
-              icon={ShieldCheck}
-              onClick={() => setActiveKpiModal('approvals')}
-            />
-            <KPICard
-              title="Payroll Status"
-              value={payrollRecords.length > 0 ? `${payrollRecords.length} Slips` : 'Draft'}
-              subtext="October 2026 Ready"
-              trend="Audited"
-              trendType="up"
-              color="purple"
-              icon={KeyRound}
-              onClick={() => setActiveKpiModal('payroll')}
-            />
-          </section>
+          {/* 4 Primary Phase 1 KPI Cards — Reducible / Collapsible */}
+          {kpisReduced ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-2.5 px-4 shadow-2xs flex items-center justify-between text-xs shrink-0">
+              <div className="flex items-center gap-3.5 flex-wrap">
+                <span className="flex items-center gap-1.5 text-indigo-900 font-bold">
+                  <Users className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Workforce:</span>
+                  <span className="font-mono">{employees.length}</span>
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="flex items-center gap-1.5 text-emerald-900 font-bold">
+                  <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Attendance:</span>
+                  <span className="font-mono">{todayAttendanceRecords.filter((a) => a.status === 'Present').length} Present</span>
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="flex items-center gap-1.5 text-amber-900 font-bold">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Pending:</span>
+                  <span className="font-mono">{pendingApprovals.length} Requests</span>
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="flex items-center gap-1.5 text-purple-900 font-bold">
+                  <KeyRound className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Payroll:</span>
+                  <span className="font-mono">{payrollRecords.length > 0 ? `${payrollRecords.length} Slips` : 'Draft'}</span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKpisReduced(false)}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer shrink-0"
+                title="Expand KPI metrics"
+              >
+                <span>Expand Metrics</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <section className="space-y-1 shrink-0">
+              <div className="flex items-center justify-end px-1">
+                <button
+                  type="button"
+                  onClick={() => setKpisReduced(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
+                  title="Reduce KPI cards"
+                >
+                  <span>Reduce Metrics</span>
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
+                <KPICard
+                  title="Total Workforce"
+                  value={employees.length}
+                  subtext={`${employees.filter((e) => e.status === 'Active').length} Active Duty`}
+                  trend={`${employees.length} Enrolled`}
+                  trendType="up"
+                  color="indigo"
+                  icon={Users}
+                  onClick={() => setActiveKpiModal('workforce')}
+                />
+                <KPICard
+                  title="Today's Attendance"
+                  value={`${todayAttendanceRecords.filter((a) => a.status === 'Present').length} Present`}
+                  subtext={
+                    todayAttendanceRecords.length > 0
+                      ? `${todayAttendanceRecords.filter((a) => a.lateStatus).length} Late Arrivals Today`
+                      : previousDatesList.length > 0
+                        ? `0 marked today • ${previousDatesList.length} past dates`
+                        : 'Awaiting shift clock-ins'
+                  }
+                  trend="Biometric Sync"
+                  trendType="up"
+                  color="emerald"
+                  icon={Building2}
+                  onClick={() => {
+                    setAttendanceViewTab(todayAttendanceRecords.length > 0 ? 'TODAY' : (previousDatesList.length > 0 ? 'PREVIOUS' : 'TODAY'));
+                    setActiveKpiModal('attendance');
+                  }}
+                />
+                <KPICard
+                  title="Pending Approvals"
+                  value={`${pendingApprovals.length} Requests`}
+                  subtext="Leaves, advances & work"
+                  trend="Action Needed"
+                  trendType={pendingApprovals.length > 0 ? 'down' : 'up'}
+                  color="amber"
+                  icon={ShieldCheck}
+                  onClick={() => setActiveKpiModal('approvals')}
+                />
+                <KPICard
+                  title="Payroll Status"
+                  value={payrollRecords.length > 0 ? `${payrollRecords.length} Slips` : 'Draft'}
+                  subtext="October 2026 Ready"
+                  trend="Audited"
+                  trendType="up"
+                  color="purple"
+                  icon={KeyRound}
+                  onClick={() => setActiveKpiModal('payroll')}
+                />
+              </div>
+            </section>
+          )}
 
           {/* Primary Operations Table: Plant Facilities Network */}
           <section>
