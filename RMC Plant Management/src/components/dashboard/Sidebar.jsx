@@ -158,16 +158,15 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ADMIN:
         return [
           { id: 'dashboard', label: 'System Administration', icon: ShieldCheck },
-          { id: 'live-tracking', label: 'Live GPS Tracking', icon: MapPin },
           { 
             id: 'employees_group', 
             label: 'Employees', 
             icon: Users,
-            badge: 4,
+            badge: 7,
             children: [
               { id: 'employees', label: 'Directory Records', icon: Users },
               { id: 'attendance', label: 'Attendance System', icon: Clock },
-              { id: 'live-tracking', label: 'Employee Locations', icon: MapPin },
+              { id: 'live-tracking', label: 'Live GPS Tracking', icon: MapPin },
               { id: 'shifts', label: 'Shifts & Roster', icon: Calendar },
               { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
               { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
@@ -589,19 +588,21 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                         onClick={() => toggleGroup(item.id)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm transition-all cursor-pointer group ${
                           isChildActive
-                            ? 'bg-[#136dec] text-white font-semibold shadow-md'
+                            ? (isExpanded 
+                                ? 'bg-blue-950/70 text-white font-semibold border border-blue-700/50 shadow-xs' 
+                                : 'bg-[#136dec] text-white font-semibold shadow-md')
                             : 'text-slate-200 hover:text-white hover:bg-white/[0.06] font-medium'
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <Icon className={`w-4 h-4 shrink-0 stroke-[1.9] ${
-                            isChildActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
+                            isChildActive ? (isExpanded ? 'text-blue-400' : 'text-white') : 'text-slate-300 group-hover:text-white'
                           }`} />
                           <span className="truncate text-xs sm:text-sm font-medium">{t(item.label)}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${
-                            isChildActive ? 'bg-white/20 text-white' : 'bg-blue-600 text-white'
+                            isChildActive && !isExpanded ? 'bg-white/20 text-white' : 'bg-blue-600 text-white'
                           }`}>
                             {count}
                           </span>
@@ -625,15 +626,15 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
                                 onClick={() => selectTab(child.id)}
                                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
                                   isChildSelected
-                                    ? 'bg-blue-600/30 text-white font-semibold border border-blue-500/40'
+                                    ? 'bg-[#136dec] text-white font-bold shadow-md'
                                     : 'text-slate-300 hover:text-white hover:bg-white/[0.05]'
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-blue-300' : 'text-slate-400'}`} />
+                                  <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isChildSelected ? 'text-white' : 'text-slate-400'}`} />
                                   <span className="truncate text-xs sm:text-sm font-medium">{t(child.label)}</span>
                                 </div>
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                                <ChevronRight className={`w-3.5 h-3.5 ${isChildSelected ? 'text-white' : 'text-slate-500'}`} />
                               </button>
                             );
                           })}
