@@ -611,7 +611,6 @@ export default function AdminDashboardPage() {
     },
     'live-tracking': {
       title: 'Employee Live GPS Locations',
-      subtitle: 'Real-time GPS coordinates, geofence status & live positions of punched-in staff',
       badge: 'LIVE GPS',
     },
     shifts: {
@@ -705,9 +704,6 @@ export default function AdminDashboardPage() {
                     {todayAttendanceRecords.filter((a) => a.status === 'Present').length} PUNCHED IN
                   </span>
                 </div>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  View real-time GPS locations, map positions & geofence status of employees after clock-in.
-                </p>
               </div>
             </div>
             <button

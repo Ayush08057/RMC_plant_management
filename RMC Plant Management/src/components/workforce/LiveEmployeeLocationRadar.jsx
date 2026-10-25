@@ -311,9 +311,6 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Live GPS Tracking for <span className="font-bold text-amber-700">Site Supervisor, Plant Incharge, and Driver</span> only • Accountants & Operators are fixed desk/control room staff
-              </p>
             </div>
           </div>
 
@@ -355,15 +352,6 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 Radar Only
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* Hardware Tracking Notice Banner */}
-        <div className="p-3 mb-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-start gap-2.5 text-xs text-amber-900">
-          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-bold">Hardware Tracking Notice: </span>
-            Continuous real-time background GPS tracking of transit mixers and field personnel requires dedicated on-board vehicle IoT/GPS telematics or a persistent mobile app. Web-browser geolocation reflects active mobile punches or live foreground browser sessions only.
           </div>
         </div>
 

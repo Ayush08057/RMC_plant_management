@@ -541,11 +541,6 @@ export default function WeighbridgeView() {
                 SCALE ONLINE
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              {isMarathi
-                ? 'कच्चा माल आवक व काँक्रीट ट्रान्झिट मिक्सर वाहनांच्या अचूक वजनाची नोंदवही'
-                : 'Automated gross, tare, and net weighment records for raw materials & RMC transit mixers'}
-            </p>
           </div>
         </div>
 
