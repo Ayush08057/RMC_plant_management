@@ -148,7 +148,7 @@ export default function KPICard({
             )}
           </div>
           <div className="text-xs sm:text-sm font-black text-slate-900 tracking-tight font-sans tabular-nums my-0.5 leading-tight">
-            {value}
+            {typeof value === 'string' ? t(value) : value}
           </div>
         </div>
 

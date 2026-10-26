@@ -671,6 +671,130 @@ export const DIRECT_MARATHI_MAP = {
   'Available Fleet': 'प्लॅन्टमधील उपलब्ध गाड्या',
   'Maintenance / Workshop': 'दुरुस्ती / गॅरेज',
   'Total Fleet Size': 'एकूण वाहने',
+  // --- Enhanced Admin, Telemetry & Full System Translations ---
+  'Total Workforce': 'एकूण कर्मचारी वर्ग',
+  "Today's Attendance": 'आजची हजेरी',
+  'Pending Approvals': 'प्रलंबित मंजुऱ्या',
+  'Payroll Status': 'पगार पत्रक स्थिती',
+  'Active Duty': 'सक्रिय सेवेत',
+  'Enrolled': 'नोंदणीकृत',
+  'Biometric Sync': 'बायोमेट्रिक सिंक',
+  'Late Arrivals Today': 'आज उशिरा आलेले',
+  'Late Arrivals': 'उशिरा आलेले',
+  'Action Needed': 'कृती आवश्यक',
+  'Draft': 'मसुदा तयार',
+  'Audited': 'ऑडिट पूर्ण',
+  'October 2026 Ready': 'ऑक्टोबर २०२६ तयार',
+  'Awaiting shift clock-ins': 'शिफ्ट हजेरीची प्रतीक्षा',
+  '0 marked today': 'आज ० नोंद',
+  'Reduce Metrics': 'मेट्रिक्स संकुचित करा',
+  'Expand Metrics': 'मेट्रिक्स उघडा',
+  'Live Fleet Radar': 'लाईव्ह वाहन रडार',
+  'Track Live Locations': 'लाईव्ह ठिकाणे ट्रॅक करा',
+  'GNSS Telemetry Live': 'जीपीएस लाईव्ह सक्रिय',
+  'Plant Staff:': 'प्लॅन्ट कर्मचारी:',
+  'Drivers:': 'ड्रायव्हर्स:',
+  'Field Sites:': 'साइट कर्मचारी:',
+  'In-Plant': 'प्लॅन्टमध्ये',
+  'Transit': 'रस्त्यावर',
+  'Workforce:': 'कर्मचारी:',
+  'Attendance:': 'हजेरी:',
+  'Pending:': 'प्रलंबित:',
+  'Payroll:': 'पगार:',
+  'Registered Plant Network & Facilities': 'नोंदणीकृत प्लॅन्ट आणि शाखा',
+  'Search plant node, facility name, location...': 'प्लॅन्ट, शाखा, पत्ता शोधा...',
+
+  // Live GPS Radar & Sangli Telemetry
+  'Live GPS Telemetry & Fleet Tracking Radar': 'लाईव्ह जीपीएस व वाहन ट्रॅकिंग रडार',
+  'Workforce Directory & Roster': 'कर्मचारी निर्देशिका व यादी',
+  'Enrolled Workforce Personnel': 'नोंदणीकृत कर्मचारी वर्ग',
+  'Live Employee Location & Sangli Fleet Radar': 'कर्मचारी व सांगली वाहन लाईव्ह रडार',
+  'Personnel Focus': 'कर्मचारी निवडा',
+  'Driver Route Telemetry': 'ड्रायव्हर प्रवास मार्ग',
+  'Satellite': 'उपग्रह दृश्य',
+  'Street': 'रस्ता नकाशा',
+  'Open in Google Maps': 'गुगल मॅप्सवर उघडा',
+  'Sangli Market Yard': 'सांगली मार्केट यार्ड',
+  'Main Plant HQ': 'मुख्य प्लॅन्ट हेडक्वार्टर',
+  'APMC Market Yard, Sangli': 'एपीएमसी मार्केट यार्ड, सांगली',
+  'Quick Mobile Punch': 'मोबाईल हजेरी',
+  'Mark Attendance': 'हजेरी लावा',
+  'Workforce Focus': 'कर्मचारी निवड',
+  'Focus Map': 'नकाशा केंद्रित करा',
+  'Center Map': 'नकाशा मध्यभागी घ्या',
+  'Reset View': 'नकाशा रिसेट करा',
+  'Zoom In': 'मोठे करा',
+  'Zoom Out': 'लहान करा',
+  'Full Width': 'पूर्ण रुंदी (फुलस्क्रीन)',
+  'Exit Full Width': 'सामान्य रुंदी',
+  'Vehicle Location': 'गाडीचे ठिकाण',
+  'Speed:': 'गती:',
+  'Status:': 'स्थिती:',
+  'Last Seen:': 'शेवटची वेळ:',
+  'Distance:': 'अंतर:',
+  'Current Route:': 'चालू मार्ग:',
+  'Odometer': 'ओडोमीटर',
+  'Sangli APMC': 'सांगली एपीएमसी',
+  'Tanang Plant': 'ताणंग प्लॅन्ट',
+  'Kupwad MIDC': 'कुपवाड एमआयडीसी',
+  'Vishrambag': 'विश्रामबाग',
+  'Miraj MIDC': 'मिरज एमआयडीसी',
+  'Dispatched': 'रवाना',
+  'En Route Site': 'साइटकडे जात आहे',
+  'Pouring Site': 'साइटवर ओतणे चालू',
+  'Returning Plant': 'प्लॅन्टवर परत येत आहे',
+
+  // Navigation Tabs & Modules
+  'Employees': 'कर्मचारी वर्ग',
+  'Attendance': 'हजेरी',
+  'Shifts': 'शिफ्ट नियोजन',
+  'Payroll': 'पगार पत्रक',
+  'Approvals': 'मंजुरी केंद्र',
+  'Documents': 'कागदपत्रे',
+  'Reports': 'अहवाल (रिपोर्ट्स)',
+  'Audit Logs': 'ऑडिट लॉग्स',
+  'Audit': 'ऑडिट',
+  'Settings': 'सेटिंग्ज',
+  'Billing': 'बिलिंग आणि पावत्या',
+  'Cash Memos': 'कॅश मेमो',
+  'Purchases': 'खरेदी नोंदी',
+  'OTP Audit': 'ओटीपी ऑडिट',
+  'Advances': 'अ‍ॅडव्हान्स',
+  'Loans': 'कर्ज',
+  'Live Tracking': 'लाईव्ह ट्रॅकिंग',
+  'Leaves, advances & work': 'सुट्ट्या, अ‍ॅडव्हान्स आणि काम',
+  'Awaiting shift clock-ins': 'शिफ्ट हजेरीची प्रतीक्षा',
+
+  // Actions & Buttons
+  'Add Employee': 'नवीन कर्मचारी जोडा',
+  'Edit Employee': 'कर्मचारी माहिती बदला',
+  'Delete Employee': 'कर्मचारी काढा',
+  'Save Details': 'माहिती सेव्ह करा',
+  'Add Plant': 'प्लॅन्ट जोडा',
+  'Edit Plant': 'प्लॅन्ट बदला',
+  'Delete Plant': 'प्लॅन्ट काढा',
+  'Cancel': 'रद्द करा',
+  'Close': 'बंद करा',
+  'Save': 'सेव्ह करा',
+  'Confirm': 'खात्री करा',
+  'Download': 'डाउनलोड',
+  'Export CSV': 'CSV डाउनलोड करा',
+  'Export PDF': 'PDF डाउनलोड करा',
+  'Print': 'प्रिंट करा',
+  'Punch In': 'पंच इन (चेक इन)',
+  'Punch Out': 'पंच आउट (चेक आउट)',
+  'Clock In': 'हजेरी लावा (चेक इन)',
+  'Clock Out': 'बाहेर पडा (चेक आउट)',
+  'Break': 'सुट्टी / ब्रेक',
+  'On Duty': 'कामावर हजर',
+  'Off Duty': 'कामावरून सुटले',
+  'Present': 'हजर',
+  'Absent': 'गैरहजर',
+  'Requests': 'अर्ज',
+  'Slips': 'पावत्या',
+  'records': 'नोंदी',
+  'past dates': 'मागील तारखा',
+
 };
 
 // Precomputed lowercase map for ultra-fast, case-insensitive translation lookups
@@ -745,7 +869,57 @@ export function LanguageProvider({ children }) {
       return LOWER_MARATHI_MAP[lowerKey];
     }
 
-    // 5. Handling '+ ' prefix (e.g. '+ Add Employee' -> '+ नवीन कर्मचारी जोडा')
+
+    // 5. Handling bullet separator '•' (e.g. '4 Late Arrivals Today • Biometric Sync')
+    if (trimmed.includes('•')) {
+      const parts = trimmed.split('•');
+      const translatedParts = parts.map(p => t(p.trim()));
+      return translatedParts.join(' • ');
+    }
+
+    // 6. Dynamic numeric patterns (e.g. '4 Present', '8 Enrolled', '2 Active Duty')
+    const numPresentMatch = trimmed.match(/^(\d+)\s+Present$/i);
+    if (numPresentMatch) return `${numPresentMatch[1]} हजर`;
+
+    const numAbsentMatch = trimmed.match(/^(\d+)\s+Absent$/i);
+    if (numAbsentMatch) return `${numAbsentMatch[1]} गैरहजर`;
+
+    const numActiveDutyMatch = trimmed.match(/^(\d+)\s+Active\s+Duty$/i);
+    if (numActiveDutyMatch) return `${numActiveDutyMatch[1]} सक्रिय सेवेत`;
+
+    const numEnrolledMatch = trimmed.match(/^(\d+)\s+Enrolled$/i);
+    if (numEnrolledMatch) return `${numEnrolledMatch[1]} नोंदणीकृत`;
+
+    const numLateMatch = trimmed.match(/^(\d+)\s+Late\s+Arrivals(\s+Today)?$/i);
+    if (numLateMatch) return `${numLateMatch[1]} आज उशिरा आलेले`;
+
+    const numRequestsMatch = trimmed.match(/^(\d+)\s+Requests$/i);
+    if (numRequestsMatch) return `${numRequestsMatch[1]} अर्ज`;
+
+    const numSlipsMatch = trimmed.match(/^(\d+)\s+Slips$/i);
+    if (numSlipsMatch) return `${numSlipsMatch[1]} पावत्या`;
+
+    const numRecordsMatch = trimmed.match(/^(\d+)\s+records$/i);
+    if (numRecordsMatch) return `${numRecordsMatch[1]} नोंदी`;
+
+    const numPastDatesMatch = trimmed.match(/^(\d+)\s+past\s+dates$/i);
+    if (numPastDatesMatch) return `${numPastDatesMatch[1]} मागील तारखा`;
+
+    const numTransitMatch = trimmed.match(/^(\d+)\s+Transit$/i);
+    if (numTransitMatch) return `${numTransitMatch[1]} रस्त्यावर`;
+
+    const numInPlantMatch = trimmed.match(/^(\d+)\s+In-Plant$/i);
+    if (numInPlantMatch) return `${numInPlantMatch[1]} प्लॅन्टमध्ये`;
+
+    const numActiveMatch = trimmed.match(/^(\d+)\s+Active$/i);
+    if (numActiveMatch) return `${numActiveMatch[1]} सक्रिय`;
+
+    const numOnDutyMatch = trimmed.match(/^(\d+)\s+ON\s+DUTY$/i);
+    if (numOnDutyMatch) return `${numOnDutyMatch[1]} हजर`;
+
+    if (/^0\s+marked\s+today/i.test(trimmed)) return 'आज ० नोंद';
+
+    // 7. Handling '+ ' prefix (e.g. '+ Add Employee' -> '+ नवीन कर्मचारी जोडा')
     if (trimmed.startsWith('+ ')) {
       const core = trimmed.slice(2).trim();
       const translatedCore = DIRECT_MARATHI_MAP[core] || LOWER_MARATHI_MAP[core.toLowerCase()];
@@ -787,6 +961,115 @@ export function LanguageProvider({ children }) {
 
     return fallback || key;
   };
+
+
+  // Global DOM Auto-Translator for Marathi
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    if (language === 'en') {
+      // Restore original English text
+      const origEls = document.querySelectorAll('[data-rmc-orig]');
+      origEls.forEach((el) => {
+        if (el.dataset.rmcOrig) {
+          el.textContent = el.dataset.rmcOrig;
+          el.removeAttribute('data-rmc-orig');
+        }
+      });
+      const origPhs = document.querySelectorAll('input[data-rmc-orig-ph], textarea[data-rmc-orig-ph]');
+      origPhs.forEach((input) => {
+        if (input.dataset.rmcOrigPh) {
+          input.placeholder = input.dataset.rmcOrigPh;
+          input.removeAttribute('data-rmc-orig-ph');
+        }
+      });
+      return;
+    }
+
+    let isTranslating = false;
+
+    const translateNode = (node) => {
+      if (!node || node.nodeType !== 3) return;
+      const text = node.nodeValue;
+      if (!text || !text.trim()) return;
+
+      const parent = node.parentElement;
+      if (!parent) return;
+      const tag = parent.tagName ? parent.tagName.toLowerCase() : '';
+      if (['script', 'style', 'code', 'pre'].includes(tag)) return;
+
+      const translated = t(text);
+      if (translated && translated !== text) {
+        if (!parent.hasAttribute('data-rmc-orig')) {
+          parent.setAttribute('data-rmc-orig', text);
+        }
+        node.nodeValue = translated;
+      }
+    };
+
+    const translatePlaceholders = (root) => {
+      const inputs = (root || document).querySelectorAll ? (root || document).querySelectorAll('input, textarea') : [];
+      inputs.forEach((input) => {
+        if (input.placeholder && input.placeholder.trim()) {
+          const ph = input.placeholder;
+          const translatedPh = t(ph);
+          if (translatedPh && translatedPh !== ph) {
+            if (!input.hasAttribute('data-rmc-orig-ph')) {
+              input.setAttribute('data-rmc-orig-ph', ph);
+            }
+            input.placeholder = translatedPh;
+          }
+        }
+      });
+    };
+
+    const translateAll = (root = document.body) => {
+      if (isTranslating || !root) return;
+      isTranslating = true;
+      try {
+        const walker = document.createTreeWalker(root, 4, null, false);
+        let curr = walker.nextNode();
+        while (curr) {
+          translateNode(curr);
+          curr = walker.nextNode();
+        }
+        translatePlaceholders(root);
+      } catch (err) {
+        // ignore
+      } finally {
+        isTranslating = false;
+      }
+    };
+
+    translateAll();
+
+    const observer = new MutationObserver((mutations) => {
+      if (isTranslating) return;
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((added) => {
+            if (added.nodeType === 3) {
+              translateNode(added);
+            } else if (added.nodeType === 1) {
+              translateAll(added);
+            }
+          });
+        } else if (mutation.type === 'characterData') {
+          translateNode(mutation.target);
+        }
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [language]);
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t }}>

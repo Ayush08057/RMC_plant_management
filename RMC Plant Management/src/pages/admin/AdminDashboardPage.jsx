@@ -48,6 +48,7 @@ import {
 import { MOCK_ADMIN_DATA } from '../../data/mockDashboardData';
 import { ROLES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { useWorkforce, isDummyEmployee } from '../../context/WorkforceContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatToIndian12Hr } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
@@ -66,6 +67,7 @@ import LoanManagementView from '../../components/workforce/LoanManagementView';
 import LiveEmployeeLocationRadar from '../../components/workforce/LiveEmployeeLocationRadar';
 
 export default function AdminDashboardPage() {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [triggerMarkAttendance, setTriggerMarkAttendance] = useState(false);
   const [triggerMobileAttendance, setTriggerMobileAttendance] = useState(false);
