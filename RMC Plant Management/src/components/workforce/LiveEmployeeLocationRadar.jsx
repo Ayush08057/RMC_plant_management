@@ -37,6 +37,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
+import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
@@ -847,115 +848,18 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
             {/* Interactive GIS Satellite/Road Map vs Radar Scope */}
             {mapDisplayType === 'gis' ? (
-              <div className="relative w-full rounded-2xl overflow-hidden border border-slate-300 shadow-inner bg-slate-900 h-[460px] sm:h-[500px] xl:h-[540px]">
-                {(() => {
-                  const lat = activeTarget?.lat || (realDeviceGps.active ? realDeviceGps.lat : null);
-                  const lng = activeTarget?.lng || (realDeviceGps.active ? realDeviceGps.lng : null);
-
-                  if (!lat || !lng) {
-                    return (
-                      <div className="flex flex-col items-center justify-center h-full p-6 text-center text-slate-300 space-y-3 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950">
-                        <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                          <MapPin className="w-6 h-6 animate-pulse" />
-                        </div>
-                        <div className="text-sm font-bold text-white">
-                          Live GPS Beacon Pending for {activeTarget?.name || 'Staff User'}
-                        </div>
-                        <p className="text-xs text-slate-400 max-w-sm">
-                          Attendance punch was recorded without foreground geolocation permissions, or device is currently offline.
-                        </p>
-
-                        {/* Quick switch to personnel with active GPS */}
-                        <div className="pt-2 border-t border-slate-800 w-full max-w-md">
-                          <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block mb-2">
-                            Switch to Personnel with Active GPS Signal:
-                          </span>
-                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                            {telemetryList.filter((t) => t.hasGpsFix).map((t) => (
-                              <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => handleSelectStaffOnMap(t)}
-                                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
-                              >
-                                <MapPin className="w-3 h-3 text-emerald-300" />
-                                <span>{t.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // Determine iframe URL: Route navigation mode or single pin point
-                  const mapUrl = (mapRouteMode && activeTarget?.activeTrip)
-                    ? `https://maps.google.com/maps?saddr=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&daddr=${lat},${lng}&output=embed`
-                    : `https://maps.google.com/maps?q=${lat},${lng}&z=${mapZoom}${mapSatellite ? '&t=k' : ''}&output=embed`;
-
-                  return (
-                    <div className="relative w-full h-full">
-                      <iframe
-                        title="Real Time Live Location Map"
-                        width="100%"
-                        height="100%"
-                        style={{ border: 0, width: '100%', height: '100%' }}
-                        loading="lazy"
-                        allowFullScreen
-                        src={mapUrl}
-                      />
-
-                      {/* Top Overlay HUD: Telemetry Badge */}
-                      <div className="absolute top-2.5 left-2.5 right-2.5 z-10 bg-white/95 backdrop-blur-md border border-slate-300 text-slate-900 p-2.5 px-3 rounded-xl shadow-lg flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {activeTarget?.selfieUrl ? (
-                            <img src={activeTarget.selfieUrl} alt={activeTarget.name} className="w-8 h-8 rounded-full object-cover border-2 border-emerald-400 shrink-0 shadow-xs" />
-                          ) : (
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 text-white ${
-                              activeTarget?.isDriver ? 'bg-cyan-600' : 'bg-blue-600'
-                            }`}>
-                              {(activeTarget?.name || 'ST').substring(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-900 font-bold truncate text-xs">{activeTarget?.name || 'Staff User'}</span>
-                              <span className="text-[10px] text-slate-500 font-semibold truncate hidden sm:inline">• {activeTarget?.role}</span>
-                              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
-                                activeTarget?.status === 'Punched In' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-                              }`}>
-                                {activeTarget?.status}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-slate-600 font-mono font-medium flex items-center gap-1.5 truncate">
-                              <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
-                              <span className="truncate">{activeTarget?.geofenceStatus}</span>
-                              <span>•</span>
-                              <span className="text-emerald-700 font-bold">{lat.toFixed(4)}°N, {lng.toFixed(4)}°E</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[9px] uppercase px-2 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold">
-                            {activeTarget?.gpsFixSource === 'LIVE_DEVICE' ? 'Live Device GNSS' : 'Punch Fix'}
-                          </span>
-                          <a
-                            href={`https://www.google.com/maps?q=${lat},${lng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-2xs cursor-pointer"
-                            title="Open in Google Maps"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                      </div>
-
-                    </div>
-                  );
-                })()}
-              </div>
+              <LiveInteractiveMap
+                telemetryList={telemetryList}
+                activeTarget={activeTarget}
+                realDeviceGps={realDeviceGps}
+                onSelectTarget={handleSelectStaffOnMap}
+                mapSatellite={mapSatellite}
+                onToggleSatellite={() => setMapSatellite((prev) => !prev)}
+                mapRouteMode={mapRouteMode}
+                onToggleRouteMode={() => setMapRouteMode((prev) => !prev)}
+                isFullWidth={isFullscreenMap}
+                onToggleFullWidth={() => setIsFullscreenMap((prev) => !prev)}
+              />
             ) : (
               /* Radar Scope Visualizer */
               <div className="relative my-4 aspect-square max-w-[380px] mx-auto w-full flex items-center justify-center">
