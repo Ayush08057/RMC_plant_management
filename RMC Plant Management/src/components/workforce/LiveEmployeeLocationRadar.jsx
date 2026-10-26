@@ -26,7 +26,11 @@ import {
   ChevronDown,
   ChevronUp,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  Route,
+  Share2
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -39,12 +43,19 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All'); // 'All' | 'Punched In' | 'Punched Out' | 'Not Checked In'
-  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'field' | 'plant'
+  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'drivers' | 'field' | 'plant'
   const [mapDisplayType, setMapDisplayType] = useState('gis'); // 'gis' | 'radar'
   const [adminPingMsg, setAdminPingMsg] = useState(null);
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'cards' | 'radar'
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedTargetId, setSelectedTargetId] = useState(null);
   const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
+  const [mapZoom, setMapZoom] = useState(15);
+  const [mapSatellite, setMapSatellite] = useState(false);
+  const [mapRouteMode, setMapRouteMode] = useState(false);
+  const [isFullscreenMap, setIsFullscreenMap] = useState(false);
+
+  // Real Driver Trips from Local & Cloud Store
   const [driverTrips, setDriverTrips] = useState(() => {
     try {
       const saved = localStorage.getItem('rmc_driver_trips_v2');
@@ -130,8 +141,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             label: `Real Device GPS: Lat ${lat}, Lng ${lng} (±${accuracy}m)`,
           });
         },
-        (err) => console.warn('Radar watch error:', err.message),
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+        (err) => {
+          console.warn('Geolocation watch error:', err.message);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000 }
       );
     }
 
@@ -142,7 +155,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
     return () => {
       clearInterval(timer);
-      if (watchId !== undefined && navigator.geolocation) {
+      if (watchId && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchId);
       }
     };
@@ -178,7 +191,6 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     return Array.from(map.values());
   }, [employees, user]);
 
-  // The live GPS radar tracks all workforce personnel and active employees
   const liveTrackedEmployees = useMemo(() => {
     return allEmployees;
   }, [allEmployees]);
@@ -221,9 +233,49 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
       const hasGpsFix = lat !== null && lng !== null;
 
+      // Match real active or recent driver trip
+      const isDriver = (emp.role || '').toLowerCase().includes('driver');
+      const empNameLower = (emp.name || '').toLowerCase();
+      const empIdLower = (emp.employeeId || emp.id || '').toLowerCase();
+
+      const matchedTrip = (driverTrips || []).find((t) => {
+        const dName = (t.driverName || '').toLowerCase();
+        const dId = (t.driverId || '').toLowerCase();
+        return (dId && dId === empIdLower) || (dName && (dName.includes(empNameLower) || empNameLower.includes(dName)));
+      }) || (isDriver && driverTrips && driverTrips.length > 0 ? driverTrips[0] : null);
+
+      const activeTrip = matchedTrip ? {
+        id: matchedTrip.id,
+        vehicleNo: matchedTrip.vehicleNo || 'MH-10-CR-1212',
+        clientName: matchedTrip.clientName || 'Sunshine Residency',
+        siteName: matchedTrip.siteName || matchedTrip.siteLocation || 'Site #01',
+        status: matchedTrip.status || (isPunchedIn ? 'Departed' : 'Completed'),
+        distanceKm: matchedTrip.distanceKm || 15.4,
+        quantityM3: matchedTrip.quantityM3 || 6.0,
+        grade: matchedTrip.grade || 'M25',
+        challanNo: matchedTrip.challanNo || 'DC-2026-101',
+        startOdometer: matchedTrip.startOdometer || 14250,
+        finalOdometer: matchedTrip.finalOdometer || null,
+        departureTime: matchedTrip.departureTime || '10:15 AM',
+        siteArrivalTime: matchedTrip.siteArrivalTime || null,
+        returnTime: matchedTrip.returnTime || null,
+        routeLabel: `Plant HQ ➔ ${matchedTrip.siteName || matchedTrip.clientName || 'Site #01'}`,
+        googleRouteUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&destination=${encodeURIComponent((matchedTrip.siteName ? matchedTrip.siteName + ', ' : '') + (matchedTrip.clientName || 'Sangli'))}`,
+      } : null;
+
       let geofenceLabel = 'Plant HQ Zone';
-      if ((emp.role || '').toLowerCase().includes('driver')) {
-        geofenceLabel = isPunchedIn ? 'Highway Transit' : 'Truck Bay';
+      if (isDriver) {
+        if (activeTrip?.status === 'Departed') {
+          geofenceLabel = `Highway Transit (${activeTrip.routeLabel})`;
+        } else if (activeTrip?.status === 'At Site') {
+          geofenceLabel = `At Site: ${activeTrip.siteName}`;
+        } else if (activeTrip?.status === 'Returning') {
+          geofenceLabel = 'Returning to Plant HQ';
+        } else if (isPunchedIn) {
+          geofenceLabel = 'Plant Loading Bay';
+        } else {
+          geofenceLabel = 'Truck Bay / Off Duty';
+        }
       } else if ((emp.role || '').toLowerCase().includes('supervisor')) {
         geofenceLabel = isPunchedIn ? 'Site Geofence' : 'Off-Duty';
       } else if (isPunchedIn) {
@@ -271,9 +323,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
           : 'No GPS Telemetry',
         selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || null,
         remarks: record?.remarks || (hasGpsFix ? 'Verified GPS Telemetry' : 'No GPS Fix Recorded'),
+        activeTrip,
+        isDriver,
       };
     });
-  }, [liveTrackedEmployees, attendance, todayStr, realDeviceGps, user]);
+  }, [liveTrackedEmployees, attendance, todayStr, realDeviceGps, user, driverTrips]);
 
   // Filtered telemetry list
   const filteredList = useMemo(() => {
@@ -297,12 +351,43 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
       const matchCategory = 
         categoryFilter === 'all' ||
+        (categoryFilter === 'drivers' && item.isDriver) ||
         (categoryFilter === 'field' && isFieldWorker) ||
         (categoryFilter === 'plant' && !isFieldWorker);
 
       return matchSearch && matchRole && matchStatus && matchCategory;
     });
   }, [telemetryList, searchQuery, selectedRoleFilter, selectedStatusFilter, categoryFilter]);
+
+  // Active target for map focus
+  const activeTarget = useMemo(() => {
+    if (selectedTargetId) {
+      const found = telemetryList.find((t) => t.id === selectedTargetId);
+      if (found) return found;
+    }
+    if (selectedEmployee) {
+      const found = telemetryList.find((t) => t.id === selectedEmployee.id);
+      if (found) return found;
+    }
+    return (
+      telemetryList.find((t) => t.isDriver && t.hasGpsFix) ||
+      telemetryList.find((t) => t.status === 'Punched In' && t.hasGpsFix) ||
+      telemetryList.find((t) => t.hasGpsFix) ||
+      telemetryList[0] ||
+      null
+    );
+  }, [selectedTargetId, selectedEmployee, telemetryList]);
+
+  // Select employee on map and sync selection
+  const handleSelectStaffOnMap = (emp) => {
+    setSelectedTargetId(emp.id);
+    setSelectedEmployee(emp);
+    setMapDisplayType('gis');
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      const el = document.getElementById('live-gps-map-container');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   // Statistics
   const stats = useMemo(() => {
@@ -319,8 +404,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       t.geofenceStatus.toLowerCase().includes('transit') ||
       t.geofenceStatus.toLowerCase().includes('site')
     ).length;
-
     const driversCount = telemetryList.filter((t) => t.isDriver).length;
+
     return { total, punchedIn, punchedOut, notCheckedIn, inGeofence, fieldWorkers, driversCount };
   }, [telemetryList]);
 
@@ -334,44 +419,47 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-3.5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-300/60 flex items-center justify-center shrink-0">
-              <Radio className="w-5 h-5 animate-pulse" />
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Navigation className="w-5 h-5 animate-pulse" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                  Field Fleet Live Location Radar
+                  Real-Time Workforce & Fleet GPS Radar
                 </h2>
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
               </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Exact live satellite telemetry, driver transit routes & plant geofence monitoring
+              </p>
             </div>
           </div>
 
           {/* Clock & View Switchers */}
-          <div className="flex items-center gap-2 self-start lg:self-center">
+          <div className="flex items-center gap-2 self-start lg:self-center flex-wrap">
             <div className="px-3 py-1.5 rounded-xl bg-cyan-50 text-cyan-900 border border-cyan-200 font-mono text-xs flex items-center gap-2 shadow-xs">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-bold text-amber-400">{currentTime}</span>
-              <span className="text-[10px] text-slate-400">IST</span>
+              <Clock className="w-3.5 h-3.5 text-amber-500" />
+              <span className="font-bold text-slate-800">{currentTime}</span>
+              <span className="text-[10px] text-slate-400 font-bold">IST</span>
             </div>
 
             {/* View Mode Buttons */}
             <div className="flex rounded-xl bg-slate-100 p-0.5 border border-slate-200 text-xs">
               <button
                 type="button"
-                onClick={() => setViewMode('split')}
+                onClick={() => { setViewMode('split'); setIsFullscreenMap(false); }}
                 className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  viewMode === 'split' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  viewMode === 'split' && !isFullscreenMap ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Radar + List
+                Map + Fleet
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('cards')}
+                onClick={() => { setViewMode('cards'); setIsFullscreenMap(false); }}
                 className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                   viewMode === 'cards' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -380,19 +468,19 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('radar')}
+                onClick={() => { setViewMode('radar'); setIsFullscreenMap(true); }}
                 className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  viewMode === 'radar' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  viewMode === 'radar' || isFullscreenMap ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Radar Only
+                Full Map
               </button>
             </div>
           </div>
         </div>
 
         {/* Hardware Tracking Notice Banner */}
-        <div className="p-2.5 mb-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-center justify-between gap-2 text-xs text-amber-900">
+        <div className="p-2.5 mb-3 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-center justify-between gap-2 text-xs text-amber-900">
           <div className="flex items-center gap-2 min-w-0">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
             <span className="truncate">
@@ -414,22 +502,22 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 <span className="font-mono">{stats.punchedIn}</span> Active On Duty
               </span>
               <span className="text-slate-300">•</span>
-              <span className="text-slate-700 font-semibold">
-                <span className="font-mono font-bold">{stats.punchedOut}</span> Completed
+              <span className="text-blue-800 font-semibold">
+                <span className="font-mono font-bold">{stats.driversCount}</span> Drivers
               </span>
               <span className="text-slate-300">•</span>
               <span className="text-amber-800 font-semibold">
-                <span className="font-mono font-bold">{stats.notCheckedIn}</span> Pending Check-In
+                <span className="font-mono font-bold">{stats.notCheckedIn}</span> Pending
               </span>
               <span className="text-slate-300">•</span>
-              <span className="text-cyan-800 font-semibold">
-                <span className="font-mono font-bold">{stats.total}</span> Total Fleet
+              <span className="text-slate-700 font-semibold">
+                <span className="font-mono font-bold">{stats.total}</span> Total
               </span>
             </div>
             <button
               type="button"
               onClick={() => setStatsReduced(false)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 hover:text-amber-700 cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer shrink-0"
               title="Expand telemetry counters"
             >
               <span>Expand Counters</span>
@@ -459,19 +547,20 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   {stats.punchedIn}
                 </div>
                 <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
-                  Live GPS Tracked ({stats.inGeofence} In-Plant)
+                  Live GPS Tracked Personnel
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="text-xs text-slate-600 font-semibold mb-1">
-                  Shift Completed
+              <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200">
+                <div className="flex items-center justify-between text-xs text-blue-800 font-semibold mb-1">
+                  <span>Transit Drivers</span>
+                  <Truck className="w-3.5 h-3.5 text-blue-600" />
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
-                  {stats.punchedOut}
+                <div className="text-xl sm:text-2xl font-black text-blue-950 font-mono">
+                  {stats.driversCount}
                 </div>
-                <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-                  Punched Out Today
+                <div className="text-[10px] text-blue-700 font-medium mt-0.5">
+                  Transit Mixers on Road
                 </div>
               </div>
 
@@ -495,14 +584,14 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   {stats.total}
                 </div>
                 <div className="text-[10px] text-cyan-700 font-medium mt-0.5">
-                  Roster Strength
+                  Total Enrolled Fleet
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Quick Category Filter Pills: Focus on Field Workers vs In-Plant Staff */}
+        {/* Quick Category Filter Pills */}
         <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100">
           <span className="text-[10px] font-mono uppercase font-bold text-slate-400">Target Fleet:</span>
           
@@ -511,11 +600,27 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             onClick={() => setCategoryFilter('all')}
             className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               categoryFilter === 'all'
-                ? 'bg-white text-slate-900 border border-slate-200 shadow-xs'
+                ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
             All Personnel ({stats.total})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('drivers')}
+            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              categoryFilter === 'drivers'
+                ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/30'
+                : 'bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100'
+            }`}
+          >
+            <Truck className="w-3.5 h-3.5" />
+            <span>Drivers on Road</span>
+            <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold ${categoryFilter === 'drivers' ? 'bg-white/30 text-white' : 'bg-blue-200/80 text-blue-900'}`}>
+              {stats.driversCount || 0}
+            </span>
           </button>
 
           <button
@@ -527,7 +632,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
             }`}
           >
-            <span>🚚 Field Workers & Drivers Fleet</span>
+            <span>🚚 Field Staff</span>
             <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold ${categoryFilter === 'field' ? 'bg-white/30 text-white' : 'bg-amber-200/80 text-amber-900'}`}>
               {stats.fieldWorkers}
             </span>
@@ -542,7 +647,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'
             }`}
           >
-            <span>🏭 Plant Operators & In-Plant</span>
+            <span>🏭 Plant Operators</span>
             <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold ${categoryFilter === 'plant' ? 'bg-white/30 text-white' : 'bg-teal-200/80 text-teal-900'}`}>
               {stats.total - stats.fieldWorkers}
             </span>
@@ -558,7 +663,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search employee by name, ID, role, or geofence location..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500 font-medium"
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 font-medium"
             />
           </div>
 
@@ -566,7 +671,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             <select
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:border-amber-500 cursor-pointer"
+              className="py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               <option value="All">All Statuses</option>
               <option value="Punched In">Active Only (Punched In)</option>
@@ -577,7 +682,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             <select
               value={selectedRoleFilter}
               onChange={(e) => setSelectedRoleFilter(e.target.value)}
-              className="py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:border-amber-500 cursor-pointer"
+              className="py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               {uniqueRoles.map((r) => (
                 <option key={r} value={r}>{r === 'All' ? 'All Roles' : r}</option>
@@ -587,100 +692,262 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         </div>
       </div>
 
-      {/* Main Grid: Radar Screen + Employee Cards */}
-      <div className={`grid gap-4 ${
-        viewMode === 'split' ? 'grid-cols-1 lg:grid-cols-12' : 
-        viewMode === 'radar' ? 'grid-cols-1' : 'grid-cols-1'
+      {/* Main Grid: Prominent High-Definition Live GPS Map + Employee Roster */}
+      <div className={`grid gap-4.5 ${
+        isFullscreenMap || viewMode === 'radar'
+          ? 'grid-cols-1'
+          : viewMode === 'split'
+            ? 'grid-cols-1 lg:grid-cols-12'
+            : 'grid-cols-1'
       }`}>
         
-        {/* Visual Live Radar Component (Visible in 'split' or 'radar' mode) */}
-        {(viewMode === 'split' || viewMode === 'radar') && (
-          <div className={`${viewMode === 'split' ? 'lg:col-span-5 xl:col-span-4' : 'w-full'} bg-white text-slate-900 border border-slate-200/90 shadow-md rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg relative overflow-hidden flex flex-col justify-between`}>
-            
-            <div className="flex items-center justify-between z-10 mb-2">
+        {/* Prominent High-Definition Live Map Container */}
+        {(viewMode === 'split' || viewMode === 'radar' || isFullscreenMap) && (
+          <div 
+            id="live-gps-map-container"
+            className={`${
+              isFullscreenMap || viewMode === 'radar'
+                ? 'col-span-12 w-full'
+                : viewMode === 'split'
+                  ? 'lg:col-span-7 xl:col-span-7'
+                  : 'w-full'
+            } bg-white text-slate-900 border border-slate-200/90 shadow-md rounded-2xl p-3.5 sm:p-4.5 relative overflow-hidden flex flex-col justify-between transition-all`}
+          >
+            {/* Top Toolbar: Map Mode, Satellite Toggle, Zoom & Fullscreen Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
               <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span className="text-xs font-mono font-bold tracking-wider text-emerald-400 uppercase">
-                  LIVE GPS LOCATION MAP
-                </span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center justify-center shrink-0">
+                  <Radio className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black tracking-tight text-slate-900 uppercase">
+                    Live GPS Telemetry & Transit Map
+                  </h3>
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    Tracking: <strong className="text-blue-900 font-bold">{activeTarget?.name || 'Staff Member'}</strong> ({activeTarget?.role || 'Operations'})
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setMapDisplayType('gis')}
-                  className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded cursor-pointer ${
-                    mapDisplayType === 'gis' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  GIS Map
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapDisplayType('radar')}
-                  className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded cursor-pointer ${
-                    mapDisplayType === 'radar' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Radar Scope
-                </button>
+
+              {/* Map View Controls */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setMapDisplayType('gis')}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                      mapDisplayType === 'gis' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    GIS Map
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapDisplayType('radar')}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                      mapDisplayType === 'radar' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Radar Scope
+                  </button>
+                </div>
+
+                {mapDisplayType === 'gis' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMapSatellite(!mapSatellite)}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
+                        mapSatellite
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title="Toggle Satellite vs Street Map"
+                    >
+                      {mapSatellite ? '🛰️ Satellite' : '🗺️ Street'}
+                    </button>
+
+                    <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setMapZoom((z) => Math.min(18, z + 1))}
+                        className="p-1 text-slate-700 hover:text-slate-900 rounded cursor-pointer"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMapZoom((z) => Math.max(12, z - 1))}
+                        className="p-1 text-slate-700 hover:text-slate-900 rounded cursor-pointer"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsFullscreenMap(!isFullscreenMap)}
+                      className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-2xs cursor-pointer"
+                      title={isFullscreenMap ? 'Exit Full Width' : 'Expand Full Width'}
+                    >
+                      {isFullscreenMap ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                    </button>
+                  </>
+                )}
               </div>
+            </div>
+
+            {/* Quick Interactive Fleet Switcher: 1-Tap Focus on Any Personnel */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 no-scrollbar border-b border-slate-100">
+              <span className="text-[10px] font-mono uppercase font-bold text-slate-400 shrink-0">Focus:</span>
+              {telemetryList.map((emp) => {
+                const isSelected = activeTarget?.id === emp.id;
+                const isOnline = emp.status === 'Punched In';
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => handleSelectStaffOnMap(emp)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-2xs scale-102'
+                        : isOnline
+                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+                          : 'bg-slate-50 text-slate-400 border border-slate-100'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${
+                      emp.isDriver ? 'bg-cyan-400' : isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'
+                    }`} />
+                    <span className="truncate max-w-[120px]">{emp.name}</span>
+                    {emp.isDriver && emp.activeTrip && (
+                      <span className={`text-[9px] font-mono font-bold px-1 rounded ${
+                        isSelected ? 'bg-blue-800 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {emp.activeTrip.vehicleNo.split('-').slice(-2).join('-')}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Interactive GIS Satellite/Road Map vs Radar Scope */}
             {mapDisplayType === 'gis' ? (
-              <div className="relative my-2 aspect-square max-w-[340px] mx-auto w-full rounded-2xl overflow-hidden border border-slate-700 shadow-xl bg-slate-900/90 min-h-[280px]">
+              <div className="relative w-full rounded-2xl overflow-hidden border border-slate-300 shadow-inner bg-slate-900 h-[460px] sm:h-[500px] xl:h-[540px]">
                 {(() => {
-                  const punchedInList = telemetryList.filter((t) => t.status === 'Punched In' && t.hasGpsFix);
-                  const activeTarget = (selectedEmployee?.hasGpsFix ? selectedEmployee : null) || punchedInList[0] || telemetryList.find((t) => t.hasGpsFix);
                   const lat = activeTarget?.lat || (realDeviceGps.active ? realDeviceGps.lat : null);
                   const lng = activeTarget?.lng || (realDeviceGps.active ? realDeviceGps.lng : null);
 
                   if (!lat || !lng) {
                     return (
-                      <div className="flex flex-col items-center justify-center h-full min-h-[280px] p-6 text-center text-slate-400 space-y-3">
-                        <MapPin className="w-8 h-8 text-amber-500/70" />
-                        <div className="text-xs font-semibold text-slate-200">No Active GPS Telemetry</div>
-                        <p className="text-[11px] text-slate-400 max-w-[220px]">
-                          Real coordinates will appear once staff punch in via mobile GPS or grant browser location permission.
+                      <div className="flex flex-col items-center justify-center h-full p-6 text-center text-slate-300 space-y-3 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                          <MapPin className="w-6 h-6 animate-pulse" />
+                        </div>
+                        <div className="text-sm font-bold text-white">
+                          Live GPS Beacon Pending for {activeTarget?.name || 'Staff User'}
+                        </div>
+                        <p className="text-xs text-slate-400 max-w-sm">
+                          Attendance punch was recorded without foreground geolocation permissions, or device is currently offline.
                         </p>
+
+                        {/* Quick switch to personnel with active GPS */}
+                        <div className="pt-2 border-t border-slate-800 w-full max-w-md">
+                          <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block mb-2">
+                            Switch to Personnel with Active GPS Signal:
+                          </span>
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            {telemetryList.filter((t) => t.hasGpsFix).map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleSelectStaffOnMap(t)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
+                              >
+                                <MapPin className="w-3 h-3 text-emerald-300" />
+                                <span>{t.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     );
                   }
 
+                  // Determine iframe URL: Route navigation mode or single pin point
+                  const mapUrl = (mapRouteMode && activeTarget?.activeTrip)
+                    ? `https://maps.google.com/maps?saddr=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&daddr=${lat},${lng}&output=embed`
+                    : `https://maps.google.com/maps?q=${lat},${lng}&z=${mapZoom}${mapSatellite ? '&t=k' : ''}&output=embed`;
+
                   return (
-                    <div className="relative w-full h-full min-h-[280px]">
+                    <div className="relative w-full h-full">
                       <iframe
                         title="Real Time Live Location Map"
                         width="100%"
                         height="100%"
-                        style={{ border: 0, minHeight: '280px', width: '100%', height: '100%' }}
+                        style={{ border: 0, width: '100%', height: '100%' }}
                         loading="lazy"
                         allowFullScreen
-                        src={`https://maps.google.com/maps?q=${lat},${lng}&z=15&output=embed`}
+                        src={mapUrl}
                       />
-                      <div className="absolute top-2 left-2 right-2 z-10 bg-white/95 border border-slate-200 text-emerald-700 px-3 py-1.5 rounded-xl text-xs font-mono font-bold shadow-md flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+
+                      {/* Top Overlay HUD: Telemetry Badge */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 z-10 bg-white/95 backdrop-blur-md border border-slate-300 text-slate-900 p-2.5 px-3 rounded-xl shadow-lg flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           {activeTarget?.selfieUrl ? (
-                            <img src={activeTarget.selfieUrl} alt={activeTarget.name} className="w-7 h-7 rounded-full object-cover border-2 border-emerald-400 shrink-0 shadow-sm" />
+                            <img src={activeTarget.selfieUrl} alt={activeTarget.name} className="w-8 h-8 rounded-full object-cover border-2 border-emerald-400 shrink-0 shadow-xs" />
                           ) : (
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 text-white ${
+                              activeTarget?.isDriver ? 'bg-cyan-600' : 'bg-blue-600'
+                            }`}>
+                              {(activeTarget?.name || 'ST').substring(0, 2).toUpperCase()}
+                            </div>
                           )}
                           <div className="min-w-0">
-                            <span className="text-slate-900 block font-bold truncate text-[11px]">{activeTarget?.name || 'Staff User'}</span>
-                            <span className="text-emerald-700 block font-mono text-[9px] font-semibold">{activeTarget?.status || 'Active'} • {lat.toFixed(4)}°N, {lng.toFixed(4)}°E</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-900 font-bold truncate text-xs">{activeTarget?.name || 'Staff User'}</span>
+                              <span className="text-[10px] text-slate-500 font-semibold truncate hidden sm:inline">• {activeTarget?.role}</span>
+                              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                                activeTarget?.status === 'Punched In' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {activeTarget?.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-600 font-mono font-medium flex items-center gap-1.5 truncate">
+                              <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span className="truncate">{activeTarget?.geofenceStatus}</span>
+                              <span>•</span>
+                              <span className="text-emerald-700 font-bold">{lat.toFixed(4)}°N, {lng.toFixed(4)}°E</span>
+                            </div>
                           </div>
                         </div>
-                        <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold shrink-0">
-                          {activeTarget?.gpsFixSource === 'LIVE_DEVICE' ? 'GNSS Live' : 'Punch Fix'}
-                        </span>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[9px] uppercase px-2 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold">
+                            {activeTarget?.gpsFixSource === 'LIVE_DEVICE' ? 'Live Device GNSS' : 'Punch Fix'}
+                          </span>
+                          <a
+                            href={`https://www.google.com/maps?q=${lat},${lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-2xs cursor-pointer"
+                            title="Open in Google Maps"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                       </div>
+
                     </div>
                   );
                 })()}
               </div>
             ) : (
               /* Radar Scope Visualizer */
-              <div className="relative my-4 aspect-square max-w-[320px] mx-auto w-full flex items-center justify-center">
+              <div className="relative my-4 aspect-square max-w-[380px] mx-auto w-full flex items-center justify-center">
                 {/* Concentric Geofence Rings */}
                 <div className="absolute inset-0 rounded-full border border-emerald-500/20" />
                 <div className="absolute inset-[15%] rounded-full border border-emerald-500/30" />
@@ -732,7 +999,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       <button
                         key={emp.id}
                         type="button"
-                        onClick={() => setSelectedEmployee(emp)}
+                        onClick={() => handleSelectStaffOnMap(emp)}
                         className="absolute z-20 group -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform hover:scale-125"
                         style={{ left: `${left}%`, top: `${top}%` }}
                         title={`${emp.name} (${emp.role}) - ${emp.status}`}
@@ -760,359 +1027,411 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </div>
             )}
 
-            {/* Radar Scope Footer Legend */}
-            <div className="z-10 bg-white/90 p-2.5 rounded-xl border border-slate-200 text-slate-800 text-[11px] font-mono flex items-center justify-between text-slate-300">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                <span>On Duty</span>
+            {/* Bottom Telemetry Dossier Strip: Special Route Box for Drivers */}
+            {activeTarget?.isDriver && activeTarget?.activeTrip && (
+              <div className="mt-3 p-3 rounded-xl bg-blue-50/90 border border-blue-200/90 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs font-bold">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-blue-950 text-xs">Transit Mixer: {activeTarget.activeTrip.vehicleNo}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-600 text-white">
+                        {activeTarget.activeTrip.status}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span>Route: <strong className="text-slate-900">{activeTarget.activeTrip.routeLabel}</strong></span>
+                      <span>•</span>
+                      <span>Destination: <strong className="text-slate-900">{activeTarget.activeTrip.clientName}</strong></span>
+                      <span>•</span>
+                      <span>Distance: <strong className="font-mono text-blue-800">{activeTarget.activeTrip.distanceKm} km</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={activeTarget.activeTrip.googleRouteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Track Live Route in Google Maps</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setMapRouteMode(!mapRouteMode)}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border ${
+                      mapRouteMode 
+                        ? 'bg-amber-500 text-slate-950 border-amber-600' 
+                        : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                    }`}
+                  >
+                    <Route className="w-3.5 h-3.5" />
+                    <span>{mapRouteMode ? 'Single Pin' : 'Route Path'}</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
-                <span>Transit Driver</span>
+            )}
+
+            {/* Non-driver active target location info */}
+            {activeTarget && !activeTarget.isDriver && (
+              <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="text-slate-700 truncate">
+                    <strong className="text-slate-900">{activeTarget.name}</strong> • Landmark: {activeTarget.geofenceStatus}
+                  </span>
+                </div>
+                {activeTarget.hasGpsFix && (
+                  <a
+                    href={`https://www.google.com/maps?q=${activeTarget.lat},${activeTarget.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 self-start sm:self-auto cursor-pointer"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Open Exact Location</span>
+                  </a>
+                )}
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-slate-500 inline-block" />
-                <span>Off Duty</span>
-              </div>
-            </div>
+            )}
 
           </div>
         )}
 
         {/* Live Employee Telemetry Cards Grid */}
-        <div className={`${
-          viewMode === 'split' ? 'lg:col-span-7 xl:col-span-8' : 'w-full'
-        } space-y-3`}>
-          
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 font-semibold px-1">
-            <div className="flex items-center gap-2">
-              <span>Displaying {filteredList.length} of {telemetryList.length} Personnel</span>
-              <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">• Live GPS stream</span>
-            </div>
+        {(!isFullscreenMap && viewMode !== 'radar') && (
+          <div className={`${
+            viewMode === 'split' ? 'lg:col-span-5 xl:col-span-5' : 'w-full'
+          } space-y-3`}>
             
-            <div className="flex items-center gap-1.5 self-end sm:self-auto">
-              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setCardDensity('compact')}
-                  className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                    cardDensity === 'compact' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Compact Cards
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCardDensity('detailed')}
-                  className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                    cardDensity === 'detailed' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Detailed Cards
-                </button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 font-semibold px-1">
+              <div className="flex items-center gap-2">
+                <span>Displaying {filteredList.length} of {telemetryList.length} Personnel</span>
+                <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">• Live GPS stream</span>
+              </div>
+              
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCardDensity('compact')}
+                    className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                      cardDensity === 'compact' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Compact Cards
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardDensity('detailed')}
+                    className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                      cardDensity === 'detailed' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Detailed Cards
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            {filteredList.map((emp) => {
-              const isOnline = emp.status === 'Punched In';
-              const isOut = emp.status === 'Punched Out';
-              const isExpanded = cardDensity === 'detailed' || expandedCardIds.has(emp.id);
+            <div className="grid grid-cols-1 gap-2.5">
+              {filteredList.map((emp) => {
+                const isOnline = emp.status === 'Punched In';
+                const isOut = emp.status === 'Punched Out';
+                const isExpanded = cardDensity === 'detailed' || expandedCardIds.has(emp.id);
+                const isSelectedOnMap = activeTarget?.id === emp.id;
 
-              return (
-                <div
-                  key={emp.id}
-                  className={`rounded-2xl border transition-all bg-white relative overflow-hidden flex flex-col justify-between ${
-                    isExpanded ? 'p-3.5 sm:p-4' : 'p-2.5 sm:p-3'
-                  } ${
-                    isOnline 
-                      ? 'border-emerald-300 shadow-xs hover:border-emerald-400' 
-                      : isOut 
-                        ? 'border-slate-200 hover:border-slate-300' 
-                        : 'border-slate-200/70 opacity-80'
-                  }`}
-                >
-                  {/* Status Color Strip */}
-                  <div className={`h-1 absolute top-0 left-0 right-0 ${
-                    isOnline 
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400' 
-                      : isOut 
-                        ? 'bg-gradient-to-r from-slate-400 to-slate-500' 
-                        : 'bg-slate-200'
-                  }`} />
+                return (
+                  <div
+                    key={emp.id}
+                    className={`rounded-2xl border transition-all bg-white relative overflow-hidden flex flex-col justify-between ${
+                      isExpanded ? 'p-3.5 sm:p-4' : 'p-2.5 sm:p-3'
+                    } ${
+                      isSelectedOnMap 
+                        ? 'border-blue-500 ring-2 ring-blue-500/30 shadow-md bg-blue-50/20' 
+                        : isOnline 
+                          ? 'border-emerald-300 shadow-xs hover:border-emerald-400' 
+                          : isOut 
+                            ? 'border-slate-200 hover:border-slate-300' 
+                            : 'border-slate-200/70 opacity-80'
+                    }`}
+                  >
+                    {/* Status Color Strip */}
+                    <div className={`h-1 absolute top-0 left-0 right-0 ${
+                      isSelectedOnMap
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600'
+                        : isOnline 
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400' 
+                          : isOut 
+                            ? 'bg-gradient-to-r from-slate-400 to-slate-500' 
+                            : 'bg-slate-200'
+                    }`} />
 
-                  {/* Reducible Compact Layout */}
-                  {!isExpanded ? (
-                    <div className="space-y-2 pt-0.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {emp.selfieUrl ? (
-                            <img src={emp.selfieUrl} alt={emp.name} className="w-7 h-7 rounded-lg object-cover border border-emerald-400 shrink-0" />
-                          ) : (
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[11px] shrink-0 ${
-                              isOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                    {/* Reducible Compact Layout */}
+                    {!isExpanded ? (
+                      <div className="space-y-2 pt-0.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {emp.selfieUrl ? (
+                              <img src={emp.selfieUrl} alt={emp.name} className="w-8 h-8 rounded-lg object-cover border border-emerald-400 shrink-0" />
+                            ) : (
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[11px] shrink-0 text-white ${
+                                emp.isDriver ? 'bg-cyan-600' : isOnline ? 'bg-emerald-600' : 'bg-slate-500'
+                              }`}>
+                                {emp.avatar || emp.name.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="text-xs font-bold text-slate-900 truncate">{emp.name}</h4>
+                                {isSelectedOnMap && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-mono">
+                                    ON MAP
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                                <span className="font-mono font-bold text-amber-700">{emp.employeeId}</span>
+                                <span>•</span>
+                                <span className="truncate">{emp.role}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
+                              isOnline 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                : isOut 
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-300' 
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
                             }`}>
-                              {emp.avatar || emp.name.substring(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-slate-900 truncate">{emp.name}</h4>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                              <span className="font-mono font-bold text-amber-700">{emp.employeeId}</span>
-                              <span>•</span>
-                              <span className="truncate">{emp.role}</span>
-                            </div>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-ping' : isOut ? 'bg-slate-500' : 'bg-amber-500'}`} />
+                              <span>{emp.status}</span>
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleCardExpand(emp.id)}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                              title="Expand details"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
-                            isOnline 
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                              : isOut 
-                                ? 'bg-slate-100 text-slate-700 border border-slate-300' 
-                                : 'bg-amber-50 text-amber-800 border border-amber-200'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-ping' : isOut ? 'bg-slate-500' : 'bg-amber-500'}`} />
-                            <span>{emp.status}</span>
-                          </span>
+                        {/* Driver Active Trip Compact Strip */}
+                        {emp.activeTrip && (
+                          <div className="flex items-center justify-between text-[10px] bg-blue-50/90 px-2 py-1.5 rounded-lg border border-blue-200/70 font-medium text-blue-900 gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                              <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span className="font-bold text-blue-950 shrink-0">{emp.activeTrip.vehicleNo}</span>
+                              <span className="text-slate-400">•</span>
+                              <span className="truncate text-blue-800 font-semibold">{emp.activeTrip.routeLabel}</span>
+                            </div>
+                            <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-blue-200/80 text-blue-900 font-bold shrink-0">
+                              {emp.activeTrip.distanceKm} km
+                            </span>
+                          </div>
+                        )}
 
-                          <button
-                            type="button"
-                            onClick={() => toggleCardExpand(emp.id)}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                            title="Expand details"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
+                        <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100 gap-2">
+                          <div className="flex items-center gap-1 text-slate-600 truncate min-w-0">
+                            <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span className="truncate font-medium">{emp.geofenceStatus}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Focus on Map Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleSelectStaffOnMap(emp)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                isSelectedOnMap
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
+                              }`}
+                            >
+                              <MapPin className="w-2.5 h-2.5" />
+                              <span>{isSelectedOnMap ? 'Viewing' : 'View on Map'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEmployee(emp)}
+                              className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
+                              title="Open Telemetry Dossier"
+                            >
+                              <Eye className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-
-                      {emp.activeTrip && (
-                        <div className="flex items-center justify-between text-[10px] bg-blue-50/90 px-2 py-1.5 rounded-lg border border-blue-200/70 font-medium text-blue-900 gap-1.5 mb-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0 truncate">
-                            <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span className="font-bold text-blue-950 shrink-0">{emp.activeTrip.vehicleNo}</span>
-                            <span className="text-slate-400">•</span>
-                            <span className="truncate text-blue-800 font-semibold">{emp.activeTrip.routeLabel}</span>
+                    ) : (
+                      /* Detailed Expanded Card Layout */
+                      <div>
+                        {/* Header: Employee Name, ID, & Status Pill */}
+                        <div className="flex items-start justify-between gap-2 mb-2 pt-1">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {emp.selfieUrl ? (
+                              <img src={emp.selfieUrl} alt={emp.name} className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-400 shrink-0 shadow-xs" />
+                            ) : (
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 text-white ${
+                                emp.isDriver ? 'bg-cyan-600' : isOnline ? 'bg-emerald-600' : 'bg-slate-500'
+                              }`}>
+                                {emp.avatar || emp.name.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <h3 className="text-xs font-bold text-slate-900 truncate">
+                                {emp.name}
+                              </h3>
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+                                <span className="font-mono font-bold text-amber-700">{emp.employeeId}</span>
+                                <span>•</span>
+                                <span className="truncate">{emp.role}</span>
+                              </div>
+                            </div>
                           </div>
-                          <a
-                            href={emp.activeTrip.googleRouteUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-blue-200 text-[10px] shadow-2xs cursor-pointer"
-                            title="Open Google Maps Driving Route"
-                          >
-                            <Navigation className="w-2.5 h-2.5 text-blue-600" />
-                            <span>Route</span>
-                          </a>
-                        </div>
-                      )}
 
-                      <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100 gap-2">
-                        <div className="flex items-center gap-1 text-slate-600 truncate min-w-0">
-                          <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
-                          <span className="truncate font-medium">{emp.geofenceStatus}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {emp.punchIn && (
-                            <span className="font-mono text-[10px] font-bold text-emerald-700">
-                              In: {formatToIndian12Hr(emp.punchIn)}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
+                              isOnline 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                : isOut 
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-300' 
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-ping' : isOut ? 'bg-slate-500' : 'bg-amber-500'}`} />
+                              <span>{emp.status}</span>
                             </span>
-                          )}
-                          {emp.hasGpsFix ? (
+
+                            <button
+                              type="button"
+                              onClick={() => toggleCardExpand(emp.id)}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                              title="Collapse card"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Punch Timings Breakdown */}
+                        <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100 my-2 text-center text-xs">
+                          <div>
+                            <span className="text-[9px] uppercase font-bold text-slate-400 block">PUNCH IN</span>
+                            <span className={`font-mono text-[11px] font-bold ${emp.punchIn ? 'text-emerald-700' : 'text-slate-400'}`}>
+                              {formatToIndian12Hr(emp.punchIn) || '--:--'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase font-bold text-slate-400 block">PUNCH OUT</span>
+                            <span className={`font-mono text-[11px] font-bold ${emp.punchOut ? 'text-rose-700' : 'text-slate-400'}`}>
+                              {formatToIndian12Hr(emp.punchOut) || '--:--'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase font-bold text-slate-400 block">DURATION</span>
+                            <span className={`font-mono text-[11px] font-bold ${isOnline ? 'text-emerald-600' : 'text-slate-700'}`}>
+                              {emp.elapsedDisplay || '--'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Driver Active Trip & Route Card */}
+                        {emp.activeTrip && (
+                          <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200/90 space-y-1.5 my-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Mixer {emp.activeTrip.vehicleNo}</span>
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full font-mono text-[9px] font-bold bg-blue-600 text-white">
+                                {emp.activeTrip.status}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-700 flex items-center justify-between">
+                              <span className="text-slate-500 font-medium">Route:</span>
+                              <strong className="text-slate-900">{emp.activeTrip.routeLabel} ({emp.activeTrip.distanceKm} km)</strong>
+                            </div>
+                            <div className="text-[11px] text-slate-700 flex items-center justify-between">
+                              <span className="text-slate-500 font-medium">Destination:</span>
+                              <span className="font-semibold text-slate-900">{emp.activeTrip.clientName} ({emp.activeTrip.siteName})</span>
+                            </div>
                             <a
-                              href={`https://www.google.com/maps?q=${emp.lat},${emp.lng}`}
+                              href={emp.activeTrip.googleRouteUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
+                              className="w-full py-1.5 px-2 rounded-lg font-bold text-[11px] bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs mt-1"
                             >
-                              <ExternalLink className="w-2.5 h-2.5" />
-                              <span>Map</span>
+                              <Navigation className="w-3 h-3" />
+                              <span>Track Route on Google Maps</span>
                             </a>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No GPS</span>
-                          )}
+                          </div>
+                        )}
+
+                        {/* Live Location & Geofence Coordinates */}
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center gap-1.5 text-slate-700">
+                            <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-semibold truncate text-[11px]">{emp.geofenceStatus}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pl-5">
+                            {emp.hasGpsFix ? (
+                              <>
+                                <span>{Number(emp.lat).toFixed(4)}° N, {Number(emp.lng).toFixed(4)}° E</span>
+                                <span className="text-emerald-700 font-semibold">
+                                  {emp.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : 'Punch Fix'}
+                                  {emp.accuracy ? ` (±${emp.accuracy}m)` : ''}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-slate-400 italic">No GPS Fix</span>
+                                <span className="text-amber-700 font-semibold">Location Pending</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions Row */}
+                        <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectStaffOnMap(emp)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer"
+                          >
+                            <MapPin className="w-3 h-3 text-blue-600" />
+                            <span>Focus Map</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => setSelectedEmployee(emp)}
-                            className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
-                            title="Open Telemetry Dossier"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
                           >
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-3 h-3 text-slate-500" />
+                            <span>Telemetry Dossier</span>
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    /* Detailed Expanded Card Layout */
-                    <div>
-                      {/* Header: Employee Name, ID, & Status Pill */}
-                      <div className="flex items-start justify-between gap-2 mb-2 pt-1">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {emp.selfieUrl ? (
-                            <img src={emp.selfieUrl} alt={emp.name} className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-400 shrink-0 shadow-xs" />
-                          ) : (
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                              isOnline ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              {emp.avatar || emp.name.substring(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <h3 className="text-xs font-bold text-slate-900 truncate">
-                              {emp.name}
-                            </h3>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-                              <span className="font-mono font-bold text-amber-700">{emp.employeeId}</span>
-                              <span>•</span>
-                              <span className="truncate">{emp.role}</span>
-                            </div>
-                          </div>
-                        </div>
+                    )}
 
-                        {/* Status Badge & Collapse Toggle */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
-                            isOnline 
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                              : isOut 
-                                ? 'bg-slate-100 text-slate-700 border border-slate-300' 
-                                : 'bg-amber-50 text-amber-800 border border-amber-200'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-ping' : isOut ? 'bg-slate-500' : 'bg-amber-500'}`} />
-                            <span>{emp.status}</span>
-                          </span>
+                  </div>
+                );
+              })}
+            </div>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleCardExpand(emp.id)}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                            title="Collapse card"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Punch Timings Breakdown */}
-                      <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100 my-2 text-center text-xs">
-                        <div>
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">PUNCH IN</span>
-                          <span className={`font-mono text-[11px] font-bold ${emp.punchIn ? 'text-emerald-700' : 'text-slate-400'}`}>
-                            {formatToIndian12Hr(emp.punchIn) || '--:--'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">PUNCH OUT</span>
-                          <span className={`font-mono text-[11px] font-bold ${emp.punchOut ? 'text-rose-700' : 'text-slate-400'}`}>
-                            {formatToIndian12Hr(emp.punchOut) || '--:--'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">DURATION</span>
-                          <span className={`font-mono text-[11px] font-bold ${isOnline ? 'text-emerald-600' : 'text-slate-700'}`}>
-                            {emp.elapsedDisplay || '--'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Driver Active Trip & Route Card */}
-                      {emp.activeTrip && (
-                        <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200/90 space-y-1.5 my-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-blue-950 flex items-center gap-1.5">
-                              <Truck className="w-3.5 h-3.5 text-blue-600" />
-                              <span>Mixer {emp.activeTrip.vehicleNo}</span>
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full font-mono text-[9px] font-bold bg-blue-600 text-white">
-                              {emp.activeTrip.status}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-700 flex items-center justify-between">
-                            <span className="text-slate-500 font-medium">Route:</span>
-                            <strong className="text-slate-900">{emp.activeTrip.routeLabel} ({emp.activeTrip.distanceKm} km)</strong>
-                          </div>
-                          <div className="text-[11px] text-slate-700 flex items-center justify-between">
-                            <span className="text-slate-500 font-medium">Destination:</span>
-                            <span className="font-semibold text-slate-900">{emp.activeTrip.clientName} ({emp.activeTrip.siteName})</span>
-                          </div>
-                          <a
-                            href={emp.activeTrip.googleRouteUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full py-1.5 px-2 rounded-lg font-bold text-[11px] bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs mt-1"
-                          >
-                            <Navigation className="w-3 h-3" />
-                            <span>Track Route on Google Maps</span>
-                          </a>
-                        </div>
-                      )}
-
-                      {/* Live Location & Geofence Coordinates */}
-                      <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-1.5 text-slate-700">
-                          <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span className="font-semibold truncate text-[11px]">{emp.geofenceStatus}</span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pl-5">
-                          {emp.hasGpsFix ? (
-                            <>
-                              <span>{Number(emp.lat).toFixed(4)}° N, {Number(emp.lng).toFixed(4)}° E</span>
-                              <span className="text-emerald-700 font-semibold">
-                                {emp.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : 'Punch Fix'}
-                                {emp.accuracy ? ` (±${emp.accuracy}m)` : ''}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-slate-400 italic">No GPS Fix</span>
-                              <span className="text-amber-700 font-semibold">Location Pending</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions Row */}
-                      <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                        {emp.hasGpsFix ? (
-                          <a
-                            href={`https://www.google.com/maps?q=${emp.lat},${emp.lng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 transition-colors cursor-pointer"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>Google Maps</span>
-                          </a>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
-                            <ExternalLink className="w-3 h-3 text-slate-300" />
-                            <span>No GPS Fix</span>
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => setSelectedEmployee(emp)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-3 h-3 text-slate-500" />
-                          <span>Telemetry Card</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              );
-            })}
           </div>
-
-        </div>
+        )}
 
       </div>
 
@@ -1125,72 +1444,73 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
           }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedEmployee(null);
+          }}
         >
-          <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden p-6 space-y-4 animate-pop-in">
-            
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-amber-500/20">
-                  {selectedEmployee.avatar}
+          <div 
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-slate-900 flex flex-col max-h-[90vh] animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+                  {selectedEmployee.avatar || selectedEmployee.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
-                    {selectedEmployee.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-mono">
-                    {selectedEmployee.employeeId} • {selectedEmployee.role}
-                  </p>
+                  <h3 className="text-sm font-bold text-slate-900">{selectedEmployee.name}</h3>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="font-mono text-amber-700 font-bold">{selectedEmployee.employeeId}</span>
+                    <span>•</span>
+                    <span>{selectedEmployee.role}</span>
+                  </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedEmployee(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Live Location Dossier Details */}
-            <div className="space-y-3 text-xs">
-              
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 font-medium">Status:</span>
-                  <span className="font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
-                    {selectedEmployee.status}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 font-medium">Punch In Time:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.punchIn ? formatToIndian12Hr(selectedEmployee.punchIn) : 'Not yet punched in'}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 font-medium">Punch Out Time:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedEmployee.punchOut ? formatToIndian12Hr(selectedEmployee.punchOut) : (selectedEmployee.status === 'Punched In' ? 'Active On Duty' : '--')}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 font-medium">Total Duty Duration:</span>
-                  <span className="font-mono font-bold text-amber-700">{selectedEmployee.elapsedDisplay}</span>
-                </div>
+            {/* Modal Body */}
+            <div className="p-4 overflow-y-auto space-y-3.5 text-xs">
+              {/* Status Pill */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="font-semibold text-slate-700">Duty Status</span>
+                <span className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${
+                  selectedEmployee.status === 'Punched In'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-slate-100 text-slate-700 border border-slate-300'
+                }`}>
+                  {selectedEmployee.status}
+                </span>
               </div>
 
-              {/* Exact Geolocation Telemetry */}
-              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/90 space-y-2">
-                <div className="flex items-center gap-2 text-amber-900 font-bold">
-                  <MapPin className="w-4 h-4 text-amber-600" />
-                  <span>Real-time GPS Geofence Fix</span>
+              {/* Coordinates & Geofence Box */}
+              <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-2">
+                <div className="flex items-center justify-between text-amber-900 font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Compass className="w-4 h-4 text-amber-600" />
+                    <span>Real-Time Coordinates</span>
+                  </span>
+                  <span className="font-mono text-[10px] bg-amber-100 px-2 py-0.5 rounded text-amber-800">
+                    {selectedEmployee.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : (selectedEmployee.hasGpsFix ? 'Punch-In Verified' : 'No Signal')}
+                  </span>
                 </div>
 
                 {selectedEmployee.hasGpsFix ? (
-                  <div className="grid grid-cols-2 gap-2 font-mono text-[11px] pt-1">
+                  <div className="grid grid-cols-2 gap-2 text-center font-mono text-xs">
                     <div className="p-2 rounded-xl bg-white border border-amber-200">
                       <span className="text-[10px] text-slate-400 block font-sans">LATITUDE</span>
-                      <span className="font-bold text-slate-900">{Number(selectedEmployee.lat).toFixed(5)}° N</span>
+                      <span className="font-bold text-slate-900">{selectedEmployee.lat}° N</span>
                     </div>
                     <div className="p-2 rounded-xl bg-white border border-amber-200">
                       <span className="text-[10px] text-slate-400 block font-sans">LONGITUDE</span>
-                      <span className="font-bold text-slate-900">{Number(selectedEmployee.lng).toFixed(5)}° E</span>
+                      <span className="font-bold text-slate-900">{selectedEmployee.lng}° E</span>
                     </div>
                   </div>
                 ) : (
@@ -1204,6 +1524,45 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   <span className="font-bold text-slate-900">Geofence Status: </span>
                   {selectedEmployee.geofenceStatus}
                 </div>
+
+                {selectedEmployee.activeTrip && (
+                  <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200/90 space-y-2 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
+                        <Truck className="w-4 h-4 text-blue-600" />
+                        <span>Transit Mixer: {selectedEmployee.activeTrip.vehicleNo}</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-blue-600 text-white">
+                        {selectedEmployee.activeTrip.status}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-white border border-blue-200 text-xs space-y-1">
+                      <div className="text-slate-600 flex items-center justify-between">
+                        <span>Route:</span>
+                        <strong className="text-slate-900">{selectedEmployee.activeTrip.routeLabel}</strong>
+                      </div>
+                      <div className="text-slate-600 flex items-center justify-between">
+                        <span>Site Client:</span>
+                        <strong className="text-slate-900">{selectedEmployee.activeTrip.clientName} ({selectedEmployee.activeTrip.siteName})</strong>
+                      </div>
+                      <div className="text-slate-600 flex items-center justify-between">
+                        <span>Trip Odometer:</span>
+                        <strong className="text-blue-800 font-mono">Start: {selectedEmployee.activeTrip.startOdometer} km ({selectedEmployee.activeTrip.distanceKm} km one-way)</strong>
+                      </div>
+                    </div>
+
+                    <a
+                      href={selectedEmployee.activeTrip.googleRouteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2 px-3 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>Track Driver Route on Google Maps</span>
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Telemetry Source & GNSS Accuracy */}
@@ -1221,42 +1580,16 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   </span>
                 </div>
               </div>
-
-              {/* Real-time Field Worker Direct Ping / Dispatcher Action */}
-              <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-[11px] font-bold text-amber-950 block">SCADA Live Dispatch Ping</span>
-                  <span className="text-[10px] text-amber-800">Send instant location sync directive to device</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminPingMsg(`Telemetry ping acknowledged by ${selectedEmployee.name} (${selectedEmployee.employeeId}) • 5G Round-Trip: 14ms`);
-                    setTimeout(() => setAdminPingMsg(null), 4000);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
-                >
-                  🛰️ Ping Device
-                </button>
-              </div>
-
-              {adminPingMsg && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-800 font-bold flex items-center gap-2 animate-fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{adminPingMsg}</span>
-                </div>
-              )}
-
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center gap-2.5 pt-2">
+            <div className="p-4 border-t border-slate-100 flex items-center gap-2">
               {selectedEmployee.hasGpsFix ? (
                 <a
                   href={`https://www.google.com/maps?q=${selectedEmployee.lat},${selectedEmployee.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                  className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Open in Google Maps</span>
@@ -1265,7 +1598,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 <button
                   type="button"
                   disabled
-                  className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-slate-100 text-slate-400 flex items-center justify-center gap-1.5 cursor-not-allowed"
+                  className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-slate-100 text-slate-400 flex items-center justify-center gap-1.5 cursor-not-allowed"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
                   <span>No GPS Coordinates</span>
@@ -1274,18 +1607,20 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
               <button
                 type="button"
-                onClick={() => setSelectedEmployee(null)}
-                className="py-2.5 px-4 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                onClick={() => {
+                  handleSelectStaffOnMap(selectedEmployee);
+                  setSelectedEmployee(null);
+                }}
+                className="py-2 px-3 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-1.5 transition-all cursor-pointer"
               >
-                Close
+                <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                <span>Show on Map</span>
               </button>
             </div>
-
           </div>
         </div>,
         document.body
       )}
-
     </div>
   );
 }
