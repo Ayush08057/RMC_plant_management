@@ -46,8 +46,8 @@ import {
   X
 } from 'lucide-react';
 import { MOCK_ADMIN_DATA } from '../../data/mockDashboardData';
-import { ROLES } from '../../data/mockUsers';
-import { useWorkforce } from '../../context/WorkforceContext';
+import { ROLES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { useWorkforce, isDummyEmployee } from '../../context/WorkforceContext';
 import { formatToIndian12Hr } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
@@ -245,6 +245,63 @@ export default function AdminDashboardPage() {
     location: '',
     status: 'Online',
   });
+
+
+  // Master consolidated list of all workforce personnel (official operational accounts + registered staff)
+  const allWorkforceList = useMemo(() => {
+    const map = new Map();
+
+    // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
+      const id = (acc.employeeId || acc.id || '').toUpperCase();
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      map.set(id, {
+        id: acc.employeeId || acc.id,
+        employeeId: acc.employeeId || acc.id,
+        name: acc.name,
+        role: acc.role,
+        department: acc.department || 'Operations',
+        plant: acc.plantLocation || (plants && plants[0]?.name) || 'Main Plant HQ',
+        status: 'Active',
+        salary: acc.salary || 35000,
+        mobile: acc.phone || '+91 98200 00000',
+        email: acc.email || '',
+      });
+    });
+
+    // 2. Custom enterprise registered employees
+    (employees || []).forEach((e) => {
+      const id = (e.employeeId || e.id || '').toUpperCase();
+      if (!id || isDummyEmployee(e)) return;
+      if (map.has(id)) {
+        map.set(id, { ...map.get(id), ...e });
+      } else {
+        map.set(id, e);
+      }
+    });
+
+    // 3. Fallback: Any staff present in today's attendance
+    (todayAttendanceRecords || []).forEach((att) => {
+      const id = (att.employeeId || att.id || '').toUpperCase();
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      if (!map.has(id)) {
+        map.set(id, {
+          id: att.employeeId || att.id,
+          employeeId: att.employeeId || att.id,
+          name: att.employeeName || att.name || id,
+          role: att.role || 'Staff',
+          department: att.department || 'Operations',
+          plant: att.plant || (plants && plants[0]?.name) || 'Main Plant HQ',
+          status: 'Active',
+          salary: 35000,
+          mobile: att.mobile || '+91 98200 00000',
+          email: att.email || '',
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [employees, plants, todayAttendanceRecords]);
 
   const handleOpenAddEmp = () => {
     setEmpForm({
@@ -810,9 +867,9 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
                 <KPICard
                   title="Total Workforce"
-                  value={employees.length}
-                  subtext={`${employees.filter((e) => e.status === 'Active').length} Active Duty`}
-                  trend={`${employees.length} Enrolled`}
+                  value={allWorkforceList.length}
+                  subtext={`${allWorkforceList.filter((e) => e.status !== 'Inactive').length} Active Duty`}
+                  trend={`${allWorkforceList.length} Enrolled`}
                   trendType="up"
                   color="indigo"
                   icon={Users}
@@ -1468,7 +1525,7 @@ export default function AdminDashboardPage() {
         isOpen={activeKpiModal === 'workforce'}
         onClose={() => setActiveKpiModal(null)}
         title="Total Workforce Directory & Roster"
-        subtitle={`${employees.length} personnel enrolled across batching, transport, lab, and operational units`}
+        subtitle={`${allWorkforceList.length} personnel enrolled across batching, transport, lab, and operational units`}
         icon={Users}
         maxWidth="max-w-4xl"
       >
@@ -1479,14 +1536,14 @@ export default function AdminDashboardPage() {
               <span>Enrolled Workforce Personnel</span>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                  {employees.filter(e => e.status === 'Active').length} Active Duty
+                  {allWorkforceList.filter(e => e.status !== 'Inactive').length} Active Duty
                 </span>
-                <span className="text-[11px] font-mono text-slate-500 font-normal">{employees.length} records</span>
+                <span className="text-[11px] font-mono text-slate-500 font-normal">{allWorkforceList.length} records</span>
               </div>
             </div>
             <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-              {employees.length > 0 ? (
-                employees.map((emp) => (
+              {allWorkforceList.length > 0 ? (
+                allWorkforceList.map((emp) => (
                   <div key={emp.id} className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 shrink-0">
@@ -2103,8 +2160,8 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-              {employees.length > 0 ? (
-                employees.map((emp) => (
+              {allWorkforceList.length > 0 ? (
+                allWorkforceList.map((emp) => (
                   <div key={emp.id} className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 shrink-0">

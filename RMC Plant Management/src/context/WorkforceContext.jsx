@@ -74,16 +74,13 @@ export const isDummyEmployee = (e) => {
     nameLower.includes('aayush') ||
     nameLower.includes('ayush') ||
     nameLower.includes('pranav') ||
-    nameLower === 'accountant' ||
     nameLower === 'system administrator' ||
     emailLower.includes('mukta@') ||
     emailLower.includes('ayush@') ||
     emailLower.includes('pranav@') ||
     emailLower.includes('abc@gmail.com') ||
     idUpper === 'ADM-001' ||
-    idUpper === 'USR-ADMIN-001' ||
-    idUpper === 'ACC-001' ||
-    idUpper === 'USR-ACC-001'
+    idUpper === 'USR-ADMIN-001'
   );
 };
 

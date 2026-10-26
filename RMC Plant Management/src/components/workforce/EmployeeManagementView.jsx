@@ -30,7 +30,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { ROLES } from '../../data/mockUsers';
+import { ROLES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { MOCK_PLANTS } from '../../data/mockDashboardData';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
@@ -121,28 +121,54 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
 
   // Base employees list scoped to user's permissions - Clean real records only
   const visibleEmployees = useMemo(() => {
-    let list = employees || [];
+    const map = new Map();
 
-    // Filter out dummy/test data
-    list = list.filter((e) => {
+    // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
+      const id = (acc.employeeId || acc.id || '').toUpperCase();
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      map.set(id, {
+        id: acc.employeeId || acc.id,
+        employeeId: acc.employeeId || acc.id,
+        name: acc.name,
+        role: acc.role,
+        department: acc.department || 'Operations',
+        plant: acc.plantLocation || 'Main Plant HQ',
+        status: 'Active',
+        salary: acc.salary || 35000,
+        mobile: acc.phone || '+91 98200 00000',
+        email: acc.email || '',
+      });
+    });
+
+    // 2. Custom enterprise registered employees
+    (employees || []).forEach((e) => {
+      const id = (e.employeeId || e.id || '').toUpperCase();
+      if (!id) return;
       const nameLower = (e.name || '').toLowerCase().trim();
       const emailLower = (e.email || '').toLowerCase().trim();
-      const idUpper = (e.id || e.employeeId || '').toUpperCase().trim();
       const isDummyTest =
         nameLower.includes('mukta') ||
         nameLower.includes('aayush') ||
+        nameLower.includes('ayush') ||
         nameLower.includes('pranav') ||
-        nameLower === 'accountant' ||
         nameLower === 'system administrator' ||
         emailLower.includes('mukta@') ||
         emailLower.includes('ayush@') ||
+        emailLower.includes('pranav@') ||
         emailLower.includes('abc@gmail.com') ||
-        idUpper === 'ADM-001' ||
-        idUpper === 'USR-ADMIN-001' ||
-        idUpper === 'ACC-001' ||
-        idUpper === 'USR-ACC-001';
-      return !isDummyTest;
+        id === 'ADM-001' ||
+        id === 'USR-ADMIN-001';
+      if (isDummyTest) return;
+
+      if (map.has(id)) {
+        map.set(id, { ...map.get(id), ...e });
+      } else {
+        map.set(id, e);
+      }
     });
+
+    let list = Array.from(map.values());
 
     if (!isSuperAdmin) {
       list = list.filter((e) => {
