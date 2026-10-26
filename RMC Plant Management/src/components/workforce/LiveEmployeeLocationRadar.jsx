@@ -31,6 +31,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
+import { subscribeCloudStore } from '../../services/cloudSyncService';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
@@ -44,6 +45,23 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'cards' | 'radar'
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
+  const [driverTrips, setDriverTrips] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rmc_driver_trips_v2');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const unsub = subscribeCloudStore('cloud_driver_trips', 'rmc_driver_trips_v2', [], (cloudTrips) => {
+      if (Array.isArray(cloudTrips)) setDriverTrips(cloudTrips);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
   const [radarDegree, setRadarDegree] = useState(0);
 
   // Reducible / Collapsible UI States
@@ -302,7 +320,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       t.geofenceStatus.toLowerCase().includes('site')
     ).length;
 
-    return { total, punchedIn, punchedOut, notCheckedIn, inGeofence, fieldWorkers };
+    const driversCount = telemetryList.filter((t) => t.isDriver).length;
+    return { total, punchedIn, punchedOut, notCheckedIn, inGeofence, fieldWorkers, driversCount };
   }, [telemetryList]);
 
   const uniqueRoles = useMemo(() => {
@@ -370,6 +389,20 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Hardware Tracking Notice Banner */}
+        <div className="p-2.5 mb-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-center justify-between gap-2 text-xs text-amber-900">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="truncate">
+              <strong className="font-bold">Hardware Tracking Notice: </strong>
+              Live location updates from mobile attendance punches and active vehicle GPS telemetry.
+            </span>
+          </div>
+          <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+            Active GNSS
+          </span>
         </div>
 
         {/* 4 Summary Telemetry Counters (Reducible / Collapsible) */}
@@ -856,6 +889,27 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                         </div>
                       </div>
 
+                      {emp.activeTrip && (
+                        <div className="flex items-center justify-between text-[10px] bg-blue-50/90 px-2 py-1.5 rounded-lg border border-blue-200/70 font-medium text-blue-900 gap-1.5 mb-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0 truncate">
+                            <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="font-bold text-blue-950 shrink-0">{emp.activeTrip.vehicleNo}</span>
+                            <span className="text-slate-400">•</span>
+                            <span className="truncate text-blue-800 font-semibold">{emp.activeTrip.routeLabel}</span>
+                          </div>
+                          <a
+                            href={emp.activeTrip.googleRouteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-blue-200 text-[10px] shadow-2xs cursor-pointer"
+                            title="Open Google Maps Driving Route"
+                          >
+                            <Navigation className="w-2.5 h-2.5 text-blue-600" />
+                            <span>Route</span>
+                          </a>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100 gap-2">
                         <div className="flex items-center gap-1 text-slate-600 truncate min-w-0">
                           <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
@@ -964,6 +1018,38 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                           </span>
                         </div>
                       </div>
+
+                      {/* Driver Active Trip & Route Card */}
+                      {emp.activeTrip && (
+                        <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200/90 space-y-1.5 my-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                              <Truck className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Mixer {emp.activeTrip.vehicleNo}</span>
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[9px] font-bold bg-blue-600 text-white">
+                              {emp.activeTrip.status}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-700 flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">Route:</span>
+                            <strong className="text-slate-900">{emp.activeTrip.routeLabel} ({emp.activeTrip.distanceKm} km)</strong>
+                          </div>
+                          <div className="text-[11px] text-slate-700 flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">Destination:</span>
+                            <span className="font-semibold text-slate-900">{emp.activeTrip.clientName} ({emp.activeTrip.siteName})</span>
+                          </div>
+                          <a
+                            href={emp.activeTrip.googleRouteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-1.5 px-2 rounded-lg font-bold text-[11px] bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs mt-1"
+                          >
+                            <Navigation className="w-3 h-3" />
+                            <span>Track Route on Google Maps</span>
+                          </a>
+                        </div>
+                      )}
 
                       {/* Live Location & Geofence Coordinates */}
                       <div className="space-y-1 text-xs">
