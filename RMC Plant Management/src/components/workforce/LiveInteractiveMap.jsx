@@ -1,12 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useState, useMemo } from 'react';
 import { 
   Navigation, 
   MapPin, 
   Truck, 
-  Building2, 
-  HardHat, 
   ExternalLink, 
   Layers, 
   Compass, 
@@ -14,16 +10,14 @@ import {
   ZoomOut,
   Maximize2,
   Minimize2,
-  Phone,
-  Clock
+  Route,
+  CheckCircle2
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { isAdminPerson } from '../../data/mockUsers';
 
 // Sangli Plant HQ and Major Operational Anchors
-const SANGLI_PLANT_HQ = { lat: 16.8450, lng: 74.6200 };
-const SANGLI_MARKET_YARD = { lat: 16.8584, lng: 74.5824 };
-const SANGLI_SITE_PROJECT = { lat: 16.8520, lng: 74.5900 };
+const SANGLI_PLANT_HQ = { lat: 16.8450, lng: 74.6200, name: 'SM Concrete Plant HQ, Tanang' };
 
 export default function LiveInteractiveMap({
   telemetryList = [],
@@ -41,408 +35,113 @@ export default function LiveInteractiveMap({
   onToggleFullWidth = () => {},
 }) {
   const { t } = useLanguage();
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markersLayerRef = useRef(null);
-  const routeLayerRef = useRef(null);
-  const tileLayerRef = useRef(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [internalZoom, setInternalZoom] = useState(15);
 
-  // Initialize Leaflet Map
-  useEffect(() => {
-    if (!mapContainerRef.current) return;
-    if (mapInstanceRef.current) return;
+  // Validate active target (skip system admin to avoid fake GPS coords)
+  const validTarget = useMemo(() => {
+    if (activeTarget && !isAdminPerson(activeTarget)) return activeTarget;
+    const nonAdminPunchedIn = telemetryList.find((t) => !isAdminPerson(t) && t.hasGpsFix);
+    return nonAdminPunchedIn || telemetryList.find((t) => !isAdminPerson(t)) || null;
+  }, [activeTarget, telemetryList]);
 
-    // Center map around Sangli operational belt (strictly ignoring admin)
-    const validTarget = activeTarget && !isAdminPerson(activeTarget) ? activeTarget : null;
-    const initialLat = validTarget?.lat || SANGLI_PLANT_HQ.lat;
-    const initialLng = validTarget?.lng || SANGLI_PLANT_HQ.lng;
+  // Determine active coordinates
+  const activeLat = selectedStop?.lat || validTarget?.lat || SANGLI_PLANT_HQ.lat;
+  const activeLng = selectedStop?.lng || validTarget?.lng || SANGLI_PLANT_HQ.lng;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [initialLat, initialLng],
-      zoom: 14,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    // Tile Layer: OpenStreetMap or Esri Satellite
-    const streetUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-
-    const tileLayer = L.tileLayer(mapSatellite ? satelliteUrl : streetUrl, {
-      maxZoom: 19,
-      subdomains: ['a', 'b', 'c'],
-    }).addTo(map);
-
-    tileLayerRef.current = tileLayer;
-
-    // Layer groups for markers & route lines
-    const markersGroup = L.layerGroup().addTo(map);
-    const routeGroup = L.layerGroup().addTo(map);
-
-    markersLayerRef.current = markersGroup;
-    routeLayerRef.current = routeGroup;
-    mapInstanceRef.current = map;
-    setMapReady(true);
-
-    return () => {
-      map.remove();
-      mapInstanceRef.current = null;
-    };
-  }, []);
-
-  // Update Tile Layer when satellite mode toggles
-  useEffect(() => {
-    if (!mapInstanceRef.current || !tileLayerRef.current) return;
-    const streetUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-
-    tileLayerRef.current.setUrl(mapSatellite ? satelliteUrl : streetUrl);
-  }, [mapSatellite]);
-
-  // Update Markers & Routes whenever telemetry or activeTarget changes
-  useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current || !routeLayerRef.current) return;
-
-    const map = mapInstanceRef.current;
-    const markersGroup = markersLayerRef.current;
-    const routeGroup = routeLayerRef.current;
-
-    markersGroup.clearLayers();
-    routeGroup.clearLayers();
-
-    // 1. Plot Plant HQ Permanent Anchor Marker
-    const plantHqIcon = L.divIcon({
-      className: 'custom-leaflet-marker',
-      html: `
-        <div class="flex flex-col items-center group cursor-pointer">
-          <div class="px-2 py-0.5 rounded-md bg-amber-500 text-white font-extrabold text-[10px] shadow-md border border-white whitespace-nowrap mb-1">
-            🏭 Main Plant HQ
-          </div>
-          <div class="w-8 h-8 rounded-full bg-amber-600 border-2 border-white flex items-center justify-center text-white shadow-lg animate-bounce">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-          </div>
-          <div class="w-2 h-2 rounded-full bg-amber-600 shadow-sm mt-0.5"></div>
-        </div>
-      `,
-      iconSize: [120, 60],
-      iconAnchor: [60, 58],
-    });
-
-    const plantMarker = L.marker([SANGLI_PLANT_HQ.lat, SANGLI_PLANT_HQ.lng], { icon: plantHqIcon })
-      .bindPopup(`
-        <div class="p-2 text-xs font-sans">
-          <div class="font-bold text-amber-700 text-sm mb-1">SM Concrete Tech — Plant HQ</div>
-          <div class="text-slate-600 mb-1">Tanang, Sangli-Miraj Road, Sangli</div>
-          <div class="text-[11px] text-slate-500 font-mono">16.8450°N, 74.6200°E</div>
-          <div class="mt-2 text-emerald-700 font-bold">● Batching Control & Weighbridge Active</div>
-        </div>
-      `)
-      .addTo(markersGroup);
-
-    // 2. Plot Sangli Market Yard APMC Marker
-    const apmcIcon = L.divIcon({
-      className: 'custom-leaflet-marker',
-      html: `
-        <div class="flex flex-col items-center group cursor-pointer">
-          <div class="px-2 py-0.5 rounded-md bg-blue-600 text-white font-extrabold text-[10px] shadow-md border border-white whitespace-nowrap mb-1">
-            📍 Sangli Market Yard
-          </div>
-          <div class="w-8 h-8 rounded-full bg-blue-700 border-2 border-white flex items-center justify-center text-white shadow-lg">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-          </div>
-        </div>
-      `,
-      iconSize: [140, 60],
-      iconAnchor: [70, 58],
-    });
-
-    L.marker([SANGLI_MARKET_YARD.lat, SANGLI_MARKET_YARD.lng], { icon: apmcIcon })
-      .bindPopup(`
-        <div class="p-2 text-xs font-sans">
-          <div class="font-bold text-blue-700 text-sm mb-1">Sangli Market Yard (APMC)</div>
-          <div class="text-slate-600 mb-1">Accounts, Finance & Commercial Operations</div>
-          <div class="text-[11px] text-slate-500 font-mono">16.8584°N, 74.5824°E</div>
-        </div>
-      `)
-      .addTo(markersGroup);
-
-    // 3. Draw Route Polyline & Visited Stops Waypoint Pins
-    if (mapRouteMode && activeRouteDetails && Array.isArray(activeRouteDetails.stops) && activeRouteDetails.stops.length > 0) {
-      const routeCoords = activeRouteDetails.polylineCoords && activeRouteDetails.polylineCoords.length > 0 
-        ? activeRouteDetails.polylineCoords 
-        : activeRouteDetails.stops.map((s) => [Number(s.lat), Number(s.lng)]);
-
-      // Polyline with blue/cyan color and clean dash
-      L.polyline(routeCoords, {
-        color: '#0284c7',
-        weight: 5,
-        opacity: 0.9,
-        dashArray: '8, 6',
-      }).addTo(routeGroup);
-
-      // Plot numbered waypoint pins for each visited stop
-      activeRouteDetails.stops.forEach((stop, index) => {
-        const isStart = index === 0;
-        const isCurrent = stop.status === 'Current Stop' || index === activeRouteDetails.stops.length - 1;
-        const isSelected = selectedStop?.stopNo === stop.stopNo;
-
-        let badgeBg = isStart ? 'bg-emerald-600' : isCurrent ? 'bg-amber-500' : 'bg-blue-600';
-        let circleBg = isStart ? 'bg-emerald-700' : isCurrent ? 'bg-amber-600' : 'bg-blue-700';
-        let labelText = isStart ? `1. ${stop.title}` : isCurrent ? `📍 ${stop.title}` : `${stop.stopNo}. ${stop.title}`;
-
-        const waypointIcon = L.divIcon({
-          className: 'custom-waypoint-marker',
-          html: `
-            <div class="flex flex-col items-center cursor-pointer transition-transform ${isSelected ? 'scale-125 z-60' : 'hover:scale-110'}">
-              <div class="px-2 py-0.5 rounded-md ${badgeBg} text-white font-extrabold text-[9px] shadow-md border border-white whitespace-nowrap mb-0.5">
-                ${labelText}
-              </div>
-              <div class="w-6 h-6 rounded-full ${circleBg} border-2 ${isSelected ? 'border-amber-300 ring-4 ring-amber-400/50' : 'border-white'} text-white font-black text-[10px] flex items-center justify-center shadow-lg">
-                ${isCurrent ? '●' : stop.stopNo}
-              </div>
-            </div>
-          `,
-          iconSize: [120, 50],
-          iconAnchor: [60, 48],
-        });
-
-        const wpMarker = L.marker([Number(stop.lat), Number(stop.lng)], { icon: waypointIcon })
-          .on('click', () => {
-            onSelectStop(stop);
-          })
-          .bindPopup(`
-            <div class="p-2.5 text-xs font-sans min-w-[210px]">
-              <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1 mb-1.5">
-                <span class="font-bold text-slate-900 text-xs">Stop #${stop.stopNo}: ${stop.title}</span>
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                  isStart ? 'bg-emerald-100 text-emerald-800' : isCurrent ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                }">${stop.status}</span>
-              </div>
-              <div class="space-y-1 text-slate-600 text-[11px]">
-                <div><strong class="text-slate-700">Time:</strong> ${stop.time} ${stop.stayMinutes ? `(Stay: ${stop.stayMinutes}m)` : ''}</div>
-                <div><strong class="text-slate-700">Category:</strong> ${stop.category}</div>
-                <div><strong class="text-slate-700">Distance:</strong> <span class="font-mono font-bold text-blue-700">${stop.distanceKm} km from Start</span></div>
-                <div><strong class="text-slate-700">Address:</strong> ${stop.address}</div>
-                ${stop.notes ? `<div class="italic text-slate-500 mt-1">"${stop.notes}"</div>` : ''}
-              </div>
-              <div class="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between">
-                <a 
-                  href="https://www.google.com/maps?q=${stop.lat},${stop.lng}" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800"
-                >
-                  <span>Google Maps</span>
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                </a>
-              </div>
-            </div>
-          `)
-          .addTo(routeGroup);
-
-        if (isSelected && mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo([Number(stop.lat), Number(stop.lng)], 16, { duration: 0.6 });
-          wpMarker.openPopup();
-        }
-      });
-    } else if (mapRouteMode) {
-      const fallbackPoints = [
-        [SANGLI_PLANT_HQ.lat, SANGLI_PLANT_HQ.lng],
-        [16.8490, 74.6080],
-        [SANGLI_SITE_PROJECT.lat, SANGLI_SITE_PROJECT.lng],
-        [SANGLI_MARKET_YARD.lat, SANGLI_MARKET_YARD.lng]
-      ];
-
-      L.polyline(fallbackPoints, {
-        color: '#06b6d4',
-        weight: 4,
-        opacity: 0.85,
-        dashArray: '8, 8',
-      }).addTo(routeGroup);
+  // Construct High-Definition Google Maps Embed URL
+  const mapEmbedUrl = useMemo(() => {
+    // If a specific stop was clicked in the route timeline:
+    if (selectedStop) {
+      return `https://maps.google.com/maps?q=${selectedStop.lat},${selectedStop.lng}&z=16${mapSatellite ? '&t=k' : ''}&output=embed`;
     }
 
-    // 4. Plot Telemetry Staff & Vehicles (Strictly exclude Admin)
-    telemetryList.filter((s) => !isAdminPerson(s)).forEach((staff) => {
-      // Determine coordinates: real GPS fix or default stationed hub
-      let lat = staff.lat;
-      let lng = staff.lng;
+    // If Route mode is active and we have visited waypoints:
+    if (mapRouteMode && activeRouteDetails && Array.isArray(activeRouteDetails.stops) && activeRouteDetails.stops.length > 1) {
+      const startStop = activeRouteDetails.stops[0];
+      const endStop = activeRouteDetails.stops[activeRouteDetails.stops.length - 1];
+      return `https://maps.google.com/maps?saddr=${startStop.lat},${startStop.lng}&daddr=${endStop.lat},${endStop.lng}&z=${internalZoom}${mapSatellite ? '&t=k' : ''}&output=embed`;
+    }
 
-      const isDriver = (staff.role || '').toLowerCase().includes('driver');
-      const isAccountant = (staff.role || '').toLowerCase().includes('account');
-      const isSupervisor = (staff.role || '').toLowerCase().includes('supervisor');
+    // Default: Point of Interest / Live GPS fix of staff member
+    return `https://maps.google.com/maps?q=${activeLat},${activeLng}&z=${internalZoom}${mapSatellite ? '&t=k' : ''}&output=embed`;
+  }, [selectedStop, mapRouteMode, activeRouteDetails, activeLat, activeLng, internalZoom, mapSatellite]);
 
-      if (!lat || !lng) {
-        if (isAccountant) {
-          lat = SANGLI_MARKET_YARD.lat;
-          lng = SANGLI_MARKET_YARD.lng;
-        } else if (isDriver) {
-          lat = 16.8490;
-          lng = 74.6080;
-        } else if (isSupervisor) {
-          lat = SANGLI_SITE_PROJECT.lat;
-          lng = SANGLI_SITE_PROJECT.lng;
-        } else {
-          lat = SANGLI_PLANT_HQ.lat;
-          lng = SANGLI_PLANT_HQ.lng;
-        }
-      }
-
-      const isPunchedIn = staff.status === 'Punched In';
-      const isSelected = activeTarget?.id === staff.id;
-
-      let badgeColor = isDriver ? 'bg-cyan-600' : isAccountant ? 'bg-indigo-600' : 'bg-emerald-600';
-      let iconColor = isDriver ? 'bg-cyan-700' : isAccountant ? 'bg-indigo-700' : 'bg-emerald-700';
-
-      const staffMarkerIcon = L.divIcon({
-        className: 'custom-staff-marker',
-        html: `
-          <div class="flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? 'scale-110 z-50' : 'hover:scale-105'}">
-            <div class="px-2 py-0.5 rounded-md ${badgeColor} text-white font-black text-[10px] shadow-lg border border-white whitespace-nowrap mb-0.5 flex items-center gap-1">
-              ${isDriver ? '🚚 ' + (staff.activeTrip?.vehicleNo || 'MH-10-CR-1212') : staff.name}
-            </div>
-            <div class="w-8 h-8 rounded-full ${iconColor} border-2 ${isSelected ? 'border-amber-400 ring-4 ring-amber-400/40' : 'border-white'} flex items-center justify-center text-white font-bold text-xs shadow-xl">
-              ${isDriver ? '🚛' : isAccountant ? '📊' : isSupervisor ? '👷' : '👤'}
-            </div>
-            <div class="w-2.5 h-2.5 rounded-full ${isPunchedIn ? 'bg-emerald-400 animate-ping' : 'bg-slate-400'} mt-0.5"></div>
-          </div>
-        `,
-        iconSize: [140, 60],
-        iconAnchor: [70, 58],
-      });
-
-      const marker = L.marker([lat, lng], { icon: staffMarkerIcon })
-        .on('click', () => {
-          onSelectTarget(staff);
-        })
-        .bindPopup(`
-          <div class="p-2.5 text-xs font-sans min-w-[200px]">
-            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 mb-2">
-              <span class="font-bold text-slate-900 text-sm">${staff.name}</span>
-              <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                isPunchedIn ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-              }">${staff.status}</span>
-            </div>
-            <div class="space-y-1 text-slate-600">
-              <div><strong class="text-slate-800">Role:</strong> ${staff.role}</div>
-              <div><strong class="text-slate-800">Location:</strong> ${staff.geofenceStatus || 'Sangli Operational Area'}</div>
-              <div><strong class="text-slate-800">Coordinates:</strong> <span class="font-mono text-emerald-700 font-bold">${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E</span></div>
-              ${isDriver && staff.activeTrip ? `
-                <div class="mt-2 pt-2 border-t border-slate-100 text-[11px]">
-                  <div><strong class="text-cyan-700">Vehicle:</strong> ${staff.activeTrip.vehicleNo}</div>
-                  <div><strong class="text-cyan-700">Destination:</strong> ${staff.activeTrip.siteName}</div>
-                  <div><strong class="text-cyan-700">Route:</strong> ${staff.activeTrip.routeLabel}</div>
-                </div>
-              ` : ''}
-            </div>
-            <div class="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
-              <a 
-                href="https://www.google.com/maps?q=${lat},${lng}" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800"
-              >
-                <span>Google Maps</span>
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-              </a>
-            </div>
-          </div>
-        `)
-        .addTo(markersGroup);
-
-      // If this is the active selected target, open popup and pan to it
-      if (isSelected && mapInstanceRef.current) {
-        mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
-        marker.openPopup();
-      }
-    });
-
-  }, [telemetryList, activeTarget, mapRouteMode, activeRouteDetails, selectedStop, onSelectTarget, onSelectStop]);
-
-  // Center on active target when focus changes (strictly ignoring admin)
-  const handleCenterOnActive = () => {
-    if (!mapInstanceRef.current) return;
-    const validTarget = activeTarget && !isAdminPerson(activeTarget) ? activeTarget : null;
-    const lat = validTarget?.lat || SANGLI_PLANT_HQ.lat;
-    const lng = validTarget?.lng || SANGLI_PLANT_HQ.lng;
-    mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
-  };
-
-  const handleZoomIn = () => {
-    if (mapInstanceRef.current) mapInstanceRef.current.zoomIn();
-  };
-
-  const handleZoomOut = () => {
-    if (mapInstanceRef.current) mapInstanceRef.current.zoomOut();
-  };
+  const handleZoomIn = () => setInternalZoom((z) => Math.min(19, z + 1));
+  const handleZoomOut = () => setInternalZoom((z) => Math.max(11, z - 1));
 
   return (
-    <div className={`relative w-full rounded-2xl overflow-hidden border border-slate-300 shadow-inner bg-slate-950 transition-all duration-300 ${
-      isFullWidth ? 'h-[620px]' : 'h-[480px] sm:h-[520px] xl:h-[550px]'
+    <div className={`relative w-full rounded-2xl overflow-hidden border border-slate-300 shadow-md bg-slate-900 transition-all duration-300 ${
+      isFullWidth ? 'h-[620px]' : 'h-[460px] sm:h-[500px] xl:h-[520px]'
     }`}>
-      {/* Leaflet Map Canvas Container */}
-      <div ref={mapContainerRef} className="w-full h-full z-0" />
+      {/* Real High-Definition Google Maps Iframe */}
+      <iframe
+        key={mapEmbedUrl}
+        title="Live Interactive GPS Map"
+        width="100%"
+        height="100%"
+        style={{ border: 0, width: '100%', height: '100%' }}
+        loading="lazy"
+        allowFullScreen
+        src={mapEmbedUrl}
+        className="w-full h-full"
+      />
 
-      {/* Top Floating Telemetry HUD (Displays Active Workforce Target or Plant HQ, Never Admin) */}
-      {(() => {
-        const hudTarget = activeTarget && !isAdminPerson(activeTarget) ? activeTarget : null;
-        return (
-          <div className="absolute top-2.5 left-2.5 right-2.5 z-400 bg-white/95 backdrop-blur-md border border-slate-300 text-slate-900 p-2.5 px-3 rounded-xl shadow-lg flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-blue-600 border-2 border-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 text-white shadow-xs">
-                {hudTarget ? (hudTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-900 font-bold truncate text-xs">
-                    {hudTarget?.name || 'SM Concrete Tech — Sangli Fleet Radar'}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-semibold truncate hidden sm:inline">
-                    • {hudTarget?.role || 'Plant Hub'}
-                  </span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                    {hudTarget?.status || 'Active Roster'}
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-600 font-mono font-medium flex items-center gap-1.5 truncate">
-                  <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
-                  <span className="truncate">{hudTarget?.geofenceStatus || 'Sangli Operational Grid'}</span>
-                  <span>•</span>
-                  <span className="text-emerald-700 font-bold">
-                    {(hudTarget?.lat || SANGLI_PLANT_HQ.lat).toFixed(4)}°N, {(hudTarget?.lng || SANGLI_PLANT_HQ.lng).toFixed(4)}°E
-                  </span>
-                </div>
-              </div>
+      {/* Top Floating Telemetry HUD */}
+      <div className="absolute top-2.5 left-2.5 right-2.5 z-10 bg-white/95 backdrop-blur-md border border-slate-200 text-slate-900 p-2.5 px-3 rounded-xl shadow-lg flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-blue-600 border-2 border-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 text-white shadow-xs">
+            {validTarget ? (validTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-900 font-bold truncate text-xs">
+                {selectedStop ? `Stop #${selectedStop.stopNo}: ${selectedStop.title}` : (validTarget?.name || 'SM Concrete Tech — Sangli Fleet Radar')}
+              </span>
+              <span className="text-[10px] text-slate-500 font-semibold truncate hidden sm:inline">
+                • {validTarget?.role || 'Plant Hub'}
+              </span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 shrink-0">
+                {selectedStop ? selectedStop.status : (validTarget?.status || 'Active')}
+              </span>
             </div>
-
-            {/* Action Controls in HUD */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={handleCenterOnActive}
-                className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1 shadow-2xs cursor-pointer"
-                title="Center Map"
-              >
-                <Compass className="w-3.5 h-3.5 text-blue-600" />
-                <span className="hidden sm:inline">Center</span>
-              </button>
-
-              <a
-                href={`https://www.google.com/maps?q=${hudTarget?.lat || SANGLI_PLANT_HQ.lat},${hudTarget?.lng || SANGLI_PLANT_HQ.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-2xs cursor-pointer"
-                title="Open in Google Maps"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+            <div className="text-[10px] text-slate-600 font-mono font-medium flex items-center gap-1.5 truncate">
+              <MapPin className="w-3 h-3 text-amber-600 shrink-0" />
+              <span className="truncate">{selectedStop?.address || validTarget?.geofenceStatus || 'Sangli Operational Area'}</span>
+              <span>•</span>
+              <span className="text-emerald-700 font-bold">
+                {Number(activeLat).toFixed(4)}°N, {Number(activeLng).toFixed(4)}°E
+              </span>
             </div>
           </div>
-        );
-      })()}
+        </div>
 
-      {/* Floating Map Utility Bar (Satellite Toggle, Route Toggle, Zoom Controls, Fullscreen) */}
-      <div className="absolute bottom-4 right-3 z-400 flex flex-col items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-300 shadow-xl">
+        {/* Action Controls in HUD */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {selectedStop && (
+            <button
+              type="button"
+              onClick={() => onSelectStop(null)}
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="Reset to Full Route"
+            >
+              <span>Full Route</span>
+            </button>
+          )}
+
+          <a
+            href={`https://www.google.com/maps?q=${activeLat},${activeLng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-2xs cursor-pointer"
+            title="Open in Google Maps App"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
+
+      {/* Floating Map Utility Bar */}
+      <div className="absolute bottom-4 right-3 z-10 flex flex-col items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-300 shadow-xl">
         <button
           type="button"
           onClick={onToggleSatellite}
@@ -460,9 +159,9 @@ export default function LiveInteractiveMap({
           className={`p-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             mapRouteMode ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
           }`}
-          title="Toggle Fleet Delivery Routes"
+          title={mapRouteMode ? 'Switch to Single Pin Mode' : 'Switch to Visited Route Navigation Path'}
         >
-          <Navigation className="w-4 h-4" />
+          <Route className="w-4 h-4" />
         </button>
 
         <div className="w-full h-px bg-slate-200 my-0.5" />
@@ -498,10 +197,12 @@ export default function LiveInteractiveMap({
       </div>
 
       {/* Floating Status Indicator on Bottom-Left */}
-      <div className="absolute bottom-4 left-3 z-400 bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-2 text-xs">
+      <div className="absolute bottom-4 left-3 z-10 bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-2 text-xs">
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        <span className="font-bold font-mono">Live GNSS Active</span>
-        <span className="text-slate-400 text-[10px] hidden sm:inline">• High-Precision Sangli Cluster</span>
+        <span className="font-bold font-mono">Google Maps Live</span>
+        <span className="text-slate-400 text-[10px] hidden sm:inline">
+          {mapRouteMode ? '• Route Navigation Active' : '• GNSS Pin Active'}
+        </span>
       </div>
     </div>
   );
