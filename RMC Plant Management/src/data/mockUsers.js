@@ -29,6 +29,22 @@ export const ROLE_ROUTES = {
   [ROLES.OWNER_DIRECTOR]: '/owner',
 };
 
+export function isAdminPerson(u) {
+  if (!u) return false;
+  const roleLower = String(u.role || '').trim().toLowerCase();
+  const nameLower = String(u.name || '').trim().toLowerCase();
+  const idUpper = String(u.employeeId || u.id || '').trim().toUpperCase();
+  return (
+    roleLower === 'admin' ||
+    roleLower.includes('system admin') ||
+    roleLower.includes('administrator') ||
+    nameLower === 'system administrator' ||
+    nameLower.includes('system admin') ||
+    idUpper === 'ADM-001' ||
+    idUpper === 'USR-ADMIN-001'
+  );
+}
+
 export function getRoleRoute(role) {
   if (!role) return '/login';
   if (ROLE_ROUTES[role]) return ROLE_ROUTES[role];

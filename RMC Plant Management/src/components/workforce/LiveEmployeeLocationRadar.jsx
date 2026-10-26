@@ -34,9 +34,11 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { OFFICIAL_ROLE_ACCOUNTS, isAdminPerson } from '../../data/mockUsers';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
+import { getEmployeeRouteDetails, recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
@@ -54,8 +56,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
   const [mapZoom, setMapZoom] = useState(15);
   const [mapSatellite, setMapSatellite] = useState(false);
-  const [mapRouteMode, setMapRouteMode] = useState(false);
+  const [mapRouteMode, setMapRouteMode] = useState(true);
   const [isFullscreenMap, setIsFullscreenMap] = useState(false);
+  const [selectedStop, setSelectedStop] = useState(null);
+  const [routeHistoryExpanded, setRouteHistoryExpanded] = useState(true);
 
   // Real Driver Trips from Local & Cloud Store
   const [driverTrips, setDriverTrips] = useState(() => {
@@ -165,10 +169,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Master list of real workforce employees + current authenticated user
+  // Master list of real workforce employees (strictly excluding Administrator accounts)
   const allEmployees = useMemo(() => {
     const map = new Map();
-    if (user) {
+    // Only include currently logged in user if they are non-admin operational personnel
+    if (user && !isAdminPerson(user)) {
       const uKey = user.employeeId || user.id || 'EMP-USER-01';
       map.set(uKey, {
         id: uKey,
@@ -179,22 +184,59 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         plant: user.plantLocation || 'Main Plant HQ',
         avatar: (user.name || 'US').substring(0, 2).toUpperCase(),
         phone: user.phone || '+91 98200 00000',
+        isDriver: (user.role || '').toLowerCase().includes('driver'),
       });
     }
     (employees || []).forEach((e) => {
+      if (isAdminPerson(e)) return;
       const key = e.employeeId || e.id;
       map.set(key, {
         ...map.get(key),
         ...e,
         id: key,
         employeeId: key,
+        isDriver: (e.role || '').toLowerCase().includes('driver'),
       });
     });
-    return Array.from(map.values());
-  }, [employees, user]);
+
+    // Also include active transit drivers from driverTrips if not already present
+    (driverTrips || []).forEach((trip) => {
+      const tripKey = trip.driverId || `DRV-${trip.id}`;
+      if (!map.has(tripKey) && trip.driverName) {
+        map.set(tripKey, {
+          id: tripKey,
+          employeeId: tripKey,
+          name: trip.driverName,
+          role: 'Transit Driver',
+          department: 'Logistics',
+          plant: trip.plant || 'Sangli Main Plant HQ',
+          avatar: trip.driverName.substring(0, 2).toUpperCase(),
+          phone: trip.driverPhone || '+91 98220 12345',
+          isDriver: true,
+        });
+      }
+    });
+
+    // If still no employees enrolled, populate with official operational workforce accounts (strictly non-admin)
+    if (map.size === 0) {
+      OFFICIAL_ROLE_ACCOUNTS.forEach((acc) => {
+        if (isAdminPerson(acc)) return;
+        const key = acc.employeeId || acc.id;
+        map.set(key, {
+          ...acc,
+          id: key,
+          employeeId: key,
+          avatar: (acc.name || 'OP').substring(0, 2).toUpperCase(),
+          isDriver: (acc.role || '').toLowerCase().includes('driver'),
+        });
+      });
+    }
+
+    return Array.from(map.values()).filter((e) => !isAdminPerson(e));
+  }, [employees, user, driverTrips]);
 
   const liveTrackedEmployees = useMemo(() => {
-    return allEmployees;
+    return allEmployees.filter((e) => !isAdminPerson(e));
   }, [allEmployees]);
 
   // Combine live tracked employees with today's attendance records & GPS telemetry
@@ -210,11 +252,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       const isPunchedIn = Boolean(record?.punchIn && !record?.punchOut);
       const isPunchedOut = Boolean(record?.punchIn && record?.punchOut);
 
-      // Check if this employee is the active user on this client device
-      const isCurrentUser = user && (
+      // Check if this employee is the active user on this client device (never admin)
+      const isCurrentUser = Boolean(user && !isAdminPerson(user) && (
         (user.employeeId && emp.employeeId && user.employeeId.toUpperCase() === emp.employeeId.toUpperCase()) ||
         (user.id && emp.id && user.id === emp.id)
-      );
+      ));
 
       let lat = null;
       let lng = null;
@@ -333,60 +375,78 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         activeTrip,
         isDriver,
       };
-    });
+    }).filter((t) => !isAdminPerson(t));
   }, [liveTrackedEmployees, attendance, todayStr, realDeviceGps, user, driverTrips]);
 
-  // Filtered telemetry list
+  // Filtered telemetry list (strictly workforce only, excluding admin)
   const filteredList = useMemo(() => {
-    return telemetryList.filter((item) => {
-      const matchSearch = 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.geofenceStatus.toLowerCase().includes(searchQuery.toLowerCase());
+    return telemetryList
+      .filter((item) => !isAdminPerson(item))
+      .filter((item) => {
+        const matchSearch = 
+          (item.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (item.employeeId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (item.role || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (item.geofenceStatus || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchRole = selectedRoleFilter === 'All' || item.role === selectedRoleFilter;
-      const matchStatus = selectedStatusFilter === 'All' || item.status === selectedStatusFilter;
+        const matchRole = selectedRoleFilter === 'All' || item.role === selectedRoleFilter;
+        const matchStatus = selectedStatusFilter === 'All' || item.status === selectedStatusFilter;
 
-      const isFieldWorker = 
-        item.role.toLowerCase().includes('driver') ||
-        item.role.toLowerCase().includes('supervisor') ||
-        item.role.toLowerCase().includes('quality') ||
-        item.role.toLowerCase().includes('field') ||
-        item.geofenceStatus.toLowerCase().includes('transit') ||
-        item.geofenceStatus.toLowerCase().includes('site');
+        const isFieldWorker = 
+          (item.role || '').toLowerCase().includes('driver') ||
+          (item.role || '').toLowerCase().includes('supervisor') ||
+          (item.role || '').toLowerCase().includes('quality') ||
+          (item.role || '').toLowerCase().includes('field') ||
+          (item.geofenceStatus || '').toLowerCase().includes('transit') ||
+          (item.geofenceStatus || '').toLowerCase().includes('site');
 
-      const matchCategory = 
-        categoryFilter === 'all' ||
-        (categoryFilter === 'drivers' && item.isDriver) ||
-        (categoryFilter === 'field' && isFieldWorker) ||
-        (categoryFilter === 'plant' && !isFieldWorker);
+        const matchCategory = 
+          categoryFilter === 'all' ||
+          (categoryFilter === 'drivers' && item.isDriver) ||
+          (categoryFilter === 'field' && isFieldWorker) ||
+          (categoryFilter === 'plant' && !isFieldWorker);
 
-      return matchSearch && matchRole && matchStatus && matchCategory;
-    });
+        return matchSearch && matchRole && matchStatus && matchCategory;
+      });
   }, [telemetryList, searchQuery, selectedRoleFilter, selectedStatusFilter, categoryFilter]);
 
-  // Active target for map focus
+  // Active target for map focus (strictly non-admin)
   const activeTarget = useMemo(() => {
+    const validCandidates = telemetryList.filter((t) => !isAdminPerson(t));
     if (selectedTargetId) {
-      const found = telemetryList.find((t) => t.id === selectedTargetId);
+      const found = validCandidates.find((t) => t.id === selectedTargetId);
       if (found) return found;
     }
     if (selectedEmployee) {
-      const found = telemetryList.find((t) => t.id === selectedEmployee.id);
+      const found = validCandidates.find((t) => t.id === selectedEmployee.id);
       if (found) return found;
     }
     return (
-      telemetryList.find((t) => t.isDriver && t.hasGpsFix) ||
-      telemetryList.find((t) => t.status === 'Punched In' && t.hasGpsFix) ||
-      telemetryList.find((t) => t.hasGpsFix) ||
-      telemetryList[0] ||
+      validCandidates.find((t) => t.isDriver && t.hasGpsFix) ||
+      validCandidates.find((t) => t.status === 'Punched In' && t.hasGpsFix) ||
+      validCandidates.find((t) => t.hasGpsFix) ||
+      validCandidates[0] ||
       null
     );
   }, [selectedTargetId, selectedEmployee, telemetryList]);
 
+  // Active visited route details for active target
+  const activeRouteDetails = useMemo(() => {
+    if (!activeTarget || isAdminPerson(activeTarget)) return null;
+    return getEmployeeRouteDetails(activeTarget, realDeviceGps);
+  }, [activeTarget, realDeviceGps]);
+
+  // Record live GPS breadcrumb for authenticated staff (strictly non-admin)
+  useEffect(() => {
+    if (user && !isAdminPerson(user) && realDeviceGps.active && realDeviceGps.lat && realDeviceGps.lng) {
+      const uKey = user.employeeId || user.id || 'EMP-USER-01';
+      recordEmployeeBreadcrumb(uKey, realDeviceGps.lat, realDeviceGps.lng);
+    }
+  }, [user, realDeviceGps.active, realDeviceGps.lat, realDeviceGps.lng]);
+
   // Select employee on map and sync selection
   const handleSelectStaffOnMap = (emp) => {
+    if (isAdminPerson(emp)) return;
     setSelectedTargetId(emp.id);
     setSelectedEmployee(emp);
     setMapDisplayType('gis');
@@ -396,28 +456,29 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     }
   };
 
-  // Statistics
+  // Statistics (strictly workforce only, excluding admin)
   const stats = useMemo(() => {
-    const total = telemetryList.length;
-    const punchedIn = telemetryList.filter((t) => t.status === 'Punched In').length;
-    const punchedOut = telemetryList.filter((t) => t.status === 'Punched Out').length;
-    const notCheckedIn = telemetryList.filter((t) => t.status === 'Not Checked In').length;
-    const inGeofence = telemetryList.filter((t) => t.status === 'Punched In' && t.geofenceStatus.includes('Inside')).length;
-    const fieldWorkers = telemetryList.filter((t) => 
-      t.role.toLowerCase().includes('driver') ||
-      t.role.toLowerCase().includes('supervisor') ||
-      t.role.toLowerCase().includes('quality') ||
-      t.role.toLowerCase().includes('field') ||
-      t.geofenceStatus.toLowerCase().includes('transit') ||
-      t.geofenceStatus.toLowerCase().includes('site')
+    const list = telemetryList.filter((t) => !isAdminPerson(t));
+    const total = list.length;
+    const punchedIn = list.filter((t) => t.status === 'Punched In').length;
+    const punchedOut = list.filter((t) => t.status === 'Punched Out').length;
+    const notCheckedIn = list.filter((t) => t.status === 'Not Checked In').length;
+    const inGeofence = list.filter((t) => t.status === 'Punched In' && (t.geofenceStatus || '').includes('Inside')).length;
+    const fieldWorkers = list.filter((t) => 
+      (t.role || '').toLowerCase().includes('driver') ||
+      (t.role || '').toLowerCase().includes('supervisor') ||
+      (t.role || '').toLowerCase().includes('quality') ||
+      (t.role || '').toLowerCase().includes('field') ||
+      (t.geofenceStatus || '').toLowerCase().includes('transit') ||
+      (t.geofenceStatus || '').toLowerCase().includes('site')
     ).length;
-    const driversCount = telemetryList.filter((t) => t.isDriver).length;
+    const driversCount = list.filter((t) => t.isDriver).length;
 
     return { total, punchedIn, punchedOut, notCheckedIn, inGeofence, fieldWorkers, driversCount };
   }, [telemetryList]);
 
   const uniqueRoles = useMemo(() => {
-    return ['All', ...Array.from(new Set(telemetryList.map((t) => t.role)))];
+    return ['All', ...Array.from(new Set(telemetryList.filter((t) => !isAdminPerson(t)).map((t) => t.role)))];
   }, [telemetryList]);
 
   return (
@@ -809,7 +870,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             {/* Quick Interactive Fleet Switcher: 1-Tap Focus on Any Personnel */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 no-scrollbar border-b border-slate-100">
               <span className="text-[10px] font-mono uppercase font-bold text-slate-400 shrink-0">Focus:</span>
-              {telemetryList.map((emp) => {
+              {telemetryList.filter((e) => !isAdminPerson(e)).map((emp) => {
                 const isSelected = activeTarget?.id === emp.id;
                 const isOnline = emp.status === 'Punched In';
                 return (
@@ -851,6 +912,9 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               <LiveInteractiveMap
                 telemetryList={telemetryList}
                 activeTarget={activeTarget}
+                activeRouteDetails={activeRouteDetails}
+                selectedStop={selectedStop}
+                onSelectStop={(stop) => setSelectedStop(stop)}
                 realDeviceGps={realDeviceGps}
                 onSelectTarget={handleSelectStaffOnMap}
                 mapSatellite={mapSatellite}
@@ -942,75 +1006,162 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </div>
             )}
 
-            {/* Bottom Telemetry Dossier Strip: Special Route Box for Drivers */}
-            {activeTarget?.isDriver && activeTarget?.activeTrip && (
-              <div className="mt-3 p-3 rounded-xl bg-blue-50/90 border border-blue-200/90 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs font-bold">
-                    <Truck className="w-5 h-5" />
+            {/* Visited Route Trail & Traveled Stops (Reducible / Collapsible) */}
+            {activeRouteDetails && (
+              <div className="mt-3 bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+                {/* Header with Metrics & Actions */}
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <Route className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-slate-900 text-xs truncate">
+                          Visited Route Trail: {activeRouteDetails.employeeName}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-100 text-blue-900">
+                          {activeRouteDetails.stops.length} Locations Visited
+                        </span>
+                        {activeTarget?.isDriver && activeTarget?.activeTrip && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-cyan-100 text-cyan-900">
+                            Mixer: {activeTarget.activeTrip.vehicleNo}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span>Traveled: <strong className="font-mono text-blue-700 font-bold">{activeRouteDetails.totalDistanceKm} km</strong></span>
+                        <span>•</span>
+                        <span>Role: <strong className="text-slate-700">{activeRouteDetails.role}</strong></span>
+                        <span>•</span>
+                        <span>Start: <strong className="text-emerald-700 font-mono font-bold">{activeRouteDetails.stops[0]?.time || '--:--'}</strong></span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-blue-950 text-xs">Transit Mixer: {activeTarget.activeTrip.vehicleNo}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-600 text-white">
-                        {activeTarget.activeTrip.status}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span>Route: <strong className="text-slate-900">{activeTarget.activeTrip.routeLabel}</strong></span>
-                      <span>•</span>
-                      <span>Destination: <strong className="text-slate-900">{activeTarget.activeTrip.clientName}</strong></span>
-                      <span>•</span>
-                      <span>Distance: <strong className="font-mono text-blue-800">{activeTarget.activeTrip.distanceKm} km</strong></span>
-                    </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <a
+                      href={activeRouteDetails.googleMapsFullRouteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                      title="Open full turn-by-turn visited route in Google Maps"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>Full Route (Google Maps)</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => setMapRouteMode(!mapRouteMode)}
+                      className={`px-2.5 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center gap-1 ${
+                        mapRouteMode ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                      }`}
+                      title="Toggle Polyline Trail on Map"
+                    >
+                      <Route className="w-3.5 h-3.5" />
+                      <span>{mapRouteMode ? 'Hide Path' : 'Show Path'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRouteHistoryExpanded(!routeHistoryExpanded)}
+                      className="p-1.5 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer border border-slate-200"
+                      title={routeHistoryExpanded ? 'Reduce Timeline' : 'Expand Timeline'}
+                    >
+                      {routeHistoryExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={activeTarget.activeTrip.googleRouteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                  >
-                    <Navigation className="w-3.5 h-3.5" />
-                    <span>Track Live Route in Google Maps</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setMapRouteMode(!mapRouteMode)}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border ${
-                      mapRouteMode 
-                        ? 'bg-amber-500 text-slate-950 border-amber-600' 
-                        : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
-                    }`}
-                  >
-                    <Route className="w-3.5 h-3.5" />
-                    <span>{mapRouteMode ? 'Single Pin' : 'Route Path'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
+                {/* Collapsible Timeline of Visited Waypoints */}
+                {routeHistoryExpanded ? (
+                  <div className="p-3 space-y-2 max-h-[260px] overflow-y-auto">
+                    <div className="relative pl-6 space-y-2.5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-blue-200">
+                      {activeRouteDetails.stops.map((stop, i) => {
+                        const isStart = i === 0;
+                        const isCurrent = stop.status === 'Current Stop' || i === activeRouteDetails.stops.length - 1;
+                        const isSelected = selectedStop?.stopNo === stop.stopNo;
 
-            {/* Non-driver active target location info */}
-            {activeTarget && !activeTarget.isDriver && (
-              <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2 min-w-0">
-                  <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="text-slate-700 truncate">
-                    <strong className="text-slate-900">{activeTarget.name}</strong> • Landmark: {activeTarget.geofenceStatus}
-                  </span>
-                </div>
-                {activeTarget.hasGpsFix && (
-                  <a
-                    href={`https://www.google.com/maps?q=${activeTarget.lat},${activeTarget.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 self-start sm:self-auto cursor-pointer"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Open Exact Location</span>
-                  </a>
+                        return (
+                          <div
+                            key={stop.stopNo}
+                            onClick={() => setSelectedStop(stop)}
+                            className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-50/90 border-blue-400 ring-2 ring-blue-400/30 shadow-xs'
+                                : 'bg-slate-50/70 hover:bg-slate-100/80 border-slate-200/80'
+                            }`}
+                          >
+                            {/* Timeline Node Dot */}
+                            <div className={`absolute -left-[19px] top-3.5 w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center font-bold text-[9px] text-white shadow-xs ${
+                              isStart ? 'bg-emerald-600' : isCurrent ? 'bg-amber-500 ring-2 ring-amber-300' : 'bg-blue-600'
+                            }`}>
+                              {isCurrent ? '●' : stop.stopNo}
+                            </div>
+
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-900 text-xs">
+                                    Stop #{stop.stopNo}: {stop.title}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-medium">
+                                    ({stop.category})
+                                  </span>
+                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                    isStart 
+                                      ? 'bg-emerald-100 text-emerald-800' 
+                                      : isCurrent 
+                                        ? 'bg-amber-100 text-amber-800' 
+                                        : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {stop.status}
+                                  </span>
+                                </div>
+
+                                <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                  {stop.address}
+                                </div>
+                                {stop.notes && (
+                                  <div className="text-[10px] text-slate-600 italic mt-0.5">
+                                    "{stop.notes}"
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <div className="font-mono font-bold text-slate-900 text-[11px]">
+                                  {stop.time}
+                                </div>
+                                <div className="text-[10px] font-mono text-blue-700 font-bold">
+                                  {stop.distanceKm} km from Start
+                                </div>
+                                {stop.stayMinutes && (
+                                  <div className="text-[9px] text-slate-400 font-medium">
+                                    Stay: {stop.stayMinutes}m
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 text-[11px] text-slate-500 flex items-center justify-between bg-white">
+                    <span>
+                      Timeline reduced ({activeRouteDetails.stops.length} stops recorded, total {activeRouteDetails.totalDistanceKm} km).
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRouteHistoryExpanded(true)}
+                      className="text-blue-600 font-bold hover:underline cursor-pointer"
+                    >
+                      Show Stop Details
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -1026,7 +1177,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 font-semibold px-1">
               <div className="flex items-center gap-2">
-                <span>Displaying {filteredList.length} of {telemetryList.length} Personnel</span>
+                <span>Displaying {filteredList.length} of {telemetryList.filter((t) => !isAdminPerson(t)).length} Personnel</span>
                 <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">• Live GPS stream</span>
               </div>
               
@@ -1055,7 +1206,14 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             </div>
 
             <div className="grid grid-cols-1 gap-2.5">
-              {filteredList.map((emp) => {
+              {filteredList.length === 0 ? (
+                <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
+                  <Radio className="w-8 h-8 text-slate-400 mx-auto mb-2 animate-pulse" />
+                  <p className="font-bold text-slate-700">No workforce personnel found</p>
+                  <p className="text-xs text-slate-500 mt-1">No active field personnel match the selected filters.</p>
+                </div>
+              ) : (
+                filteredList.map((emp) => {
                 const isOnline = emp.status === 'Punched In';
                 const isOut = emp.status === 'Punched Out';
                 const isExpanded = cardDensity === 'detailed' || expandedCardIds.has(emp.id);
@@ -1162,7 +1320,22 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             <span className="truncate font-medium">{emp.geofenceStatus}</span>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Visited Route Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectStaffOnMap(emp);
+                                setMapRouteMode(true);
+                                setRouteHistoryExpanded(true);
+                              }}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border border-cyan-200 transition-all cursor-pointer"
+                              title="View visited travel route on map"
+                            >
+                              <Route className="w-2.5 h-2.5 text-cyan-700" />
+                              <span>Route</span>
+                            </button>
+
                             {/* Focus on Map Button */}
                             <button
                               type="button"
@@ -1174,7 +1347,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                               }`}
                             >
                               <MapPin className="w-2.5 h-2.5" />
-                              <span>{isSelectedOnMap ? 'Viewing' : 'View on Map'}</span>
+                              <span>{isSelectedOnMap ? 'Viewing' : 'Map'}</span>
                             </button>
 
                             <button
@@ -1318,20 +1491,36 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                         </div>
 
                         {/* Actions Row */}
-                        <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectStaffOnMap(emp)}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer"
-                          >
-                            <MapPin className="w-3 h-3 text-blue-600" />
-                            <span>Focus Map</span>
-                          </button>
+                        <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectStaffOnMap(emp);
+                                setMapRouteMode(true);
+                                setRouteHistoryExpanded(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-800 hover:text-cyan-950 bg-cyan-50 px-2 py-1 rounded-lg border border-cyan-200 cursor-pointer"
+                              title="View visited travel route on map"
+                            >
+                              <Route className="w-3 h-3 text-cyan-700" />
+                              <span>Visited Route</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSelectStaffOnMap(emp)}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 cursor-pointer"
+                            >
+                              <MapPin className="w-3 h-3 text-blue-600" />
+                              <span>Focus Map</span>
+                            </button>
+                          </div>
 
                           <button
                             type="button"
                             onClick={() => setSelectedEmployee(emp)}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
                           >
                             <Eye className="w-3 h-3 text-slate-500" />
                             <span>Telemetry Dossier</span>
@@ -1342,7 +1531,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                   </div>
                 );
-              })}
+              })
+            )}
             </div>
 
           </div>
@@ -1524,9 +1714,24 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 type="button"
                 onClick={() => {
                   handleSelectStaffOnMap(selectedEmployee);
+                  setMapRouteMode(true);
+                  setRouteHistoryExpanded(true);
                   setSelectedEmployee(null);
                 }}
-                className="py-2 px-3 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-1.5 transition-all cursor-pointer"
+                className="py-2 px-3 rounded-xl font-bold text-xs bg-cyan-600 hover:bg-cyan-700 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+                title="View visited route and travel trail on map"
+              >
+                <Route className="w-3.5 h-3.5" />
+                <span>View Route</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleSelectStaffOnMap(selectedEmployee);
+                  setSelectedEmployee(null);
+                }}
+                className="py-2 px-3 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
               >
                 <MapPin className="w-3.5 h-3.5 text-blue-600" />
                 <span>Show on Map</span>
