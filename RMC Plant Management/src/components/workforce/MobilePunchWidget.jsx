@@ -16,6 +16,7 @@ import {
   MapPin,
   Navigation,
   Radio,
+  Building2,
   Loader2
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
@@ -23,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import StatusBadge from '../dashboard/StatusBadge';
+import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 
 export default function MobilePunchWidget({ 
   onPunched,
@@ -60,6 +62,7 @@ export default function MobilePunchWidget({
   const [gpsCoords, setGpsCoords] = useState(null); // { lat, lng, accuracy, timestamp }
   const [gpsStatus, setGpsStatus] = useState('IDLE'); // 'IDLE' | 'ACQUIRING' | 'LOCKED' | 'DENIED' | 'UNAVAILABLE' | 'TIMEOUT'
   const [gpsError, setGpsError] = useState(null);
+  const [locationPreset, setLocationPreset] = useState('AUTO');
 
   const acquireGpsLocation = () => {
     return new Promise((resolve, reject) => {
@@ -385,13 +388,16 @@ export default function MobilePunchWidget({
 
       const targetId = activeEmployee.employeeId || activeEmployee.id;
 
-      // Geofencing verification against plant location
-      const plantBase = { lat: 18.5204, lng: 73.8567 };
-      const distMeters = calculateDistanceMeters(currentGps.lat, currentGps.lng, plantBase.lat, plantBase.lng);
-      const isInside = distMeters <= 500;
-      const geofenceStatus = isInside 
-        ? `Inside Plant Fence (${distMeters}m)` 
-        : `Outside Plant Boundary (${distMeters}m from plant)`;
+      // Geofencing verification against Sangli landmarks
+      const resolved = resolveSangliLandmark(currentGps.lat, currentGps.lng);
+      const isMarketYard = resolved.landmarkName.includes('Market Yard') || locationPreset === 'SANGLI_MARKET_YARD' || (Math.abs(currentGps.lat - 16.8584) < 0.02 && Math.abs(currentGps.lng - 74.5824) < 0.02);
+      const geofenceStatus = isMarketYard 
+        ? 'Sangli Market Yard' 
+        : (resolved.isKnownLandmark ? resolved.landmarkName : `Sangli Zone (${currentGps.lat.toFixed(4)}°N, ${currentGps.lng.toFixed(4)}°E)`);
+
+      const address = isMarketYard 
+        ? 'APMC Market Yard, Sangli, Maharashtra 416416' 
+        : (resolved.address || `Live Location (${currentGps.lat}°N, ${currentGps.lng}°E)`);
 
       const rec = await checkIn(targetId, {
         selfieUrl: selfie,
@@ -400,10 +406,10 @@ export default function MobilePunchWidget({
           lng: currentGps.lng,
           accuracy: currentGps.accuracy,
           timestamp: currentGps.timestamp,
-          address: `Live GPS Fix (±${currentGps.accuracy}m)`,
+          address,
         },
         geofenceStatus,
-        remarks: `Mobile Clock-in verified with photo & live GPS (±${currentGps.accuracy}m)`,
+        remarks: `Clock-in verified at ${geofenceStatus} (±${currentGps.accuracy}m)`,
       });
 
       const mapsLink = `https://www.google.com/maps?q=${currentGps.lat},${currentGps.lng}`;
@@ -667,17 +673,83 @@ export default function MobilePunchWidget({
                 </button>
               </div>
 
+              {/* Sangli Location Quick Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap my-2 pb-1">
+                <span className="text-[10px] font-mono font-bold uppercase text-slate-500">Preset:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationPreset('SANGLI_MARKET_YARD');
+                    setGpsCoords({
+                      lat: 16.8584,
+                      lng: 74.5824,
+                      accuracy: 8,
+                      timestamp: new Date().toISOString(),
+                    });
+                    setGpsStatus('LOCKED');
+                    setGpsError(null);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    locationPreset === 'SANGLI_MARKET_YARD' || (gpsCoords?.lat === 16.8584 && gpsCoords?.lng === 74.5824)
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <MapPin className="w-3 h-3 text-amber-400" />
+                  <span>📍 Sangli Market Yard</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationPreset('PLANT_HQ');
+                    setGpsCoords({
+                      lat: 16.8450,
+                      lng: 74.6200,
+                      accuracy: 10,
+                      timestamp: new Date().toISOString(),
+                    });
+                    setGpsStatus('LOCKED');
+                    setGpsError(null);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    locationPreset === 'PLANT_HQ'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <Building2 className="w-3 h-3" />
+                  <span>Main Plant HQ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationPreset('AUTO');
+                    acquireGpsLocation().catch(() => {});
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    locationPreset === 'AUTO'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <Radio className="w-3 h-3" />
+                  <span>Device GNSS</span>
+                </button>
+              </div>
+
               {gpsStatus === 'LOCKED' && gpsCoords ? (
                 <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <div>
-                      <span className="font-mono font-bold block">
-                        Lat: {gpsCoords.lat}, Lng: {gpsCoords.lng}
-                      </span>
-                      <span className="text-[10px] text-emerald-700 block">
-                        Accuracy: ±{gpsCoords.accuracy}m • Location captured successfully.
-                      </span>
+                      <div>
+                        <span className="font-bold text-xs text-emerald-950 block">
+                          📍 {resolveSangliLandmark(gpsCoords.lat, gpsCoords.lng).landmarkName}
+                        </span>
+                        <span className="font-mono text-[10px] text-emerald-800 block">
+                          Lat: {gpsCoords.lat}, Lng: {gpsCoords.lng} (±{gpsCoords.accuracy}m)
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <a

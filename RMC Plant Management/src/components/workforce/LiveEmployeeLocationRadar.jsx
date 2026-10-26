@@ -36,6 +36,7 @@ import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
+import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
@@ -263,6 +264,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         googleRouteUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&destination=${encodeURIComponent((matchedTrip.siteName ? matchedTrip.siteName + ', ' : '') + (matchedTrip.clientName || 'Sangli'))}`,
       } : null;
 
+      const landmark = hasGpsFix ? resolveSangliLandmark(lat, lng) : null;
       let geofenceLabel = 'Plant HQ Zone';
       if (isDriver) {
         if (activeTrip?.status === 'Departed') {
@@ -276,10 +278,14 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         } else {
           geofenceLabel = 'Truck Bay / Off Duty';
         }
+      } else if (record?.geofenceStatus && !record.geofenceStatus.includes('Plant Batching Geofence')) {
+        geofenceLabel = record.geofenceStatus;
+      } else if (landmark && landmark.isKnownLandmark) {
+        geofenceLabel = landmark.landmarkName;
       } else if ((emp.role || '').toLowerCase().includes('supervisor')) {
         geofenceLabel = isPunchedIn ? 'Site Geofence' : 'Off-Duty';
       } else if (isPunchedIn) {
-        geofenceLabel = 'Plant Batching Geofence';
+        geofenceLabel = landmark ? landmark.landmarkName : 'Sangli Operational Zone';
       }
 
       // Calculate elapsed active working duration
@@ -822,6 +828,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       emp.isDriver ? 'bg-cyan-400' : isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'
                     }`} />
                     <span className="truncate max-w-[120px]">{emp.name}</span>
+                    {emp.geofenceStatus && emp.geofenceStatus.includes('Market Yard') && (
+                      <span className="text-[9px] font-mono font-bold px-1 rounded bg-amber-200 text-amber-950">
+                        Market Yard
+                      </span>
+                    )}
                     {emp.isDriver && emp.activeTrip && (
                       <span className={`text-[9px] font-mono font-bold px-1 rounded ${
                         isSelected ? 'bg-blue-800 text-white' : 'bg-slate-200 text-slate-700'

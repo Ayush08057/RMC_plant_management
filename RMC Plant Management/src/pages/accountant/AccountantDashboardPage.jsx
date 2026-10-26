@@ -201,7 +201,7 @@ export default function AccountantDashboardPage() {
                 </div>
                 <p className="text-[11px] text-slate-600">
                   {isAccountantClockedIn && !isAccountantShiftEnded
-                    ? `Clocked In at ${formatToIndian12Hr(accountantTodayAttendance?.punchIn)} • Biometric & GPS verified`
+                    ? `Clocked In at ${formatToIndian12Hr(accountantTodayAttendance?.punchIn)} • 📍 ${accountantTodayAttendance?.geofenceStatus || 'Sangli Market Yard'} ${accountantTodayAttendance?.gpsLocation?.lat ? `(${Number(accountantTodayAttendance.gpsLocation.lat).toFixed(4)}°N, ${Number(accountantTodayAttendance.gpsLocation.lng).toFixed(4)}°E)` : ''}`
                     : isAccountantShiftEnded
                     ? `Shift Concluded at ${formatToIndian12Hr(accountantTodayAttendance?.punchOut)} (${accountantTodayAttendance?.workingHours || 8}h worked)`
                     : 'Awaiting Today\'s Attendance Punch-In • Shift: 09:00 AM - 06:00 PM'}
