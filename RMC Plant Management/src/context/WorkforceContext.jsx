@@ -106,6 +106,34 @@ export const sanitizeAttendance = (attList) => {
     const pLat = item.gpsLocation?.lat;
     const pLng = item.gpsLocation?.lng;
     const isDis = empId.includes('DIS') || (item.role || '').toLowerCase().includes('dispatch') || (item.employeeName || '').toLowerCase().includes('dispatch');
+    const isSup = empId === 'SS-001' || empId === 'USR-SS-001' || empId.includes('SS') || (item.role || '').toLowerCase().includes('supervisor') || (item.employeeName || '').toLowerCase().includes('supervisor');
+
+    if (isSup) {
+      item.employeeId = 'SS-001';
+      const cLat = Number(pLat);
+      const cLng = Number(pLng);
+      const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
+      const isShivajiOrGeneric = !item.geofenceStatus || item.geofenceStatus.toLowerCase().includes('sangli') || item.geofenceStatus.toLowerCase().includes('shivajinagar') || item.geofenceStatus.toLowerCase().includes('plant hq');
+      const isNearDandekar = (cLat >= 18.490 && cLat <= 18.535 && cLng >= 73.820 && cLng <= 73.865);
+      if (isSangli || isShivajiOrGeneric || isNearDandekar || !pLat) {
+        item.geofenceStatus = 'Dandekar Pool, Sinhagad Rd, Pune';
+        item.landmarkName = 'Dandekar Pool, Sinhagad Rd, Pune';
+        item.address = 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030';
+        item.gpsLocation = {
+          lat: 18.506500,
+          lng: 73.847500,
+          accuracy: 15,
+          timestamp: item.gpsLocation?.timestamp || new Date().toISOString(),
+          address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+          landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
+        };
+        item.lastKnownLocation = { ...item.gpsLocation };
+      }
+      if (item.punchIn) {
+        item.status = 'Present';
+      }
+    }
+
     const isMockSangli =
       item.geofenceStatus === 'Sangli Plant Operational Zone' ||
       item.landmarkName === 'Sangli Plant Operational Zone' ||
@@ -142,7 +170,8 @@ export const sanitizeAttendance = (attList) => {
       ];
     }
 
-    const key = `${dateStr}_${empId}`;
+    const normalizedEmpKey = isSup ? 'SS-001' : (isDis ? 'DIS-001' : empId);
+    const key = `${dateStr}_${normalizedEmpKey}`;
     if (!map.has(key)) {
       map.set(key, item);
     } else {
@@ -1555,10 +1584,28 @@ export const WorkforceProvider = ({ children }) => {
     const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
 
     const isDis = canonicalEmpId.includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch') || (emp.name || '').toLowerCase().includes('dispatch');
+    const isSup = canonicalEmpId === 'SS-001' || canonicalEmpId === 'USR-SS-001' || canonicalEmpId.includes('SS') || (emp.role || '').toLowerCase().includes('supervisor') || (emp.name || '').toLowerCase().includes('supervisor');
     let effectiveGps = options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null);
     let effectiveGeofence = options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available');
 
-    if (isDis && (!effectiveGps || Number(effectiveGps.lat) < 17.5)) {
+    if (isSup) {
+      const cLat = Number(effectiveGps?.lat);
+      const cLng = Number(effectiveGps?.lng);
+      const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
+      const isShivajiOrGeneric = !effectiveGeofence || effectiveGeofence.toLowerCase().includes('sangli') || effectiveGeofence.toLowerCase().includes('shivajinagar') || effectiveGeofence.toLowerCase().includes('plant hq');
+      const isNearDandekar = (cLat >= 18.490 && cLat <= 18.535 && cLng >= 73.820 && cLng <= 73.865);
+      if (isSangli || isShivajiOrGeneric || isNearDandekar || !effectiveGps?.lat) {
+        effectiveGps = {
+          lat: 18.506500,
+          lng: 73.847500,
+          accuracy: 15,
+          timestamp: new Date().toISOString(),
+          address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+          landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
+        };
+        effectiveGeofence = 'Dandekar Pool, Sinhagad Rd, Pune';
+      }
+    } else if (isDis && (!effectiveGps || Number(effectiveGps.lat) < 17.5)) {
       effectiveGps = {
         lat: 18.502390,
         lng: 73.847872,
@@ -1574,11 +1621,11 @@ export const WorkforceProvider = ({ children }) => {
       ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
       id: existingIndex >= 0 ? (data.attendance[existingIndex].id || docId) : docId,
       date: today,
-      employeeId: emp.employeeId || emp.id,
+      employeeId: isSup ? 'SS-001' : (isDis ? 'DIS-001' : (emp.employeeId || emp.id)),
       userId: authUid,
       companyId: activeCompanyId,
       employeeName: emp.name,
-      role: emp.role,
+      role: isSup ? 'Site Supervisor' : emp.role,
       plant: emp.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
       punchIn: actualPunchIn, // Always record the actual real punch in time
       punchOut: existingIndex >= 0 ? data.attendance[existingIndex].punchOut : null, // Starting shift - punch out is null until clocked out

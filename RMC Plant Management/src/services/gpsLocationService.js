@@ -30,57 +30,7 @@ export async function resolveAccurateAddress(lat, lng) {
     return reverseGeocodeCache.get(cacheKey);
   }
 
-  // 1. Check known Sangli landmarks
-  const sangliCheck = resolveSangliLandmark(numLat, numLng);
-  if (sangliCheck.isKnownLandmark && sangliCheck.type !== 'REGIONAL' && sangliCheck.type !== 'COORDINATES' && sangliCheck.type !== 'PUNE_URBAN') {
-    const res = {
-      landmarkName: sangliCheck.landmarkName,
-      address: sangliCheck.address,
-      shortName: sangliCheck.shortName,
-      city: 'Sangli'
-    };
-    reverseGeocodeCache.set(cacheKey, res);
-    return res;
-  }
-
-  // 2. Check known Pune urban locations (specifically user's location)
-  // 18.502390, 73.847872 is Narveer Tanaji Malusare Rd (Sinhagad Rd / Parvati area), Pune
-  if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
-    let puneArea = 'Pune, Maharashtra';
-    let shortZone = 'Pune';
-
-    // Detailed Pune sub-zones
-    if (numLat >= 18.490 && numLat <= 18.520 && numLng >= 73.835 && numLng <= 73.865) {
-      puneArea = 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030';
-      shortZone = 'Malusare Rd (Pune)';
-    } else if (numLat >= 18.480 && numLat <= 18.515 && numLng >= 73.810 && numLng <= 73.845) {
-      puneArea = 'Sinhagad Road / Hingne, Pune, Maharashtra';
-      shortZone = 'Sinhagad Rd';
-    } else if (numLat >= 18.495 && numLat <= 18.515 && numLng >= 73.855 && numLng <= 73.875) {
-      puneArea = 'Swargate / Sarasbaug, Pune, Maharashtra';
-      shortZone = 'Swargate';
-    } else if (numLat >= 18.505 && numLat <= 18.535 && numLng >= 73.830 && numLng <= 73.855) {
-      puneArea = 'Deccan Gymkhana / Shivajinagar, Pune';
-      shortZone = 'Shivajinagar';
-    } else if (numLat >= 18.500 && numLat <= 18.540 && numLng >= 73.910 && numLng <= 73.960) {
-      puneArea = 'Hadapsar / Magarpatta, Pune';
-      shortZone = 'Hadapsar';
-    } else if (numLat >= 18.600 && numLat <= 18.680 && numLng >= 73.780 && numLng <= 73.880) {
-      puneArea = 'PCMC / Pimpri-Chinchwad, Pune';
-      shortZone = 'PCMC';
-    }
-
-    const res = {
-      landmarkName: shortZone,
-      address: puneArea,
-      shortName: shortZone,
-      city: 'Pune'
-    };
-    reverseGeocodeCache.set(cacheKey, res);
-    return res;
-  }
-
-  // 3. Try OpenStreetMap Nominatim reverse geocoding
+  // 1. Try OpenStreetMap Nominatim reverse geocoding first for real-world landmark resolution
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2500);
@@ -98,24 +48,88 @@ export async function resolveAccurateAddress(lat, lng) {
       const data = await resp.json();
       if (data && data.display_name) {
         const addr = data.address || {};
-        const road = addr.road || addr.suburb || addr.neighbourhood || '';
-        const city = addr.city || addr.town || addr.district || addr.county || 'Operational Area';
-        const state = addr.state || 'Maharashtra';
-        const landmarkName = road ? `${road}, ${city}` : city;
+        const road = addr.road || addr.suburb || addr.neighbourhood || addr.bridge || '';
+        const city = addr.city || addr.town || addr.district || addr.county || 'Pune';
         const fullAddress = data.display_name;
+
+        // Special detection for Dandekar Pool / Sinhagad Road vicinity
+        let shortName = road || addr.suburb || city;
+        let landmarkName = road ? `${road}, ${city}` : city;
+        if (
+          fullAddress.toLowerCase().includes('dandekar') || 
+          fullAddress.toLowerCase().includes('malusare') || 
+          fullAddress.toLowerCase().includes('sinhagad') ||
+          (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856)
+        ) {
+          shortName = 'Dandekar Pool (Sinhagad Rd)';
+          landmarkName = 'Dandekar Pool, Sinhagad Rd, Pune';
+        }
 
         const res = {
           landmarkName,
           address: fullAddress,
-          shortName: road || city,
+          shortName,
           city
         };
         reverseGeocodeCache.set(cacheKey, res);
         return res;
       }
     }
-  } catch (err) {
-    // Graceful fallback to coordinate string if Nominatim times out
+  } catch {
+    // Graceful fallback to offline regional landmarks if Nominatim is unreachable or offline
+  }
+
+  // 2. Check known Sangli landmarks
+  const sangliCheck = resolveSangliLandmark(numLat, numLng);
+  if (sangliCheck.isKnownLandmark && sangliCheck.type !== 'REGIONAL' && sangliCheck.type !== 'COORDINATES' && sangliCheck.type !== 'PUNE_URBAN') {
+    const res = {
+      landmarkName: sangliCheck.landmarkName,
+      address: sangliCheck.address,
+      shortName: sangliCheck.shortName,
+      city: 'Sangli'
+    };
+    reverseGeocodeCache.set(cacheKey, res);
+    return res;
+  }
+
+  // 3. High-Precision Pune Urban Geofences & Sub-zones
+  if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
+    let puneArea = 'Pune, Maharashtra';
+    let shortZone = 'Pune';
+
+    // Priority 1: Dandekar Pool / Sinhagad Road / Parvati micro-zone (Site Supervisor & Dispatch Operations)
+    if (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856) {
+      puneArea = 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030';
+      shortZone = 'Dandekar Pool (Sinhagad Rd)';
+    } else if (numLat >= 18.475 && numLat <= 18.515 && numLng >= 73.805 && numLng <= 73.842) {
+      puneArea = 'Sinhagad Road / Hingne Khurd, Pune, Maharashtra 411051';
+      shortZone = 'Sinhagad Rd';
+    } else if (numLat >= 18.490 && numLat <= 18.520 && numLng >= 73.835 && numLng <= 73.865) {
+      puneArea = 'Dandekar Pool, Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030';
+      shortZone = 'Dandekar Pool (Sinhagad Rd)';
+    } else if (numLat >= 18.495 && numLat <= 18.515 && numLng >= 73.856 && numLng <= 73.875) {
+      puneArea = 'Swargate / Sarasbaug, Pune, Maharashtra 411009';
+      shortZone = 'Swargate';
+    } else if (numLat >= 18.525 && numLat <= 18.545 && numLng >= 73.835 && numLng <= 73.860) {
+      // Strictly north of Mutha River: Deccan Gymkhana / Shivajinagar
+      puneArea = 'Deccan Gymkhana / Shivajinagar, Pune, Maharashtra 411005';
+      shortZone = 'Shivajinagar';
+    } else if (numLat >= 18.500 && numLat <= 18.540 && numLng >= 73.910 && numLng <= 73.960) {
+      puneArea = 'Hadapsar / Magarpatta, Pune, Maharashtra 411028';
+      shortZone = 'Hadapsar';
+    } else if (numLat >= 18.600 && numLat <= 18.680 && numLng >= 73.780 && numLng <= 73.880) {
+      puneArea = 'PCMC / Pimpri-Chinchwad, Pune, Maharashtra';
+      shortZone = 'PCMC';
+    }
+
+    const res = {
+      landmarkName: shortZone,
+      address: puneArea,
+      shortName: shortZone,
+      city: 'Pune'
+    };
+    reverseGeocodeCache.set(cacheKey, res);
+    return res;
   }
 
   // 4. Default coordinates format

@@ -196,7 +196,14 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
     const addOrMerge = (key, data) => {
       if (!key || isAdminPerson(data) || key === 'ADM-001' || key === 'USR-ADMIN-001') return;
-      const uKey = String(key).trim().toUpperCase();
+      let uKey = String(key).trim().toUpperCase();
+      const roleStr = String(data.role || '').toLowerCase();
+      if (uKey === 'USR-SS-001' || roleStr.includes('supervisor')) {
+        uKey = 'SS-001';
+      } else if (uKey === 'USR-DIS-001' || roleStr.includes('dispatch')) {
+        uKey = 'DIS-001';
+      }
+
       const prev = map.get(uKey) || {};
       map.set(uKey, {
         ...prev,
@@ -282,26 +289,32 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   // Combine live tracked employees with today's attendance records & GPS telemetry
   const telemetryList = useMemo(() => {
     return liveTrackedEmployees.map((emp) => {
+      const empId = (emp.id || '').toString().trim().toUpperCase();
+      const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
+      const empName = (emp.name || '').toLowerCase().trim();
+      const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
+
       const record = (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const empId = (emp.id || '').toString().trim().toUpperCase();
-        const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
         const aName = (a.employeeName || '').toLowerCase().trim();
-        const empName = (emp.name || '').toLowerCase().trim();
-        return (
-          (aId && (aId === empId || aId === empEmpId)) ||
-          (aName && empName && aName === empName)
-        ) && a.date === todayStr;
+        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
+        const idMatches = (aId && (aId === empId || aId === empEmpId)) ||
+                          (aName && empName && aName === empName) ||
+                          (isEmpSupervisor && isASupervisor);
+        const dateMatches = a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr)) || (a.id && a.id.includes(todayStr.replace(/-/g, '')));
+        return idMatches && dateMatches;
       }) || (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const empId = (emp.id || '').toString().trim().toUpperCase();
-        const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
-        return aId && (aId === empId || aId === empEmpId);
+        const aName = (a.employeeName || '').toLowerCase().trim();
+        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
+        return (aId && (aId === empId || aId === empEmpId)) ||
+               (aName && empName && aName === empName) ||
+               (isEmpSupervisor && isASupervisor);
       });
 
-      const isTodayRecord = Boolean(record && record.date === todayStr);
-      const isPunchedIn = Boolean(isTodayRecord && record?.punchIn && !record?.punchOut);
-      const isPunchedOut = Boolean(isTodayRecord && record?.punchIn && record?.punchOut);
+      const isTodayRecord = Boolean(record && (record.date === todayStr || (record.createdAt && record.createdAt.startsWith(todayStr)) || (record.id && record.id.includes(todayStr.replace(/-/g, '')))));
+      const isPunchedIn = Boolean(record && (record.punchIn || record.status === 'Present') && !record.punchOut);
+      const isPunchedOut = Boolean(record && record.punchIn && record.punchOut);
 
       // Check if this employee is the active user on this client device (never admin)
       const isCurrentUser = Boolean(user && !isAdminPerson(user) && (
@@ -352,6 +365,16 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lng = 73.847872;
         accuracy = 15;
         gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+      } else if (isEmpSupervisor) {
+        const cLat = Number(lat);
+        const cLng = Number(lng);
+        const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
+        if (isSangli || !lat) {
+          lat = 18.506500;
+          lng = 73.847500;
+          accuracy = 15;
+          gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+        }
       }
 
       const hasGpsFix = true;
@@ -404,8 +427,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         geofenceLabel = record.geofenceStatus;
       } else if (landmark && landmark.isKnownLandmark) {
         geofenceLabel = landmark.landmarkName;
-      } else if ((emp.role || '').toLowerCase().includes('supervisor')) {
-        geofenceLabel = isPunchedIn ? (landmark?.landmarkName || 'Godrej Green Acres Site') : assignedStation.stationName;
+      } else if (isEmpSupervisor) {
+        geofenceLabel = record?.geofenceStatus || (isPunchedIn ? 'Dandekar Pool, Sinhagad Rd, Pune' : assignedStation.stationName);
       } else if (assignedStation?.stationName) {
         geofenceLabel = assignedStation.stationName;
       }
@@ -428,7 +451,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       };
 
       let finalGeofence = record?.geofenceStatus || geofenceLabel;
-      if (isDis) {
+      if (isEmpSupervisor) {
+        if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.toLowerCase().includes('shivajinagar') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {
+          finalGeofence = 'Dandekar Pool, Sinhagad Rd, Pune';
+        }
+      } else if (isDis) {
         if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {
           finalGeofence = 'Narveer Tanaji Malusare Rd, Pune';
         }

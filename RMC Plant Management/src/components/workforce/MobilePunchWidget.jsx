@@ -315,13 +315,22 @@ export default function MobilePunchWidget({
       const targetId = activeEmployee.employeeId || activeEmployee.id;
       const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
                            (targetId || '').toUpperCase().includes('DIS');
-      const defaultPuneStation = isDispatcher ? {
+      const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
+                           (targetId || '').toUpperCase().includes('SS');
+
+      const defaultPuneStation = isSupervisor ? {
+        lat: 18.506500,
+        lng: 73.847500,
+        stationName: 'Dandekar Pool, Sinhagad Rd, Pune',
+        address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+        shortZone: 'Dandekar Pool (Sinhagad Rd)'
+      } : (isDispatcher ? {
         lat: 18.502390,
         lng: 73.847872,
         stationName: 'Narveer Tanaji Malusare Rd, Pune',
         address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
         shortZone: 'Narveer Tanaji Malusare Rd, Pune'
-      } : null;
+      } : null);
 
       // 2. Obtain fresh, high-precision GPS location
       let currentGps = null;
@@ -335,12 +344,31 @@ export default function MobilePunchWidget({
         currentGps = await acquireGpsLocation(true, defaultPuneStation);
       }
 
+      // Safeguard: Ensure supervisor location in Pune strictly resolves Dandekar Pool
+      if (isSupervisor) {
+        const cLat = Number(currentGps?.lat);
+        const cLng = Number(currentGps?.lng);
+        const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
+        const isNearDandekar = (cLat >= 18.490 && cLat <= 18.535 && cLng >= 73.820 && cLng <= 73.865);
+        if (isSangli || isNearDandekar || !currentGps?.lat) {
+          currentGps = {
+            ...currentGps,
+            lat: 18.506500,
+            lng: 73.847500,
+            accuracy: 15,
+            landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
+            shortName: 'Dandekar Pool (Sinhagad Rd)',
+            address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+          };
+        }
+      }
+
       // Safeguard: Ensure dispatcher location is strictly Pune
       if (isDispatcher && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
         currentGps = defaultPuneStation;
       }
 
-      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location');
+      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isSupervisor ? 'Dandekar Pool, Sinhagad Rd, Pune' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location'));
       const address = currentGps?.address || `${Number(currentGps?.lat).toFixed(5)}°N, ${Number(currentGps?.lng).toFixed(5)}°E`;
       const geofenceStatus = landmarkName;
 
@@ -496,17 +524,42 @@ export default function MobilePunchWidget({
       const targetId = activeEmployee.employeeId || activeEmployee.id;
       const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
                            (targetId || '').toUpperCase().includes('DIS');
-      const defaultPuneStation = isDispatcher ? {
+      const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
+                           (targetId || '').toUpperCase().includes('SS');
+
+      const defaultPuneStation = isSupervisor ? {
+        lat: 18.506500,
+        lng: 73.847500,
+        stationName: 'Dandekar Pool, Sinhagad Rd, Pune',
+        address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+        shortZone: 'Dandekar Pool (Sinhagad Rd)'
+      } : (isDispatcher ? {
         lat: 18.502390,
         lng: 73.847872,
         stationName: 'Narveer Tanaji Malusare Rd, Pune',
         address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
         shortZone: 'Narveer Tanaji Malusare Rd, Pune'
-      } : null;
+      } : null);
 
       const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation: defaultPuneStation });
       let finalLoc = loc;
-      if (isDispatcher && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
+      if (isSupervisor) {
+        const cLat = Number(finalLoc?.lat);
+        const cLng = Number(finalLoc?.lng);
+        const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
+        const isNearDandekar = (cLat >= 18.490 && cLat <= 18.535 && cLng >= 73.820 && cLng <= 73.865);
+        if (isSangli || isNearDandekar || !finalLoc?.lat) {
+          finalLoc = {
+            ...finalLoc,
+            lat: 18.506500,
+            lng: 73.847500,
+            accuracy: 15,
+            landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
+            shortName: 'Dandekar Pool (Sinhagad Rd)',
+            address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+          };
+        }
+      } else if (isDispatcher && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
         finalLoc = defaultPuneStation;
       }
 

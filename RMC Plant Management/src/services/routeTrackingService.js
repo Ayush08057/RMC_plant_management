@@ -62,12 +62,12 @@ export function getAssignedEmployeeStation(emp) {
 
   if (roleLower.includes('supervisor') || idUpper.includes('SS') || nameLower.includes('supervisor')) {
     return {
-      lat: 16.8520,
-      lng: 74.5900,
-      stationName: 'Godrej Green Acres Construction Site',
-      address: 'Near Government Colony, Sangli',
-      shortZone: 'Godrej Project Site',
-      notes: 'On-site concrete pouring & supervision',
+      lat: 18.5065,
+      lng: 73.8475,
+      stationName: 'Dandekar Pool Site / Sinhagad Road Station',
+      address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+      shortZone: 'Dandekar Pool (Sinhagad Rd)',
+      notes: 'On-site concrete pouring & supervision at Dandekar Pool',
     };
   }
 

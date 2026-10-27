@@ -151,24 +151,34 @@ export default function AdminDashboardPage() {
       }
 
       // Canonical employee key to guarantee strictly 1 record per staff member
-      const empKey = (a.employeeId || a.id || a.userId || a.employeeName || '').toString().trim().toUpperCase();
+      let empKey = (a.employeeId || a.id || a.userId || a.employeeName || '').toString().trim().toUpperCase();
       if (!empKey) return;
+      if (empKey === 'USR-SS-001' || (a.role || '').toLowerCase().includes('supervisor')) {
+        empKey = 'SS-001';
+      } else if (empKey === 'USR-DIS-001' || (a.role || '').toLowerCase().includes('dispatch')) {
+        empKey = 'DIS-001';
+      }
 
-      if (recDate === todayLocalDateStr) {
+      const todayUtcStr = new Date().toISOString().split('T')[0];
+      const isToday = (recDate === todayLocalDateStr || recDate === todayUtcStr || (a.createdAt && a.createdAt.startsWith(todayLocalDateStr)) || (a.id && a.id.includes(todayLocalDateStr.replace(/-/g, ''))));
+
+      if (isToday) {
         if (!todayMap.has(empKey)) {
-          todayMap.set(empKey, a);
+          todayMap.set(empKey, { ...a, employeeId: empKey });
         } else {
           // Merge duplicates if already present, keeping the most complete punch
           const existing = todayMap.get(empKey);
           todayMap.set(empKey, {
             ...existing,
             ...a,
+            employeeId: empKey,
             punchIn: existing.punchIn || a.punchIn,
             punchOut: existing.punchOut || a.punchOut,
             workingHours: (existing.workingHours !== null && existing.workingHours !== undefined) ? existing.workingHours : a.workingHours,
-            gpsLocation: existing.gpsLocation || a.gpsLocation,
+            gpsLocation: a.gpsLocation || existing.gpsLocation,
+            geofenceStatus: a.geofenceStatus || existing.geofenceStatus,
             selfieUrl: existing.selfieUrl || a.selfieUrl,
-            status: (existing.status === 'Present' || a.status === 'Present') ? 'Present' : (a.status || existing.status),
+            status: (existing.status === 'Present' || a.status === 'Present' || Boolean(existing.punchIn || a.punchIn)) ? 'Present' : (a.status || existing.status),
           });
         }
       } else {
@@ -255,11 +265,14 @@ export default function AdminDashboardPage() {
 
     // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
-      const id = (acc.employeeId || acc.id || '').toUpperCase();
+      let id = (acc.employeeId || acc.id || '').toUpperCase();
       if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      if (id === 'USR-SS-001' || (acc.role || '').toLowerCase().includes('supervisor')) id = 'SS-001';
+      if (id === 'USR-DIS-001' || (acc.role || '').toLowerCase().includes('dispatch')) id = 'DIS-001';
+
       map.set(id, {
-        id: acc.employeeId || acc.id,
-        employeeId: acc.employeeId || acc.id,
+        id,
+        employeeId: id,
         name: acc.name,
         role: acc.role,
         department: acc.department || 'Operations',
@@ -273,23 +286,29 @@ export default function AdminDashboardPage() {
 
     // 2. Custom enterprise registered employees
     (employees || []).forEach((e) => {
-      const id = (e.employeeId || e.id || '').toUpperCase();
+      let id = (e.employeeId || e.id || '').toUpperCase();
       if (!id || isDummyEmployee(e)) return;
+      if (id === 'USR-SS-001' || (e.role || '').toLowerCase().includes('supervisor')) id = 'SS-001';
+      if (id === 'USR-DIS-001' || (e.role || '').toLowerCase().includes('dispatch')) id = 'DIS-001';
+
       if (map.has(id)) {
-        map.set(id, { ...map.get(id), ...e });
+        map.set(id, { ...map.get(id), ...e, id, employeeId: id });
       } else {
-        map.set(id, e);
+        map.set(id, { ...e, id, employeeId: id });
       }
     });
 
     // 3. Fallback: Any staff present in today's attendance
     (todayAttendanceRecords || []).forEach((att) => {
-      const id = (att.employeeId || att.id || '').toUpperCase();
+      let id = (att.employeeId || att.id || '').toUpperCase();
       if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      if (id === 'USR-SS-001' || (att.role || '').toLowerCase().includes('supervisor')) id = 'SS-001';
+      if (id === 'USR-DIS-001' || (att.role || '').toLowerCase().includes('dispatch')) id = 'DIS-001';
+
       if (!map.has(id)) {
         map.set(id, {
-          id: att.employeeId || att.id,
-          employeeId: att.employeeId || att.id,
+          id,
+          employeeId: id,
           name: att.employeeName || att.name || id,
           role: att.role || 'Staff',
           department: att.department || 'Operations',

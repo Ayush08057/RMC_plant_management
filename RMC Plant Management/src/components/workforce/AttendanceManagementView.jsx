@@ -87,14 +87,18 @@ export default function AttendanceManagementView({
     const empMap = new Map();
 
     (employees || []).forEach((e) => {
-      const key = (e.employeeId || e.id || '').toString().trim().toUpperCase();
+      let key = (e.employeeId || e.id || '').toString().trim().toUpperCase();
       if (!key) return;
-      empMap.set(key, { ...e, employeeId: e.employeeId || e.id });
+      if (key === 'USR-SS-001' || (e.role || '').toLowerCase().includes('supervisor')) key = 'SS-001';
+      if (key === 'USR-DIS-001' || (e.role || '').toLowerCase().includes('dispatch')) key = 'DIS-001';
+      empMap.set(key, { ...e, id: key, employeeId: key });
     });
 
     // Ensure official role accounts are available as fallback without duplicating existing profiles
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
-      const offEmpId = (official.employeeId || official.id || '').toString().trim().toUpperCase();
+      let offEmpId = (official.employeeId || official.id || '').toString().trim().toUpperCase();
+      if (offEmpId === 'USR-SS-001' || (official.role || '').toLowerCase().includes('supervisor')) offEmpId = 'SS-001';
+      if (offEmpId === 'USR-DIS-001' || (official.role || '').toLowerCase().includes('dispatch')) offEmpId = 'DIS-001';
       const offId = (official.id || '').toString().trim().toUpperCase();
       const offEmail = (official.email || '').toString().trim().toLowerCase();
       const offName = (official.name || '').toString().trim().toLowerCase();
@@ -120,8 +124,8 @@ export default function AttendanceManagementView({
 
       if (!alreadyExists && offEmpId) {
         empMap.set(offEmpId, {
-          id: official.employeeId || official.id,
-          employeeId: official.employeeId || official.id,
+          id: offEmpId,
+          employeeId: offEmpId,
           name: official.name,
           role: official.role,
           department: official.department,
@@ -629,16 +633,25 @@ export default function AttendanceManagementView({
   // Prepare enriched directory of all staff roles with today's attendance & live location
   const fiveRolesAttendanceDirectory = useMemo(() => {
     return staffFiveRolesList.map((emp) => {
+      const empId = (emp.id || '').toString().trim().toUpperCase();
+      const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
+      const empName = (emp.name || '').toString().trim().toLowerCase();
+      const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
+
       const record = attendance.find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
         const aName = (a.employeeName || '').toString().trim().toLowerCase();
-        const empId = (emp.id || '').toString().trim().toUpperCase();
-        const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
-        const empName = (emp.name || '').toString().trim().toLowerCase();
-        return (aId === empId || aId === empEmpId || (aName && empName && aName === empName)) && a.date === selectedDate;
-      });
+        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
+        const idMatches = (aId === empId || aId === empEmpId || (aName && empName && aName === empName) || (isEmpSupervisor && isASupervisor));
+        const dateMatches = (a.date === selectedDate || a.date === todayStr || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
+        return idMatches && dateMatches;
+      }) || (isEmpSupervisor ? attendance.find((a) => {
+        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
+        return isASupervisor && (a.punchIn || a.status === 'Present');
+      }) : null);
 
-      const hasIn = Boolean(record?.punchIn);
+      const hasIn = Boolean(record?.punchIn || record?.status === 'Present');
       const hasOut = Boolean(record?.punchOut);
       const isOnline = hasIn && !hasOut;
       const isCompleted = hasIn && hasOut;
@@ -657,23 +670,26 @@ export default function AttendanceManagementView({
         statusTheme = 'purple';
       }
 
-      // Location details
-      let locationSummary = 'Fixed Office Desk / Stationary Console';
-      let locationCoords = null;
+      // Dynamic Real-time Location Details
+      const realLocation = record?.geofenceStatus || record?.gpsLocation?.landmarkName || record?.gpsLocation?.address;
+      let locationSummary = realLocation || 'Fixed Office Desk / Stationary Console';
+      let locationCoords = record?.gpsLocation || null;
       let locationSpeed = 0;
 
-      if (isTracked) {
+      if (isEmpSupervisor) {
+        locationSummary = realLocation || (isOnline ? 'Dandekar Pool, Sinhagad Rd, Pune' : 'Dandekar Pool Site Hub');
+        locationCoords = record?.gpsLocation || { lat: 18.506500, lng: 73.847500 };
+      } else if ((emp.role || '').toLowerCase().includes('dispatch')) {
+        locationSummary = realLocation || 'Narveer Tanaji Malusare Rd, Pune';
+        locationCoords = record?.gpsLocation || { lat: 18.502390, lng: 73.847872 };
+      } else if (isTracked) {
         if (emp.role.toLowerCase().includes('driver')) {
-          locationSummary = isOnline ? 'Highway Transit (NH-48 Sector 12)' : 'Truck Dispatch Bay 03';
+          locationSummary = realLocation || (isOnline ? 'Highway Transit (NH-48 Sector 12)' : 'Truck Dispatch Bay 03');
           locationSpeed = isOnline ? 34 : 0;
           locationCoords = record?.gpsLocation || { lat: 19.0683, lng: 73.0373 };
-        } else if (emp.role.toLowerCase().includes('supervisor')) {
-          locationSummary = isOnline ? 'Pouring Site: Metro Line 4 (Pier 24)' : 'Site Reception Hub';
-          locationSpeed = 0;
-          locationCoords = record?.gpsLocation || { lat: 19.0520, lng: 73.0210 };
         } else {
           // Plant Incharge
-          locationSummary = isOnline ? 'Main Plant Unit #01 Operational Hub' : 'Plant Control Office';
+          locationSummary = realLocation || (isOnline ? 'Main Plant Unit #01 Operational Hub' : 'Plant Control Office');
           locationSpeed = 0;
           locationCoords = record?.gpsLocation || { lat: 19.0558, lng: 73.0163 };
         }

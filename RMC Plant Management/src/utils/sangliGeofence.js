@@ -120,11 +120,21 @@ export function resolveSangliLandmark(lat, lng) {
 
   // Check Pune Urban Region (lat: 18.35 to 18.70, lng: 73.65 to 74.05)
   if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
+    if (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856) {
+      return {
+        landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
+        shortName: 'Dandekar Pool',
+        address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+        distanceMeters: null,
+        isKnownLandmark: true,
+        type: 'PUNE_URBAN',
+      };
+    }
     if (numLat >= 18.490 && numLat <= 18.520 && numLng >= 73.835 && numLng <= 73.865) {
       return {
-        landmarkName: 'Narveer Tanaji Malusare Rd, Pune',
-        shortName: 'Malusare Rd (Pune)',
-        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+        landmarkName: 'Dandekar Pool / Sinhagad Rd, Pune',
+        shortName: 'Dandekar Pool',
+        address: 'Narveer Tanaji Malusare Rd, Dandekar Pool, Pune, Maharashtra 411030',
         distanceMeters: null,
         isKnownLandmark: true,
         type: 'PUNE_URBAN',

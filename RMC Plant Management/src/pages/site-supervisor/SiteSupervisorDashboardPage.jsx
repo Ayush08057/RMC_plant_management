@@ -45,12 +45,12 @@ export default function SiteSupervisorDashboardPage() {
   const teamWorkCount = dailyWork.filter((w) => w.date === todayStr).length;
   const pendingLeaves = leaves.filter((l) => l.status === 'Pending').length;
   const supervisorTodayAttendance = (attendance || []).find(
-    (a) => a.date === todayStr &&
-      ((a.employeeId && a.employeeId.toUpperCase() === 'SS-001') ||
+    (a) => (a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr)) || (a.id && a.id.includes(todayStr.replace(/-/g, '')))) &&
+      ((a.employeeId && (a.employeeId.toUpperCase() === 'SS-001' || a.employeeId.toUpperCase() === 'USR-SS-001')) ||
        (a.employeeId && user?.employeeId && a.employeeId.toUpperCase() === user.employeeId.toUpperCase()) ||
        (a.role && a.role.toLowerCase() === 'site supervisor'))
   );
-  const isSupervisorClockedIn = Boolean(supervisorTodayAttendance?.punchIn);
+  const isSupervisorClockedIn = Boolean(supervisorTodayAttendance?.punchIn || supervisorTodayAttendance?.status === 'Present');
   const isSupervisorShiftEnded = Boolean(supervisorTodayAttendance?.punchOut);
 
   const { kpis, currentSite, todayDeliveries, pouringStatus, siteIssues } = MOCK_SITE_SUPERVISOR_DATA;
