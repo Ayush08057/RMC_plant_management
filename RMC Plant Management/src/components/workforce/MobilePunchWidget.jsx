@@ -46,14 +46,7 @@ export default function MobilePunchWidget({
   const [showWorkReportModal, setShowWorkReportModal] = useState(false);
   const [workReportError, setWorkReportError] = useState(null);
 
-  // Live real-time clock
-  const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(getNowIndian12Hr(true));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+
 
   // Camera & Live Photo States
   const [cameraActive, setCameraActive] = useState(false);
@@ -479,31 +472,16 @@ export default function MobilePunchWidget({
           }
         `}</style>
 
-        {/* Top Header Bar (matches top of Image 2) */}
-        <div className="bg-[#1a2536] px-4 py-3 border-b border-slate-700/60 flex flex-col gap-1.5 shrink-0">
-          {/* Status row: Time + Camera Icon */}
-          <div className="flex items-center justify-between text-xs text-slate-300">
-            <span className="font-mono font-bold tracking-wider">{currentTime}</span>
-            <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/40">
-                <Camera className="w-3 h-3 text-emerald-400" />
-              </span>
-            </div>
+        {/* Top Header Bar */}
+        <div className="bg-[#1a2536] px-4 py-3 border-b border-slate-700/60 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-bold text-white text-sm">{activeEmployee.name}</span>
+            <span className="text-slate-500">•</span>
+            <span className="font-mono text-emerald-400 font-semibold">{activeEmployee.employeeId || activeEmployee.id}</span>
           </div>
-
-          {/* Company Title (matches Image 2 exact title) */}
-          <h1 className="text-center font-bold text-base sm:text-lg text-white tracking-tight">
-            Infoyashonand Technology Pvt.Ltd.
-          </h1>
-
-          {/* Employee Badge Subtitle */}
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-            <span className="font-semibold text-slate-200">{activeEmployee.name}</span>
-            <span>•</span>
-            <span className="font-mono text-emerald-400">{activeEmployee.employeeId || activeEmployee.id}</span>
-            <span>•</span>
-            <span>{activeEmployee.role}</span>
-          </div>
+          <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-medium">
+            {activeEmployee.role}
+          </span>
         </div>
 
         {/* Messages */}
@@ -745,10 +723,7 @@ export default function MobilePunchWidget({
                   <span className="text-slate-400">Shift Schedule</span>
                   <span className="font-semibold text-slate-200">General Morning (09:00 AM - 06:00 PM)</span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Company Portal</span>
-                  <span className="font-semibold text-emerald-400">Infoyashonand Technology Pvt.Ltd.</span>
-                </div>
+
               </div>
             </div>
 
