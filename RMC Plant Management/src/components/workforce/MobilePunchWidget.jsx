@@ -864,10 +864,10 @@ export default function MobilePunchWidget({
             type="button"
             onClick={() => setActiveNavTab('punch')}
             className={`flex flex-col items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${
-              activeNavTab === 'punch' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+              activeNavTab === 'punch' ? 'text-white' : 'text-slate-200 hover:text-white'
             }`}
           >
-            <Fingerprint className={`w-5 h-5 ${activeNavTab === 'punch' ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <Fingerprint className={`w-5 h-5 stroke-[2] ${activeNavTab === 'punch' ? 'text-emerald-400' : 'text-slate-200'}`} />
             <span>Punch</span>
           </button>
 
@@ -875,10 +875,10 @@ export default function MobilePunchWidget({
             type="button"
             onClick={() => setActiveNavTab('activity')}
             className={`flex flex-col items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${
-              activeNavTab === 'activity' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+              activeNavTab === 'activity' ? 'text-white' : 'text-slate-200 hover:text-white'
             }`}
           >
-            <CalendarCheck className={`w-5 h-5 ${activeNavTab === 'activity' ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <CalendarCheck className={`w-5 h-5 stroke-[2] ${activeNavTab === 'activity' ? 'text-emerald-400' : 'text-slate-200'}`} />
             <span>Activity</span>
           </button>
 
@@ -886,10 +886,10 @@ export default function MobilePunchWidget({
             type="button"
             onClick={() => setActiveNavTab('account')}
             className={`flex flex-col items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${
-              activeNavTab === 'account' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+              activeNavTab === 'account' ? 'text-white' : 'text-slate-200 hover:text-white'
             }`}
           >
-            <User className={`w-5 h-5 ${activeNavTab === 'account' ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <User className={`w-5 h-5 stroke-[2] ${activeNavTab === 'account' ? 'text-emerald-400' : 'text-slate-200'}`} />
             <span>Account</span>
           </button>
         </div>
