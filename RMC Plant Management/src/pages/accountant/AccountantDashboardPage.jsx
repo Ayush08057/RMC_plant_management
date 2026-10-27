@@ -19,6 +19,7 @@ import {
   FileText,
   AlertCircle,
   Download,
+  FileCode,
   Clock,
   CheckCircle2
 } from 'lucide-react';
@@ -142,6 +143,15 @@ export default function AccountantDashboardPage() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('tally_sync')}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Tally Prime & ERP 9 XML Sync"
+            >
+              <FileCode className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Tally Sync</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('billing')}
               className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Navigate to Cash Memo & Billing Desk"
@@ -173,6 +183,7 @@ export default function AccountantDashboardPage() {
       {activeTab === 'billing' && <BillingManagementView defaultSection="cash_memos" />}
       {activeTab === 'purchases' && <BillingManagementView defaultSection="purchases" />}
       {activeTab === 'otp_audit' && <BillingManagementView defaultSection="otp_audit" />}
+      {activeTab === 'tally_sync' && <BillingManagementView defaultSection="tally_sync" />}
       {activeTab === 'payroll' && <PayrollPreparationView />}
       {activeTab === 'advances' && <AdvanceManagementView />}
       {activeTab === 'loans' && <LoanManagementView />}

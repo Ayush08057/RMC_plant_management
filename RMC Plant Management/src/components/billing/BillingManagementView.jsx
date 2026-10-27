@@ -50,11 +50,13 @@ import {
   CircleDollarSign,
   ChevronDown,
   FileSpreadsheet,
+  FileCode,
   Download,
   RotateCcw
 } from 'lucide-react';
 import CashMemoPrintView from './CashMemoPrintView';
 import CustomerStatementModal from './CustomerStatementModal';
+import TallySyncView from './TallySyncView';
 import { useExclusiveModal } from '../dashboard/Modal';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { useAuth } from '../../context/AuthContext';
@@ -1296,6 +1298,19 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               {otpLogs.length}
             </span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveSection('tally_sync'); setSearchQuery(''); }}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeSection === 'tally_sync'
+                ? 'bg-white text-slate-950 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <FileCode className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Tally Prime Sync</span>
+          </button>
         </div>
 
         {/* Global Primary Action & Fullscreen Button */}
@@ -2479,6 +2494,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             </table>
           </div>
         </div>
+      )}
+
+      {activeSection === 'tally_sync' && (
+        <TallySyncView bills={bills} purchases={purchases} />
       )}
 
       {/* ========================================================
