@@ -118,6 +118,38 @@ export function resolveSangliLandmark(lat, lng) {
     }
   }
 
+  // Check Pune Urban Region (lat: 18.35 to 18.70, lng: 73.65 to 74.05)
+  if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
+    if (numLat >= 18.490 && numLat <= 18.520 && numLng >= 73.835 && numLng <= 73.865) {
+      return {
+        landmarkName: 'Narveer Tanaji Malusare Rd, Pune',
+        shortName: 'Malusare Rd (Pune)',
+        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+        distanceMeters: null,
+        isKnownLandmark: true,
+        type: 'PUNE_URBAN',
+      };
+    }
+    if (numLat >= 18.480 && numLat <= 18.515 && numLng >= 73.810 && numLng <= 73.845) {
+      return {
+        landmarkName: 'Sinhagad Road, Pune',
+        shortName: 'Sinhagad Rd',
+        address: 'Sinhagad Road / Hingne, Pune, Maharashtra',
+        distanceMeters: null,
+        isKnownLandmark: true,
+        type: 'PUNE_URBAN',
+      };
+    }
+    return {
+      landmarkName: 'Pune Operational Hub',
+      shortName: 'Pune',
+      address: `Pune Metropolitan Region (${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E)`,
+      distanceMeters: null,
+      isKnownLandmark: true,
+      type: 'PUNE_URBAN',
+    };
+  }
+
   // Check Sangli District bounding box (lat: 16.70 to 16.98, lng: 74.40 to 74.80)
   if (numLat >= 16.70 && numLat <= 16.98 && numLng >= 74.40 && numLng <= 74.80) {
     return {

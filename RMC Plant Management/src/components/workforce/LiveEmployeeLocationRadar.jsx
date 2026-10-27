@@ -42,6 +42,7 @@ import { OFFICIAL_ROLE_ACCOUNTS, isAdminPerson } from '../../data/mockUsers';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
+import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { 
   getEmployeeRouteDetails, 
   recordEmployeeBreadcrumb,
@@ -115,27 +116,21 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     label: 'Connecting Browser Geolocation...',
   });
 
-  const updateRealDeviceGps = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = Number(pos.coords.latitude.toFixed(5));
-          const lng = Number(pos.coords.longitude.toFixed(5));
-          const accuracy = Math.round(pos.coords.accuracy);
-          setRealDeviceGps({
-            lat,
-            lng,
-            accuracy,
-            active: true,
-            label: `Real Device GPS: Lat ${lat}, Lng ${lng} (±${accuracy}m)`,
-          });
-        },
-        (err) => {
-          console.warn('Real Device GPS error:', err.message);
-          setRealDeviceGps((prev) => ({ ...prev, active: false, label: err.message }));
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
+  const updateRealDeviceGps = async () => {
+    try {
+      const loc = await getAccurateDeviceLocation({ forceFresh: true });
+      if (loc && loc.lat && loc.lng) {
+        setRealDeviceGps({
+          lat: loc.lat,
+          lng: loc.lng,
+          accuracy: loc.accuracy || 20,
+          active: true,
+          label: `Real Device GPS: Lat ${loc.lat}, Lng ${loc.lng} (${loc.landmarkName || ''})`,
+        });
+      }
+    } catch (err) {
+      console.warn('Real Device GPS error:', err.message);
+      setRealDeviceGps((prev) => ({ ...prev, active: false, label: err.message }));
     }
   };
 
@@ -308,6 +303,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lng = realDeviceGps.lng;
         accuracy = realDeviceGps.accuracy;
         gpsFixSource = 'LIVE_DEVICE';
+      } else if (record?.lastKnownLocation?.lat && record?.lastKnownLocation?.lng) {
+        lat = Number(record.lastKnownLocation.lat);
+        lng = Number(record.lastKnownLocation.lng);
+        accuracy = record.lastKnownLocation.accuracy ? Math.round(record.lastKnownLocation.accuracy) : null;
+        gpsFixSource = 'LIVE_TRACKING';
       } else if (record?.gpsLocation?.lat && record?.gpsLocation?.lng) {
         lat = Number(record.gpsLocation.lat);
         lng = Number(record.gpsLocation.lng);

@@ -33,6 +33,9 @@ import {
 import { OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../utils/shiftUtils.js';
 import { deleteEmployeeDocumentFile } from '../services/storageService.js';
+import { calculateDistanceMeters } from '../utils/sangliGeofence.js';
+import { resolveAccurateAddress } from '../services/gpsLocationService.js';
+import { recordEmployeeBreadcrumb } from '../services/routeTrackingService.js';
 
 const WorkforceContext = createContext(null);
 
@@ -1522,6 +1525,8 @@ export const WorkforceProvider = ({ children }) => {
       remarks: options.remarks || 'Clocked in via RMC Mobile/Web Console',
       selfieUrl: options.selfieUrl || (existingIndex >= 0 ? data.attendance[existingIndex].selfieUrl : null),
       gpsLocation: options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null),
+      lastKnownLocation: options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].lastKnownLocation : null),
+      routeTrail: options.routeTrail || (existingIndex >= 0 ? data.attendance[existingIndex].routeTrail : []) || [],
       geofenceStatus: options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available'),
       createdAt: existingIndex >= 0 ? (data.attendance[existingIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1675,6 +1680,7 @@ export const WorkforceProvider = ({ children }) => {
       exitGpsLocation: options.exitGpsLocation || options.gpsLocation || null,
       lastKnownLocation: options.exitGpsLocation || options.gpsLocation || currentRecord.gpsLocation || null,
       exitGeofenceStatus: options.geofenceStatus || (options.exitGpsLocation || options.gpsLocation ? 'Shift Concluded (GPS Verified)' : 'Shift Concluded'),
+      routeTrail: options.routeTrail || currentRecord.routeTrail || [],
       remarks: options.remarks ? `${currentRecord.remarks} | Out: ${options.remarks}` : currentRecord.remarks,
       updatedAt: new Date().toISOString(),
     };
@@ -1816,6 +1822,124 @@ export const WorkforceProvider = ({ children }) => {
     });
     addAuditLog(`Deleted Attendance (${id})`, 'Attendance', `Record removed`);
   };
+
+  /**
+   * Continuous real-time location update for clocked-in personnel
+   * Appends GPS breadcrumbs into routeTrail and updates lastKnownLocation
+   */
+  const updateLiveEmployeeLocation = async (employeeId, locationData) => {
+    if (!employeeId || !locationData || !locationData.lat || !locationData.lng) return;
+    const today = new Date().toISOString().split('T')[0];
+    const canonicalEmpId = employeeId.toString().trim().toUpperCase();
+
+    setData((prev) => {
+      const prevList = prev.attendance || [];
+      const pIdx = prevList.findIndex((a) => {
+        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        return aDate === today && (aEmpId === canonicalEmpId || a.id?.toUpperCase().includes(canonicalEmpId));
+      });
+
+      if (pIdx < 0) return prev;
+      const target = prevList[pIdx];
+      const existingTrail = Array.isArray(target.routeTrail) ? [...target.routeTrail] : [];
+
+      const lastStop = existingTrail[existingTrail.length - 1];
+      const dist = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, locationData.lat, locationData.lng) : 999;
+
+      let newTrail = existingTrail;
+      if (dist > 80 || existingTrail.length === 0) {
+        const timeNow = getNowIndian12Hr(false);
+        const prevKm = lastStop?.distanceKm || 0;
+        const addKm = lastStop ? Number((dist / 1000).toFixed(2)) : 0;
+        const newStop = {
+          stopNo: existingTrail.length + 1,
+          title: locationData.landmarkName || 'Live Position',
+          category: existingTrail.length === 0 ? 'Punch In' : 'En Route',
+          address: locationData.address || `${Number(locationData.lat).toFixed(5)}°N, ${Number(locationData.lng).toFixed(5)}°E`,
+          time: timeNow,
+          lat: Number(locationData.lat),
+          lng: Number(locationData.lng),
+          status: 'Live',
+          distanceKm: Number((prevKm + addKm).toFixed(1)),
+          notes: 'Real-time GPS telemetry'
+        };
+        newTrail = [...existingTrail, newStop];
+      }
+
+      const updatedRecord = {
+        ...target,
+        lastKnownLocation: {
+          lat: Number(locationData.lat),
+          lng: Number(locationData.lng),
+          accuracy: locationData.accuracy || 20,
+          timestamp: new Date().toISOString(),
+          address: locationData.address || target.lastKnownLocation?.address || 'Live Telemetry',
+          landmarkName: locationData.landmarkName || target.lastKnownLocation?.landmarkName || 'Live Position'
+        },
+        routeTrail: newTrail,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedList = [...prevList];
+      updatedList[pIdx] = updatedRecord;
+
+      saveDocumentWithId(COLLECTIONS.ATTENDANCE, target.id, updatedRecord).catch(() => {});
+      return { ...prev, attendance: updatedList };
+    });
+  };
+
+  // Continuous background location tracking for authenticated staff actively on duty
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation || !user) return;
+    if (user.role === 'Admin') return;
+
+    const empId = user.employeeId || user.id;
+    if (!empId) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecord = (data.attendance || []).find((a) => {
+      const aDate = a.date || '';
+      const aEmpId = (a.employeeId || a.id || '').toUpperCase();
+      return aDate === today && (aEmpId === empId.toUpperCase());
+    });
+
+    const isPunchedIn = Boolean(todayRecord?.punchIn && !todayRecord?.punchOut);
+    if (!isPunchedIn) return;
+
+    let watchId;
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          const accuracy = Math.round(pos.coords.accuracy || 20);
+
+          const addrInfo = await resolveAccurateAddress(lat, lng);
+          updateLiveEmployeeLocation(empId, {
+            lat,
+            lng,
+            accuracy,
+            address: addrInfo.address,
+            landmarkName: addrInfo.landmarkName
+          });
+          recordEmployeeBreadcrumb(empId, lat, lng, addrInfo.landmarkName);
+        },
+        (err) => {
+          console.warn('Live staff tracking watch notice:', err.message);
+        },
+        { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 }
+      );
+    } catch (e) {
+      console.warn('Geolocation watch failed:', e);
+    }
+
+    return () => {
+      if (watchId && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [user, data.attendance]);
 
   const requestAttendanceCorrection = ({ employeeId, date, reason, requestedIn, requestedOut }) => {
     const emp = data.employees.find((e) => e.id === employeeId);
@@ -3367,6 +3491,7 @@ export const WorkforceProvider = ({ children }) => {
     updateAttendanceRecord,
     deleteAttendanceRecord,
     requestAttendanceCorrection,
+    updateLiveEmployeeLocation,
 
     // Daily Work Actions
     submitDailyWork,

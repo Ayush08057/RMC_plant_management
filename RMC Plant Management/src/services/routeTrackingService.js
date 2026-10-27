@@ -190,69 +190,149 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
 
   let stops = [];
 
-  // Strictly use real recorded breadcrumb history
-  if (allHistories[empId] && Array.isArray(allHistories[empId]) && allHistories[empId].length > 0) {
+  // 1. If employee has recorded routeTrail in attendance record
+  const attTrail = employee.routeTrail || employee.record?.routeTrail || [];
+  if (Array.isArray(attTrail) && attTrail.length > 0) {
+    stops = attTrail.map((s, idx) => ({ ...s, stopNo: idx + 1 }));
+  } else if (allHistories[empId] && Array.isArray(allHistories[empId]) && allHistories[empId].length > 0) {
     stops = [...allHistories[empId]];
   }
 
-  // If the employee has a verified live GPS fix, update or append current stop
-  const currentLat = liveGps?.lat || employee.lat;
-  const currentLng = liveGps?.lng || employee.lng;
+  // 2. Identify punch-in coordinates
+  const punchInGps = employee.gpsLocation || employee.record?.gpsLocation || null;
+  const punchInTime = employee.punchIn || employee.record?.punchIn || 'Shift Start';
 
-  if (currentLat && currentLng) {
-    const landmark = resolveSangliLandmark(currentLat, currentLng);
-    const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (punchInGps && punchInGps.lat && punchInGps.lng) {
+    const pLat = Number(punchInGps.lat);
+    const pLng = Number(punchInGps.lng);
+    const landmark = resolveSangliLandmark(pLat, pLng);
 
     if (stops.length === 0) {
-      // Clean single live location pinpoint with 0.0 km
       stops.push({
         stopNo: 1,
-        title: landmark.landmarkName || 'Current Location',
-        category: 'Live Position',
-        address: landmark.address || `${Number(currentLat).toFixed(4)}°N, ${Number(currentLng).toFixed(4)}°E`,
-        time: timeNow,
-        lat: Number(currentLat),
-        lng: Number(currentLng),
-        status: 'Current Location',
+        title: punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station',
+        category: 'Punch-In Location',
+        address: punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
+        time: punchInTime,
+        lat: pLat,
+        lng: pLng,
+        status: 'Punch-In Station',
         distanceKm: 0.0,
         stayMinutes: null,
-        notes: 'Real-time GPS coordinate fix'
+        notes: 'Verified biometric punch-in'
       });
     } else {
-      const lastStop = stops[stops.length - 1];
-      const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, currentLat, currentLng) : 999;
-
-      if (distToLast > 250) {
-        // Significantly moved — add new live waypoint
-        const prevKm = lastStop ? (lastStop.distanceKm || 0) : 0;
-        const addKm = Number((distToLast / 1000).toFixed(1));
-        stops.push({
-          stopNo: stops.length + 1,
-          title: landmark.landmarkName || 'Live GPS Location',
-          category: 'Current Location',
-          address: landmark.address || `${Number(currentLat).toFixed(4)}°N, ${Number(currentLng).toFixed(4)}°E`,
-          time: timeNow,
-          lat: Number(currentLat),
-          lng: Number(currentLng),
-          status: 'Current Stop',
-          distanceKm: Number((prevKm + addKm).toFixed(1)),
+      // Ensure stop 1 matches punch-in location
+      const firstStop = stops[0];
+      const dist = calculateDistanceMeters(firstStop.lat, firstStop.lng, pLat, pLng);
+      if (dist > 150) {
+        stops.unshift({
+          stopNo: 1,
+          title: punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station',
+          category: 'Punch-In Location',
+          address: punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
+          time: punchInTime,
+          lat: pLat,
+          lng: pLng,
+          status: 'Punch-In Station',
+          distanceKm: 0.0,
           stayMinutes: null,
-          notes: 'Real-time GNSS coordinate fix'
+          notes: 'Verified biometric punch-in'
         });
-      } else if (lastStop) {
-        // Update coordinates of current stop to highest precision
-        lastStop.lat = Number(currentLat);
-        lastStop.lng = Number(currentLng);
-        lastStop.title = landmark.landmarkName || lastStop.title;
-        lastStop.address = landmark.address || lastStop.address;
       }
     }
   }
 
-  // Polyline array for Leaflet [ [lat, lng], [lat, lng], ... ]
-  // Polyline is strictly formed only when at least 2 distinct coordinate points exist
+  // 3. Identify exit / current coordinates
+  const exitGps = employee.exitGpsLocation || employee.record?.exitGpsLocation || null;
+  const punchOutTime = employee.punchOut || employee.record?.punchOut || null;
+
+  if (exitGps && exitGps.lat && exitGps.lng) {
+    const eLat = Number(exitGps.lat);
+    const eLng = Number(exitGps.lng);
+    const eLandmark = resolveSangliLandmark(eLat, eLng);
+    const lastStop = stops[stops.length - 1];
+    const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, eLat, eLng) : 999;
+
+    if (distToLast > 50 || stops.length === 1) {
+      stops.push({
+        stopNo: stops.length + 1,
+        title: exitGps.landmarkName || eLandmark.landmarkName || 'Punch-Out Station',
+        category: 'Punch-Out Location',
+        address: exitGps.address || eLandmark.address || `${eLat.toFixed(4)}°N, ${eLng.toFixed(4)}°E`,
+        time: punchOutTime || 'Shift End',
+        lat: eLat,
+        lng: eLng,
+        status: 'Punch-Out Station',
+        distanceKm: 0.0,
+        stayMinutes: null,
+        notes: 'Verified punch-out location'
+      });
+    }
+  } else {
+    // Current live / last known position
+    const currentLat = liveGps?.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat || employee.lat;
+    const currentLng = liveGps?.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng || employee.lng;
+
+    if (currentLat && currentLng) {
+      const cLat = Number(currentLat);
+      const cLng = Number(currentLng);
+      const landmark = resolveSangliLandmark(cLat, cLng);
+      const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      if (stops.length === 0) {
+        stops.push({
+          stopNo: 1,
+          title: landmark.landmarkName || 'Current Location',
+          category: 'Live Position',
+          address: landmark.address || `${cLat.toFixed(4)}°N, ${cLng.toFixed(4)}°E`,
+          time: timeNow,
+          lat: cLat,
+          lng: cLng,
+          status: 'Current Location',
+          distanceKm: 0.0,
+          stayMinutes: null,
+          notes: 'Real-time GPS coordinate fix'
+        });
+      } else {
+        const lastStop = stops[stops.length - 1];
+        const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
+
+        if (distToLast > 80) {
+          stops.push({
+            stopNo: stops.length + 1,
+            title: landmark.landmarkName || 'Live GPS Location',
+            category: 'Current Location',
+            address: landmark.address || `${cLat.toFixed(4)}°N, ${cLng.toFixed(4)}°E`,
+            time: timeNow,
+            lat: cLat,
+            lng: cLng,
+            status: 'Current Stop',
+            distanceKm: 0.0,
+            stayMinutes: null,
+            notes: 'Real-time GNSS coordinate fix'
+          });
+        }
+      }
+    }
+  }
+
+  // 4. Calculate accurate cumulative kilometer distances across all stops
+  let cumulativeDist = 0.0;
+  for (let i = 0; i < stops.length; i++) {
+    stops[i].stopNo = i + 1;
+    if (i === 0) {
+      stops[i].distanceKm = 0.0;
+    } else {
+      const prev = stops[i - 1];
+      const legDistMeters = calculateDistanceMeters(prev.lat, prev.lng, stops[i].lat, stops[i].lng);
+      cumulativeDist += legDistMeters / 1000;
+      stops[i].distanceKm = Number(cumulativeDist.toFixed(1));
+    }
+  }
+
   const polylineCoords = stops.length >= 2 ? stops.map((s) => [Number(s.lat), Number(s.lng)]) : [];
-  const totalDistanceKm = stops.length > 0 ? (stops[stops.length - 1].distanceKm || 0.0) : 0.0;
+  const totalDistanceKm = Number(cumulativeDist.toFixed(1));
   const visitedStopsCount = stops.filter((s) => s.status !== 'Current Stop' && s.status !== 'Current Location').length;
 
   return {

@@ -25,6 +25,8 @@ import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
+import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
+import { recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
 
 export default function MobilePunchWidget({ 
   onPunched,
@@ -158,37 +160,17 @@ export default function MobilePunchWidget({
     remarks: '',
   });
 
-  // Background GPS Acquisition
-  const acquireGpsLocation = () => {
-    return new Promise((resolve) => {
-      if (typeof window === 'undefined' || !navigator.geolocation) {
-        const fallback = { lat: 16.8464, lng: 74.5990, accuracy: 25, timestamp: new Date().toISOString() };
-        setGpsCoords(fallback);
-        setGpsStatus('LOCKED');
-        return resolve(fallback);
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords = {
-            lat: Number(pos.coords.latitude.toFixed(6)),
-            lng: Number(pos.coords.longitude.toFixed(6)),
-            accuracy: Math.round(pos.coords.accuracy || 20),
-            timestamp: new Date().toISOString(),
-          };
-          setGpsCoords(coords);
-          setGpsStatus('LOCKED');
-          resolve(coords);
-        },
-        () => {
-          // Graceful fallback to Plant HQ coordinates so user is never blocked
-          const fallback = { lat: 16.8464, lng: 74.5990, accuracy: 30, timestamp: new Date().toISOString() };
-          setGpsCoords(fallback);
-          setGpsStatus('LOCKED');
-          resolve(fallback);
-        },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
-      );
-    });
+  // Background GPS Acquisition with Multi-Tiered Geolocation
+  const acquireGpsLocation = async (forceFresh = false) => {
+    try {
+      const loc = await getAccurateDeviceLocation({ forceFresh });
+      setGpsCoords(loc);
+      setGpsStatus('LOCKED');
+      return loc;
+    } catch (err) {
+      console.warn('GPS location notice:', err);
+      return gpsCoords;
+    }
   };
 
   useEffect(() => {
@@ -322,30 +304,55 @@ export default function MobilePunchWidget({
       // 1. Capture live photo from stream
       const photoUrl = captureSelfiePhoto();
 
-      // 2. Obtain current GPS location
-      let currentGps = gpsCoords;
-      if (!currentGps || !currentGps.lat) {
-        currentGps = await acquireGpsLocation();
+      // 2. Obtain fresh, high-precision GPS location
+      let currentGps = null;
+      try {
+        currentGps = await acquireGpsLocation(true);
+      } catch {
+        currentGps = gpsCoords;
       }
 
-      const landmark = resolveSangliLandmark(currentGps.lat, currentGps.lng);
-      const geofenceStatus = landmark.isKnownLandmark ? landmark.landmarkName : 'Sangli Plant Operational Zone';
-      const address = landmark.address || 'Plant HQ Geofence Zone';
+      if (!currentGps || !currentGps.lat) {
+        currentGps = await acquireGpsLocation(true);
+      }
+
+      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || 'Current Location';
+      const address = currentGps?.address || `${Number(currentGps?.lat).toFixed(5)}°N, ${Number(currentGps?.lng).toFixed(5)}°E`;
+      const geofenceStatus = landmarkName;
 
       const targetId = activeEmployee.employeeId || activeEmployee.id;
+
+      // Start route trail with punch-in waypoint
+      const punchInWaypoint = {
+        stopNo: 1,
+        title: `Punch-In: ${landmarkName}`,
+        category: 'Punch-In Location',
+        address,
+        time: getNowIndian12Hr(false),
+        lat: Number(currentGps.lat),
+        lng: Number(currentGps.lng),
+        status: 'Punch-In Station',
+        distanceKm: 0.0,
+        notes: 'Verified biometric punch-in'
+      };
 
       const rec = await checkIn(targetId, {
         selfieUrl: photoUrl,
         gpsLocation: {
-          lat: currentGps.lat,
-          lng: currentGps.lng,
-          accuracy: currentGps.accuracy,
+          lat: Number(currentGps.lat),
+          lng: Number(currentGps.lng),
+          accuracy: currentGps.accuracy || 20,
           timestamp: currentGps.timestamp || new Date().toISOString(),
           address,
+          landmarkName,
         },
+        routeTrail: [punchInWaypoint],
         geofenceStatus,
         remarks: `Live biometric scan clocked in at ${geofenceStatus}`,
       });
+
+      // Record in local & cloud route tracking history
+      recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`);
 
       setSuccessMsg(`Punch In recorded successfully at ${formatToIndian12Hr(rec.punchIn)}!`);
       if (onPunched) onPunched();
@@ -418,22 +425,29 @@ export default function MobilePunchWidget({
         });
       }
 
-      // 2. Perform Punch Out
-      let exitGps = gpsCoords;
+      // 2. Perform Punch Out with fresh accurate GPS
+      let exitGps = null;
       try {
-        const freshCoords = await acquireGpsLocation();
-        if (freshCoords) exitGps = freshCoords;
+        exitGps = await acquireGpsLocation(true);
       } catch {
-        // Fall back to exitGps
+        exitGps = gpsCoords;
       }
 
-      const exitGpsData = exitGps ? {
-        lat: exitGps.lat,
-        lng: exitGps.lng,
-        accuracy: exitGps.accuracy,
+      const exitAddress = exitGps?.address || `${Number(exitGps?.lat).toFixed(5)}°N, ${Number(exitGps?.lng).toFixed(5)}°E`;
+      const exitLandmark = exitGps?.landmarkName || exitGps?.shortName || 'Punch-Out Station';
+
+      const exitGpsData = exitGps && exitGps.lat ? {
+        lat: Number(exitGps.lat),
+        lng: Number(exitGps.lng),
+        accuracy: exitGps.accuracy || 20,
         timestamp: new Date().toISOString(),
-        address: 'Exit GPS Verification Fix',
+        address: exitAddress,
+        landmarkName: exitLandmark,
       } : null;
+
+      if (exitGps && exitGps.lat) {
+        recordEmployeeBreadcrumb(targetId, Number(exitGps.lat), Number(exitGps.lng), `Punch-Out: ${exitLandmark}`);
+      }
 
       const rec = await checkOut(targetId, {
         exitGpsLocation: exitGpsData,
