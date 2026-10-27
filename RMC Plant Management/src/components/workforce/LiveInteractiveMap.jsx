@@ -180,6 +180,7 @@ export default function LiveInteractiveMap({
       zoom: 13,
       zoomControl: false,
       attributionControl: false,
+      scrollWheelZoom: false,
     });
 
     // Clean Tile Layer Configuration (Google Maps / Esri - 100% Free, NO WATERMARKS)

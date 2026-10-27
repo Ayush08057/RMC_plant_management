@@ -26,6 +26,14 @@
     padding: 0;
     overflow: hidden !important;
     box-sizing: border-box;
+    touch-action: pan-x pan-y;
+  }
+
+  /* Prevent automatic mobile browser zoom when inputs are tapped */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
   }
 
   *, *::before, *::after {
