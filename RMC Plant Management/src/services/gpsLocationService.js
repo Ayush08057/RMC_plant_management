@@ -32,7 +32,7 @@ export async function resolveAccurateAddress(lat, lng) {
 
   // 1. Check known Sangli landmarks
   const sangliCheck = resolveSangliLandmark(numLat, numLng);
-  if (sangliCheck.isKnownLandmark && sangliCheck.type !== 'REGIONAL' && sangliCheck.type !== 'COORDINATES') {
+  if (sangliCheck.isKnownLandmark && sangliCheck.type !== 'REGIONAL' && sangliCheck.type !== 'COORDINATES' && sangliCheck.type !== 'PUNE_URBAN') {
     const res = {
       landmarkName: sangliCheck.landmarkName,
       address: sangliCheck.address,

@@ -324,6 +324,15 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         gpsFixSource = 'ASSIGNED_STATION';
       }
 
+      // Safeguard against residual legacy mock coordinates (16.8464, 74.5990)
+      if ((emp.id?.includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch')) &&
+          lat !== null && lng !== null && Math.abs(lat - 16.8464) < 0.01 && Math.abs(lng - 74.5990) < 0.01) {
+        lat = 18.502390;
+        lng = 73.847872;
+        accuracy = 15;
+        gpsFixSource = 'ASSIGNED_STATION';
+      }
+
       const hasGpsFix = true;
 
       // Match real active or recent driver trip
@@ -397,6 +406,12 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         return `${h}h ${m}m`;
       };
 
+      let finalGeofence = record?.geofenceStatus || geofenceLabel;
+      if (finalGeofence === 'Sangli Plant Operational Zone' || 
+          ((emp.id?.includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch')) && finalGeofence?.includes('Sangli Plant'))) {
+        finalGeofence = 'Narveer Tanaji Malusare Rd, Pune';
+      }
+
       return {
         ...emp,
         recordId: record?.id,
@@ -415,7 +430,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         gpsFixSource,
         stationName: assignedStation.stationName,
         stationAddress: assignedStation.address,
-        geofenceStatus: record?.geofenceStatus || geofenceLabel,
+        geofenceStatus: finalGeofence,
         speedKmh: null,
         batteryPct: null,
         network: gpsFixSource === 'LIVE_DEVICE' 

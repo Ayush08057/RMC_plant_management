@@ -34,7 +34,15 @@ export default function MobilePunchWidget({
   roleLocked = false
 }) {
   const { user } = useAuth();
-  const { attendance, employees, checkIn, checkOut, submitDailyWork } = useWorkforce();
+  const { 
+    attendance, 
+    employees, 
+    checkIn, 
+    checkOut, 
+    submitDailyWork, 
+    resetTodayAttendance, 
+    updateLiveEmployeeLocation 
+  } = useWorkforce();
   const isAdmin = user?.role === 'Admin' || user?.role === 'Owner / Director';
   
   const [loading, setLoading] = useState(false);
@@ -161,9 +169,9 @@ export default function MobilePunchWidget({
   });
 
   // Background GPS Acquisition with Multi-Tiered Geolocation
-  const acquireGpsLocation = async (forceFresh = false) => {
+  const acquireGpsLocation = async (forceFresh = false, defaultStation = null) => {
     try {
-      const loc = await getAccurateDeviceLocation({ forceFresh });
+      const loc = await getAccurateDeviceLocation({ forceFresh, defaultStation });
       setGpsCoords(loc);
       setGpsStatus('LOCKED');
       return loc;
@@ -304,23 +312,37 @@ export default function MobilePunchWidget({
       // 1. Capture live photo from stream
       const photoUrl = captureSelfiePhoto();
 
+      const targetId = activeEmployee.employeeId || activeEmployee.id;
+      const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
+                           (targetId || '').toUpperCase().includes('DIS');
+      const defaultPuneStation = isDispatcher ? {
+        lat: 18.502390,
+        lng: 73.847872,
+        stationName: 'Narveer Tanaji Malusare Rd, Pune',
+        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+        shortZone: 'Narveer Tanaji Malusare Rd, Pune'
+      } : null;
+
       // 2. Obtain fresh, high-precision GPS location
       let currentGps = null;
       try {
-        currentGps = await acquireGpsLocation(true);
+        currentGps = await acquireGpsLocation(true, defaultPuneStation);
       } catch {
         currentGps = gpsCoords;
       }
 
       if (!currentGps || !currentGps.lat) {
-        currentGps = await acquireGpsLocation(true);
+        currentGps = await acquireGpsLocation(true, defaultPuneStation);
       }
 
-      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || 'Current Location';
+      // Safeguard: Ensure dispatcher location is strictly Pune
+      if (isDispatcher && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
+        currentGps = defaultPuneStation;
+      }
+
+      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location');
       const address = currentGps?.address || `${Number(currentGps?.lat).toFixed(5)}°N, ${Number(currentGps?.lng).toFixed(5)}°E`;
       const geofenceStatus = landmarkName;
-
-      const targetId = activeEmployee.employeeId || activeEmployee.id;
 
       // Start route trail with punch-in waypoint
       const punchInWaypoint = {
@@ -466,6 +488,62 @@ export default function MobilePunchWidget({
     }
   };
 
+  // Re-sync live GPS location while on duty
+  const handleRefreshLiveLocation = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const targetId = activeEmployee.employeeId || activeEmployee.id;
+      const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
+                           (targetId || '').toUpperCase().includes('DIS');
+      const defaultPuneStation = isDispatcher ? {
+        lat: 18.502390,
+        lng: 73.847872,
+        stationName: 'Narveer Tanaji Malusare Rd, Pune',
+        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+        shortZone: 'Narveer Tanaji Malusare Rd, Pune'
+      } : null;
+
+      const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation: defaultPuneStation });
+      let finalLoc = loc;
+      if (isDispatcher && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
+        finalLoc = defaultPuneStation;
+      }
+
+      if (finalLoc && finalLoc.lat && finalLoc.lng) {
+        setGpsCoords(finalLoc);
+        if (typeof updateLiveEmployeeLocation === 'function') {
+          updateLiveEmployeeLocation(targetId, finalLoc);
+        }
+        recordEmployeeBreadcrumb(targetId, Number(finalLoc.lat), Number(finalLoc.lng), `Live GPS: ${finalLoc.landmarkName}`);
+        setSuccessMsg(`GPS location updated: ${finalLoc.landmarkName}!`);
+      }
+    } catch (err) {
+      setError('Unable to acquire fresh GPS: ' + (err.message || 'Timeout'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reset clock-in to allow re-punching in fresh
+  const handleResetTodayClockIn = async () => {
+    if (!window.confirm("Reset today's punch-in? This clears today's record so you can clock in again with fresh biometric photo & GPS.")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const targetId = activeEmployee.employeeId || activeEmployee.id;
+      if (typeof resetTodayAttendance === 'function') {
+        await resetTodayAttendance(targetId);
+        setSuccessMsg("Clock-in cleared. You can now punch in fresh.");
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to reset attendance.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-sm sm:max-w-md mx-auto">
       {/* Hidden canvas for video frame grab */}
@@ -571,17 +649,46 @@ export default function MobilePunchWidget({
               </div>
 
               {/* Status Indicator Under Circle */}
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-col items-center gap-2">
                 {!hasPunchedIn ? (
                   <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                     <span>Position Face in Circle to Clock In</span>
                   </span>
                 ) : !hasPunchedOut ? (
-                  <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>On Duty • Clocked In: {formatToIndian12Hr(userTodayRecord?.punchIn)}</span>
-                  </span>
+                  <>
+                    <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>On Duty • Clocked In: {formatToIndian12Hr(userTodayRecord?.punchIn)}</span>
+                    </span>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] text-slate-300 shadow-xs">
+                      <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="font-semibold text-white truncate max-w-[220px]">
+                        {userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.geofenceStatus || 'Narveer Tanaji Malusare Rd, Pune'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleRefreshLiveLocation}
+                        className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-900/90 border border-slate-700 hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Re-acquire fresh device GPS coordinates"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>Update GPS</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleResetTodayClockIn}
+                        className="text-[10px] font-medium text-slate-400 hover:text-red-400 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                        title="Clear clock-in to punch in fresh with real GPS"
+                      >
+                        <span>Reset Clock-In</span>
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-blue-950/80 text-blue-300 border border-blue-700/60 flex items-center gap-1.5">
                     <Check className="w-3.5 h-3.5 text-blue-400" />

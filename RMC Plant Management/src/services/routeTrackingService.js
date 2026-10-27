@@ -51,12 +51,12 @@ export function getAssignedEmployeeStation(emp) {
 
   if (roleLower.includes('dispatch') || idUpper.includes('DIS') || nameLower.includes('dispatcher')) {
     return {
-      lat: 16.8450,
-      lng: 74.6200,
-      stationName: 'SM Concrete Plant HQ (Weighbridge & Dispatch)',
-      address: 'Tanang, Sangli-Miraj Road, Sangli',
-      shortZone: 'Plant Dispatch Bay',
-      notes: 'Batching control & delivery challan dispatch',
+      lat: 18.502390,
+      lng: 73.847872,
+      stationName: 'Pune Central Dispatch Operations Hub',
+      address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+      shortZone: 'Narveer Tanaji Malusare Rd, Pune',
+      notes: 'Central logistics dispatch & batching control',
     };
   }
 
@@ -132,7 +132,10 @@ export function getAllRouteHistories() {
             s.notes !== 'Formwork & reinforcement check' &&
             s.notes !== 'Batching 6.0 m³ M25 concrete loaded' &&
             s.title !== 'Plant HQ (Loading Bay)' &&
-            s.title !== 'Godrej Green Acres Pier Site'
+            s.title !== 'Godrej Green Acres Pier Site' &&
+            !s.title?.includes('Sangli Plant Operational Zone') &&
+            !s.title?.includes('Effotel') &&
+            !(s.lat && s.lng && Math.abs(Number(s.lat) - 16.8464) < 0.01 && Math.abs(Number(s.lng) - 74.5990) < 0.01)
           );
           if (filtered.length !== list.length) {
             hasLegacyMocks = true;
@@ -203,16 +206,30 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   const punchInTime = employee.punchIn || employee.record?.punchIn || 'Shift Start';
 
   if (punchInGps && punchInGps.lat && punchInGps.lng) {
-    const pLat = Number(punchInGps.lat);
-    const pLng = Number(punchInGps.lng);
+    let pLat = Number(punchInGps.lat);
+    let pLng = Number(punchInGps.lng);
+
+    // Sanitize legacy mock coordinates for Dispatcher (16.8464, 74.5990) -> Pune real location
+    if ((empId.includes('DIS') || (employee.role || '').toLowerCase().includes('dispatch')) &&
+        Math.abs(pLat - 16.8464) < 0.01 && Math.abs(pLng - 74.5990) < 0.01) {
+      pLat = 18.502390;
+      pLng = 73.847872;
+    }
+
     const landmark = resolveSangliLandmark(pLat, pLng);
+    const resolvedTitle = (punchInGps.landmarkName && !punchInGps.landmarkName.includes('Sangli Plant Operational'))
+      ? punchInGps.landmarkName 
+      : landmark.landmarkName;
+    const resolvedAddress = (punchInGps.address && !punchInGps.address.includes('Plant HQ Geofence'))
+      ? punchInGps.address
+      : landmark.address;
 
     if (stops.length === 0) {
       stops.push({
         stopNo: 1,
-        title: punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station',
+        title: resolvedTitle || 'Punch-In Station',
         category: 'Punch-In Location',
-        address: punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
+        address: resolvedAddress || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
         time: punchInTime,
         lat: pLat,
         lng: pLng,
@@ -228,9 +245,9 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       if (dist > 150) {
         stops.unshift({
           stopNo: 1,
-          title: punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station',
+          title: resolvedTitle || 'Punch-In Station',
           category: 'Punch-In Location',
-          address: punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
+          address: resolvedAddress || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
           time: punchInTime,
           lat: pLat,
           lng: pLng,

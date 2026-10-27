@@ -41,6 +41,27 @@ export default function App() {
           } catch {}
         }
       });
+
+      // Scrub legacy mock route coordinates (16.8464, 74.5990)
+      const routesRaw = localStorage.getItem('rmc_employee_route_histories_v1');
+      if (routesRaw && (routesRaw.includes('Sangli Plant Operational') || routesRaw.includes('16.8464') || routesRaw.includes('Effotel'))) {
+        try {
+          const routesParsed = JSON.parse(routesRaw);
+          const cleanedRoutes = {};
+          Object.keys(routesParsed).forEach((k) => {
+            const list = routesParsed[k];
+            if (Array.isArray(list)) {
+              cleanedRoutes[k] = list.filter((s) => 
+                s &&
+                !s.title?.includes('Sangli Plant Operational') &&
+                !s.title?.includes('Effotel') &&
+                !(s.lat && s.lng && Math.abs(Number(s.lat) - 16.8464) < 0.01)
+              );
+            }
+          });
+          localStorage.setItem('rmc_employee_route_histories_v1', JSON.stringify(cleanedRoutes));
+        } catch {}
+      }
     } catch {}
   }, []);
   return (
