@@ -44,6 +44,14 @@ export default function SiteSupervisorDashboardPage() {
   const lateCount = teamAttendance.filter((a) => a.lateStatus).length;
   const teamWorkCount = dailyWork.filter((w) => w.date === todayStr).length;
   const pendingLeaves = leaves.filter((l) => l.status === 'Pending').length;
+  const supervisorTodayAttendance = (attendance || []).find(
+    (a) => a.date === todayStr &&
+      ((a.employeeId && a.employeeId.toUpperCase() === 'SS-001') ||
+       (a.employeeId && user?.employeeId && a.employeeId.toUpperCase() === user.employeeId.toUpperCase()) ||
+       (a.role && a.role.toLowerCase() === 'site supervisor'))
+  );
+  const isSupervisorClockedIn = Boolean(supervisorTodayAttendance?.punchIn);
+  const isSupervisorShiftEnded = Boolean(supervisorTodayAttendance?.punchOut);
 
   const { kpis, currentSite, todayDeliveries, pouringStatus, siteIssues } = MOCK_SITE_SUPERVISOR_DATA;
 
@@ -127,11 +135,15 @@ export default function SiteSupervisorDashboardPage() {
           <button
             type="button"
             onClick={() => setActiveTab('attendance')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+              isSupervisorClockedIn && !isSupervisorShiftEnded
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
+            }`}
             title="Mark or View Daily Attendance"
           >
-            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Daily Attendance</span>
+            <Clock className={`w-3.5 h-3.5 ${isSupervisorClockedIn && !isSupervisorShiftEnded ? 'text-emerald-600' : 'text-[#1D5FA7]'}`} />
+            <span>{isSupervisorClockedIn && !isSupervisorShiftEnded ? 'On Duty (End Shift)' : 'Daily Attendance'}</span>
           </button>
           <button
             type="button"
@@ -188,6 +200,18 @@ export default function SiteSupervisorDashboardPage() {
               <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-2xs">
                 Pending Leave: <strong className="text-purple-700 font-bold">{pendingLeaves}</strong>
               </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab('attendance')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold font-sans cursor-pointer shadow-xs transition-all flex items-center gap-1.5 ${
+                  isSupervisorClockedIn && !isSupervisorShiftEnded
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-[#136dec] hover:bg-[#115ec9] text-white'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>{isSupervisorClockedIn && !isSupervisorShiftEnded ? 'Shift Active (Clock Out →)' : 'Punch In for Today →'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('daily-work')}

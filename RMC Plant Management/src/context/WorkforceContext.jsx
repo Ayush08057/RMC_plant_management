@@ -1442,7 +1442,14 @@ export const WorkforceProvider = ({ children }) => {
   const checkIn = async (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
-    const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
+    const defaultId = user?.employeeId || user?.id || (
+      user?.role === 'Site Supervisor' ? 'SS-001' :
+      user?.role === 'Plant Manager' ? 'PM-001' :
+      user?.role === 'Driver' ? 'DRV-001' :
+      user?.role === 'Dispatcher' ? 'DIS-001' :
+      user?.role === 'QC Engineer' ? 'QC-001' :
+      user?.role === 'Accountant' ? 'ACC-001' : 'ADM-001'
+    );
     const targetId = employeeId || defaultId;
     
     // 1. Search in data.employees
@@ -1629,7 +1636,14 @@ export const WorkforceProvider = ({ children }) => {
 
   const resetTodayAttendance = async (employeeId) => {
     const today = new Date().toISOString().split('T')[0];
-    const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
+    const defaultId = user?.employeeId || user?.id || (
+      user?.role === 'Site Supervisor' ? 'SS-001' :
+      user?.role === 'Plant Manager' ? 'PM-001' :
+      user?.role === 'Driver' ? 'DRV-001' :
+      user?.role === 'Dispatcher' ? 'DIS-001' :
+      user?.role === 'QC Engineer' ? 'QC-001' :
+      user?.role === 'Accountant' ? 'ACC-001' : 'ADM-001'
+    );
     const targetId = employeeId || defaultId;
     const cleanTargetId = targetId.toString().trim().toUpperCase();
 
@@ -1677,7 +1691,14 @@ export const WorkforceProvider = ({ children }) => {
   const checkOut = async (employeeId, options = {}) => {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = options.time ? formatToIndian12Hr(options.time) : getNowIndian12Hr(false);
-    const defaultId = user?.employeeId || user?.id || (user?.role === 'Plant Manager' ? 'PM-001' : (user?.role === 'Driver' ? 'DRV-001' : 'ADM-001'));
+    const defaultId = user?.employeeId || user?.id || (
+      user?.role === 'Site Supervisor' ? 'SS-001' :
+      user?.role === 'Plant Manager' ? 'PM-001' :
+      user?.role === 'Driver' ? 'DRV-001' :
+      user?.role === 'Dispatcher' ? 'DIS-001' :
+      user?.role === 'QC Engineer' ? 'QC-001' :
+      user?.role === 'Accountant' ? 'ACC-001' : 'ADM-001'
+    );
     const targetId = employeeId || defaultId;
     
     let emp = data.employees.find(
