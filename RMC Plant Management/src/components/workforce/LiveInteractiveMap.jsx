@@ -15,13 +15,76 @@ import {
   Route, 
   Crosshair,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Key,
+  Check,
+  Settings,
+  ShieldCheck,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { isAdminPerson } from '../../data/mockUsers';
 
 // Sangli Plant HQ anchor
 const SANGLI_PLANT_HQ = { lat: 16.8450, lng: 74.6200, name: 'SM Concrete Plant HQ, Tanang' };
+
+export const LEAFLET_STORAGE_KEY = 'rmc_leaflet_api_key';
+export const LEAFLET_PROVIDER_KEY = 'rmc_leaflet_tile_provider';
+
+/**
+ * Generates clean tile configuration for Leaflet
+ * Defaults to OpenStreetMap standard (100% Free, NO API Key needed, Zero Watermarks)
+ * Supports custom Leaflet / Carto / Mapbox API Key if provided
+ */
+export function getTileConfig(isSatellite, apiKey = '', provider = 'osm') {
+  if (isSatellite) {
+    return {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      options: {
+        maxZoom: 19,
+        subdomains: ['server'],
+        attribution: '&copy; Esri World Imagery'
+      }
+    };
+  }
+
+  const trimmedKey = (apiKey || '').trim();
+
+  // If user selected CartoDB and provided a key, append api_key query param to avoid watermark
+  if (provider === 'carto' && trimmedKey.length > 0) {
+    return {
+      url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=${encodeURIComponent(trimmedKey)}`,
+      options: {
+        maxZoom: 19,
+        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+      }
+    };
+  }
+
+  // If user selected Esri World Street (clean corporate road map, zero watermark)
+  if (provider === 'esri_street') {
+    return {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      options: {
+        maxZoom: 19,
+        subdomains: ['server'],
+        attribution: '&copy; Esri World Street'
+      }
+    };
+  }
+
+  // Primary Default: Official OpenStreetMap Standard (100% Free, NO API KEY NEEDED, ZERO WATERMARKS)
+  return {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    options: {
+      maxZoom: 19,
+      subdomains: ['a', 'b', 'c'],
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }
+  };
+}
 
 export default function LiveInteractiveMap({
   telemetryList = [],
@@ -47,6 +110,27 @@ export default function LiveInteractiveMap({
   const lastTargetIdRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
 
+  // Leaflet API Key & Clean Tile Provider State Management
+  const [leafletApiKey, setLeafletApiKey] = useState(() => {
+    try {
+      return localStorage.getItem(LEAFLET_STORAGE_KEY) || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_LEAFLET_API_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [tileProvider, setTileProvider] = useState(() => {
+    try {
+      return localStorage.getItem(LEAFLET_PROVIDER_KEY) || 'osm';
+    } catch {
+      return 'osm';
+    }
+  });
+
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [inputApiKey, setInputApiKey] = useState(leafletApiKey);
+  const [keySavedToast, setKeySavedToast] = useState(false);
+
   // Validate active target (strictly non-admin)
   const validTarget = activeTarget && !isAdminPerson(activeTarget) ? activeTarget : null;
   const stops = activeRouteDetails?.stops || [];
@@ -54,7 +138,26 @@ export default function LiveInteractiveMap({
   const endStop = stops.length > 0 ? stops[stops.length - 1] : null;
   const totalKm = activeRouteDetails?.totalDistanceKm || (stops.length > 1 ? stops[stops.length - 1].distanceKm : 0);
 
-  // Initialize Leaflet Map once on mount
+  // Save Leaflet API Key or Provider Setting
+  const handleSaveApiKey = (newKey, newProvider = tileProvider) => {
+    const trimmed = (newKey || '').trim();
+    setLeafletApiKey(trimmed);
+    try {
+      if (trimmed) {
+        localStorage.setItem(LEAFLET_STORAGE_KEY, trimmed);
+      } else {
+        localStorage.removeItem(LEAFLET_STORAGE_KEY);
+      }
+      localStorage.setItem(LEAFLET_PROVIDER_KEY, newProvider);
+    } catch (e) {
+      console.warn('Failed saving leaflet key to localStorage:', e);
+    }
+    setTileProvider(newProvider);
+    setKeySavedToast(true);
+    setTimeout(() => setKeySavedToast(false), 2500);
+  };
+
+  // Initialize Leaflet Map once on mount with clean watermark-free tiles
   useEffect(() => {
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return;
@@ -74,14 +177,9 @@ export default function LiveInteractiveMap({
       attributionControl: false,
     });
 
-    // Street tiles: CartoDB Voyager (clean, fast, professional roads)
-    const streetUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    const satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-
-    const tileLayer = L.tileLayer(mapSatellite ? satelliteUrl : streetUrl, {
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(map);
+    // Clean Tile Layer Configuration (OpenStreetMap / Esri - 100% Free, NO WATERMARKS)
+    const config = getTileConfig(mapSatellite, leafletApiKey, tileProvider);
+    const tileLayer = L.tileLayer(config.url, config.options).addTo(map);
 
     tileLayerRef.current = tileLayer;
 
@@ -109,13 +207,12 @@ export default function LiveInteractiveMap({
     };
   }, []);
 
-  // Update Tile Layer when satellite mode toggles
+  // Update Tile Layer when satellite, API key, or provider toggles
   useEffect(() => {
-    if (!tileLayerRef.current) return;
-    const streetUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    const satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-    tileLayerRef.current.setUrl(mapSatellite ? satelliteUrl : streetUrl);
-  }, [mapSatellite]);
+    if (!tileLayerRef.current || !mapInstanceRef.current) return;
+    const config = getTileConfig(mapSatellite, leafletApiKey, tileProvider);
+    tileLayerRef.current.setUrl(config.url);
+  }, [mapSatellite, leafletApiKey, tileProvider]);
 
   // Invalidate map size on full width toggle
   useEffect(() => {
@@ -372,6 +469,21 @@ export default function LiveInteractiveMap({
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
+              onClick={() => {
+                setInputApiKey(leafletApiKey);
+                setShowKeyModal(true);
+              }}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
+              title="Configure Leaflet API Key & Clean Tile Layers"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">
+                {tileProvider === 'carto' && leafletApiKey ? 'API Key Active' : 'Map Layers & Key'}
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleFitRoute}
               className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 flex items-center gap-1 shadow-2xs cursor-pointer transition-all"
               title="Fit Entire Travelled Route on Screen"
@@ -471,6 +583,21 @@ export default function LiveInteractiveMap({
 
           <button
             type="button"
+            onClick={() => {
+              setInputApiKey(leafletApiKey);
+              setShowKeyModal(true);
+            }}
+            className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors relative"
+            title="Configure Leaflet API Key & Clean Tile Layers"
+          >
+            <Key className="w-4 h-4 text-amber-600" />
+            {leafletApiKey && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={handleFitRoute}
             className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
             title="Fit Full Route"
@@ -528,6 +655,210 @@ export default function LiveInteractiveMap({
           </span>
         </div>
       </div>
+
+      {/* Leaflet API Key & Clean Map Tile Provider Configuration Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-[9999] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 max-w-lg w-full overflow-hidden animate-in fade-in duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Leaflet Map & API Key Settings</h3>
+                  <p className="text-[11px] text-slate-400">Configure clean, watermark-free map tiles or provide custom API Key</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4 text-xs text-slate-700">
+              {/* Status Banner */}
+              <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                tileProvider === 'carto' && !leafletApiKey
+                  ? 'bg-amber-50 border-amber-300 text-amber-900'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              }`}>
+                <ShieldCheck className={`w-4 h-4 shrink-0 mt-0.5 ${
+                  tileProvider === 'carto' && !leafletApiKey ? 'text-amber-600' : 'text-emerald-600'
+                }`} />
+                <div className="text-[11px] leading-relaxed">
+                  <strong className="block font-bold">
+                    {tileProvider === 'carto' && !leafletApiKey
+                      ? 'Watermark Warning: Carto requires an API Key.'
+                      : 'Clean Map Active: Zero Watermarks'}
+                  </strong>
+                  <span>
+                    {tileProvider === 'carto' && !leafletApiKey
+                      ? 'Carto now prints "API KEY REQUIRED" without a key. Select OpenStreetMap or Esri below for 100% clean tiles with zero watermarks.'
+                      : 'Serving clean, high-performance raster map tiles without any watermark across Sangli, Miraj, and Maharashtra.'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Provider Selection */}
+              <div>
+                <label className="block font-bold text-slate-900 mb-2">Select Map Tile Provider:</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTileProvider('osm');
+                      handleSaveApiKey(inputApiKey, 'osm');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      tileProvider === 'osm'
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>🗺️ OpenStreetMap</span>
+                      {tileProvider === 'osm' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Recommended • 100% Free • No API Key needed • Zero watermark</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTileProvider('esri_street');
+                      handleSaveApiKey(inputApiKey, 'esri_street');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      tileProvider === 'esri_street'
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>🏢 Esri World Street</span>
+                      {tileProvider === 'esri_street' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">High-detail corporate road network • Zero watermark</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTileProvider('osm');
+                      if (!mapSatellite) onToggleSatellite();
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      mapSatellite
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>🛰️ Esri Satellite View</span>
+                      {mapSatellite && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">High-resolution aerial satellite imagery • Zero watermark</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTileProvider('carto');
+                      handleSaveApiKey(inputApiKey, 'carto');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      tileProvider === 'carto'
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>🔑 CartoDB Voyager</span>
+                      {tileProvider === 'carto' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Requires valid API Key entered below</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* API Key Input Field */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                <label className="block font-bold text-slate-900">
+                  Custom Leaflet / Carto / Mapbox API Key:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={inputApiKey}
+                    onChange={(e) => setInputApiKey(e.target.value)}
+                    placeholder="Enter API Key (e.g. pk.eyJ1... or carto_api_key_...)"
+                    className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  {inputApiKey && (
+                    <button
+                      type="button"
+                      onClick={() => setInputApiKey('')}
+                      className="px-2.5 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 text-xs font-semibold cursor-pointer"
+                      title="Clear key"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Note: Providing a key saves it to local configuration and passes it directly to the tile server. If empty, OpenStreetMap is used automatically.
+                </p>
+              </div>
+
+              {keySavedToast && (
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-center text-xs flex items-center justify-center gap-1.5 animate-in fade-in">
+                  <Check className="w-4 h-4 text-emerald-700" />
+                  <span>Map tile configuration & API Key saved successfully!</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setInputApiKey('');
+                  handleSaveApiKey('', 'osm');
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs cursor-pointer"
+              >
+                Reset to OpenStreetMap (Clean)
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowKeyModal(false)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSaveApiKey(inputApiKey, inputApiKey.trim() ? 'carto' : tileProvider);
+                  }}
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
+                >
+                  Save & Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
