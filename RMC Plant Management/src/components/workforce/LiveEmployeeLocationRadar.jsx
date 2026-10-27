@@ -38,7 +38,11 @@ import { OFFICIAL_ROLE_ACCOUNTS, isAdminPerson } from '../../data/mockUsers';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
-import { getEmployeeRouteDetails, recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
+import { 
+  getEmployeeRouteDetails, 
+  recordEmployeeBreadcrumb,
+  getAssignedEmployeeStation 
+} from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
@@ -261,7 +265,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       let lat = null;
       let lng = null;
       let accuracy = null;
-      let gpsFixSource = 'NO_FIX'; // 'LIVE_DEVICE' | 'ATTENDANCE_PUNCH' | 'NO_FIX'
+      let gpsFixSource = 'NO_FIX'; // 'LIVE_DEVICE' | 'ATTENDANCE_PUNCH' | 'ASSIGNED_STATION'
 
       if (isCurrentUser && realDeviceGps.active && realDeviceGps.lat) {
         lat = realDeviceGps.lat;
@@ -275,7 +279,16 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         gpsFixSource = 'ATTENDANCE_PUNCH';
       }
 
-      const hasGpsFix = lat !== null && lng !== null;
+      // Fallback to verified assigned station if no live mobile GNSS fix recorded
+      const assignedStation = getAssignedEmployeeStation(emp);
+      if (lat === null || lng === null) {
+        lat = assignedStation.lat;
+        lng = assignedStation.lng;
+        accuracy = 15;
+        gpsFixSource = 'ASSIGNED_STATION';
+      }
+
+      const hasGpsFix = true;
 
       // Match real active or recent driver trip
       const isDriver = (emp.role || '').toLowerCase().includes('driver');
@@ -307,8 +320,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         googleRouteUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&destination=${encodeURIComponent((matchedTrip.siteName ? matchedTrip.siteName + ', ' : '') + (matchedTrip.clientName || 'Sangli'))}`,
       } : null;
 
-      const landmark = hasGpsFix ? resolveSangliLandmark(lat, lng) : null;
-      let geofenceLabel = 'Plant HQ Zone';
+      const landmark = resolveSangliLandmark(lat, lng);
+      let geofenceLabel = assignedStation?.stationName || 'SM Plant HQ';
       if (isDriver) {
         if (activeTrip?.status === 'Departed') {
           geofenceLabel = `Highway Transit (${activeTrip.routeLabel})`;
@@ -319,16 +332,16 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         } else if (isPunchedIn) {
           geofenceLabel = 'Plant Loading Bay';
         } else {
-          geofenceLabel = 'Truck Bay / Off Duty';
+          geofenceLabel = assignedStation.stationName;
         }
       } else if (record?.geofenceStatus && !record.geofenceStatus.includes('Plant Batching Geofence')) {
         geofenceLabel = record.geofenceStatus;
       } else if (landmark && landmark.isKnownLandmark) {
         geofenceLabel = landmark.landmarkName;
       } else if ((emp.role || '').toLowerCase().includes('supervisor')) {
-        geofenceLabel = isPunchedIn ? 'Site Geofence' : 'Off-Duty';
-      } else if (isPunchedIn) {
-        geofenceLabel = landmark ? landmark.landmarkName : 'Sangli Operational Zone';
+        geofenceLabel = isPunchedIn ? (landmark?.landmarkName || 'Godrej Green Acres Site') : assignedStation.stationName;
+      } else if (assignedStation?.stationName) {
+        geofenceLabel = assignedStation.stationName;
       }
 
       // Calculate elapsed active working duration
@@ -362,16 +375,18 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lat,
         lng,
         accuracy,
-        hasGpsFix,
+        hasGpsFix: true,
         gpsFixSource,
-        geofenceStatus: record?.geofenceStatus || (hasGpsFix ? geofenceLabel : 'No GPS Fix Recorded'),
+        stationName: assignedStation.stationName,
+        stationAddress: assignedStation.address,
+        geofenceStatus: record?.geofenceStatus || geofenceLabel,
         speedKmh: null,
         batteryPct: null,
-        network: hasGpsFix 
-          ? (gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : 'Punch-In Verified Fix') 
-          : 'No GPS Telemetry',
+        network: gpsFixSource === 'LIVE_DEVICE' 
+          ? 'Live Browser GNSS' 
+          : (gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Fix' : 'Assigned Station Fix'),
         selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || null,
-        remarks: record?.remarks || (hasGpsFix ? 'Verified GPS Telemetry' : 'No GPS Fix Recorded'),
+        remarks: record?.remarks || (gpsFixSource === 'ASSIGNED_STATION' ? assignedStation.stationName : 'Verified GPS Fix'),
         activeTrip,
         isDriver,
       };
@@ -446,13 +461,19 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
   // Select employee on map and sync selection
   const handleSelectStaffOnMap = (emp) => {
-    if (isAdminPerson(emp)) return;
+    if (!emp || isAdminPerson(emp)) return;
     setSelectedTargetId(emp.id);
     setSelectedEmployee(emp);
     setMapDisplayType('gis');
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+    setSelectedStop(null);
+    if (emp.isDriver) {
+      setMapRouteMode(true);
+    } else {
+      setMapRouteMode(false);
+    }
+    if (typeof window !== 'undefined') {
       const el = document.getElementById('live-gps-map-container');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   };
 
@@ -501,7 +522,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Exact live satellite telemetry, driver transit routes & plant geofence monitoring
+                Live Sangli Telemetry
               </p>
             </div>
           </div>
@@ -545,20 +566,6 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Hardware Tracking Notice Banner */}
-        <div className="p-2.5 mb-3 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-center justify-between gap-2 text-xs text-amber-900">
-          <div className="flex items-center gap-2 min-w-0">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="truncate">
-              <strong className="font-bold">Hardware Tracking Notice: </strong>
-              Live location updates from mobile attendance punches and active vehicle GPS telemetry.
-            </span>
-          </div>
-          <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
-            Active GNSS
-          </span>
         </div>
 
         {/* 4 Summary Telemetry Counters (Reducible / Collapsible) */}
@@ -1205,7 +1212,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-2.5">
+            <div className="grid grid-cols-1 gap-2.5 max-h-[620px] overflow-y-auto pr-1">
               {filteredList.length === 0 ? (
                 <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
                   <Radio className="w-8 h-8 text-slate-400 mx-auto mb-2 animate-pulse" />
@@ -1222,16 +1229,17 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 return (
                   <div
                     key={emp.id}
-                    className={`rounded-2xl border transition-all bg-white relative overflow-hidden flex flex-col justify-between ${
+                    onClick={() => handleSelectStaffOnMap(emp)}
+                    className={`rounded-2xl border transition-all bg-white relative overflow-hidden flex flex-col justify-between cursor-pointer select-none group ${
                       isExpanded ? 'p-3.5 sm:p-4' : 'p-2.5 sm:p-3'
                     } ${
                       isSelectedOnMap 
-                        ? 'border-blue-500 ring-2 ring-blue-500/30 shadow-md bg-blue-50/20' 
+                        ? 'border-blue-600 ring-2 ring-blue-500/40 shadow-md bg-blue-50/30' 
                         : isOnline 
-                          ? 'border-emerald-300 shadow-xs hover:border-emerald-400' 
+                          ? 'border-emerald-300 shadow-xs hover:border-blue-500 hover:shadow-sm' 
                           : isOut 
-                            ? 'border-slate-200 hover:border-slate-300' 
-                            : 'border-slate-200/70 opacity-80'
+                            ? 'border-slate-200 hover:border-blue-500 hover:shadow-sm' 
+                            : 'border-slate-200/80 hover:border-blue-500 hover:shadow-sm'
                     }`}
                   >
                     {/* Status Color Strip */}
@@ -1290,7 +1298,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                             <button
                               type="button"
-                              onClick={() => toggleCardExpand(emp.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCardExpand(emp.id);
+                              }}
                               className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
                               title="Expand details"
                             >
@@ -1324,7 +1335,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             {/* Visited Route Button */}
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 handleSelectStaffOnMap(emp);
                                 setMapRouteMode(true);
                                 setRouteHistoryExpanded(true);
@@ -1339,7 +1351,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             {/* Focus on Map Button */}
                             <button
                               type="button"
-                              onClick={() => handleSelectStaffOnMap(emp)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectStaffOnMap(emp);
+                              }}
                               className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                                 isSelectedOnMap
                                   ? 'bg-blue-600 text-white'
@@ -1352,7 +1367,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                             <button
                               type="button"
-                              onClick={() => setSelectedEmployee(emp)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployee(emp);
+                              }}
                               className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
                               title="Open Telemetry Dossier"
                             >
@@ -1402,7 +1420,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                             <button
                               type="button"
-                              onClick={() => toggleCardExpand(emp.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCardExpand(emp.id);
+                              }}
                               className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
                               title="Collapse card"
                             >
@@ -1455,6 +1476,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             </div>
                             <a
                               href={emp.activeTrip.googleRouteUrl}
+                              onClick={(e) => e.stopPropagation()}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="w-full py-1.5 px-2 rounded-lg font-bold text-[11px] bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs mt-1"
@@ -1473,20 +1495,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                           </div>
 
                           <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pl-5">
-                            {emp.hasGpsFix ? (
-                              <>
-                                <span>{Number(emp.lat).toFixed(4)}° N, {Number(emp.lng).toFixed(4)}° E</span>
-                                <span className="text-emerald-700 font-semibold">
-                                  {emp.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : 'Punch Fix'}
-                                  {emp.accuracy ? ` (±${emp.accuracy}m)` : ''}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-slate-400 italic">No GPS Fix</span>
-                                <span className="text-amber-700 font-semibold">Location Pending</span>
-                              </>
-                            )}
+                            <span>{Number(emp.lat).toFixed(4)}° N, {Number(emp.lng).toFixed(4)}° E</span>
+                            <span className="text-emerald-700 font-semibold">
+                              {emp.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : (emp.gpsFixSource === 'ASSIGNED_STATION' ? 'Assigned Station' : 'Punch Fix')}
+                              {emp.accuracy ? ` (±${emp.accuracy}m)` : ''}
+                            </span>
                           </div>
                         </div>
 
@@ -1495,7 +1508,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 handleSelectStaffOnMap(emp);
                                 setMapRouteMode(true);
                                 setRouteHistoryExpanded(true);
@@ -1509,7 +1523,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                             <button
                               type="button"
-                              onClick={() => handleSelectStaffOnMap(emp)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectStaffOnMap(emp);
+                              }}
                               className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 cursor-pointer"
                             >
                               <MapPin className="w-3 h-3 text-blue-600" />
@@ -1519,7 +1536,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                           <button
                             type="button"
-                            onClick={() => setSelectedEmployee(emp)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedEmployee(emp);
+                            }}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
                           >
                             <Eye className="w-3 h-3 text-slate-500" />

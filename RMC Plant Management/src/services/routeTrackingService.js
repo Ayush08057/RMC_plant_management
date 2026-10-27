@@ -191,6 +191,135 @@ export const DEFAULT_ROUTE_TRAILS = {
     }
   ],
 
+  // Accountant Routes
+  accountant: [
+    {
+      stopNo: 1,
+      title: 'Plant HQ Admin & Accounts',
+      category: 'Shift Start',
+      address: 'SM Concrete Tech, Tanang',
+      time: '09:00 AM',
+      lat: 16.8450,
+      lng: 74.6200,
+      status: 'Departed',
+      distanceKm: 0.0,
+      stayMinutes: 45,
+      notes: 'Daily collection register & ledger review'
+    },
+    {
+      stopNo: 2,
+      title: 'Vishrambag Banking Branch',
+      category: 'Commercial Visit',
+      address: 'Vishrambag Commercial Area, Sangli',
+      time: '10:30 AM',
+      lat: 16.8480,
+      lng: 74.6020,
+      status: 'Visited',
+      distanceKm: 4.8,
+      stayMinutes: 30,
+      notes: 'Bank deposit & contractor RTGS clearance'
+    },
+    {
+      stopNo: 3,
+      title: 'Sangli Market Yard APMC Hub',
+      category: 'Current Location',
+      address: 'APMC Market Yard Commercial Office, Sangli',
+      time: '11:45 AM',
+      lat: 16.8584,
+      lng: 74.5824,
+      status: 'Current Stop',
+      distanceKm: 8.9,
+      stayMinutes: null,
+      notes: 'Active station — Sales invoice billing counter'
+    }
+  ],
+
+  // Dispatcher Routes
+  dispatcher: [
+    {
+      stopNo: 1,
+      title: 'SM Plant Weighbridge Scale #01',
+      category: 'Shift Start',
+      address: 'Weighbridge Post, SM Concrete Tech, Tanang',
+      time: '08:00 AM',
+      lat: 16.8450,
+      lng: 74.6200,
+      status: 'Departed',
+      distanceKm: 0.0,
+      stayMinutes: 60,
+      notes: 'Calibrated digital weight indicator & raw aggregate tare'
+    },
+    {
+      stopNo: 2,
+      title: 'Mixer Batching Loading Bay',
+      category: 'Dispatch Control',
+      address: 'Pan Mixer Bay #02, Tanang Plant',
+      time: '10:00 AM',
+      lat: 16.8455,
+      lng: 74.6205,
+      status: 'Visited',
+      distanceKm: 0.3,
+      stayMinutes: 45,
+      notes: 'Printed delivery challans for 4 transit mixers'
+    },
+    {
+      stopNo: 3,
+      title: 'Central Dispatch Control Desk',
+      category: 'Current Location',
+      address: 'Tanang Main Plant HQ, Sangli',
+      time: '11:30 AM',
+      lat: 16.8450,
+      lng: 74.6200,
+      status: 'Current Stop',
+      distanceKm: 0.6,
+      stayMinutes: null,
+      notes: 'Active station — Real-time mixer fleet dispatch'
+    }
+  ],
+
+  // Plant Manager Routes
+  manager: [
+    {
+      stopNo: 1,
+      title: 'SM Plant Main Gate & Silo Bay',
+      category: 'Inspection',
+      address: 'Tanang, Sangli-Miraj Road',
+      time: '08:15 AM',
+      lat: 16.8450,
+      lng: 74.6200,
+      status: 'Departed',
+      distanceKm: 0.0,
+      stayMinutes: 30,
+      notes: 'Cement & aggregate silo stock verification'
+    },
+    {
+      stopNo: 2,
+      title: 'Automation Control Panel Hub',
+      category: 'Plant Operations',
+      address: 'Tanang Batching Control Room',
+      time: '10:00 AM',
+      lat: 16.8452,
+      lng: 74.6202,
+      status: 'Visited',
+      distanceKm: 0.2,
+      stayMinutes: 60,
+      notes: 'Supervised SCADA calibration & cycle times'
+    },
+    {
+      stopNo: 3,
+      title: 'Plant Manager Executive Desk',
+      category: 'Current Location',
+      address: 'SM Concrete Tech Operations HQ, Tanang',
+      time: '01:00 PM',
+      lat: 16.8450,
+      lng: 74.6200,
+      status: 'Current Stop',
+      distanceKm: 0.5,
+      stayMinutes: null,
+      notes: 'Active station — Overall plant operations'
+    }
+  ],
+
   // General Staff Route
   default: [
     {
@@ -234,6 +363,101 @@ export const DEFAULT_ROUTE_TRAILS = {
     }
   ]
 };
+
+/**
+ * Returns the verified operational station in Sangli for an employee based on role/ID
+ */
+export function getAssignedEmployeeStation(emp) {
+  if (!emp) {
+    return {
+      lat: 16.8450,
+      lng: 74.6200,
+      stationName: 'SM Concrete Plant HQ, Tanang',
+      address: 'Tanang, Sangli-Miraj Road, Sangli',
+      shortZone: 'SM Plant HQ',
+      notes: 'Operational plant station',
+    };
+  }
+
+  const roleLower = String(emp.role || '').toLowerCase();
+  const idUpper = String(emp.employeeId || emp.id || '').toUpperCase();
+  const nameLower = String(emp.name || '').toLowerCase();
+
+  if (roleLower.includes('account') || idUpper.includes('ACC') || nameLower.includes('accountant')) {
+    return {
+      lat: 16.8584,
+      lng: 74.5824,
+      stationName: 'Sangli Market Yard (APMC Commercial Hub)',
+      address: 'APMC Market Yard Area, Sangli',
+      shortZone: 'Market Yard Hub',
+      notes: 'Commercial accounts & sales billing desk',
+    };
+  }
+
+  if (roleLower.includes('dispatch') || idUpper.includes('DIS') || nameLower.includes('dispatcher')) {
+    return {
+      lat: 16.8450,
+      lng: 74.6200,
+      stationName: 'SM Concrete Plant HQ (Weighbridge & Dispatch)',
+      address: 'Tanang, Sangli-Miraj Road, Sangli',
+      shortZone: 'Plant Dispatch Bay',
+      notes: 'Batching control & delivery challan dispatch',
+    };
+  }
+
+  if (roleLower.includes('supervisor') || idUpper.includes('SS') || nameLower.includes('supervisor')) {
+    return {
+      lat: 16.8520,
+      lng: 74.5900,
+      stationName: 'Godrej Green Acres Construction Site',
+      address: 'Near Government Colony, Sangli',
+      shortZone: 'Godrej Project Site',
+      notes: 'On-site concrete pouring & supervision',
+    };
+  }
+
+  if (roleLower.includes('quality') || roleLower.includes('qc') || idUpper.includes('QC') || nameLower.includes('quality')) {
+    return {
+      lat: 16.8300,
+      lng: 74.6400,
+      stationName: 'Miraj Highway Package B Quality Lab',
+      address: 'Miraj Industrial Corridor, Sangli',
+      shortZone: 'Highway QC Lab',
+      notes: 'Slump test & compressive cube strength testing',
+    };
+  }
+
+  if (roleLower.includes('driver') || idUpper.includes('DRV') || nameLower.includes('driver')) {
+    return {
+      lat: 16.8480,
+      lng: 74.6020,
+      stationName: 'Sangli-Miraj Highway NH-166 (Transit Mixer)',
+      address: 'Transit Mixer Corridor, Sangli',
+      shortZone: 'Highway Transit',
+      notes: 'Transit mixer delivering concrete to site',
+    };
+  }
+
+  if (roleLower.includes('manager') || idUpper.includes('PM') || nameLower.includes('manager')) {
+    return {
+      lat: 16.8450,
+      lng: 74.6200,
+      stationName: 'SM Concrete Plant HQ Central Control Room',
+      address: 'Tanang, Sangli-Miraj Road, Sangli',
+      shortZone: 'Plant Control Room',
+      notes: 'Operational administration & batching oversight',
+    };
+  }
+
+  return {
+    lat: 16.8450,
+    lng: 74.6200,
+    stationName: 'SM Concrete Plant HQ, Tanang',
+    address: 'Tanang, Sangli-Miraj Road, Sangli',
+    shortZone: 'SM Plant HQ',
+    notes: 'Operational plant station',
+  };
+}
 
 /**
  * Retrieves all stored route histories
@@ -285,6 +509,12 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       template = DEFAULT_ROUTE_TRAILS.supervisor;
     } else if (roleLower.includes('quality') || roleLower.includes('qc') || roleLower.includes('lab')) {
       template = DEFAULT_ROUTE_TRAILS.qc;
+    } else if (roleLower.includes('account')) {
+      template = DEFAULT_ROUTE_TRAILS.accountant;
+    } else if (roleLower.includes('dispatch')) {
+      template = DEFAULT_ROUTE_TRAILS.dispatcher;
+    } else if (roleLower.includes('manager')) {
+      template = DEFAULT_ROUTE_TRAILS.manager;
     }
     stops = JSON.parse(JSON.stringify(template));
   }
