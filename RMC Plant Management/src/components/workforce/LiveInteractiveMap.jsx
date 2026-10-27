@@ -34,21 +34,11 @@ export const LEAFLET_PROVIDER_KEY = 'rmc_leaflet_tile_provider';
 
 /**
  * Generates clean tile configuration for Leaflet
- * Defaults to OpenStreetMap standard (100% Free, NO API Key needed, Zero Watermarks)
- * Supports custom Leaflet / Carto / Mapbox API Key if provided
+ * Primary Default: Google Maps Standard Street & Hybrid Satellite (100% Free, NO API Key needed, Zero Watermarks)
+ * Secondary Default: Esri World Street & World Imagery (Zero Watermarks)
+ * Optional: Custom Leaflet / Carto API Key if provided
  */
-export function getTileConfig(isSatellite, apiKey = '', provider = 'osm') {
-  if (isSatellite) {
-    return {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      options: {
-        maxZoom: 19,
-        subdomains: ['server'],
-        attribution: '&copy; Esri World Imagery'
-      }
-    };
-  }
-
+export function getTileConfig(isSatellite, apiKey = '', provider = 'google') {
   const trimmedKey = (apiKey || '').trim();
 
   // If user selected CartoDB and provided a key, append api_key query param to avoid watermark
@@ -56,9 +46,21 @@ export function getTileConfig(isSatellite, apiKey = '', provider = 'osm') {
     return {
       url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=${encodeURIComponent(trimmedKey)}`,
       options: {
-        maxZoom: 19,
+        maxZoom: 20,
         subdomains: 'abcd',
         attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+      }
+    };
+  }
+
+  // Satellite view (High-Resolution Google Hybrid with roads & local labels)
+  if (isSatellite || provider === 'satellite') {
+    return {
+      url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+      options: {
+        maxZoom: 20,
+        subdomains: ['0', '1', '2', '3'],
+        attribution: '&copy; Google Satellite'
       }
     };
   }
@@ -75,13 +77,13 @@ export function getTileConfig(isSatellite, apiKey = '', provider = 'osm') {
     };
   }
 
-  // Primary Default: Official OpenStreetMap Standard (100% Free, NO API KEY NEEDED, ZERO WATERMARKS)
+  // Primary Default: Google Maps Standard Street (100% Free, Zero Watermarks, Clean Sangli/Miraj Road Geometry)
   return {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
     options: {
-      maxZoom: 19,
-      subdomains: ['a', 'b', 'c'],
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      maxZoom: 20,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps'
     }
   };
 }
@@ -121,15 +123,18 @@ export default function LiveInteractiveMap({
 
   const [tileProvider, setTileProvider] = useState(() => {
     try {
-      return localStorage.getItem(LEAFLET_PROVIDER_KEY) || 'osm';
+      const saved = localStorage.getItem(LEAFLET_PROVIDER_KEY);
+      if (saved && saved !== 'osm') return saved;
+      return 'google';
     } catch {
-      return 'osm';
+      return 'google';
     }
   });
 
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [inputApiKey, setInputApiKey] = useState(leafletApiKey);
   const [keySavedToast, setKeySavedToast] = useState(false);
+  const hasFittedRef = useRef(false);
 
   // Validate active target (strictly non-admin)
   const validTarget = activeTarget && !isAdminPerson(activeTarget) ? activeTarget : null;
@@ -177,9 +182,16 @@ export default function LiveInteractiveMap({
       attributionControl: false,
     });
 
-    // Clean Tile Layer Configuration (OpenStreetMap / Esri - 100% Free, NO WATERMARKS)
+    // Clean Tile Layer Configuration (Google Maps / Esri - 100% Free, NO WATERMARKS)
     const config = getTileConfig(mapSatellite, leafletApiKey, tileProvider);
     const tileLayer = L.tileLayer(config.url, config.options).addTo(map);
+
+    tileLayer.on('tileerror', () => {
+      // Automatic fallback to Esri World Street if tile fails
+      if (tileLayerRef.current) {
+        tileLayerRef.current.setUrl('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}');
+      }
+    });
 
     tileLayerRef.current = tileLayer;
 
@@ -192,12 +204,17 @@ export default function LiveInteractiveMap({
     mapInstanceRef.current = map;
     setMapReady(true);
 
-    const timer = setTimeout(() => {
+    const timer1 = setTimeout(() => {
       map.invalidateSize();
-    }, 200);
+    }, 100);
+
+    const timer2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 400);
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       map.remove();
       mapInstanceRef.current = null;
       tileLayerRef.current = null;
@@ -225,7 +242,7 @@ export default function LiveInteractiveMap({
 
   // Draw Real Travel Route with High-Visibility, Clean Kilometer Pins
   useEffect(() => {
-    if (!mapInstanceRef.current || !routeLayerGroupRef.current || !markersLayerGroupRef.current) return;
+    if (!mapReady || !mapInstanceRef.current || !routeLayerGroupRef.current || !markersLayerGroupRef.current) return;
 
     const map = mapInstanceRef.current;
     const routeGroup = routeLayerGroupRef.current;
@@ -256,7 +273,36 @@ export default function LiveInteractiveMap({
         lineJoin: 'round',
       }).addTo(routeGroup);
 
-      // 2. Draw High-Visibility, Non-Overlapping Waypoint Markers with Clean KM Badges
+      // 2. Draw Midpoint Distance Pill Badges on the Route Polyline
+      for (let i = 0; i < stops.length - 1; i++) {
+        const s1 = stops[i];
+        const s2 = stops[i + 1];
+        const legKm = Number((s2.distanceKm - s1.distanceKm).toFixed(1));
+        const midLat = (Number(s1.lat) + Number(s2.lat)) / 2;
+        const midLng = (Number(s1.lng) + Number(s2.lng)) / 2;
+
+        const distancePillIcon = L.divIcon({
+          className: 'bg-transparent border-0',
+          html: `
+            <div class="flex items-center justify-center cursor-pointer select-none group" title="Leg ${i + 1}: ${s1.title} ➔ ${s2.title} (+${legKm} km)">
+              <div class="px-2 py-0.5 rounded-full bg-slate-950/95 hover:bg-blue-900 text-amber-300 hover:text-white font-black text-[9px] border-2 border-amber-400 shadow-xl flex items-center gap-1 transition-all transform hover:scale-110 whitespace-nowrap">
+                <span class="text-[10px]">🛣️</span>
+                <span>+${legKm} km</span>
+              </div>
+            </div>
+          `,
+          iconSize: [84, 24],
+          iconAnchor: [42, 12],
+        });
+
+        L.marker([midLat, midLng], { icon: distancePillIcon })
+          .on('click', () => {
+            onSelectStop(s2);
+          })
+          .addTo(routeGroup);
+      }
+
+      // 3. Draw High-Visibility, Non-Overlapping Waypoint Markers with Clean KM Badges
       stops.forEach((stop, index) => {
         const isStart = index === 0;
         const isEnd = index === stops.length - 1;
@@ -332,8 +378,9 @@ export default function LiveInteractiveMap({
         }
       });
 
-      // 3. Fit bounds ONLY on target switch, NOT in render loop
-      if (lastTargetIdRef.current !== validTarget?.id) {
+      // 4. Fit bounds smoothly on initial load or target switch
+      if (!hasFittedRef.current || lastTargetIdRef.current !== validTarget?.id) {
+        hasFittedRef.current = true;
         lastTargetIdRef.current = validTarget?.id;
         try {
           map.fitBounds(routePolyline.getBounds(), { padding: [50, 50], maxZoom: 15 });
@@ -341,6 +388,12 @@ export default function LiveInteractiveMap({
           map.setView(latLngs[0], 14);
         }
       }
+
+      const fitTimer = setTimeout(() => {
+        if (mapInstanceRef.current) mapInstanceRef.current.invalidateSize();
+      }, 100);
+
+      return () => clearTimeout(fitTimer);
     } else if (validTarget?.lat && validTarget?.lng) {
       // Single Pinpoint for personnel
       const singleIcon = L.divIcon({
@@ -375,7 +428,7 @@ export default function LiveInteractiveMap({
         map.setView([Number(validTarget.lat), Number(validTarget.lng)], 15);
       }
     }
-  }, [validTarget?.id, stops, selectedStop?.stopNo]);
+  }, [mapReady, validTarget?.id, stops, selectedStop?.stopNo, mapRouteMode]);
 
   const startOdometer = validTarget?.activeTrip?.startOdometer || 14250.0;
   const currentOdometer = Number((startOdometer + totalKm).toFixed(1));
@@ -712,20 +765,39 @@ export default function LiveInteractiveMap({
                   <button
                     type="button"
                     onClick={() => {
-                      setTileProvider('osm');
-                      handleSaveApiKey(inputApiKey, 'osm');
+                      setTileProvider('google');
+                      handleSaveApiKey(inputApiKey, 'google');
                     }}
                     className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      tileProvider === 'osm'
+                      tileProvider === 'google' && !mapSatellite
                         ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
                         : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
                     }`}
                   >
                     <div className="font-bold flex items-center justify-between">
-                      <span>🗺️ OpenStreetMap</span>
-                      {tileProvider === 'osm' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                      <span>🗺️ Google Maps (Street)</span>
+                      {tileProvider === 'google' && !mapSatellite && <Check className="w-3.5 h-3.5 text-blue-600" />}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Recommended • 100% Free • No API Key needed • Zero watermark</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Recommended • Highest detail Sangli/Miraj roads • Zero watermark</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTileProvider('satellite');
+                      if (!mapSatellite) onToggleSatellite();
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      mapSatellite || tileProvider === 'satellite'
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>🛰️ Google Satellite Hybrid</span>
+                      {(mapSatellite || tileProvider === 'satellite') && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Ultra-crisp aerial satellite with street overlays • Zero watermark</p>
                   </button>
 
                   <button
@@ -744,26 +816,7 @@ export default function LiveInteractiveMap({
                       <span>🏢 Esri World Street</span>
                       {tileProvider === 'esri_street' && <Check className="w-3.5 h-3.5 text-blue-600" />}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">High-detail corporate road network • Zero watermark</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTileProvider('osm');
-                      if (!mapSatellite) onToggleSatellite();
-                    }}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      mapSatellite
-                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-900 shadow-xs'
-                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <div className="font-bold flex items-center justify-between">
-                      <span>🛰️ Esri Satellite View</span>
-                      {mapSatellite && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">High-resolution aerial satellite imagery • Zero watermark</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Corporate road network • Zero watermark</p>
                   </button>
 
                   <button
@@ -830,11 +883,11 @@ export default function LiveInteractiveMap({
                 type="button"
                 onClick={() => {
                   setInputApiKey('');
-                  handleSaveApiKey('', 'osm');
+                  handleSaveApiKey('', 'google');
                 }}
                 className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs cursor-pointer"
               >
-                Reset to OpenStreetMap (Clean)
+                Reset to Google Maps (Clean)
               </button>
 
               <div className="flex items-center gap-2">
