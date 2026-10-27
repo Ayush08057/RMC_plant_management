@@ -160,8 +160,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
     const timer = setInterval(() => {
       setCurrentTime(getNowIndian12Hr(true));
-      setRadarDegree((prev) => (prev + 3) % 360);
-    }, 100);
+    }, 1000);
 
     return () => {
       clearInterval(timer);
@@ -946,9 +945,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                 {/* Rotating Radar Sweep Cone */}
                 <div 
-                  className="absolute inset-0 rounded-full pointer-events-none transition-transform"
+                  className="absolute inset-0 rounded-full pointer-events-none animate-spin"
                   style={{
-                    background: `conic-gradient(from ${radarDegree}deg, rgba(16, 185, 129, 0.35) 0deg, rgba(16, 185, 129, 0) 60deg)`,
+                    animationDuration: '6s',
+                    background: 'conic-gradient(from 0deg, rgba(16, 185, 129, 0.35) 0deg, rgba(16, 185, 129, 0) 60deg)',
                   }}
                 />
 
