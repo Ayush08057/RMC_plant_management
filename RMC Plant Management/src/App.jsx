@@ -29,6 +29,8 @@ export default function App() {
         'rmc_employee_route_history_v2',
         'rmc_employee_route_histories_v1',
         'rmc_qc_cube_tests_v1',
+        'rmc_store_inventory_v1',
+        'rmc_store_logs_v1',
       ];
       keysToScrub.forEach((key) => {
         const raw = localStorage.getItem(key);

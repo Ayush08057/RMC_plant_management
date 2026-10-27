@@ -10,6 +10,7 @@ import {
   Navigation,
   Fuel,
   FileBarChart,
+  Package,
   ArrowLeft,
   ChevronRight
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import DieselManagementView from './DieselManagementView';
 import PlantDashboardView from './PlantDashboardView';
 import PlantReportsView from './PlantReportsView';
 import QcCubeTestingView from './QcCubeTestingView';
+import StoreInventoryView from './StoreInventoryView';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../data/mockUsers';
@@ -131,6 +133,16 @@ export const OPERATIONS_MODULES = [
     roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT]
   },
   { 
+    id: 'store-inventory', 
+    label: 'Store & Spares', 
+    shortLabel: 'Store', 
+    shortLabelMr: 'स्टोअर', 
+    labelMr: 'स्टोअर व स्पेअर पार्ट्स', 
+    icon: Package, 
+    color: 'text-emerald-700',
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT]
+  },
+  { 
     id: 'plant-reports', 
     label: 'Plant Reports', 
     shortLabel: 'Reports', 
@@ -199,6 +211,8 @@ export default function PlantOperationsView({ activeTab = 'plant-dashboard', onS
         return <DriverTripsView onNavigateTab={onSelectTab} />;
       case 'diesel-management':
         return <DieselManagementView onNavigateTab={onSelectTab} />;
+      case 'store-inventory':
+        return <StoreInventoryView onNavigateTab={onSelectTab} />;
       case 'plant-reports':
         return <PlantReportsView onNavigateTab={onSelectTab} />;
       default:

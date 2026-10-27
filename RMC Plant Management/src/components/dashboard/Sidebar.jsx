@@ -30,6 +30,7 @@ import {
   MapPin,
   Monitor,
   Store,
+  Package,
   Scale,
   Fuel,
   FileBarChart,
@@ -102,6 +103,12 @@ const ALL_PLANT_OPERATIONS_ITEMS = [
     id: 'diesel-management', 
     label: 'Diesel Management', 
     icon: Fuel, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT] 
+  },
+  { 
+    id: 'store-inventory', 
+    label: 'Store & Spares', 
+    icon: Package, 
     roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.ACCOUNTANT] 
   },
   { 
