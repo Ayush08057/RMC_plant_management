@@ -254,53 +254,56 @@ export default function LiveInteractiveMap({
 
     if (stops.length > 0) {
       const latLngs = stops.map((s) => [Number(s.lat), Number(s.lng)]);
+      let routePolyline = null;
 
-      // 1. Draw Polyline Route Path (Exact Travel Track)
-      // Glow underlay
-      L.polyline(latLngs, {
-        color: '#0284c7',
-        weight: 8,
-        opacity: 0.35,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(routeGroup);
+      // 1. Draw Polyline Route Path only when at least 2 coordinate points exist
+      if (stops.length > 1) {
+        // Glow underlay
+        L.polyline(latLngs, {
+          color: '#0284c7',
+          weight: 8,
+          opacity: 0.35,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeGroup);
 
-      // Main route line
-      const routePolyline = L.polyline(latLngs, {
-        color: '#2563eb',
-        weight: 5,
-        opacity: 0.95,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(routeGroup);
+        // Main route line
+        routePolyline = L.polyline(latLngs, {
+          color: '#2563eb',
+          weight: 5,
+          opacity: 0.95,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeGroup);
 
-      // 2. Draw Midpoint Distance Pill Badges on the Route Polyline
-      for (let i = 0; i < stops.length - 1; i++) {
-        const s1 = stops[i];
-        const s2 = stops[i + 1];
-        const legKm = Number((s2.distanceKm - s1.distanceKm).toFixed(1));
-        const midLat = (Number(s1.lat) + Number(s2.lat)) / 2;
-        const midLng = (Number(s1.lng) + Number(s2.lng)) / 2;
+        // 2. Draw Midpoint Distance Pill Badges on the Route Polyline
+        for (let i = 0; i < stops.length - 1; i++) {
+          const s1 = stops[i];
+          const s2 = stops[i + 1];
+          const legKm = Number((s2.distanceKm - s1.distanceKm).toFixed(1));
+          const midLat = (Number(s1.lat) + Number(s2.lat)) / 2;
+          const midLng = (Number(s1.lng) + Number(s2.lng)) / 2;
 
-        const distancePillIcon = L.divIcon({
-          className: 'bg-transparent border-0',
-          html: `
-            <div class="flex items-center justify-center cursor-pointer select-none group" title="Leg ${i + 1}: ${s1.title} ➔ ${s2.title} (+${legKm} km)">
-              <div class="px-2 py-0.5 rounded-full bg-slate-950/95 hover:bg-blue-900 text-amber-300 hover:text-white font-black text-[9px] border-2 border-amber-400 shadow-xl flex items-center gap-1 transition-all transform hover:scale-110 whitespace-nowrap">
-                <span class="text-[10px]">🛣️</span>
-                <span>+${legKm} km</span>
+          const distancePillIcon = L.divIcon({
+            className: 'bg-transparent border-0',
+            html: `
+              <div class="flex items-center justify-center cursor-pointer select-none group" title="Leg ${i + 1}: ${s1.title} ➔ ${s2.title} (+${legKm} km)">
+                <div class="px-2.5 py-0.5 rounded-full bg-white hover:bg-blue-50 text-blue-900 hover:text-blue-700 font-black text-[10px] font-mono border-2 border-blue-600 shadow-md flex items-center gap-1 transition-all transform hover:scale-110 whitespace-nowrap">
+                  <span class="text-[10px]">🛣️</span>
+                  <span class="font-extrabold text-blue-900">+${legKm} km</span>
+                </div>
               </div>
-            </div>
-          `,
-          iconSize: [84, 24],
-          iconAnchor: [42, 12],
-        });
+            `,
+            iconSize: [92, 26],
+            iconAnchor: [46, 13],
+          });
 
-        L.marker([midLat, midLng], { icon: distancePillIcon })
-          .on('click', () => {
-            onSelectStop(s2);
-          })
-          .addTo(routeGroup);
+          L.marker([midLat, midLng], { icon: distancePillIcon })
+            .on('click', () => {
+              onSelectStop(s2);
+            })
+            .addTo(routeGroup);
+        }
       }
 
       // 3. Draw High-Visibility, Non-Overlapping Waypoint Markers with Clean KM Badges
@@ -312,7 +315,7 @@ export default function LiveInteractiveMap({
         const legKm = prevStop ? Number((stop.distanceKm - prevStop.distanceKm).toFixed(1)) : 0;
 
         let pinBg = isStart ? 'bg-emerald-600' : isEnd ? 'bg-amber-500' : 'bg-blue-600';
-        let pinText = isStart ? '1' : isEnd ? '📍' : String(stop.stopNo);
+        let pinText = stops.length === 1 ? '📍' : isStart ? '1' : isEnd ? '📍' : String(stop.stopNo);
         let kmBadgeStyle = isStart
           ? 'bg-emerald-600 text-white border-2 border-white'
           : isEnd
@@ -347,7 +350,7 @@ export default function LiveInteractiveMap({
             <div class="p-2 text-xs font-sans min-w-[240px]">
               <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1 mb-1.5">
                 <span class="font-bold text-slate-900 text-xs">
-                  ${isStart ? '🟢 1. Punch-In Location' : isEnd ? `📍 ${stop.stopNo}. Current / Punch-Out` : `Stop #${stop.stopNo}: ${stop.title}`}
+                  ${stops.length === 1 ? `📍 ${stop.title}` : isStart ? '🟢 1. Punch-In Location' : isEnd ? `📍 ${stop.stopNo}. Current / Punch-Out` : `Stop #${stop.stopNo}: ${stop.title}`}
                 </span>
                 <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${
                   isStart ? 'bg-emerald-100 text-emerald-800' : isEnd ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
@@ -384,7 +387,11 @@ export default function LiveInteractiveMap({
         hasFittedRef.current = true;
         lastTargetIdRef.current = validTarget?.id;
         try {
-          map.fitBounds(routePolyline.getBounds(), { padding: [50, 50], maxZoom: 15 });
+          if (routePolyline && stops.length > 1) {
+            map.fitBounds(routePolyline.getBounds(), { padding: [50, 50], maxZoom: 15 });
+          } else {
+            map.setView([Number(stops[0].lat), Number(stops[0].lng)], 15);
+          }
         } catch {
           map.setView(latLngs[0], 14);
         }
@@ -692,19 +699,19 @@ export default function LiveInteractiveMap({
         </div>
 
         {/* Floating Route Legend on Bottom-Left with Leg & Kilometer Details */}
-        <div className="absolute bottom-3 left-3 z-[400] bg-slate-950/95 backdrop-blur-md border border-slate-700 text-white px-3 py-2 rounded-xl shadow-xl flex items-center gap-2.5 text-xs flex-wrap">
-          <span className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-300 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm" />
+        <div className="absolute bottom-3 left-3 z-[400] bg-white/95 backdrop-blur-md border border-slate-300 text-slate-800 px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-2.5 text-xs flex-wrap">
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-700 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs" />
             <span>1. Punch-In (0.0 km)</span>
           </span>
-          <span className="text-slate-600">•</span>
-          <span className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300 font-black">
-            <span className="w-3.5 h-1 bg-amber-400 rounded-full" />
+          <span className="text-slate-300">•</span>
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-blue-900 font-black">
+            <span className="w-3.5 h-1.5 bg-blue-600 rounded-full" />
             <span>Total Run: {totalKm} KM ({legsCount} Legs)</span>
           </span>
-          <span className="text-slate-600">•</span>
-          <span className="flex items-center gap-1.5 font-mono text-[11px] text-cyan-300 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-sm" />
+          <span className="text-slate-300">•</span>
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-amber-700 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs" />
             <span>Current ({totalKm} KM)</span>
           </span>
         </div>

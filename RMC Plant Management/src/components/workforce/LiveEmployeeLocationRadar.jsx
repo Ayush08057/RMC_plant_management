@@ -33,7 +33,8 @@ import {
   Share2,
   Gauge,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Trash2
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -44,13 +45,14 @@ import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { 
   getEmployeeRouteDetails, 
   recordEmployeeBreadcrumb,
-  getAssignedEmployeeStation 
+  getAssignedEmployeeStation,
+  deleteEmployeeRouteHistory
 } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
-  const { attendance, employees, plants } = useWorkforce();
+  const { attendance, employees, plants, deleteEmployee } = useWorkforce();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All'); // 'All' | 'Punched In' | 'Punched Out' | 'Not Checked In'
@@ -60,6 +62,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'cards' | 'radar'
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [currentTime, setCurrentTime] = useState(getNowIndian12Hr(true));
   const [mapZoom, setMapZoom] = useState(15);
   const [mapSatellite, setMapSatellite] = useState(false);
@@ -223,21 +227,6 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       }
     });
 
-    // If still no employees enrolled, populate with official operational workforce accounts (strictly non-admin)
-    if (map.size === 0) {
-      OFFICIAL_ROLE_ACCOUNTS.forEach((acc) => {
-        if (isAdminPerson(acc)) return;
-        const key = acc.employeeId || acc.id;
-        map.set(key, {
-          ...acc,
-          id: key,
-          employeeId: key,
-          avatar: (acc.name || 'OP').substring(0, 2).toUpperCase(),
-          isDriver: (acc.role || '').toLowerCase().includes('driver'),
-        });
-      });
-    }
-
     return Array.from(map.values()).filter((e) => !isAdminPerson(e));
   }, [employees, user, driverTrips]);
 
@@ -300,25 +289,25 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       const matchedTrip = (driverTrips || []).find((t) => {
         const dName = (t.driverName || '').toLowerCase();
         const dId = (t.driverId || '').toLowerCase();
-        return (dId && dId === empIdLower) || (dName && (dName.includes(empNameLower) || empNameLower.includes(dName)));
-      }) || (isDriver && driverTrips && driverTrips.length > 0 ? driverTrips[0] : null);
+        return (dId && dId === empIdLower) || (dName && empNameLower && (dName.includes(empNameLower) || empNameLower.includes(dName)));
+      }) || null;
 
       const activeTrip = matchedTrip ? {
         id: matchedTrip.id,
-        vehicleNo: matchedTrip.vehicleNo || 'MH-10-CR-1212',
-        clientName: matchedTrip.clientName || 'Sunshine Residency',
-        siteName: matchedTrip.siteName || matchedTrip.siteLocation || 'Site #01',
-        status: matchedTrip.status || (isPunchedIn ? 'Departed' : 'Completed'),
-        distanceKm: matchedTrip.distanceKm || 15.4,
-        quantityM3: matchedTrip.quantityM3 || 6.0,
-        grade: matchedTrip.grade || 'M25',
-        challanNo: matchedTrip.challanNo || 'DC-2026-101',
-        startOdometer: matchedTrip.startOdometer || 14250,
+        vehicleNo: matchedTrip.vehicleNo || 'Transit Mixer',
+        clientName: matchedTrip.clientName || 'Client Site',
+        siteName: matchedTrip.siteName || matchedTrip.siteLocation || 'Pouring Site',
+        status: matchedTrip.status || (isPunchedIn ? 'In Transit' : 'Completed'),
+        distanceKm: matchedTrip.distanceKm || 0,
+        quantityM3: matchedTrip.quantityM3 || 0,
+        grade: matchedTrip.grade || 'Concrete',
+        challanNo: matchedTrip.challanNo || 'Challan',
+        startOdometer: matchedTrip.startOdometer || 0,
         finalOdometer: matchedTrip.finalOdometer || null,
-        departureTime: matchedTrip.departureTime || '10:15 AM',
+        departureTime: matchedTrip.departureTime || '',
         siteArrivalTime: matchedTrip.siteArrivalTime || null,
         returnTime: matchedTrip.returnTime || null,
-        routeLabel: `Plant HQ ➔ ${matchedTrip.siteName || matchedTrip.clientName || 'Site #01'}`,
+        routeLabel: `Plant HQ ➔ ${matchedTrip.siteName || matchedTrip.clientName || 'Site'}`,
         googleRouteUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&destination=${encodeURIComponent((matchedTrip.siteName ? matchedTrip.siteName + ', ' : '') + (matchedTrip.clientName || 'Sangli'))}`,
       } : null;
 
@@ -503,6 +492,56 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     if (typeof window !== 'undefined') {
       const el = document.getElementById('live-gps-map-container');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+
+  // Handle Delete Employee & Associated Tracking
+  const handleConfirmDeleteEmployee = async () => {
+    if (!employeeToDelete) return;
+    setIsDeleting(true);
+    try {
+      const targetId = employeeToDelete.id;
+      const targetEmpId = employeeToDelete.employeeId || employeeToDelete.id;
+
+      if (typeof deleteEmployee === 'function' && targetId) {
+        await deleteEmployee(targetId);
+        if (targetEmpId && targetEmpId !== targetId) {
+          await deleteEmployee(targetEmpId).catch(() => {});
+        }
+      }
+
+      deleteEmployeeRouteHistory(targetEmpId);
+      if (targetId && targetId !== targetEmpId) {
+        deleteEmployeeRouteHistory(targetId);
+      }
+
+      setDriverTrips((prev) => {
+        const filtered = (prev || []).filter(
+          (t) => (t.driverId || '').toUpperCase() !== String(targetEmpId).toUpperCase() &&
+                 (t.driverId || '').toUpperCase() !== String(targetId).toUpperCase()
+        );
+        try {
+          localStorage.setItem('rmc_driver_trips_v2', JSON.stringify(filtered));
+        } catch {}
+        return filtered;
+      });
+
+      if (selectedTargetId === targetId || selectedTargetId === targetEmpId) {
+        setSelectedTargetId(null);
+      }
+      if (selectedEmployee?.id === targetId || selectedEmployee?.employeeId === targetEmpId) {
+        setSelectedEmployee(null);
+      }
+
+      setAdminPingMsg(`Successfully deleted ${employeeToDelete.name}.`);
+      setTimeout(() => setAdminPingMsg(null), 4000);
+      setEmployeeToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete employee:', err);
+      setAdminPingMsg(`Error deleting employee: ${err.message}`);
+      setTimeout(() => setAdminPingMsg(null), 4000);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1194,7 +1233,20 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white">
-                          {routeLegs.map((leg) => {
+                          {routeLegs.length === 0 ? (
+                            <tr>
+                              <td colSpan="8" className="py-8 px-4 text-center text-slate-500">
+                                <div className="flex flex-col items-center justify-center gap-1.5">
+                                  <Route className="w-6 h-6 text-slate-400 stroke-[1.5]" />
+                                  <span className="font-semibold text-slate-700 text-xs">No Route Travel Legs Recorded Yet</span>
+                                  <span className="text-[11px] text-slate-400 max-w-md">
+                                    Staff is currently at base location with 0.0 KM traveled. Route waypoints and transit legs will automatically log as the device moves.
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            routeLegs.map((leg) => {
                             const isSelected = selectedStop?.stopNo === leg.to.stopNo;
                             return (
                               <tr
@@ -1265,8 +1317,9 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                                 </td>
                               </tr>
                             );
-                          })}
-                        </tbody>
+                          })
+                        )}
+                      </tbody>
                       </table>
                     </div>
                   ) : (
@@ -1503,6 +1556,19 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             >
                               <Eye className="w-3 h-3" />
                             </button>
+
+                            {/* Delete Employee Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEmployeeToDelete(emp);
+                              }}
+                              className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete Employee"
+                            >
+                              <Trash2 className="w-3 h-3 text-red-500" />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1661,17 +1727,32 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                             </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedEmployee(emp);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
-                          >
-                            <Eye className="w-3 h-3 text-slate-500" />
-                            <span>Telemetry Dossier</span>
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployee(emp);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                            >
+                              <Eye className="w-3 h-3 text-slate-500" />
+                              <span>Telemetry Dossier</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEmployeeToDelete(emp);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-lg border border-red-200 transition-colors cursor-pointer shrink-0"
+                              title="Delete Employee"
+                            >
+                              <Trash2 className="w-3 h-3 text-red-600" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1882,6 +1963,98 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               >
                 <MapPin className="w-3.5 h-3.5 text-blue-600" />
                 <span>Show on Map</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const emp = selectedEmployee;
+                  setSelectedEmployee(null);
+                  setEmployeeToDelete(emp);
+                }}
+                className="py-2 px-3 rounded-xl font-bold text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+                title="Delete Employee & Tracking Record"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Employee Confirmation Modal */}
+      {employeeToDelete && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 app-modal-backdrop animate-fade-in"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+          onClick={() => !isDeleting && setEmployeeToDelete(null)}
+        >
+          <div 
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-red-200 overflow-hidden text-slate-900 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-slate-100 flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-slate-900">Delete Employee & Tracking</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Are you sure you want to permanently delete this employee and all associated tracking data?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 bg-slate-50/70 border-b border-slate-100 space-y-2 text-xs">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
+                <span className="text-slate-500 font-medium">Employee Name:</span>
+                <span className="font-bold text-slate-900">{employeeToDelete.name}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
+                <span className="text-slate-500 font-medium">Role & Department:</span>
+                <span className="font-semibold text-slate-800">{employeeToDelete.role} • {employeeToDelete.department || 'Workforce'}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 font-mono">
+                <span className="text-slate-500 font-medium font-sans">Employee ID:</span>
+                <span className="font-bold text-amber-700">{employeeToDelete.employeeId || employeeToDelete.id}</span>
+              </div>
+              <div className="text-[11px] text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-200 font-medium">
+                ⚠️ This action will permanently remove their workforce profile, live GPS tracking, and route records.
+              </div>
+            </div>
+
+            <div className="p-4 bg-white flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setEmployeeToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDeleteEmployee}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Employee</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
