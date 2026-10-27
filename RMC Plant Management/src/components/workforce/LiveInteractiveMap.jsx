@@ -241,7 +241,7 @@ export default function LiveInteractiveMap({
     return () => clearTimeout(timer);
   }, [isFullWidth]);
 
-  // Draw Real Travel Route with High-Visibility, Clean Kilometer Pins
+  // Draw Real Travel Route and Dedicated Live Employee GPS Markers
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !routeLayerGroupRef.current || !markersLayerGroupRef.current) return;
 
@@ -252,87 +252,75 @@ export default function LiveInteractiveMap({
     routeGroup.clearLayers();
     markersGroup.clearLayers();
 
-    if (stops.length > 0) {
+    const targetLat = validTarget?.lat ? Number(validTarget.lat) : null;
+    const targetLng = validTarget?.lng ? Number(validTarget.lng) : null;
+
+    // 1. Draw Route Trail (only when selected target has multiple visited stops and route mode is on)
+    if (mapRouteMode && stops.length > 1) {
       const latLngs = stops.map((s) => [Number(s.lat), Number(s.lng)]);
-      let routePolyline = null;
 
-      // 1. Draw Polyline Route Path only when at least 2 coordinate points exist
-      if (stops.length > 1) {
-        // Glow underlay
-        L.polyline(latLngs, {
-          color: '#0284c7',
-          weight: 8,
-          opacity: 0.35,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeGroup);
+      // Glow underlay
+      L.polyline(latLngs, {
+        color: '#0284c7',
+        weight: 8,
+        opacity: 0.35,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(routeGroup);
 
-        // Main route line
-        routePolyline = L.polyline(latLngs, {
-          color: '#2563eb',
-          weight: 5,
-          opacity: 0.95,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeGroup);
+      // Main route line
+      L.polyline(latLngs, {
+        color: '#2563eb',
+        weight: 5,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(routeGroup);
 
-        // 2. Draw Midpoint Distance Pill Badges on the Route Polyline
-        for (let i = 0; i < stops.length - 1; i++) {
-          const s1 = stops[i];
-          const s2 = stops[i + 1];
-          const legKm = Number((s2.distanceKm - s1.distanceKm).toFixed(1));
-          const midLat = (Number(s1.lat) + Number(s2.lat)) / 2;
-          const midLng = (Number(s1.lng) + Number(s2.lng)) / 2;
+      // Draw Midpoint Distance Pill Badges on Route Legs
+      for (let i = 0; i < stops.length - 1; i++) {
+        const s1 = stops[i];
+        const s2 = stops[i + 1];
+        const legKm = Number((s2.distanceKm - s1.distanceKm).toFixed(1));
+        const midLat = (Number(s1.lat) + Number(s2.lat)) / 2;
+        const midLng = (Number(s1.lng) + Number(s2.lng)) / 2;
 
-          const distancePillIcon = L.divIcon({
-            className: 'bg-transparent border-0',
-            html: `
-              <div class="flex items-center justify-center cursor-pointer select-none group" title="Leg ${i + 1}: ${s1.title} ➔ ${s2.title} (+${legKm} km)">
-                <div class="px-2.5 py-0.5 rounded-full bg-white hover:bg-blue-50 text-blue-900 hover:text-blue-700 font-black text-[10px] font-mono border-2 border-blue-600 shadow-md flex items-center gap-1 transition-all transform hover:scale-110 whitespace-nowrap">
-                  <span class="text-[10px]">🛣️</span>
-                  <span class="font-extrabold text-blue-900">+${legKm} km</span>
-                </div>
+        const distancePillIcon = L.divIcon({
+          className: 'bg-transparent border-0',
+          html: `
+            <div class="flex items-center justify-center cursor-pointer select-none group" title="Leg ${i + 1}: ${s1.title} ➔ ${s2.title} (+${legKm} km)">
+              <div class="px-2.5 py-0.5 rounded-full bg-white hover:bg-blue-50 text-blue-900 hover:text-blue-700 font-black text-[10px] font-mono border-2 border-blue-600 shadow-md flex items-center gap-1 transition-all transform hover:scale-110 whitespace-nowrap">
+                <span class="text-[10px]">🛣️</span>
+                <span class="font-extrabold text-blue-900">+${legKm} km</span>
               </div>
-            `,
-            iconSize: [92, 26],
-            iconAnchor: [46, 13],
-          });
+            </div>
+          `,
+          iconSize: [92, 26],
+          iconAnchor: [46, 13],
+        });
 
-          L.marker([midLat, midLng], { icon: distancePillIcon })
-            .on('click', () => {
-              onSelectStop(s2);
-            })
-            .addTo(routeGroup);
-        }
+        L.marker([midLat, midLng], { icon: distancePillIcon })
+          .on('click', () => {
+            onSelectStop(s2);
+          })
+          .addTo(routeGroup);
       }
 
-      // 3. Draw High-Visibility, Non-Overlapping Waypoint Markers with Clean KM Badges
-      stops.forEach((stop, index) => {
+      // Draw Intermediate Waypoint Markers (Stops before the current/final location)
+      stops.slice(0, -1).forEach((stop, index) => {
         const isStart = index === 0;
-        const isEnd = index === stops.length - 1;
         const isSelected = selectedStop?.stopNo === stop.stopNo;
         const prevStop = index > 0 ? stops[index - 1] : null;
         const legKm = prevStop ? Number((stop.distanceKm - prevStop.distanceKm).toFixed(1)) : 0;
 
-        let pinBg = isStart ? 'bg-emerald-600' : isEnd ? 'bg-amber-500' : 'bg-blue-600';
-        let pinText = stops.length === 1 ? '📍' : isStart ? '1' : isEnd ? '📍' : String(stop.stopNo);
-        let kmBadgeStyle = isStart
-          ? 'bg-emerald-600 text-white border-2 border-white'
-          : isEnd
-            ? 'bg-amber-500 text-slate-950 font-black border-2 border-white'
-            : 'bg-white text-blue-950 font-black border-2 border-blue-600';
-
         const icon = L.divIcon({
           className: 'bg-transparent border-0',
           html: `
-            <div class="flex flex-col items-center cursor-pointer select-none transition-transform ${isSelected ? 'scale-125 z-50' : 'hover:scale-115'}" title="Stop #${stop.stopNo}: ${stop.title} (${stop.distanceKm} KM)">
-              <!-- Pin Circle -->
-              <div class="w-7 h-7 rounded-full ${pinBg} ${isSelected ? 'border-2 border-amber-300 ring-4 ring-amber-400/60 shadow-xl' : 'border-2 border-white shadow-md'} text-white font-black text-xs flex items-center justify-center">
-                ${pinText}
+            <div class="flex flex-col items-center cursor-pointer select-none transition-transform ${isSelected ? 'scale-125 z-40' : 'hover:scale-115'}" title="Stop #${stop.stopNo}: ${stop.title} (${stop.distanceKm} KM)">
+              <div class="w-7 h-7 rounded-full ${isStart ? 'bg-emerald-600' : 'bg-blue-600'} ${isSelected ? 'border-2 border-amber-300 ring-4 ring-amber-400/60 shadow-xl' : 'border-2 border-white shadow-md'} text-white font-black text-xs flex items-center justify-center">
+                ${isStart ? '1' : String(stop.stopNo)}
               </div>
-              
-              <!-- High-Visibility Kilometer Tag -->
-              <div class="mt-0.5 px-2 py-0.5 rounded-full ${kmBadgeStyle} text-[10px] font-mono shadow-lg whitespace-nowrap tracking-tight">
+              <div class="mt-0.5 px-2 py-0.5 rounded-full ${isStart ? 'bg-emerald-600 text-white' : 'bg-white text-blue-950 font-black border-2 border-blue-600'} text-[10px] font-mono shadow-lg whitespace-nowrap tracking-tight">
                 ${stop.distanceKm} KM
               </div>
             </div>
@@ -350,11 +338,9 @@ export default function LiveInteractiveMap({
             <div class="p-2 text-xs font-sans min-w-[240px]">
               <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1 mb-1.5">
                 <span class="font-bold text-slate-900 text-xs">
-                  ${stops.length === 1 ? `📍 ${stop.title}` : isStart ? '🟢 1. Punch-In Location' : isEnd ? `📍 ${stop.stopNo}. Current / Punch-Out` : `Stop #${stop.stopNo}: ${stop.title}`}
+                  ${isStart ? '🟢 1. Punch-In Location' : `Stop #${stop.stopNo}: ${stop.title}`}
                 </span>
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                  isStart ? 'bg-emerald-100 text-emerald-800' : isEnd ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                }">${stop.status}</span>
+                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${isStart ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">${stop.status}</span>
               </div>
               <div class="space-y-1.5 text-slate-600 text-[11px]">
                 <div class="bg-blue-50 p-2 rounded-lg border border-blue-200 flex items-center justify-between">
@@ -367,10 +353,9 @@ export default function LiveInteractiveMap({
                     <span class="font-bold text-slate-800">+${legKm} KM from previous stop</span>
                   </div>
                 ` : ''}
-                <div><strong class="text-slate-700">Time:</strong> ${stop.time} ${stop.stayMinutes ? `(Stay: ${stop.stayMinutes}m)` : ''}</div>
+                <div><strong class="text-slate-700">Time:</strong> ${stop.time}</div>
                 <div><strong class="text-slate-700">Category:</strong> ${stop.category}</div>
                 <div><strong class="text-slate-700">Address:</strong> ${stop.address}</div>
-                ${stop.notes ? `<div class="italic text-slate-500 mt-1">"${stop.notes}"</div>` : ''}
               </div>
             </div>
           `)
@@ -381,63 +366,122 @@ export default function LiveInteractiveMap({
           map.panTo([Number(stop.lat), Number(stop.lng)], { animate: true, duration: 0.5 });
         }
       });
+    }
 
-      // 4. Fit bounds smoothly on initial load or target switch
-      if (!hasFittedRef.current || lastTargetIdRef.current !== validTarget?.id) {
-        hasFittedRef.current = true;
-        lastTargetIdRef.current = validTarget?.id;
-        try {
-          if (routePolyline && stops.length > 1) {
-            map.fitBounds(routePolyline.getBounds(), { padding: [50, 50], maxZoom: 15 });
-          } else {
-            map.setView([Number(stops[0].lat), Number(stops[0].lng)], 15);
-          }
-        } catch {
-          map.setView(latLngs[0], 14);
-        }
-      }
+    // 2. Draw Prominent, Dedicated LIVE BEACON MARKER for the SELECTED EMPLOYEE
+    if (validTarget && targetLat !== null && targetLng !== null && !isNaN(targetLat) && !isNaN(targetLng)) {
+      const isOnline = validTarget.status === 'Punched In';
+      const isDriver = Boolean(validTarget.isDriver);
+      const isDis = String(validTarget.employeeId || validTarget.id || '').toUpperCase().includes('DIS') ||
+                    String(validTarget.role || '').toLowerCase().includes('dispatch');
 
-      const fitTimer = setTimeout(() => {
-        if (mapInstanceRef.current) mapInstanceRef.current.invalidateSize();
-      }, 100);
-
-      return () => clearTimeout(fitTimer);
-    } else if (validTarget?.lat && validTarget?.lng) {
-      // Single Pinpoint for personnel
-      const singleIcon = L.divIcon({
+      const selectedBeaconIcon = L.divIcon({
         className: 'bg-transparent border-0',
         html: `
-          <div class="flex flex-col items-center cursor-pointer select-none">
-            <div class="w-8 h-8 rounded-full bg-blue-700 border-2 border-white flex items-center justify-center text-white font-bold text-xs shadow-xl">
-              ${validTarget.isDriver ? '🚛' : '👤'}
+          <div class="flex flex-col items-center cursor-pointer select-none group z-50">
+            <!-- Pulsing Radar Beacon Halo -->
+            <div class="relative flex items-center justify-center">
+              <span class="absolute w-14 h-14 rounded-full ${isOnline ? 'bg-emerald-400/40 animate-ping' : 'bg-blue-400/40 animate-ping'}"></span>
+              <span class="absolute w-10 h-10 rounded-full ${isOnline ? 'bg-emerald-500/25 ring-4 ring-emerald-400/50' : 'bg-blue-500/25 ring-4 ring-blue-400/50'}"></span>
+              <div class="w-10 h-10 rounded-full ${isDriver ? 'bg-cyan-600' : isDis ? 'bg-purple-600' : isOnline ? 'bg-emerald-600' : 'bg-blue-700'} border-3 border-white shadow-2xl flex items-center justify-center text-white font-black text-sm z-10">
+                ${isDriver ? '🚛' : isDis ? '📡' : '👤'}
+              </div>
+              <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full ${isOnline ? 'bg-emerald-400 border-2 border-white ring-2 ring-emerald-500 animate-pulse' : 'bg-slate-400 border-2 border-white'} z-20"></span>
             </div>
-            <div class="mt-0.5 px-2 py-0.5 rounded-full bg-white text-blue-950 font-black text-[10px] border-2 border-blue-600 shadow-md whitespace-nowrap">
-              ${validTarget.name}
+
+            <!-- Prominent Floating Name Banner -->
+            <div class="mt-1 px-3 py-1 rounded-xl bg-slate-900 text-white font-black text-xs border-2 border-white shadow-2xl flex items-center gap-1.5 whitespace-nowrap">
+              <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}"></span>
+              <span>${validTarget.name}</span>
+              <span class="px-1.5 py-0.2 rounded-md bg-blue-600 text-[10px] font-mono">${validTarget.employeeId || validTarget.id}</span>
+            </div>
+
+            <!-- Geofence & Location Landmark Sub-badge -->
+            <div class="mt-0.5 px-2 py-0.5 rounded-full bg-white text-blue-950 font-black text-[10px] border-2 border-blue-600 shadow-lg whitespace-nowrap">
+              📍 ${validTarget.geofenceStatus || validTarget.stationName || 'Live Station'}
             </div>
           </div>
         `,
-        iconSize: [120, 56],
-        iconAnchor: [60, 54],
-        popupAnchor: [0, -54],
+        iconSize: [180, 92],
+        iconAnchor: [90, 52],
+        popupAnchor: [0, -52],
       });
 
-      L.marker([Number(validTarget.lat), Number(validTarget.lng)], { icon: singleIcon })
+      const selectedMarker = L.marker([targetLat, targetLng], { icon: selectedBeaconIcon, zIndexOffset: 1000 })
         .bindPopup(`
-          <div class="p-2 text-xs font-sans min-w-[200px]">
-            <div class="font-bold text-slate-900">${validTarget.name}</div>
-            <div class="text-[11px] text-slate-500">${validTarget.role} • ${validTarget.geofenceStatus}</div>
-            <div class="mt-1 font-mono text-[10px] text-emerald-700">${Number(validTarget.lat).toFixed(4)}°N, ${Number(validTarget.lng).toFixed(4)}°E</div>
+          <div class="p-3 text-xs font-sans min-w-[260px]">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-2">
+              <div>
+                <div class="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                  <span>${validTarget.name}</span>
+                  <span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-blue-100 text-blue-800">${validTarget.employeeId || validTarget.id}</span>
+                </div>
+                <div class="text-[11px] text-slate-500 font-semibold mt-0.5">${validTarget.role} • ${validTarget.department || 'Operations'}</div>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                isOnline ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300'
+              }">${validTarget.status}</span>
+            </div>
+
+            <div class="space-y-2 text-[11px] text-slate-600">
+              <div class="bg-blue-50/90 border border-blue-200 p-2.5 rounded-xl">
+                <div class="text-[9px] font-black text-blue-900 uppercase tracking-wider">Current Live Station</div>
+                <div class="font-extrabold text-slate-900 text-xs mt-0.5">${validTarget.geofenceStatus || validTarget.stationName || 'Operational Zone'}</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">${validTarget.stationAddress || ''}</div>
+              </div>
+
+              <div class="flex items-center justify-between font-mono text-[10px] bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <span class="text-slate-500 font-semibold">Live GPS Coordinates:</span>
+                <span class="font-black text-blue-700">${targetLat.toFixed(4)}°N, ${targetLng.toFixed(4)}°E</span>
+              </div>
+
+              ${validTarget.punchIn ? `
+                <div class="flex items-center justify-between text-[11px] px-1">
+                  <span class="text-slate-600">Clocked In At:</span>
+                  <span class="font-extrabold text-emerald-700 font-mono">${validTarget.punchIn}</span>
+                </div>
+              ` : ''}
+
+              ${validTarget.workingHours ? `
+                <div class="flex items-center justify-between text-[11px] px-1">
+                  <span class="text-slate-600">Active Working Duration:</span>
+                  <span class="font-extrabold text-slate-900 font-mono">${validTarget.elapsedDisplay || `${validTarget.workingHours} hrs`}</span>
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="mt-2.5 pt-2 border-t border-slate-200 flex items-center justify-between">
+              <span class="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>Active GNSS Fix</span>
+              </span>
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=${targetLat},${targetLng}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] shadow-2xs transition-all inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>Google Maps ↗</span>
+              </a>
+            </div>
           </div>
         `)
         .addTo(markersGroup);
 
-      if (lastTargetIdRef.current !== validTarget.id) {
+      // Smoothly fly to target on selection change, or center on initial mount
+      if (!hasFittedRef.current) {
+        hasFittedRef.current = true;
         lastTargetIdRef.current = validTarget.id;
-        map.setView([Number(validTarget.lat), Number(validTarget.lng)], 15);
+        map.setView([targetLat, targetLng], 15);
+        selectedMarker.openPopup();
+      } else if (lastTargetIdRef.current !== validTarget.id) {
+        lastTargetIdRef.current = validTarget.id;
+        map.flyTo([targetLat, targetLng], 15, { animate: true, duration: 0.8 });
+        selectedMarker.openPopup();
       }
     }
 
-    // 5. Draw All Other Live Personnel on the Map (Dispatcher, Plant Manager, Accountant, etc.)
+    // 3. Draw All Other Live Personnel on the Map (Dispatcher, Plant Manager, Accountant, etc.)
     const otherPersonnel = (telemetryList || []).filter(
       (s) => !isAdminPerson(s) && s.id !== validTarget?.id && s.lat && s.lng
     );
@@ -484,6 +528,9 @@ export default function LiveInteractiveMap({
               <div><strong class="text-slate-800">GPS:</strong> ${Number(staff.lat).toFixed(4)}°N, ${Number(staff.lng).toFixed(4)}°E</div>
               ${staff.punchIn ? `<div><strong class="text-slate-800">Clocked In:</strong> ${staff.punchIn}</div>` : ''}
             </div>
+            <div class="mt-2 pt-1.5 border-t border-slate-200 text-right">
+              <span class="text-[10px] font-bold text-blue-600 hover:underline">Click pin to focus</span>
+            </div>
           </div>
         `)
         .on('click', () => {
@@ -491,7 +538,7 @@ export default function LiveInteractiveMap({
         })
         .addTo(markersGroup);
     });
-  }, [mapReady, validTarget?.id, stops, selectedStop?.stopNo, mapRouteMode, telemetryList]);
+  }, [mapReady, validTarget?.id, validTarget?.lat, validTarget?.lng, stops, selectedStop?.stopNo, mapRouteMode, telemetryList]);
 
   const startOdometer = validTarget?.activeTrip?.startOdometer || 14250.0;
   const currentOdometer = Number((startOdometer + totalKm).toFixed(1));
@@ -539,22 +586,20 @@ export default function LiveInteractiveMap({
               )}
             </div>
 
-            {/* Traveled Route summary from Punch-In to Punch-Out */}
+            {/* Live Station & GPS Location Telemetry Header */}
             <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2 truncate mt-0.5 flex-wrap">
-              {startStop && (
+              {validTarget && (
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span>🟢 In: {startStop.time}</span>
-                  <span className="text-slate-400 font-normal">({startStop.title.substring(0, 16)})</span>
+                  <span>📍 Live: {validTarget.geofenceStatus || validTarget.stationName}</span>
+                  <span className="text-cyan-300 font-mono text-[10px]">
+                    ({Number(validTarget.lat).toFixed(4)}°N, {Number(validTarget.lng).toFixed(4)}°E)
+                  </span>
                 </span>
               )}
-              {endStop && (
-                <>
-                  <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
-                  <span className="text-amber-400 font-bold flex items-center gap-1">
-                    <span>📍 End: {endStop.time}</span>
-                    <span className="text-slate-400 font-normal">({endStop.title.substring(0, 16)})</span>
-                  </span>
-                </>
+              {validTarget?.punchIn && (
+                <span className="text-slate-300 font-semibold flex items-center gap-1">
+                  <span>• In: {validTarget.punchIn}</span>
+                </span>
               )}
             </div>
           </div>

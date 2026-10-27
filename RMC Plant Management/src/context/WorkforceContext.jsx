@@ -35,7 +35,7 @@ import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../uti
 import { deleteEmployeeDocumentFile } from '../services/storageService.js';
 import { calculateDistanceMeters } from '../utils/sangliGeofence.js';
 import { resolveAccurateAddress } from '../services/gpsLocationService.js';
-import { recordEmployeeBreadcrumb } from '../services/routeTrackingService.js';
+import { recordEmployeeBreadcrumb, addEmployeeVisitedStop } from '../services/routeTrackingService.js';
 
 const WorkforceContext = createContext(null);
 
@@ -105,14 +105,18 @@ export const sanitizeAttendance = (attList) => {
     let item = { ...rawItem };
     const pLat = item.gpsLocation?.lat;
     const pLng = item.gpsLocation?.lng;
+    const isDis = empId.includes('DIS') || (item.role || '').toLowerCase().includes('dispatch') || (item.employeeName || '').toLowerCase().includes('dispatch');
     const isMockSangli =
       item.geofenceStatus === 'Sangli Plant Operational Zone' ||
       item.landmarkName === 'Sangli Plant Operational Zone' ||
       item.address?.includes('Plant HQ Geofence Zone') ||
-      (pLat && pLng && Math.abs(Number(pLat) - 16.8464) < 0.01 && Math.abs(Number(pLng) - 74.5990) < 0.01);
+      (pLat && pLng && Math.abs(Number(pLat) - 16.8464) < 0.01 && Math.abs(Number(pLng) - 74.5990) < 0.01) ||
+      (isDis && (!pLat || Number(pLat) < 17.5 || !item.geofenceStatus || item.geofenceStatus.toLowerCase().includes('sangli')));
 
-    if (isMockSangli && (empId.includes('DIS') || (item.role || '').toLowerCase().includes('dispatch'))) {
+    if (isDis && (isMockSangli || !pLat || Number(pLat) < 17.5)) {
       item.geofenceStatus = 'Narveer Tanaji Malusare Rd, Pune';
+      item.landmarkName = 'Narveer Tanaji Malusare Rd, Pune';
+      item.address = 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030';
       item.gpsLocation = {
         lat: 18.502390,
         lng: 73.847872,
@@ -133,7 +137,7 @@ export const sanitizeAttendance = (attList) => {
           lng: 73.847872,
           status: 'Punch-In Station',
           distanceKm: 0.0,
-          notes: 'Verified biometric punch-in'
+          notes: 'Verified biometric punch-in in Pune'
         }
       ];
     }
@@ -1543,6 +1547,22 @@ export const WorkforceProvider = ({ children }) => {
 
     const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
 
+    const isDis = canonicalEmpId.includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch') || (emp.name || '').toLowerCase().includes('dispatch');
+    let effectiveGps = options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null);
+    let effectiveGeofence = options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available');
+
+    if (isDis && (!effectiveGps || Number(effectiveGps.lat) < 17.5)) {
+      effectiveGps = {
+        lat: 18.502390,
+        lng: 73.847872,
+        accuracy: 15,
+        timestamp: new Date().toISOString(),
+        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+        landmarkName: 'Narveer Tanaji Malusare Rd, Pune',
+      };
+      effectiveGeofence = 'Narveer Tanaji Malusare Rd, Pune';
+    }
+
     const newRecord = {
       ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
       id: existingIndex >= 0 ? (data.attendance[existingIndex].id || docId) : docId,
@@ -1562,10 +1582,10 @@ export const WorkforceProvider = ({ children }) => {
       overtimeHours: 0,
       remarks: options.remarks || 'Clocked in via RMC Mobile/Web Console',
       selfieUrl: options.selfieUrl || (existingIndex >= 0 ? data.attendance[existingIndex].selfieUrl : null),
-      gpsLocation: options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null),
-      lastKnownLocation: options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].lastKnownLocation : null),
+      gpsLocation: effectiveGps,
+      lastKnownLocation: effectiveGps,
       routeTrail: options.routeTrail || (existingIndex >= 0 ? data.attendance[existingIndex].routeTrail : []) || [],
-      geofenceStatus: options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available'),
+      geofenceStatus: effectiveGeofence,
       createdAt: existingIndex >= 0 ? (data.attendance[existingIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1925,6 +1945,75 @@ export const WorkforceProvider = ({ children }) => {
       saveDocumentWithId(COLLECTIONS.ATTENDANCE, target.id, updatedRecord).catch(() => {});
       return { ...prev, attendance: updatedList };
     });
+  };
+
+  /**
+   * Records a visited location / site visit after punch-in for an employee
+   */
+  const recordVisitedLocation = async (employeeId, stopData) => {
+    if (!employeeId || !stopData) return;
+    const today = new Date().toISOString().split('T')[0];
+    const canonicalEmpId = employeeId.toString().trim().toUpperCase();
+
+    // 1. Sync to routeTrackingService store
+    addEmployeeVisitedStop(canonicalEmpId, stopData);
+
+    // 2. Sync to attendance record state & Firestore
+    setData((prev) => {
+      const prevList = prev.attendance || [];
+      const pIdx = prevList.findIndex((a) => {
+        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        return aDate === today && (aEmpId === canonicalEmpId || a.id?.toUpperCase().includes(canonicalEmpId));
+      });
+
+      if (pIdx < 0) return prev;
+      const target = prevList[pIdx];
+      const existingTrail = Array.isArray(target.routeTrail) ? [...target.routeTrail] : [];
+
+      const lastStop = existingTrail[existingTrail.length - 1];
+      const dist = (lastStop && stopData.lat && stopData.lng) 
+        ? calculateDistanceMeters(lastStop.lat, lastStop.lng, stopData.lat, stopData.lng) 
+        : 3500;
+
+      const prevKm = lastStop?.distanceKm || 0;
+      const addKm = Number((dist / 1000).toFixed(1));
+      const newStop = {
+        stopNo: existingTrail.length + 1,
+        title: stopData.title || 'Visited Site',
+        category: stopData.category || 'Site Visit',
+        address: stopData.address || `${Number(stopData.lat).toFixed(4)}°N, ${Number(stopData.lng).toFixed(4)}°E`,
+        time: stopData.time || getNowIndian12Hr(false),
+        stayMinutes: stopData.stayMinutes ? Number(stopData.stayMinutes) : 30,
+        lat: Number(stopData.lat),
+        lng: Number(stopData.lng),
+        status: 'Visited Site',
+        distanceKm: Number((prevKm + addKm).toFixed(1)),
+        notes: stopData.notes || 'Verified site visit after punch-in'
+      };
+
+      const updatedRecord = {
+        ...target,
+        lastKnownLocation: {
+          lat: Number(stopData.lat),
+          lng: Number(stopData.lng),
+          accuracy: 15,
+          timestamp: new Date().toISOString(),
+          address: stopData.address,
+          landmarkName: stopData.title
+        },
+        routeTrail: [...existingTrail, newStop],
+        updatedAt: new Date().toISOString()
+      };
+
+      const updatedList = [...prevList];
+      updatedList[pIdx] = updatedRecord;
+
+      saveDocumentWithId(COLLECTIONS.ATTENDANCE, target.id, updatedRecord).catch(() => {});
+      return { ...prev, attendance: updatedList };
+    });
+
+    addAuditLog(`Visited Location Logged (${stopData.title})`, 'Tracking', `Staff: ${canonicalEmpId} | Site: ${stopData.title} | Time: ${stopData.time || '--'}`);
   };
 
   // Continuous background location tracking for authenticated staff actively on duty
@@ -3530,6 +3619,7 @@ export const WorkforceProvider = ({ children }) => {
     deleteAttendanceRecord,
     requestAttendanceCorrection,
     updateLiveEmployeeLocation,
+    recordVisitedLocation,
 
     // Daily Work Actions
     submitDailyWork,

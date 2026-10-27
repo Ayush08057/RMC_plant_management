@@ -34,7 +34,9 @@ import {
   Gauge,
   Zap,
   ArrowRight,
-  Trash2
+  Trash2,
+  Plus,
+  Building2
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -47,13 +49,15 @@ import {
   getEmployeeRouteDetails, 
   recordEmployeeBreadcrumb,
   getAssignedEmployeeStation,
-  deleteEmployeeRouteHistory
+  deleteEmployeeRouteHistory,
+  addEmployeeVisitedStop,
+  removeEmployeeVisitedStop
 } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
   const { user } = useAuth();
-  const { attendance, employees, plants, deleteEmployee } = useWorkforce();
+  const { attendance, employees, plants, deleteEmployee, recordVisitedLocation } = useWorkforce();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All'); // 'All' | 'Punched In' | 'Punched Out' | 'Not Checked In'
@@ -72,6 +76,18 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const [isFullscreenMap, setIsFullscreenMap] = useState(false);
   const [selectedStop, setSelectedStop] = useState(null);
   const [routeHistoryExpanded, setRouteHistoryExpanded] = useState(true);
+
+  // Visited Locations Checkpoint Modal State
+  const [showAddVisitedModal, setShowAddVisitedModal] = useState(false);
+  const [newVisitedTitle, setNewVisitedTitle] = useState('');
+  const [newVisitedCategory, setNewVisitedCategory] = useState('Site Pouring');
+  const [newVisitedAddress, setNewVisitedAddress] = useState('');
+  const [newVisitedLat, setNewVisitedLat] = useState('');
+  const [newVisitedLng, setNewVisitedLng] = useState('');
+  const [newVisitedTime, setNewVisitedTime] = useState('');
+  const [newVisitedStay, setNewVisitedStay] = useState('45');
+  const [newVisitedNotes, setNewVisitedNotes] = useState('');
+  const [routeRefreshKey, setRouteRefreshKey] = useState(0);
 
   // Real Driver Trips from Local & Cloud Store
   const [driverTrips, setDriverTrips] = useState(() => {
@@ -324,13 +340,18 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         gpsFixSource = 'ASSIGNED_STATION';
       }
 
-      // Safeguard against residual legacy mock coordinates (16.8464, 74.5990)
-      if ((emp.id?.includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch')) &&
-          lat !== null && lng !== null && Math.abs(lat - 16.8464) < 0.01 && Math.abs(lng - 74.5990) < 0.01) {
+      // Safeguard: Dispatcher is strictly stationed & punched in at Pune (18.502390, 73.847872)
+      const isDis = 
+        (emp.id || '').toUpperCase().includes('DIS') ||
+        (emp.employeeId || '').toUpperCase().includes('DIS') ||
+        (emp.role || '').toLowerCase().includes('dispatch') ||
+        (emp.name || '').toLowerCase().includes('dispatch');
+
+      if (isDis && (lat === null || Number(lat) < 17.5)) {
         lat = 18.502390;
         lng = 73.847872;
         accuracy = 15;
-        gpsFixSource = 'ASSIGNED_STATION';
+        gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
       }
 
       const hasGpsFix = true;
@@ -407,9 +428,12 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       };
 
       let finalGeofence = record?.geofenceStatus || geofenceLabel;
-      if (finalGeofence === 'Sangli Plant Operational Zone' || 
-          ((emp.id?.includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch')) && finalGeofence?.includes('Sangli Plant'))) {
-        finalGeofence = 'Narveer Tanaji Malusare Rd, Pune';
+      if (isDis) {
+        if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {
+          finalGeofence = 'Narveer Tanaji Malusare Rd, Pune';
+        }
+      } else if (finalGeofence === 'Sangli Plant Operational Zone') {
+        finalGeofence = assignedStation.stationName || 'SM Plant HQ';
       }
 
       return {
@@ -496,11 +520,59 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     );
   }, [selectedTargetId, selectedEmployee, telemetryList]);
 
-  // Active visited route details for active target
+  // Active visited route details for active target (strictly isolate client device GPS to current user only)
   const activeRouteDetails = useMemo(() => {
     if (!activeTarget || isAdminPerson(activeTarget)) return null;
-    return getEmployeeRouteDetails(activeTarget, realDeviceGps);
-  }, [activeTarget, realDeviceGps]);
+    const gpsForTarget = activeTarget.isCurrentUser ? realDeviceGps : null;
+    return getEmployeeRouteDetails(activeTarget, gpsForTarget);
+  }, [activeTarget, realDeviceGps, routeRefreshKey]);
+
+  // Handler to manually record a new visited location after punch-in
+  const handleSaveVisitedLocation = () => {
+    if (!activeTarget || !newVisitedTitle.trim()) return;
+    const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
+                  String(activeTarget?.role || '').toLowerCase().includes('dispatch');
+    const defaultLat = isDis ? 18.4980 : 16.8520;
+    const defaultLng = isDis ? 73.8320 : 74.5900;
+    const finalLat = parseFloat(newVisitedLat) || defaultLat;
+    const finalLng = parseFloat(newVisitedLng) || defaultLng;
+
+    const stopData = {
+      title: newVisitedTitle.trim(),
+      category: newVisitedCategory,
+      address: newVisitedAddress.trim() || `${finalLat.toFixed(4)}°N, ${finalLng.toFixed(4)}°E`,
+      time: newVisitedTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      stayMinutes: parseInt(newVisitedStay, 10) || 30,
+      lat: finalLat,
+      lng: finalLng,
+      notes: newVisitedNotes.trim() || 'Verified site visit after punch-in'
+    };
+
+    addEmployeeVisitedStop(activeTarget.id, stopData);
+    if (activeTarget.employeeId && activeTarget.employeeId !== activeTarget.id) {
+      addEmployeeVisitedStop(activeTarget.employeeId, stopData);
+    }
+    if (recordVisitedLocation) {
+      recordVisitedLocation(activeTarget.employeeId || activeTarget.id, stopData);
+    }
+
+    setRouteRefreshKey((k) => k + 1);
+    setShowAddVisitedModal(false);
+    setAdminPingMsg(`Visited location "${stopData.title}" recorded for ${activeTarget.name}.`);
+    setTimeout(() => setAdminPingMsg(null), 4000);
+  };
+
+  // Handler to remove a visited stop
+  const handleRemoveVisitedStop = (stopNo) => {
+    if (!activeTarget || !stopNo) return;
+    removeEmployeeVisitedStop(activeTarget.id, stopNo);
+    if (activeTarget.employeeId && activeTarget.employeeId !== activeTarget.id) {
+      removeEmployeeVisitedStop(activeTarget.employeeId, stopNo);
+    }
+    setRouteRefreshKey((k) => k + 1);
+    setAdminPingMsg(`Removed visited stop #${stopNo}.`);
+    setTimeout(() => setAdminPingMsg(null), 3000);
+  };
 
   // Leg-by-leg kilometer analysis for driver & staff route tracking
   const routeLegs = useMemo(() => {
@@ -1028,6 +1100,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                     {emp.geofenceStatus && emp.geofenceStatus.includes('Market Yard') && (
                       <span className="text-[9px] font-mono font-bold px-1 rounded bg-amber-200 text-amber-950">
                         Market Yard
+                      </span>
+                    )}
+                    {((emp.id || '').toUpperCase().includes('DIS') || (emp.employeeId || '').toUpperCase().includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch')) && (
+                      <span className="text-[9px] font-mono font-bold px-1 rounded bg-purple-100 text-purple-900 border border-purple-300">
+                        Pune
                       </span>
                     )}
                     {emp.isDriver && emp.activeTrip && (
@@ -1842,202 +1919,178 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
           }}
         >
           <div 
-            className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-slate-900 flex flex-col max-h-[90vh] animate-scale-up"
+            className="w-full max-w-sm sm:max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden text-slate-900 flex flex-col animate-scale-up"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-                  {selectedEmployee.avatar || selectedEmployee.name.substring(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">{selectedEmployee.name}</h3>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="font-mono text-amber-700 font-bold">{selectedEmployee.employeeId}</span>
-                    <span>•</span>
-                    <span>{selectedEmployee.role}</span>
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3 min-w-0">
+                {selectedEmployee.selfieUrl ? (
+                  <img 
+                    src={selectedEmployee.selfieUrl} 
+                    alt={selectedEmployee.name} 
+                    className="w-11 h-11 rounded-2xl object-cover border-2 border-slate-100 shrink-0 shadow-xs" 
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                    {selectedEmployee.avatar || (selectedEmployee.name ? selectedEmployee.name.substring(0, 2).toUpperCase() : 'EM')}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900 leading-tight truncate">{selectedEmployee.name}</h3>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-xs">
+                    <span className="font-mono text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
+                      {selectedEmployee.employeeId}
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-slate-500 font-medium truncate">{selectedEmployee.role}</span>
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedEmployee(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2"
+                title="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 overflow-y-auto space-y-3.5 text-xs">
-              {/* Status Pill */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="font-semibold text-slate-700">Duty Status</span>
-                <span className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${
-                  selectedEmployee.status === 'Punched In'
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : 'bg-slate-100 text-slate-700 border border-slate-300'
-                }`}>
-                  {selectedEmployee.status}
-                </span>
+            <div className="p-4 sm:p-5 space-y-3">
+              {/* Primary Location & Duty Card */}
+              <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-3">
+                {/* Status & Time Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    selectedEmployee.status === 'Punched In'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300/80'
+                      : selectedEmployee.status === 'Punched Out'
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300/80'
+                        : 'bg-slate-200/80 text-slate-700 border border-slate-300'
+                  }`}>
+                    {selectedEmployee.status === 'Punched In' && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    )}
+                    <span>{selectedEmployee.status}</span>
+                  </div>
+
+                  {selectedEmployee.punchIn && (
+                    <span className="text-xs text-slate-500 font-medium">
+                      In: <strong className="text-slate-800 font-semibold">{formatToIndian12Hr(selectedEmployee.punchIn)}</strong>
+                      {selectedEmployee.elapsedDisplay && (
+                        <span className="text-slate-400 ml-1">({selectedEmployee.elapsedDisplay})</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {/* Location Info */}
+                <div className="flex items-start gap-3 pt-1 border-t border-slate-200/60">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                      Geofence Station
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 leading-snug mt-0.5">
+                      {selectedEmployee.geofenceStatus || selectedEmployee.stationName || 'Location Verified'}
+                    </div>
+                    {selectedEmployee.hasGpsFix && (
+                      <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                        {selectedEmployee.lat}° N, {selectedEmployee.lng}° E
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Coordinates & Geofence Box */}
-              <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-2">
-                <div className="flex items-center justify-between text-amber-900 font-bold">
-                  <span className="flex items-center gap-1.5">
-                    <Compass className="w-4 h-4 text-amber-600" />
-                    <span>Real-Time Coordinates</span>
-                  </span>
-                  <span className="font-mono text-[10px] bg-amber-100 px-2 py-0.5 rounded text-amber-800">
-                    {selectedEmployee.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : (selectedEmployee.hasGpsFix ? 'Punch-In Verified' : 'No Signal')}
-                  </span>
-                </div>
-
-                {selectedEmployee.hasGpsFix ? (
-                  <div className="grid grid-cols-2 gap-2 text-center font-mono text-xs">
-                    <div className="p-2 rounded-xl bg-white border border-amber-200">
-                      <span className="text-[10px] text-slate-400 block font-sans">LATITUDE</span>
-                      <span className="font-bold text-slate-900">{selectedEmployee.lat}° N</span>
-                    </div>
-                    <div className="p-2 rounded-xl bg-white border border-amber-200">
-                      <span className="text-[10px] text-slate-400 block font-sans">LONGITUDE</span>
-                      <span className="font-bold text-slate-900">{selectedEmployee.lng}° E</span>
-                    </div>
+              {/* Transit Trip Card (if driver has active trip) */}
+              {selectedEmployee.activeTrip && (
+                <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Truck className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span className="font-bold text-blue-950 truncate">{selectedEmployee.activeTrip.vehicleNo}</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-slate-600 truncate">{selectedEmployee.activeTrip.siteName || selectedEmployee.activeTrip.clientName}</span>
                   </div>
-                ) : (
-                  <div className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs text-amber-900">
-                    <span className="font-semibold block">No Real-time GPS Fix Recorded</span>
-                    <span className="text-[11px] text-slate-500">Attendance punch was saved without location permissions, or staff has not punched in today.</span>
-                  </div>
-                )}
-
-                <div className="text-[11px] text-slate-700 bg-white p-2 rounded-xl border border-amber-200">
-                  <span className="font-bold text-slate-900">Geofence Status: </span>
-                  {selectedEmployee.geofenceStatus}
-                </div>
-
-                {selectedEmployee.activeTrip && (
-                  <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200/90 space-y-2 mt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
-                        <Truck className="w-4 h-4 text-blue-600" />
-                        <span>Transit Mixer: {selectedEmployee.activeTrip.vehicleNo}</span>
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-blue-600 text-white">
-                        {selectedEmployee.activeTrip.status}
-                      </span>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-white border border-blue-200 text-xs space-y-1">
-                      <div className="text-slate-600 flex items-center justify-between">
-                        <span>Route:</span>
-                        <strong className="text-slate-900">{selectedEmployee.activeTrip.routeLabel}</strong>
-                      </div>
-                      <div className="text-slate-600 flex items-center justify-between">
-                        <span>Site Client:</span>
-                        <strong className="text-slate-900">{selectedEmployee.activeTrip.clientName} ({selectedEmployee.activeTrip.siteName})</strong>
-                      </div>
-                      <div className="text-slate-600 flex items-center justify-between">
-                        <span>Trip Odometer:</span>
-                        <strong className="text-blue-800 font-mono">Start: {selectedEmployee.activeTrip.startOdometer} km ({selectedEmployee.activeTrip.distanceKm} km one-way)</strong>
-                      </div>
-                    </div>
-
-                    <a
-                      href={selectedEmployee.activeTrip.googleRouteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-2 px-3 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                      <span>Track Driver Route on Google Maps</span>
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {/* Telemetry Source & GNSS Accuracy */}
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block">TELEMETRY SOURCE</span>
-                  <span className="font-mono font-bold text-slate-900">
-                    {selectedEmployee.gpsFixSource === 'LIVE_DEVICE' ? 'Live Browser GNSS' : (selectedEmployee.gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Record' : 'No Signal')}
+                  <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-blue-600 text-white shrink-0 ml-2">
+                    {selectedEmployee.activeTrip.status}
                   </span>
                 </div>
-                <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block">GNSS ACCURACY</span>
-                  <span className="font-mono font-bold text-emerald-700">
-                    {selectedEmployee.accuracy ? `±${selectedEmployee.accuracy}m` : 'Unavailable'}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Modal Actions */}
-            <div className="p-4 border-t border-slate-100 flex items-center gap-2">
-              {selectedEmployee.hasGpsFix ? (
-                <a
-                  href={`https://www.google.com/maps?q=${selectedEmployee.lat},${selectedEmployee.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open in Google Maps</span>
-                </a>
-              ) : (
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/60 space-y-2">
+              {/* Primary Actions Row */}
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  disabled
-                  className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-slate-100 text-slate-400 flex items-center justify-center gap-1.5 cursor-not-allowed"
+                  onClick={() => {
+                    handleSelectStaffOnMap(selectedEmployee);
+                    setSelectedEmployee(null);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl font-bold text-xs bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
-                  <span>No GPS Coordinates</span>
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Show on Map</span>
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  handleSelectStaffOnMap(selectedEmployee);
-                  setMapRouteMode(true);
-                  setRouteHistoryExpanded(true);
-                  setSelectedEmployee(null);
-                }}
-                className="py-2 px-3 rounded-xl font-bold text-xs bg-cyan-600 hover:bg-cyan-700 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
-                title="View visited route and travel trail on map"
-              >
-                <Route className="w-3.5 h-3.5" />
-                <span>View Route</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSelectStaffOnMap(selectedEmployee);
+                    setMapRouteMode(true);
+                    setRouteHistoryExpanded(true);
+                    setSelectedEmployee(null);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <Route className="w-3.5 h-3.5" />
+                  <span>View Route</span>
+                </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  handleSelectStaffOnMap(selectedEmployee);
-                  setSelectedEmployee(null);
-                }}
-                className="py-2 px-3 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-              >
-                <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                <span>Show on Map</span>
-              </button>
+              {/* Secondary Actions Row */}
+              <div className="flex items-center gap-2">
+                {selectedEmployee.hasGpsFix ? (
+                  <a
+                    href={`https://www.google.com/maps?q=${selectedEmployee.lat},${selectedEmployee.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2 px-3 rounded-xl font-semibold text-xs bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Open in Google Maps</span>
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex-1 py-2 px-3 rounded-xl font-semibold text-xs bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center gap-1.5 cursor-not-allowed"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                    <span>Open in Google Maps</span>
+                  </button>
+                )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  const emp = selectedEmployee;
-                  setSelectedEmployee(null);
-                  setEmployeeToDelete(emp);
-                }}
-                className="py-2 px-3 rounded-xl font-bold text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
-                title="Delete Employee & Tracking Record"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                <span>Delete</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emp = selectedEmployee;
+                    setSelectedEmployee(null);
+                    setEmployeeToDelete(emp);
+                  }}
+                  className="py-2 px-3.5 rounded-xl font-semibold text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0"
+                  title="Delete Employee & Tracking Record"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  <span>Delete</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>,
