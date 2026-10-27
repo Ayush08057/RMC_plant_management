@@ -321,8 +321,9 @@ export default function AttendanceManagementView({
         w.date === selectedDate
     );
 
-    // GATE: If no daily report filed today, block punch out and open report modal immediately!
-    if (!existingReport) {
+    // GATE: If no daily report filed today or empty, block punch out and open report modal immediately!
+    const hasValidReport = Boolean(existingReport && existingReport.workDescription && existingReport.workDescription.trim());
+    if (!hasValidReport) {
       setReportTargetStaff(emp);
       setReportModalAutoPunchOut(true);
       setShowReportModal(true);
@@ -369,49 +370,49 @@ export default function AttendanceManagementView({
 
   const canManage = user?.role === 'Admin' || user?.role === 'Plant Manager';
 
-  // Modal Department Report Form States
+  // Modal Department Report Form States - Starts Completely Empty
   const [modalDriverReport, setModalDriverReport] = useState({
-    vehicleNo: 'MH-04-AZ-9921',
-    tripsCount: 4,
-    deliveredM3: 28.5,
-    drumWashDone: true,
-    odometerKm: 98,
-    remarks: 'Delivered 4 batches with required slump. Drum washed at wash rack.',
+    vehicleNo: '',
+    tripsCount: '',
+    deliveredM3: '',
+    drumWashDone: false,
+    odometerKm: '',
+    remarks: '',
   });
   const [modalSupervisorReport, setModalSupervisorReport] = useState({
-    siteName: 'Metro Line 4 - Pier 24 (Vashi)',
-    gradePoured: 'M35 Pumpable',
-    volumePoured: 45,
-    slumpMm: 135,
-    cubesCast: 6,
-    remarks: 'Slump test verified on-site within 130-140mm limit. 6 cube specimens cast for 7/28 day curing.',
+    siteName: '',
+    gradePoured: '',
+    volumePoured: '',
+    slumpMm: '',
+    cubesCast: '',
+    remarks: '',
   });
   const [modalAccountantReport, setModalAccountantReport] = useState({
-    invoicesCount: 18,
-    billedAmount: 685000,
-    collectionsAmount: 420000,
-    vendorChallansCount: 6,
-    booksTallied: true,
-    remarks: 'Generated 18 delivery challan GST invoices. Reconciled RTGS collections with bank ledger.',
+    invoicesCount: '',
+    billedAmount: '',
+    collectionsAmount: '',
+    vendorChallansCount: '',
+    booksTallied: false,
+    remarks: '',
   });
   const [modalInchargeReport, setModalInchargeReport] = useState({
-    productionM3: 320,
-    siloStatus: 'Silo A (OPC 53) 85T, Silo B (Fly Ash) 42T - Normal Stock',
-    uptimeHours: 9.0,
-    breakdownHours: 0.0,
-    safetyAuditDone: true,
-    remarks: 'Batching target of 300 m³ achieved at 320 m³ (+6.6%). Aggregate moisture calibrated twice.',
+    productionM3: '',
+    siloStatus: '',
+    uptimeHours: '',
+    breakdownHours: '',
+    safetyAuditDone: false,
+    remarks: '',
   });
   const [modalOperatorReport, setModalOperatorReport] = useState({
-    batchesCount: 48,
-    scaleCheckPass: true,
-    admixtureVerified: true,
-    backupCompleted: true,
-    remarks: 'Scale zero-point verification passed. Sand moisture compensated at 4.2%. SCADA backup synced.',
+    batchesCount: '',
+    scaleCheckPass: false,
+    admixtureVerified: false,
+    backupCompleted: false,
+    remarks: '',
   });
   const [modalGeneralReport, setModalGeneralReport] = useState({
     workDescription: '',
-    remarks: 'Standard shift operational duties completed',
+    remarks: '',
   });
   const [isEditingExistingReport, setIsEditingExistingReport] = useState(false);
 
@@ -421,15 +422,56 @@ export default function AttendanceManagementView({
     setReportTargetStaff(staff);
     setReportModalAutoPunchOut(andAutoPunchOut);
     setIsEditingExistingReport(!staff.isReportDone);
+
     if (staff.todayReport?.workDescription) {
       setModalGeneralReport({
         workDescription: staff.todayReport.workDescription,
         remarks: staff.todayReport.remarks || '',
       });
     } else {
+      // Empty report - no autofilled mock data
       setModalGeneralReport({
-        workDescription: staff.todayWorkSummary || 'Daily operations completed',
-        remarks: 'Work completed as scheduled',
+        workDescription: '',
+        remarks: '',
+      });
+      setModalDriverReport({
+        vehicleNo: staff.assignedMixer || '',
+        tripsCount: '',
+        deliveredM3: '',
+        drumWashDone: false,
+        odometerKm: '',
+        remarks: '',
+      });
+      setModalSupervisorReport({
+        siteName: '',
+        gradePoured: '',
+        volumePoured: '',
+        slumpMm: '',
+        cubesCast: '',
+        remarks: '',
+      });
+      setModalAccountantReport({
+        invoicesCount: '',
+        billedAmount: '',
+        collectionsAmount: '',
+        vendorChallansCount: '',
+        booksTallied: false,
+        remarks: '',
+      });
+      setModalInchargeReport({
+        productionM3: '',
+        siloStatus: '',
+        uptimeHours: '',
+        breakdownHours: '',
+        safetyAuditDone: false,
+        remarks: '',
+      });
+      setModalOperatorReport({
+        batchesCount: '',
+        scaleCheckPass: false,
+        admixtureVerified: false,
+        backupCompleted: false,
+        remarks: '',
       });
     }
     setShowReportModal(true);
@@ -446,22 +488,49 @@ export default function AttendanceManagementView({
     let workType = `${roleCat} Daily Shift Log`;
 
     if (roleCat === 'Driver') {
-      workDescription = `Vehicle: ${modalDriverReport.vehicleNo} | Trips: ${modalDriverReport.tripsCount} | Delivered: ${modalDriverReport.deliveredM3} m³ | Drum Wash: ${modalDriverReport.drumWashDone ? 'Yes' : 'No'} | Km: ${modalDriverReport.odometerKm} km | Remarks: ${modalDriverReport.remarks}`;
+      const vNo = modalDriverReport.vehicleNo?.trim() || reportTargetStaff.assignedMixer || '';
+      const trips = modalDriverReport.tripsCount;
+      const m3 = modalDriverReport.deliveredM3;
+      if (!vNo && !trips && !m3 && !modalDriverReport.remarks?.trim()) {
+        setToastMessage('⚠️ Please enter transit mixer vehicle number or trips completed.');
+        return;
+      }
+      workDescription = `Vehicle: ${vNo || 'TM'} | Trips: ${trips || 0} | Delivered: ${m3 || 0} m³ | Drum Wash: ${modalDriverReport.drumWashDone ? 'Yes' : 'No'} | Km: ${modalDriverReport.odometerKm || 0} km | Remarks: ${modalDriverReport.remarks || 'Daily transit trips completed'}`;
       workType = 'Fleet Delivery & Transit Log';
     } else if (roleCat === 'Site Supervisor') {
-      workDescription = `Site: ${modalSupervisorReport.siteName} | Grade: ${modalSupervisorReport.gradePoured} (${modalSupervisorReport.volumePoured} m³) | Slump: ${modalSupervisorReport.slumpMm}mm | Cubes: ${modalSupervisorReport.cubesCast} | Remarks: ${modalSupervisorReport.remarks}`;
+      if (!modalSupervisorReport.siteName?.trim() && !modalSupervisorReport.volumePoured && !modalSupervisorReport.remarks?.trim()) {
+        setToastMessage('⚠️ Please enter site pouring details or remarks.');
+        return;
+      }
+      workDescription = `Site: ${modalSupervisorReport.siteName || 'Plant Site'} | Grade: ${modalSupervisorReport.gradePoured || 'RMC'} (${modalSupervisorReport.volumePoured || 0} m³) | Slump: ${modalSupervisorReport.slumpMm || 0}mm | Cubes: ${modalSupervisorReport.cubesCast || 0} | Remarks: ${modalSupervisorReport.remarks || 'Site inspection completed'}`;
       workType = 'Site Pouring & Quality Inspection';
     } else if (roleCat === 'Accountant') {
-      workDescription = `Invoices: ${modalAccountantReport.invoicesCount} (₹${modalAccountantReport.billedAmount.toLocaleString('en-IN')}) | Collections: ₹${modalAccountantReport.collectionsAmount.toLocaleString('en-IN')} | Vendor Challans: ${modalAccountantReport.vendorChallansCount} | Books Tallied: ${modalAccountantReport.booksTallied ? 'Yes' : 'No'} | Remarks: ${modalAccountantReport.remarks}`;
+      if (!modalAccountantReport.invoicesCount && !modalAccountantReport.billedAmount && !modalAccountantReport.remarks?.trim()) {
+        setToastMessage('⚠️ Please enter billing invoices count or daily financial notes.');
+        return;
+      }
+      workDescription = `Invoices: ${modalAccountantReport.invoicesCount || 0} (₹${Number(modalAccountantReport.billedAmount || 0).toLocaleString('en-IN')}) | Collections: ₹${Number(modalAccountantReport.collectionsAmount || 0).toLocaleString('en-IN')} | Vendor Challans: ${modalAccountantReport.vendorChallansCount || 0} | Books Tallied: ${modalAccountantReport.booksTallied ? 'Yes' : 'No'} | Remarks: ${modalAccountantReport.remarks || 'Daily accounts reconciled'}`;
       workType = 'Daily Invoicing & Accounts Reconciliation';
     } else if (roleCat === 'Plant Incharge') {
-      workDescription = `Production: ${modalInchargeReport.productionM3} m³ | Silos: ${modalInchargeReport.siloStatus} | Uptime: ${modalInchargeReport.uptimeHours}h | Safety Audit: ${modalInchargeReport.safetyAuditDone ? 'Passed' : 'Pending'} | Remarks: ${modalInchargeReport.remarks}`;
+      if (!modalInchargeReport.productionM3 && !modalInchargeReport.siloStatus?.trim() && !modalInchargeReport.remarks?.trim()) {
+        setToastMessage('⚠️ Please enter plant production volume, silo status, or operations notes.');
+        return;
+      }
+      workDescription = `Production: ${modalInchargeReport.productionM3 || 0} m³ | Silos: ${modalInchargeReport.siloStatus || 'Checked'} | Uptime: ${modalInchargeReport.uptimeHours || 0}h | Safety Audit: ${modalInchargeReport.safetyAuditDone ? 'Passed' : 'Pending'} | Remarks: ${modalInchargeReport.remarks || 'Daily plant operations completed'}`;
       workType = 'Plant Operations & Batching Log';
     } else if (roleCat === 'Operator') {
-      workDescription = `Batches: ${modalOperatorReport.batchesCount} | Scale Zero Check: ${modalOperatorReport.scaleCheckPass ? 'Pass' : 'Fail'} | Admixture: ${modalOperatorReport.admixtureVerified ? 'Yes' : 'No'} | SCADA Backup: ${modalOperatorReport.backupCompleted ? 'Yes' : 'No'} | Remarks: ${modalOperatorReport.remarks}`;
+      if (!modalOperatorReport.batchesCount && !modalOperatorReport.remarks?.trim()) {
+        setToastMessage('⚠️ Please enter batches mixed count or batching notes.');
+        return;
+      }
+      workDescription = `Batches: ${modalOperatorReport.batchesCount || 0} | Scale Zero Check: ${modalOperatorReport.scaleCheckPass ? 'Pass' : 'Fail'} | Admixture: ${modalOperatorReport.admixtureVerified ? 'Yes' : 'No'} | SCADA Backup: ${modalOperatorReport.backupCompleted ? 'Yes' : 'No'} | Remarks: ${modalOperatorReport.remarks || 'Batching console operation completed'}`;
       workType = 'Batching Automation & Calibration Log';
     } else {
-      workDescription = modalGeneralReport.workDescription || `Daily operational duties performed for ${reportTargetStaff.name}.`;
+      if (!modalGeneralReport.workDescription?.trim()) {
+        setToastMessage('⚠️ Please enter daily work report details before saving.');
+        return;
+      }
+      workDescription = modalGeneralReport.workDescription.trim();
       workType = `${roleCat} Operations Log`;
     }
 
@@ -616,11 +685,16 @@ export default function AttendanceManagementView({
         }
       }
 
-      // Daily Work Report status
+      // Daily Work Report status: Strictly check if a real daily work report has been submitted
       const staffReport = (dailyWork || []).find(
-        (w) => (w.employeeId === emp.employeeId || w.employeeId === emp.id) && w.date === selectedDate
+        (w) => (
+          (w.employeeId && (
+            w.employeeId.toString().trim().toUpperCase() === (emp.employeeId || '').toString().trim().toUpperCase() ||
+            w.employeeId.toString().trim().toUpperCase() === (emp.id || '').toString().trim().toUpperCase()
+          ))
+        ) && w.date === selectedDate
       );
-      const isReportDone = Boolean(staffReport || record?.workReport || (record?.remarks && !record.remarks.includes('Admin manual')));
+      const isReportDone = Boolean(staffReport && staffReport.workDescription && staffReport.workDescription.trim().length > 0);
 
       // 1. Punctuality: Is employee on time or not? (Shift starts 09:00 AM, 15m grace)
       let punctualityLabel = 'Not Clocked';
@@ -659,8 +733,8 @@ export default function AttendanceManagementView({
         dutyComplianceBadge = 'cyan';
       }
 
-      // 3. Today's Work Report: Display real submitted work report
-      const todayWorkSummary = staffReport?.workDescription || staffReport?.remarks || record?.workReport || (record?.remarks && !record.remarks.includes('Admin manual') ? record.remarks : '') || '';
+      // 3. Today's Work Report: Only real submitted daily work report
+      const todayWorkSummary = (staffReport && staffReport.workDescription) ? staffReport.workDescription : '';
 
       return {
         ...emp,
@@ -1185,8 +1259,8 @@ export default function AttendanceManagementView({
                       'Staff': 'bg-blue-50 text-blue-800 border-blue-200/90',
                     }[roleCat] || 'bg-slate-100 text-slate-700 border-slate-200';
 
-                    const hasReport = staff.isReportDone || Boolean(staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary);
-                    const reportSnippet = staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary;
+                    const hasReport = Boolean(staff.isReportDone && staff.todayReport?.workDescription);
+                    const reportSnippet = staff.todayReport?.workDescription || '';
 
                     return (
                       <tr
@@ -1359,8 +1433,8 @@ export default function AttendanceManagementView({
                 const roleCat = getRoleCategory(staff.role);
                 const isClockedIn = Boolean(staff.punchIn);
                 const hours = staff.workingHours || (staff.isOnline ? 4.5 : 0);
-                const hasReport = staff.isReportDone || Boolean(staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary);
-                const reportSnippet = staff.todayReport?.workDescription || staff.todayReport?.remarks || staff.todayWorkSummary;
+                const hasReport = Boolean(staff.isReportDone && (staff.todayReport?.workDescription || staff.todayWorkSummary));
+                const reportSnippet = staff.todayReport?.workDescription || staff.todayWorkSummary || '';
 
                 return (
                   <div
@@ -2450,8 +2524,8 @@ export default function AttendanceManagementView({
                 </span>
               </div>
 
-              {/* View Mode: If already submitted and not currently editing */}
-              {isDone && (report || reportTargetStaff.todayWorkSummary) && !isEditingExistingReport ? (
+              {/* View Mode: If a real report was already submitted and not currently editing */}
+              {isDone && report?.workDescription && !isEditingExistingReport ? (
                 <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-900">{report?.workType || `${roleCat} Daily Shift Log`}</span>
@@ -2460,7 +2534,7 @@ export default function AttendanceManagementView({
                     </span>
                   </div>
                   <div className="p-3 bg-white rounded-xl border border-slate-200 text-slate-800 text-xs leading-relaxed font-sans font-medium whitespace-pre-wrap">
-                    {report?.workDescription || reportTargetStaff.todayWorkSummary}
+                    {report.workDescription}
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1 border-t border-slate-200/60">
                     <span>Date: {report?.date || selectedDate}</span>
@@ -2513,6 +2587,7 @@ export default function AttendanceManagementView({
                           type="text"
                           value={modalDriverReport.vehicleNo}
                           onChange={(e) => setModalDriverReport({ ...modalDriverReport, vehicleNo: e.target.value })}
+                          placeholder="e.g. MH-10-CR-1212"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2522,7 +2597,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalDriverReport.tripsCount}
-                          onChange={(e) => setModalDriverReport({ ...modalDriverReport, tripsCount: Number(e.target.value) })}
+                          onChange={(e) => setModalDriverReport({ ...modalDriverReport, tripsCount: e.target.value })}
+                          placeholder="e.g. 4"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2533,7 +2609,8 @@ export default function AttendanceManagementView({
                           type="number"
                           step="0.5"
                           value={modalDriverReport.deliveredM3}
-                          onChange={(e) => setModalDriverReport({ ...modalDriverReport, deliveredM3: Number(e.target.value) })}
+                          onChange={(e) => setModalDriverReport({ ...modalDriverReport, deliveredM3: e.target.value })}
+                          placeholder="e.g. 24.0"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2543,7 +2620,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalDriverReport.odometerKm}
-                          onChange={(e) => setModalDriverReport({ ...modalDriverReport, odometerKm: Number(e.target.value) })}
+                          onChange={(e) => setModalDriverReport({ ...modalDriverReport, odometerKm: e.target.value })}
+                          placeholder="e.g. 95"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2581,6 +2659,7 @@ export default function AttendanceManagementView({
                           type="text"
                           value={modalSupervisorReport.siteName}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, siteName: e.target.value })}
+                          placeholder="e.g. Highway Bridge Pier #3"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2591,6 +2670,7 @@ export default function AttendanceManagementView({
                           type="text"
                           value={modalSupervisorReport.gradePoured}
                           onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, gradePoured: e.target.value })}
+                          placeholder="e.g. M30 Pumpable"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2600,7 +2680,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalSupervisorReport.volumePoured}
-                          onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, volumePoured: Number(e.target.value) })}
+                          onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, volumePoured: e.target.value })}
+                          placeholder="e.g. 45"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2610,7 +2691,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalSupervisorReport.slumpMm}
-                          onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, slumpMm: Number(e.target.value) })}
+                          onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, slumpMm: e.target.value })}
+                          placeholder="e.g. 130"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2620,7 +2702,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalSupervisorReport.cubesCast}
-                          onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, cubesCast: Number(e.target.value) })}
+                          onChange={(e) => setModalSupervisorReport({ ...modalSupervisorReport, cubesCast: e.target.value })}
+                          placeholder="e.g. 6"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2645,7 +2728,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalAccountantReport.invoicesCount}
-                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, invoicesCount: Number(e.target.value) })}
+                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, invoicesCount: e.target.value })}
+                          placeholder="e.g. 18"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2655,7 +2739,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalAccountantReport.billedAmount}
-                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, billedAmount: Number(e.target.value) })}
+                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, billedAmount: e.target.value })}
+                          placeholder="e.g. 450000"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2665,7 +2750,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalAccountantReport.collectionsAmount}
-                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, collectionsAmount: Number(e.target.value) })}
+                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, collectionsAmount: e.target.value })}
+                          placeholder="e.g. 320000"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2675,7 +2761,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalAccountantReport.vendorChallansCount}
-                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, vendorChallansCount: Number(e.target.value) })}
+                          onChange={(e) => setModalAccountantReport({ ...modalAccountantReport, vendorChallansCount: e.target.value })}
+                          placeholder="e.g. 6"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2712,7 +2799,8 @@ export default function AttendanceManagementView({
                         <input
                           type="number"
                           value={modalInchargeReport.productionM3}
-                          onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, productionM3: Number(e.target.value) })}
+                          onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, productionM3: e.target.value })}
+                          placeholder="e.g. 240"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2723,7 +2811,8 @@ export default function AttendanceManagementView({
                           type="number"
                           step="0.5"
                           value={modalInchargeReport.uptimeHours}
-                          onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, uptimeHours: Number(e.target.value) })}
+                          onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, uptimeHours: e.target.value })}
+                          placeholder="e.g. 8.5"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
@@ -2734,6 +2823,7 @@ export default function AttendanceManagementView({
                           type="text"
                           value={modalInchargeReport.siloStatus}
                           onChange={(e) => setModalInchargeReport({ ...modalInchargeReport, siloStatus: e.target.value })}
+                          placeholder="e.g. Silo stocks normal, cement 85T"
                           className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:bg-white focus:border-blue-500"
                           required
                         />
