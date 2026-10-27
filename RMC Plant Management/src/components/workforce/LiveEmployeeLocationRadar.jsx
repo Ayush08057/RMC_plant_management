@@ -1123,7 +1123,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                     <span className={`w-2 h-2 rounded-full ${
                       emp.isDriver ? 'bg-cyan-400' : isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'
                     }`} />
-                    <span className="truncate max-w-[120px]">{emp.name}</span>
+                    <span className="whitespace-nowrap font-medium">{emp.name}</span>
                     {emp.geofenceStatus && emp.geofenceStatus.includes('Market Yard') && (
                       <span className="text-[9px] font-mono font-bold px-1 rounded bg-amber-200 text-amber-950">
                         Market Yard

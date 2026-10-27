@@ -512,129 +512,109 @@ export default function LiveInteractiveMap({
     <div className="w-full space-y-2">
       {/* Individual Staff Tracking Selector Bar */}
       {telemetryList && telemetryList.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
-            <User className="w-3.5 h-3.5 text-blue-600" />
-            <span>Dedicated Map:</span>
-          </span>
-          {telemetryList.filter(t => !isAdminPerson(t)).map((emp) => {
-            const isSelected = validTarget?.id === emp.id;
-            const isOnline = emp.status === 'Punched In';
-            return (
-              <button
-                key={emp.id}
-                type="button"
-                onClick={() => onSelectTarget && onSelectTarget(emp)}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer shrink-0 shadow-2xs ${
-                  isSelected
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400'
-                    : isOnline
-                      ? 'bg-white hover:bg-emerald-50 text-slate-800 border border-emerald-300'
-                      : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
-                }`}
-                title={`Switch to isolated map for ${emp.name} (${emp.role})`}
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${
-                  isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
-                }`} />
-                <span>{emp.name}</span>
-                <span className={`text-[10px] font-mono px-1 rounded ${
-                  isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  {emp.employeeId || emp.id}
-                </span>
-              </button>
-            );
-          })}
+        <div className="bg-white border border-slate-200/90 p-2 rounded-2xl shadow-2xs">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5 px-1">
+              <User className="w-3.5 h-3.5 text-blue-600" />
+              <span>Dedicated Map:</span>
+            </span>
+            {telemetryList.filter(t => !isAdminPerson(t)).map((emp) => {
+              const isSelected = validTarget?.id === emp.id;
+              const isOnline = emp.status === 'Punched In';
+              return (
+                <button
+                  key={emp.id}
+                  type="button"
+                  onClick={() => onSelectTarget && onSelectTarget(emp)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer shrink-0 shadow-2xs ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400'
+                      : isOnline
+                        ? 'bg-white hover:bg-emerald-50 text-slate-800 border border-emerald-300'
+                        : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+                  }`}
+                  title={`Switch to isolated map for ${emp.name} (${emp.role})`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${
+                    isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
+                  }`} />
+                  <span>{emp.name}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                    isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {emp.employeeId || emp.id}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Top Telemetry Header Bar - High Visibility Kilometer & Odometer HUD */}
-      <div className="bg-slate-900 border border-slate-800 text-white p-2.5 sm:p-3 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 text-white shadow-sm">
-            {validTarget ? (validTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-white font-bold truncate text-sm">
-                {validTarget?.name || 'SM Concrete Fleet'}
-              </span>
-              <span className="text-xs text-slate-300 font-semibold truncate">
-                • {validTarget?.role || 'Staff'}
-              </span>
-              {validTarget?.isDriver && validTarget?.activeTrip?.vehicleNo && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-700 shrink-0">
-                  🚛 {validTarget.activeTrip.vehicleNo}
-                </span>
-              )}
-            </div>
+      {/* Top Telemetry Header Bar - High Visibility Command Center HUD */}
+      <div className="bg-slate-900 border border-slate-800 text-white p-3 sm:p-4 rounded-2xl shadow-xl flex flex-col gap-3">
 
-            {/* Live Station & GPS Location Telemetry Header */}
-            <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2 truncate mt-0.5 flex-wrap">
-              {validTarget && (
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span>📍 Live: {validTarget.geofenceStatus || validTarget.stationName}</span>
-                  <span className="text-cyan-300 font-mono text-[10px]">
-                    ({Number(validTarget.lat).toFixed(4)}°N, {Number(validTarget.lng).toFixed(4)}°E)
+        {/* Row 1: Profile & Target Info + Action Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 border-2 border-emerald-400 flex items-center justify-center font-black text-sm shrink-0 text-white shadow-md shadow-blue-900/40">
+              {validTarget ? (validTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                {validTarget?.name && validTarget?.role && validTarget.name.toLowerCase() !== validTarget.role.toLowerCase() ? (
+                  <>
+                    <span className="text-white font-black text-sm sm:text-base tracking-tight">
+                      {validTarget.name}
+                    </span>
+                    <span className="text-xs text-slate-300 font-semibold">
+                      • {validTarget.role}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-white font-black text-sm sm:text-base tracking-tight">
+                    {validTarget?.name || validTarget?.role || 'Operational Staff'}
                   </span>
+                )}
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-950 text-sky-300 border border-blue-800/80 shrink-0">
+                  {validTarget?.employeeId || validTarget?.id}
                 </span>
-              )}
-              {validTarget?.punchIn && (
-                <span className="text-slate-300 font-semibold flex items-center gap-1">
-                  <span>• In: {validTarget.punchIn}</span>
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+                {validTarget?.isDriver && validTarget?.activeTrip?.vehicleNo && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-700 shrink-0">
+                    🚛 {validTarget.activeTrip.vehicleNo}
+                  </span>
+                )}
+              </div>
 
-        {/* High-Visibility Kilometer & Odometer Metrics */}
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
-          <div className="bg-blue-600 text-white px-3 py-1.5 rounded-xl border border-blue-400/60 shadow-sm flex items-center gap-2">
-            <Route className="w-4 h-4 text-amber-300 shrink-0" />
-            <div className="text-left">
-              <div className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Total Run Today</div>
-              <div className="text-base sm:text-lg font-black font-mono text-white leading-tight">
-                {totalKm} KM
+              {/* Live Station & GPS Location Telemetry Header */}
+              <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2 truncate mt-0.5 flex-wrap">
+                {validTarget && (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <span>📍 Live: {validTarget.geofenceStatus || validTarget.stationName}</span>
+                    <span className="text-cyan-300 font-mono text-[10px]">
+                      ({Number(validTarget.lat).toFixed(4)}°N, {Number(validTarget.lng).toFixed(4)}°E)
+                    </span>
+                  </span>
+                )}
+                {validTarget?.punchIn && (
+                  <span className="text-slate-400 font-medium flex items-center gap-1">
+                    <span>• Clocked In: {validTarget.punchIn}</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700 shadow-sm flex items-center gap-2">
-            <div className="text-left">
-              <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Odometer Reading</div>
-              <div className="text-xs font-mono font-bold text-white leading-tight">
-                {startOdometer.toLocaleString()} ➔ <span className="text-amber-300 font-black">{currentOdometer.toLocaleString()} KM</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Controls in Header */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setInputApiKey(leafletApiKey);
-                setShowKeyModal(true);
-              }}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
-              title="Configure Leaflet API Key & Clean Tile Layers"
-            >
-              <Key className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">
-                {tileProvider === 'carto' && leafletApiKey ? 'API Key Active' : 'Map Layers & Key'}
-              </span>
-            </button>
-
+          {/* Action Buttons - Spacious, cleanly styled & never clipped */}
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
             <button
               type="button"
               onClick={handleFitRoute}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 flex items-center gap-1 shadow-2xs cursor-pointer transition-all"
-              title="Fit Entire Travelled Route on Screen"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/40 flex items-center gap-1.5 shadow-md shadow-blue-900/30 cursor-pointer active:scale-95 transition-all"
+              title="Fit Entire Traveled Route on Screen"
             >
-              <Crosshair className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden sm:inline">Fit Route</span>
+              <Crosshair className="w-3.5 h-3.5 text-white" />
+              <span>Fit Route</span>
             </button>
 
             {activeRouteDetails?.googleMapsFullRouteUrl && (
@@ -642,13 +622,75 @@ export default function LiveInteractiveMap({
                 href={activeRouteDetails.googleMapsFullRouteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-2xs cursor-pointer flex items-center gap-1 text-xs font-semibold transition-all"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 shadow-sm cursor-pointer flex items-center gap-1.5 text-xs font-bold active:scale-95 transition-all"
                 title="Open Full Visited Route in Google Maps"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Google Maps</span>
+                <span>Google Maps</span>
               </a>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setInputApiKey(leafletApiKey);
+                setShowKeyModal(true);
+              }}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
+              title="Configure Map Tiles & Satellite Layers"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">Layers</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Metrics Strip - Context-Aware (Odometer ONLY for Drivers!) */}
+        <div className="pt-2.5 border-t border-slate-800/80 flex items-center gap-2 flex-wrap text-xs">
+          {/* Total Run Today */}
+          <div className="bg-gradient-to-r from-blue-900/70 to-blue-950/70 text-white px-3 py-1.5 rounded-xl border border-blue-700/50 shadow-xs flex items-center gap-2">
+            <Route className="w-4 h-4 text-amber-400 shrink-0" />
+            <div className="text-left">
+              <div className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Total Run Today</div>
+              <div className="text-sm sm:text-base font-black font-mono text-white leading-tight">
+                {totalKm} KM
+              </div>
+            </div>
+          </div>
+
+          {/* Odometer Reading: EXCLUSIVELY FOR DRIVERS */}
+          {validTarget?.isDriver ? (
+            <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
+              <Truck className="w-4 h-4 text-cyan-400 shrink-0" />
+              <div className="text-left">
+                <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Vehicle Odometer</div>
+                <div className="text-xs font-mono font-bold text-white leading-tight">
+                  {startOdometer.toLocaleString()} ➔ <span className="text-amber-300 font-black">{currentOdometer.toLocaleString()} KM</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Field Locations Visited for Non-Drivers (Site Supervisor, Dispatcher, Manager, QC, etc.) */
+            <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="text-left">
+                <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Field Locations</div>
+                <div className="text-xs font-mono font-bold text-white leading-tight">
+                  {stops.length > 1 ? `${stops.length} Stops Logged` : 'Active Field Base'}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Duty Status Badge */}
+          <div className="bg-slate-800/60 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700/60 shadow-xs flex items-center gap-2 font-mono text-[11px]">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Shift Status: <strong className="text-white">{validTarget?.status || 'Active On Duty'}</strong></span>
+          </div>
+
+          {/* GNSS Accuracy */}
+          <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono text-slate-400 ml-auto">
+            <span>GNSS Precision: ±{validTarget?.accuracy || 15}m</span>
           </div>
         </div>
       </div>
