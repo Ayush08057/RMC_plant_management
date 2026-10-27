@@ -28,21 +28,9 @@ const CHALLAN_STORAGE_KEY = 'rmc_delivery_challans_v2';
 const TRIPS_STORAGE_KEY = 'rmc_driver_trips_v2';
 const BILLING_STORAGE_KEY = 'rmc_billing_records_v3';
 
-const DEFAULT_FLEET = [
-  { id: 'VEH-001', vehicleNo: 'MH-10-CR-1212', defaultDriver: 'Sachin Shinde', capacity: 6.0, status: 'Ready', type: 'Transit Mixer (TM)' },
-  { id: 'VEH-002', vehicleNo: 'MH-10-CR-1313', defaultDriver: 'Vikas Jadhav', capacity: 6.0, status: 'Ready', type: 'Transit Mixer (TM)' },
-  { id: 'VEH-003', vehicleNo: 'MH-10-CR-1414', defaultDriver: 'Sunil Kadam', capacity: 6.0, status: 'Ready', type: 'Transit Mixer (TM)' },
-  { id: 'VEH-004', vehicleNo: 'MH-12-RN-4401', defaultDriver: 'Ramesh Pawar', capacity: 7.0, status: 'Ready', type: 'Transit Mixer (TM)' },
-  { id: 'VEH-005', vehicleNo: 'MH-12-RN-8822', defaultDriver: 'Sanjay Yadav', capacity: 8.0, status: 'Ready', type: 'Transit Mixer (TM)' },
-];
+const DEFAULT_FLEET = [];
 
-const DEFAULT_CUSTOMERS = [
-  { name: 'Shree Construction & Infra', site: 'Tanang Highway Pier Zone #4' },
-  { name: 'Kulkarni Builders & Developers', site: 'Sangli Bypass Bridge Slab #2' },
-  { name: 'Sai Samarth Infrastructure', site: 'Kupwad MIDC Phase 2' },
-  { name: 'Patil Developers & Contracts', site: 'Miraj Ring Road Junction' },
-  { name: 'Cash Customer', site: 'Plant Counter Delivery' },
-];
+const DEFAULT_CUSTOMERS = [];
 
 const CONCRETE_GRADES = ['M15', 'M20', 'M25', 'M30', 'M35', 'M40'];
 const VOLUME_PRESETS = [3.0, 4.5, 6.0, 7.0, 8.0];
@@ -61,10 +49,10 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
       const raw = localStorage.getItem(VEHICLE_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return DEFAULT_FLEET;
+    return [];
   });
 
   // Add New Vehicle Modal States
@@ -80,17 +68,14 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
       const raw = localStorage.getItem(VEHICLE_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setVehicles(parsed);
         }
-      } else {
-        localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(DEFAULT_FLEET));
-        pushCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, DEFAULT_FLEET);
       }
     } catch {}
 
     const unsub = subscribeCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, [], (items) => {
-      if (Array.isArray(items) && items.length > 0) {
+      if (Array.isArray(items)) {
         setVehicles(items);
       }
     });

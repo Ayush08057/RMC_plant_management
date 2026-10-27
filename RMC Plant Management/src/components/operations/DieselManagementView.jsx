@@ -18,7 +18,8 @@ import {
   Gauge,
   X,
   Check,
-  Building2
+  Building2,
+  Trash2
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { calculateDieselMileage, calculateEquipmentHourlyConsumption } from '../../services/plantOperationsService';
@@ -232,6 +233,36 @@ export default function DieselManagementView() {
     setInwardLogs([inwardEntry, ...inwardLogs]);
     setCurrentTankStock(newStock);
     setIsInwardModalOpen(false);
+  };
+
+  const handleDeleteLog = (id) => {
+    if (window.confirm(`Delete diesel issue record ${id}?`)) {
+      const target = logs.find(l => l.id === id);
+      const updated = logs.filter(l => l.id !== id);
+      setLogs(updated);
+      if (target && target.liters) {
+        setCurrentTankStock(prev => Math.min(tankCapacity, prev + Number(target.liters)));
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        pushCloudStore('cloud_diesel_management', STORAGE_KEY, updated);
+      } catch {}
+    }
+  };
+
+  const handleDeleteInwardLog = (id) => {
+    if (window.confirm(`Delete diesel inward record ${id}?`)) {
+      const target = inwardLogs.find(l => l.id === id);
+      const updated = inwardLogs.filter(l => l.id !== id);
+      setInwardLogs(updated);
+      if (target && target.litersReceived) {
+        setCurrentTankStock(prev => Math.max(0, prev - Number(target.litersReceived)));
+      }
+      try {
+        localStorage.setItem(INWARD_STORAGE_KEY, JSON.stringify(updated));
+        pushCloudStore('cloud_diesel_inward', INWARD_STORAGE_KEY, updated);
+      } catch {}
+    }
   };
 
   const filteredLogs = logs.filter(item => {
@@ -478,13 +509,14 @@ export default function DieselManagementView() {
                   <th className="py-3 px-4 text-right text-white border-r border-white/20">Rate / Total (₹)</th>
                   <th className="py-3 px-4 text-center text-white border-r border-white/20">Odo / Hours Run</th>
                   <th className="py-3 px-4 text-center text-white border-r border-white/20">Mileage / Economy</th>
-                  <th className="py-3 px-4 text-white">Operator & Issued By</th>
+                  <th className="py-3 px-4 text-white border-r border-white/20">Operator & Issued By</th>
+                  <th className="py-3 px-3 text-center text-white">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-8 text-gray-500">
+                    <td colSpan="8" className="text-center py-8 text-gray-500">
                       No diesel records found matching your query. Click "Issue / Dispense Fuel" to record an entry.
                     </td>
                   </tr>
@@ -541,6 +573,16 @@ export default function DieselManagementView() {
                         <p className="font-semibold text-gray-800">{log.operator}</p>
                         <p className="text-gray-500">By: {log.dispensedBy}</p>
                       </td>
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLog(log.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Delete Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -571,13 +613,14 @@ export default function DieselManagementView() {
                   <th className="py-3 px-4 text-right text-white border-r border-white/20">Litres Received</th>
                   <th className="py-3 px-4 text-right text-white border-r border-white/20">Rate / Total (₹)</th>
                   <th className="py-3 px-4 text-center text-white border-r border-white/20">Tank Level After</th>
-                  <th className="py-3 px-4 text-white">Received By & Remarks</th>
+                  <th className="py-3 px-4 text-white border-r border-white/20">Received By & Remarks</th>
+                  <th className="py-3 px-3 text-center text-white">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredInward.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-8 text-gray-500">
+                    <td colSpan="8" className="text-center py-8 text-gray-500">
                       No bulk tanker inward entries recorded yet. Click "Receive Diesel Tanker" to record a delivery.
                     </td>
                   </tr>
@@ -610,6 +653,16 @@ export default function DieselManagementView() {
                       <td className="py-3 px-4 text-xs">
                         <p className="font-semibold text-gray-800">{item.receivedBy}</p>
                         <p className="text-gray-500 truncate max-w-xs">{item.remarks || '--'}</p>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteInwardLog(item.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Delete Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))

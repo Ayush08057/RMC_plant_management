@@ -16,7 +16,8 @@ import {
   RefreshCw,
   Gauge,
   Camera,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useWorkforce } from '../../context/WorkforceContext';
@@ -210,6 +211,17 @@ export default function DriverTripsView() {
       remarks: '',
       sitePhoto: null
     });
+  };
+
+  const handleDeleteTrip = (tripId) => {
+    if (window.confirm(`Delete trip record ${tripId}?`)) {
+      const updated = trips.filter(t => t.id !== tripId);
+      setTrips(updated);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        pushCloudStore('cloud_driver_trips', STORAGE_KEY, updated);
+      } catch {}
+    }
   };
 
   const filteredTrips = trips.filter(t => {
@@ -454,8 +466,8 @@ export default function DriverTripsView() {
                   )}
                 </div>
 
-                {/* 5. Action / Turnaround */}
-                <div className="shrink-0">
+                {/* 5. Action / Turnaround & Delete */}
+                <div className="flex items-center gap-1.5 shrink-0">
                   {nextAction ? (
                     <button
                       onClick={() => advanceTripStage(trip.id)}
@@ -469,6 +481,14 @@ export default function DriverTripsView() {
                       {trip.turnaroundMins || 120}m turnaround
                     </span>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTrip(trip.id)}
+                    className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    title="Delete Trip"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
             );

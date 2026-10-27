@@ -59,7 +59,12 @@ export function isDummyStoreItem(item) {
     str.includes('aayush') ||
     str.includes('pranav') ||
     str.includes('adm-001') ||
-    str.includes('acc-001')
+    str.includes('acc-001') ||
+    str.includes('mh-10-cr-1212') ||
+    str.includes('mh-10-cr-1313') ||
+    str.includes('mh-10-cr-1414') ||
+    str.includes('mh-12-rn-4401') ||
+    str.includes('mh-12-rn-8822')
   );
 }
 

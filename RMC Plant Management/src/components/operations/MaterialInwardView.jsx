@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Database,
   ArrowDownToLine,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useLanguage } from '../../context/LanguageContext';
@@ -300,6 +301,68 @@ export default function MaterialInwardView() {
     showToast(`✓ Received ${fullBarrels} barrels (${totalVolumeLiters} Litres) of ${chemicalForm.chemicalName}!`);
   };
 
+  const handleDeleteInward = (id) => {
+    if (window.confirm('Delete this material inward slip?')) {
+      const target = records.find(r => r.id === id);
+      const updated = records.filter(r => r.id !== id);
+      setRecords(updated);
+      try {
+        localStorage.setItem(INWARD_STORAGE_KEY, JSON.stringify(updated));
+        pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updated);
+      } catch {}
+      if (target && target.material && (target.netTons || target.quantity)) {
+        const netQty = Number(target.netTons || target.quantity || 0);
+        const matConfig = COMMON_RAW_MATERIALS.find(m => m.name === target.material);
+        if (matConfig && matConfig.key && siloInventory[matConfig.key]) {
+          const updatedSilo = {
+            ...siloInventory,
+            [matConfig.key]: {
+              ...siloInventory[matConfig.key],
+              stockTons: Math.max(0, Number((Number(siloInventory[matConfig.key].stockTons || 0) - netQty).toFixed(2)))
+            }
+          };
+          setSiloInventory(updatedSilo);
+          try {
+            localStorage.setItem(SILO_STORAGE_KEY, JSON.stringify(updatedSilo));
+            pushCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, updatedSilo);
+          } catch {}
+        }
+      }
+      showToast('Material inward record deleted.');
+    }
+  };
+
+  const handleDeleteChemical = (id) => {
+    if (window.confirm('Delete this chemical barrel delivery record?')) {
+      const target = chemicalRecords.find(c => c.id === id);
+      const updated = chemicalRecords.filter(c => c.id !== id);
+      setChemicalRecords(updated);
+      try {
+        localStorage.setItem(CHEMICAL_STORAGE_KEY, JSON.stringify(updated));
+        pushCloudStore('cloud_chemical_barrels', CHEMICAL_STORAGE_KEY, updated);
+      } catch {}
+      if (target && target.chemicalName && target.totalVolumeLiters) {
+        const chemConfig = COMMON_CHEMICAL_PRODUCTS.find(c => c.name === target.chemicalName);
+        const stockKey = chemConfig?.key || 'admixturePce';
+        if (siloInventory[stockKey]) {
+          const updatedSilo = {
+            ...siloInventory,
+            [stockKey]: {
+              ...siloInventory[stockKey],
+              stockLiters: Math.max(0, Number((Number(siloInventory[stockKey].stockLiters || 0) - Number(target.totalVolumeLiters)).toFixed(2)))
+            }
+          };
+          setSiloInventory(updatedSilo);
+          try {
+            localStorage.setItem(SILO_STORAGE_KEY, JSON.stringify(updatedSilo));
+            pushCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, updatedSilo);
+          } catch {}
+        }
+      }
+      showToast('Chemical intake record deleted.');
+    }
+  };
+
   const filteredInward = records.filter(r => 
     (r.material || '').toLowerCase().includes(search.toLowerCase()) ||
     (r.supplier || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -493,13 +556,14 @@ export default function MaterialInwardView() {
                 <th className="py-2.5 px-3 text-right text-white border-r border-white/20">Gross (MT)</th>
                 <th className="py-2.5 px-3 text-right text-white border-r border-white/20">Tare (MT)</th>
                 <th className="py-2.5 px-3 text-right text-white border-r border-white/20">Net Qty</th>
-                <th className="py-2.5 px-3 text-white">Destination Silo</th>
+                <th className="py-2.5 px-3 text-white border-r border-white/20">Destination Silo</th>
+                <th className="py-2.5 px-3 text-center text-white">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
               {filteredInward.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="py-10 text-center text-slate-400 font-sans">
+                  <td colSpan="9" className="py-10 text-center text-slate-400 font-sans">
                     <Scale className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     No raw material inward slips recorded yet. Click "Inward Entry" to register deliveries.
                   </td>
@@ -520,6 +584,16 @@ export default function MaterialInwardView() {
                       {r.netTons || r.quantity || 0} {r.unit || 'MT'}
                     </td>
                     <td className="py-2 px-3 font-sans text-slate-600">{r.targetSilo || r.destination || 'Storage Bin'}</td>
+                    <td className="py-2 px-3 text-center font-sans">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInward(r.id)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Delete Slip"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -555,13 +629,14 @@ export default function MaterialInwardView() {
                   <th className="py-2.5 px-3 text-center text-white border-r border-white/20">Full Barrels</th>
                   <th className="py-2.5 px-3 text-right text-white border-r border-white/20">Total Volume</th>
                   <th className="py-2.5 px-3 text-white border-r border-white/20">Recorded By</th>
-                  <th className="py-2.5 px-3 text-center text-white">Status</th>
+                  <th className="py-2.5 px-3 text-center text-white border-r border-white/20">Status</th>
+                  <th className="py-2.5 px-3 text-center text-white">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono">
                 {filteredChem.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="py-10 text-center text-slate-400 font-sans">
+                    <td colSpan="9" className="py-10 text-center text-slate-400 font-sans">
                       <Droplet className="w-8 h-8 text-purple-300 mx-auto mb-2" />
                       No chemical barrel deliveries registered. Click "Receive Chemical Barrels" above.
                     </td>
@@ -588,6 +663,16 @@ export default function MaterialInwardView() {
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {c.status}
                         </span>
+                      </td>
+                      <td className="py-2 px-3 text-center font-sans">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChemical(c.id)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Delete Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))

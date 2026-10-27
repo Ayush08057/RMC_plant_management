@@ -20,13 +20,7 @@ import HelpModal from './guided/HelpModal';
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
 
-const DEFAULT_FLEET = [
-  { id: 'VEH-001', vehicleNo: 'MH-10-CR-1212', defaultDriver: 'Sachin Shinde', capacity: 6.0, status: 'Available / Plant', type: 'Transit Mixer (TM)', model: 'Tata Signa 2823.TK' },
-  { id: 'VEH-002', vehicleNo: 'MH-10-CR-1313', defaultDriver: 'Vikas Jadhav', capacity: 6.0, status: 'Available / Plant', type: 'Transit Mixer (TM)', model: 'Ashok Leyland 2820' },
-  { id: 'VEH-003', vehicleNo: 'MH-10-CR-1414', defaultDriver: 'Sunil Kadam', capacity: 6.0, status: 'Available / Plant', type: 'Transit Mixer (TM)', model: 'Tata Prima 2830' },
-  { id: 'VEH-004', vehicleNo: 'MH-12-RN-4401', defaultDriver: 'Ramesh Pawar', capacity: 7.0, status: 'Available / Plant', type: 'Transit Mixer (TM)', model: 'Eicher Pro 6028' },
-  { id: 'VEH-005', vehicleNo: 'MH-12-RN-8822', defaultDriver: 'Sanjay Yadav', capacity: 8.0, status: 'Available / Plant', type: 'Transit Mixer (TM)', model: 'BharatBenz 2823C' },
-];
+const DEFAULT_FLEET = [];
 
 export default function VehicleManagementView() {
   const { language, t } = useLanguage();
@@ -37,10 +31,10 @@ export default function VehicleManagementView() {
       const saved = localStorage.getItem(VEHICLE_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return DEFAULT_FLEET;
+    return [];
   });
   const [search, setSearch] = useState('');
 
@@ -59,17 +53,14 @@ export default function VehicleManagementView() {
       const saved = localStorage.getItem(VEHICLE_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setVehicles(parsed);
         }
-      } else {
-        localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(DEFAULT_FLEET));
-        pushCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, DEFAULT_FLEET);
       }
     } catch {}
 
     const unsub = subscribeCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, [], (items) => {
-      if (Array.isArray(items) && items.length > 0) {
+      if (Array.isArray(items)) {
         setVehicles(items);
       }
     });

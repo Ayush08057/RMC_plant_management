@@ -18,7 +18,8 @@ import {
   Layers,
   Thermometer,
   Download,
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react';
 import { MOCK_QC_DATA } from '../../data/mockDashboardData';
 import { useAuth } from '../../context/AuthContext';
@@ -65,6 +66,13 @@ export default function QcDashboardPage() {
     setQcTests([newTest, ...qcTests]);
     setShowTestModal(false);
     setToastMessage(`QC Test logged for Batch ${newTest.batchId} (${newTest.status})`);
+  };
+
+  const handleDeleteTest = (batchId) => {
+    if (window.confirm(`Delete QC test record for Batch ${batchId}?`)) {
+      setQcTests(prev => prev.filter(t => t.batchId !== batchId));
+      setToastMessage(`QC test record for ${batchId} deleted`);
+    }
   };
 
   const columns = [
@@ -116,13 +124,23 @@ export default function QcDashboardPage() {
       header: 'Actions',
       align: 'right',
       render: (row) => (
-        <button
-          type="button"
-          onClick={() => setToastMessage(`Certificate for ${row.batchId} generated`)}
-          className="px-2.5 py-1 rounded text-[11px] bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs font-semibold"
-        >
-          QC Cert
-        </button>
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => setToastMessage(`Certificate for ${row.batchId} generated`)}
+            className="px-2 py-1 rounded text-[11px] bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs font-semibold"
+          >
+            QC Cert
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDeleteTest(row.batchId)}
+            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            title="Delete Test"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       ),
     },
   ];

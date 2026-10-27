@@ -33,20 +33,14 @@ const INITIAL_CHALLANS = [];
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
 
-const FLEET_MIXERS = [
-  { vehicleNo: 'MH-10-CR-1212', driverName: 'Sachin Shinde', capacity: 6.0 },
-  { vehicleNo: 'MH-10-CR-1313', driverName: 'Vikas Jadhav', capacity: 6.0 },
-  { vehicleNo: 'MH-10-CR-1414', driverName: 'Sunil Kadam', capacity: 6.0 },
-  { vehicleNo: 'MH-12-RN-4401', driverName: 'Ramesh Pawar', capacity: 7.0 },
-  { vehicleNo: 'MH-12-RN-8822', driverName: 'Sanjay Yadav', capacity: 8.0 },
-];
+const FLEET_MIXERS = [];
 
 function getFleetVehicles() {
   try {
     const raw = localStorage.getItem(VEHICLE_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed.map(v => ({
           vehicleNo: v.vehicleNo,
           driverName: v.driverName || v.defaultDriver || v.driver || 'Driver',
@@ -55,7 +49,7 @@ function getFleetVehicles() {
       }
     }
   } catch {}
-  return FLEET_MIXERS;
+  return [];
 }
 
 const CONCRETE_GRADES = [
@@ -70,13 +64,7 @@ const CONCRETE_GRADES = [
 const VOLUME_PRESETS = [3.0, 4.5, 6.0, 7.0, 8.0];
 const SLUMP_PRESETS = ['100 ± 25 mm', '125 ± 25 mm', '140 ± 25 mm', '160 ± 25 mm'];
 
-const DEFAULT_CUSTOMERS = [
-  { name: 'Cash Customer', defaultSite: 'Plant Counter Delivery' },
-  { name: 'Shree Construction & Infra', defaultSite: 'Tanang Highway Pier Zone #4' },
-  { name: 'Kulkarni Builders & Developers', defaultSite: 'Sangli Bypass Bridge Slab #2' },
-  { name: 'Sai Samarth Infrastructure', defaultSite: 'Kupwad MIDC Phase 2' },
-  { name: 'Patil Developers & Contracts', defaultSite: 'Miraj Ring Road Junction' },
-];
+const DEFAULT_CUSTOMERS = [];
 
 export default function DeliveryChallansView() {
   const { language, t } = useLanguage();
