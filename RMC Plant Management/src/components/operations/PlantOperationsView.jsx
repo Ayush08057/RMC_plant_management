@@ -24,6 +24,7 @@ import DriverTripsView from './DriverTripsView';
 import DieselManagementView from './DieselManagementView';
 import PlantDashboardView from './PlantDashboardView';
 import PlantReportsView from './PlantReportsView';
+import QcCubeTestingView from './QcCubeTestingView';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../data/mockUsers';
@@ -77,6 +78,16 @@ export const OPERATIONS_MODULES = [
     labelMr: 'काँक्रीट बॅचिंग', 
     icon: ClipboardList, 
     color: 'text-blue-600',
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.QC_ENGINEER]
+  },
+  { 
+    id: 'qc-cubes', 
+    label: 'QC Cube Testing', 
+    shortLabel: 'QC Cubes', 
+    shortLabelMr: 'क्युब टेस्ट', 
+    labelMr: 'क्युब टेस्टिंग व लॅब सर्टिफिकेट', 
+    icon: FlaskConical, 
+    color: 'text-cyan-600',
     roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.QC_ENGINEER]
   },
   { 
@@ -172,6 +183,8 @@ export default function PlantOperationsView({ activeTab = 'plant-dashboard', onS
         return <PlantDashboardView onNavigateTab={onSelectTab} />;
       case 'batching-sheets':
         return <BatchingSheetsView onNavigateTab={onSelectTab} />;
+      case 'qc-cubes':
+        return <QcCubeTestingView onNavigateTab={onSelectTab} />;
       case 'delivery-challans':
         return <DeliveryChallansView onNavigateTab={onSelectTab} />;
       case 'mix-design':

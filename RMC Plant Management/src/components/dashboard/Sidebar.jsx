@@ -75,6 +75,12 @@ const ALL_PLANT_OPERATIONS_ITEMS = [
     roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.QC_ENGINEER] 
   },
   { 
+    id: 'qc-cubes', 
+    label: 'QC Cube Testing', 
+    icon: FlaskConical, 
+    roles: [ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR, ROLES.OWNER_DIRECTOR, ROLES.QC_ENGINEER] 
+  },
+  { 
     id: 'delivery-challans', 
     label: 'Delivery Challans', 
     icon: Truck, 

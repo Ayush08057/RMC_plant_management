@@ -28,10 +28,12 @@ import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
 import EmployeeDocumentsView from '../../components/workforce/EmployeeDocumentsView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
+import QcCubeTestingView from '../../components/operations/QcCubeTestingView';
 
 export default function QcDashboardPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [qcSubTab, setQcSubTab] = useState('cubes'); // 'cubes' or 'slump'
   const [toastMessage, setToastMessage] = useState(null);
   const [showTestModal, setShowTestModal] = useState(false);
   const [showCertModal, setShowCertModal] = useState(false);
@@ -194,7 +196,43 @@ export default function QcDashboardPage() {
       {activeTab === 'documents' && <EmployeeDocumentsView />}
 
       {(!['attendance', 'daily-work', 'leaves', 'documents'].includes(activeTab) || activeTab === 'dashboard') && (
-        <div className="w-full flex-1 flex flex-col space-y-5 pb-6 min-w-0">
+        <div className="w-full flex-1 flex flex-col space-y-4 pb-6 min-w-0">
+          {/* Sub-Navigation Bar for QC */}
+          <div className="bg-white border border-[#D4E4F7] rounded-xl p-1.5 shadow-2xs flex items-center justify-between gap-2 overflow-x-auto">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <button
+                type="button"
+                onClick={() => setQcSubTab('cubes')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  qcSubTab === 'cubes'
+                    ? 'bg-[#1D5FA7] text-white shadow-xs'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>क्युब चाचणी व ऑटो रिमाइंडर्स (Cube Testing & Schedule)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setQcSubTab('slump')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  qcSubTab === 'slump'
+                    ? 'bg-[#1D5FA7] text-white shadow-xs'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <FlaskConical className="w-3.5 h-3.5" />
+                <span>स्लम व ऑन-साईट टेस्ट्स (Daily Slump Tests)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TAB 1: CUBE TESTING & SCHEDULE */}
+          {qcSubTab === 'cubes' && <QcCubeTestingView />}
+
+          {/* TAB 2: DAILY SLUMP & FLOW TESTS */}
+          {qcSubTab === 'slump' && (
+            <div className="space-y-4">
           {/* 4 Primary KPI Cards */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
             <KPICard
@@ -311,7 +349,7 @@ export default function QcDashboardPage() {
                 title="Cube Crushing"
                 desc="Record 7d / 28d compressive"
                 color="emerald"
-                onClick={() => setToastMessage('Opened digital compressive testing machine input.')}
+                onClick={() => setQcSubTab('cubes')}
               />
               <QuickAction
                 icon={Sliders}
@@ -325,7 +363,7 @@ export default function QcDashboardPage() {
                 title="Generate QC Cert"
                 desc="Export customer test sheet"
                 color="blue"
-                onClick={() => setToastMessage('Customer quality conformance certificate compiled.')}
+                onClick={() => setQcSubTab('cubes')}
               />
             </div>
           </section>
@@ -406,6 +444,8 @@ export default function QcDashboardPage() {
           </section>
         </div>
       )}
+    </div>
+  )}
 
       {/* Modals */}
       <Modal

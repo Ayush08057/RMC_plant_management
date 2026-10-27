@@ -138,19 +138,19 @@ export default function LoginForm() {
 
             {/* COMPANY LOGO EMBLEM - CIRCULAR MEDALLION TO MATCH CIRCULAR LOGO */}
             <div className="relative group mb-3">
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-sky-400/50 via-white/80 to-amber-400/60 shadow-xl shadow-slate-950/40 ring-4 ring-sky-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:ring-sky-400/40">
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 flex items-center justify-center">
+              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full p-1 bg-gradient-to-tr from-sky-400/50 via-white to-amber-400/60 shadow-xl shadow-slate-950/40 ring-4 ring-sky-500/25 flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:ring-sky-400/50">
+                <div className="w-full h-full rounded-full overflow-hidden bg-white flex items-center justify-center p-0.5">
                   <img
                     src={defaultLogo}
                     alt="SM ConcreTech Logo"
-                    className="w-full h-full object-cover scale-[1.03]"
+                    className="w-full h-full object-contain"
                     onError={(e) => {
                       e.target.style.display = 'none';
                       e.target.nextSibling.style.display = 'flex';
                     }}
                   />
-                  <div className="w-full h-full rounded-full bg-slate-900 items-center justify-center text-sky-400 hidden">
-                    <Building2 className="w-12 h-12" />
+                  <div className="w-full h-full rounded-full bg-white items-center justify-center text-sky-600 hidden">
+                    <Building2 className="w-14 h-14" />
                   </div>
                 </div>
               </div>
