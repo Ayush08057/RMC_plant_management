@@ -662,27 +662,6 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     }
   }
 
-  // 3b. Provide verified visited locations trail after punch-in for active personnel if only 1 stop exists
-  if (stops.length <= 1) {
-    let roleKey = 'default';
-    if (empRole.includes('driver') || empId.includes('DRV')) roleKey = 'driver';
-    else if (empRole.includes('supervisor') || empId.includes('SS')) roleKey = 'supervisor';
-    else if (empRole.includes('quality') || empRole.includes('qc') || empId.includes('QC')) roleKey = 'qc';
-    else if (isDis) roleKey = 'dispatcher';
-    else if (empRole.includes('account') || empId.includes('ACC')) roleKey = 'accountant';
-    else if (empRole.includes('manager') || empId.includes('PM')) roleKey = 'manager';
-
-    const defaultTrail = DEFAULT_ROUTE_TRAILS[roleKey];
-    if (defaultTrail && defaultTrail.length > 0) {
-      // Use role's visited route trail, preserving employee's actual punch-in time at Stop 1
-      stops = defaultTrail.map((s, idx) => ({
-        ...s,
-        stopNo: idx + 1,
-        time: idx === 0 ? punchInTime : s.time
-      }));
-    }
-  }
-
   // Fallback: If stops is still empty, populate verified station
   if (stops.length === 0) {
     const station = getAssignedEmployeeStation(employee);

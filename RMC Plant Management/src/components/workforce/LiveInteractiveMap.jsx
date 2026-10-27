@@ -21,7 +21,8 @@ import {
   Settings,
   ShieldCheck,
   AlertCircle,
-  X
+  X,
+  User
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { isAdminPerson } from '../../data/mockUsers';
@@ -317,11 +318,11 @@ export default function LiveInteractiveMap({
           className: 'bg-transparent border-0',
           html: `
             <div class="flex flex-col items-center cursor-pointer select-none transition-transform ${isSelected ? 'scale-125 z-40' : 'hover:scale-115'}" title="Stop #${stop.stopNo}: ${stop.title} (${stop.distanceKm} KM)">
-              <div class="w-7 h-7 rounded-full ${isStart ? 'bg-emerald-600' : 'bg-blue-600'} ${isSelected ? 'border-2 border-amber-300 ring-4 ring-amber-400/60 shadow-xl' : 'border-2 border-white shadow-md'} text-white font-black text-xs flex items-center justify-center">
+              <div class="w-7 h-7 rounded-full ${isStart ? 'bg-emerald-600' : 'bg-amber-500'} ${isSelected ? 'border-2 border-blue-600 ring-4 ring-blue-400/60 shadow-xl' : 'border-2 border-white shadow-md'} text-white font-black text-xs flex items-center justify-center">
                 ${isStart ? '1' : String(stop.stopNo)}
               </div>
-              <div class="mt-0.5 px-2 py-0.5 rounded-full ${isStart ? 'bg-emerald-600 text-white' : 'bg-white text-blue-950 font-black border-2 border-blue-600'} text-[10px] font-mono shadow-lg whitespace-nowrap tracking-tight">
-                ${stop.distanceKm} KM
+              <div class="mt-0.5 px-2 py-0.5 rounded-full ${isStart ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-slate-950 font-black border border-white'} text-[10px] font-mono shadow-md whitespace-nowrap tracking-tight">
+                ${isStart ? 'Punch-In' : `+${legKm} KM`}
               </div>
             </div>
           `,
@@ -335,12 +336,12 @@ export default function LiveInteractiveMap({
             onSelectStop(stop);
           })
           .bindPopup(`
-            <div class="p-2 text-xs font-sans min-w-[240px]">
-              <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1 mb-1.5">
-                <span class="font-bold text-slate-900 text-xs">
-                  ${isStart ? '🟢 1. Punch-In Location' : `Stop #${stop.stopNo}: ${stop.title}`}
+            <div class="p-2.5 text-xs font-sans min-w-[250px]">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 mb-2">
+                <span class="font-extrabold text-slate-900 text-xs">
+                  ${isStart ? '🟢 1. Punch-In Location' : `📍 Stop #${stop.stopNo}: ${stop.title}`}
                 </span>
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${isStart ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">${stop.status}</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${isStart ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-900 border border-amber-300'}">${stop.status || 'Visited'}</span>
               </div>
               <div class="space-y-1.5 text-slate-600 text-[11px]">
                 <div class="bg-blue-50 p-2 rounded-lg border border-blue-200 flex items-center justify-between">
@@ -350,12 +351,13 @@ export default function LiveInteractiveMap({
                 ${!isStart ? `
                   <div class="text-[10px] text-slate-500 font-mono flex items-center justify-between px-1">
                     <span>This Leg:</span>
-                    <span class="font-bold text-slate-800">+${legKm} KM from previous stop</span>
+                    <span class="font-bold text-slate-800">+${legKm} KM from previous</span>
                   </div>
                 ` : ''}
-                <div><strong class="text-slate-700">Time:</strong> ${stop.time}</div>
-                <div><strong class="text-slate-700">Category:</strong> ${stop.category}</div>
-                <div><strong class="text-slate-700">Address:</strong> ${stop.address}</div>
+                <div><strong class="text-slate-800">Time:</strong> ${stop.time} ${stop.stayMinutes ? `(${stop.stayMinutes}m stay/halt)` : ''}</div>
+                <div><strong class="text-slate-800">Category:</strong> ${stop.category || 'Site Visit'}</div>
+                <div><strong class="text-slate-800">Address:</strong> ${stop.address}</div>
+                ${stop.notes ? `<div class="italic text-slate-600 mt-1 bg-slate-50 p-1.5 rounded border border-slate-200">"${stop.notes}"</div>` : ''}
               </div>
             </div>
           `)
@@ -481,64 +483,7 @@ export default function LiveInteractiveMap({
       }
     }
 
-    // 3. Draw All Other Live Personnel on the Map (Dispatcher, Plant Manager, Accountant, etc.)
-    const otherPersonnel = (telemetryList || []).filter(
-      (s) => !isAdminPerson(s) && s.id !== validTarget?.id && s.lat && s.lng
-    );
-
-    otherPersonnel.forEach((staff) => {
-      const isOnline = staff.status === 'Punched In';
-      const staffIcon = L.divIcon({
-        className: 'bg-transparent border-0',
-        html: `
-          <div class="flex flex-col items-center cursor-pointer select-none transition-transform hover:scale-115 group" title="${staff.name} (${staff.role}) - ${staff.geofenceStatus}">
-            <div class="relative">
-              <div class="w-8 h-8 rounded-full ${
-                staff.isDriver ? 'bg-cyan-600' : isOnline ? 'bg-emerald-600' : 'bg-slate-700'
-              } border-2 border-white shadow-lg text-white font-bold text-xs flex items-center justify-center">
-                ${staff.isDriver ? '🚛' : '👤'}
-              </div>
-              <span class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ${
-                isOnline ? 'bg-emerald-400 border-2 border-white ring-1 ring-emerald-500 animate-pulse' : 'bg-slate-400 border-2 border-white'
-              }"></span>
-            </div>
-            
-            <div class="mt-0.5 px-2 py-0.5 rounded-full bg-white text-slate-900 font-bold text-[10px] border border-slate-300 shadow-md whitespace-nowrap flex items-center gap-1 group-hover:border-blue-500">
-              <span class="max-w-[100px] truncate">${staff.name}</span>
-            </div>
-          </div>
-        `,
-        iconSize: [120, 52],
-        iconAnchor: [60, 48],
-        popupAnchor: [0, -48],
-      });
-
-      L.marker([Number(staff.lat), Number(staff.lng)], { icon: staffIcon })
-        .bindPopup(`
-          <div class="p-2.5 text-xs font-sans min-w-[220px]">
-            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 mb-2">
-              <span class="font-bold text-slate-900 text-xs">${staff.name}</span>
-              <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                isOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-              }">${staff.status}</span>
-            </div>
-            <div class="space-y-1 text-[11px] text-slate-600">
-              <div><strong class="text-slate-800">ID / Role:</strong> ${staff.employeeId || staff.id} • ${staff.role}</div>
-              <div><strong class="text-slate-800">Location:</strong> ${staff.geofenceStatus || 'Plant Zone'}</div>
-              <div><strong class="text-slate-800">GPS:</strong> ${Number(staff.lat).toFixed(4)}°N, ${Number(staff.lng).toFixed(4)}°E</div>
-              ${staff.punchIn ? `<div><strong class="text-slate-800">Clocked In:</strong> ${staff.punchIn}</div>` : ''}
-            </div>
-            <div class="mt-2 pt-1.5 border-t border-slate-200 text-right">
-              <span class="text-[10px] font-bold text-blue-600 hover:underline">Click pin to focus</span>
-            </div>
-          </div>
-        `)
-        .on('click', () => {
-          if (onSelectTarget) onSelectTarget(staff);
-        })
-        .addTo(markersGroup);
-    });
-  }, [mapReady, validTarget?.id, validTarget?.lat, validTarget?.lng, stops, selectedStop?.stopNo, mapRouteMode, telemetryList]);
+  }, [mapReady, validTarget?.id, validTarget?.lat, validTarget?.lng, stops, selectedStop?.stopNo, mapRouteMode]);
 
   const startOdometer = validTarget?.activeTrip?.startOdometer || 14250.0;
   const currentOdometer = Number((startOdometer + totalKm).toFixed(1));
@@ -565,6 +510,45 @@ export default function LiveInteractiveMap({
 
   return (
     <div className="w-full space-y-2">
+      {/* Individual Staff Tracking Selector Bar */}
+      {telemetryList && telemetryList.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+            <User className="w-3.5 h-3.5 text-blue-600" />
+            <span>Dedicated Map:</span>
+          </span>
+          {telemetryList.filter(t => !isAdminPerson(t)).map((emp) => {
+            const isSelected = validTarget?.id === emp.id;
+            const isOnline = emp.status === 'Punched In';
+            return (
+              <button
+                key={emp.id}
+                type="button"
+                onClick={() => onSelectTarget && onSelectTarget(emp)}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer shrink-0 shadow-2xs ${
+                  isSelected
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400'
+                    : isOnline
+                      ? 'bg-white hover:bg-emerald-50 text-slate-800 border border-emerald-300'
+                      : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+                }`}
+                title={`Switch to isolated map for ${emp.name} (${emp.role})`}
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                  isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
+                }`} />
+                <span>{emp.name}</span>
+                <span className={`text-[10px] font-mono px-1 rounded ${
+                  isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {emp.employeeId || emp.id}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Top Telemetry Header Bar - High Visibility Kilometer & Odometer HUD */}
       <div className="bg-slate-900 border border-slate-800 text-white p-2.5 sm:p-3 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -807,12 +791,12 @@ export default function LiveInteractiveMap({
           <span className="text-slate-300">•</span>
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-blue-900 font-black">
             <span className="w-3.5 h-1.5 bg-blue-600 rounded-full" />
-            <span>Total Run: {totalKm} KM ({legsCount} Legs)</span>
+            <span>{totalKm > 0 ? `Total Run: ${totalKm} KM (${legsCount} Legs)` : 'Total Run: 0 KM (Stationary)'}</span>
           </span>
           <span className="text-slate-300">•</span>
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-amber-700 font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs" />
-            <span>Current ({totalKm} KM)</span>
+            <span>Current: {totalKm > 0 ? `${totalKm} KM` : 'At Base'}</span>
           </span>
         </div>
       </div>

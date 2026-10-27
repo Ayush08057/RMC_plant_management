@@ -9,7 +9,8 @@ import {
   AlertCircle,
   Loader2,
   Building2,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_ROUTES } from '../../data/mockUsers';
@@ -112,47 +113,57 @@ export default function LoginForm() {
     <div className="w-full max-w-md mx-auto">
 
       {/* ========================================================
-          ENTERPRISE INDUSTRIAL LOGIN CARD - PROPER UPPER SPACING
+          ENTERPRISE INDUSTRIAL LOGIN CARD - BRAND HARMONIZED
           ======================================================== */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl shadow-amber-950/10 transition-all duration-300">
+      <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl shadow-blue-950/25 transition-all duration-300">
 
-        {/* Top Accent Line */}
-        <div className="h-1.5 bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300" />
+        {/* Top Accent Strip - Tri-tone blue, cyan & safety amber echoing the logo palette */}
+        <div className="h-1.5 bg-gradient-to-r from-blue-700 via-sky-400 to-amber-400" />
 
-        {/* Brand Header Banner - Balanced Warm Industrial Gold-Orange Theme */}
-        <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-400 pt-5 pb-4 px-5 sm:pt-6 sm:pb-5 sm:px-6 text-slate-950 text-center relative overflow-hidden shadow-inner">
+        {/* Brand Header Banner - Deep Architectural Navy & Blueprint Theme */}
+        <div className="bg-gradient-to-b from-[#070e1c] via-[#0c1a36] to-[#071124] pt-6 pb-5 px-5 sm:pt-7 sm:pb-6 sm:px-6 text-white text-center relative overflow-hidden shadow-inner border-b border-sky-950/60">
 
-          {/* Subtle Ambient Depth */}
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-52 h-52 bg-white/25 rounded-full blur-xl pointer-events-none" />
-          <div className="absolute -bottom-8 right-0 w-36 h-36 bg-orange-300/30 rounded-full blur-lg pointer-events-none" />
+          {/* Blueprint Geometric Accents & Ambient Glows */}
+          <div
+            className="absolute inset-0 opacity-15 pointer-events-none"
+            style={{
+              backgroundImage: "radial-gradient(circle, rgba(56, 189, 248, 0.4) 1px, transparent 1px)",
+              backgroundSize: "16px 16px"
+            }}
+          />
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-56 h-56 bg-sky-500/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-8 right-0 w-36 h-36 bg-amber-400/15 rounded-full blur-xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col items-center">
 
-            {/* COMPANY LOGO EMBLEM - PROPORTIONAL & BALANCED SIZE */}
+            {/* COMPANY LOGO EMBLEM - CIRCULAR MEDALLION TO MATCH CIRCULAR LOGO */}
             <div className="relative group mb-3">
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl shadow-lg flex items-center justify-center transition-transform duration-300 group-hover:scale-105 overflow-hidden">
-                <img
-                  src={defaultLogo}
-                  alt="SM ConcreTech Logo"
-                  className="w-full h-full object-cover scale-[1.04]"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
-                />
-                <div className="w-full h-full rounded-xl bg-slate-50 items-center justify-center text-slate-700 hidden">
-                  <Building2 className="w-12 h-12" />
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-sky-400/50 via-white/80 to-amber-400/60 shadow-xl shadow-slate-950/40 ring-4 ring-sky-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:ring-sky-400/40">
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                  <img
+                    src={defaultLogo}
+                    alt="SM ConcreTech Logo"
+                    className="w-full h-full object-cover scale-[1.03]"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="w-full h-full rounded-full bg-slate-900 items-center justify-center text-sky-400 hidden">
+                    <Building2 className="w-12 h-12" />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Title & Subtitle */}
-            <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight leading-snug drop-shadow-2xs">
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-wider leading-snug drop-shadow-md">
               SM CONCRETECH
             </h1>
-            <p className="text-xs text-amber-950 font-extrabold tracking-wide mt-0.5">
-              Ready-Mix Concrete Plant Management ERP
-            </p>
+            <div className="inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-500/30 text-[11px] font-bold text-sky-300 tracking-wide shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span>Ready-Mix Concrete Plant Management ERP</span>
+            </div>
 
           </div>
         </div>
@@ -162,8 +173,8 @@ export default function LoginForm() {
 
           {/* Error Alert */}
           {(localError || authError) && (
-            <div className="p-2 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-red-800 text-xs animate-shake shadow-2xs">
-              <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-red-800 text-xs animate-shake shadow-xs">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <div className="leading-tight font-medium flex-1 text-[11px]">{localError || authError}</div>
             </div>
           )}
@@ -188,16 +199,18 @@ export default function LoginForm() {
           )}
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-2.5">
+          <form onSubmit={handleSubmit} className="space-y-3">
 
             {/* Identifier Field */}
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-0.5 flex items-center justify-between">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center justify-between">
                 <span>Username, ID, or Email</span>
-                <span className="text-[9px] text-amber-700 font-semibold font-mono">e.g. @suraj, rahul_driver, ADM-001</span>
+                <span className="text-[9px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/60 font-semibold font-mono">
+                  e.g. @suraj, rahul_driver, ADM-001
+                </span>
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-amber-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
                   <User className="w-4 h-4" />
                 </div>
                 <input
@@ -207,26 +220,26 @@ export default function LoginForm() {
                   placeholder="Enter @username, Employee ID, or Email"
                   disabled={isSubmitting}
                   autoComplete="username"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-medium shadow-2xs"
+                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-500/15 transition-all font-medium shadow-xs"
                 />
               </div>
             </div>
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center justify-between mb-1">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700">
                   Password
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-[10px] text-amber-700 hover:text-amber-800 hover:underline font-semibold transition-colors"
+                  className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline font-semibold transition-colors"
                 >
                   Forgot Password?
                 </Link>
               </div>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-amber-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -236,7 +249,7 @@ export default function LoginForm() {
                   placeholder="••••••••••••"
                   disabled={isSubmitting}
                   autoComplete="current-password"
-                  className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-mono shadow-2xs"
+                  className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-500/15 transition-all font-mono shadow-xs"
                 />
                 <button
                   type="button"
@@ -257,7 +270,7 @@ export default function LoginForm() {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   disabled={isSubmitting}
-                  className="w-3.5 h-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-600/20 cursor-pointer accent-amber-600"
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 cursor-pointer accent-blue-600"
                 />
                 <span className="text-slate-700 font-medium text-[11px]">
                   Keep signed in
@@ -269,20 +282,26 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:via-orange-400 hover:to-amber-500 text-slate-950 flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer group"
+              className="w-full mt-1.5 py-2.5 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-blue-700 via-blue-600 to-sky-600 hover:from-blue-600 hover:via-blue-500 hover:to-sky-500 text-white flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 active:scale-[0.99] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer group"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
-                  <span>Verifying...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Verifying credentials...</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
+                  <ShieldCheck className="w-4 h-4 text-amber-300 group-hover:scale-110 transition-transform" />
                   <span>Sign In</span>
                 </>
               )}
             </button>
+
+            {/* Enterprise Security Subtext */}
+            <div className="flex items-center justify-center gap-1.5 pt-1 text-[10px] text-slate-400 font-medium font-mono">
+              <Lock className="w-3 h-3 text-sky-600" />
+              <span>256-Bit SCADA Encryption • Gateway Active</span>
+            </div>
           </form>
         </div>
       </div>

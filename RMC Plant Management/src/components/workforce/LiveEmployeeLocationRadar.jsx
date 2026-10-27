@@ -1259,7 +1259,37 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
+                                        String(activeTarget?.role || '').toLowerCase().includes('dispatch');
+                          if (isDis) {
+                            setNewVisitedTitle('Sinhagad Road Logistics Hub, Pune');
+                            setNewVisitedCategory('Logistics Hub');
+                            setNewVisitedAddress('Sinhagad Road, Pune, Maharashtra');
+                            setNewVisitedLat('18.4980');
+                            setNewVisitedLng('73.8320');
+                          } else {
+                            setNewVisitedTitle('Godrej Green Acres Construction Site');
+                            setNewVisitedCategory('Site Pouring');
+                            setNewVisitedAddress('Near Government Colony, Sangli');
+                            setNewVisitedLat('16.8520');
+                            setNewVisitedLng('74.5900');
+                          }
+                          setNewVisitedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                          setNewVisitedStay('45');
+                          setNewVisitedNotes('Operational site visit after punch-in');
+                          setShowAddVisitedModal(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        title="Record a visited location/checkpoint after punch-in"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-white" />
+                        <span>+ Add Visited Location</span>
+                      </button>
+
                       <a
                         href={activeRouteDetails.googleMapsFullRouteUrl}
                         target="_blank"
@@ -1320,36 +1350,104 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                         {startOdo.toLocaleString()} ➔ <span className="text-amber-600">{finalOdo.toLocaleString()}</span>
                       </div>
                       <div className="text-[10px] text-emerald-700 font-bold mt-1 truncate flex items-center gap-1">
-                        <span>✓ Diff: +{totalKm} KM logged</span>
+                        <span>{totalKm > 0 ? `✓ Diff: +${totalKm} KM logged` : 'Stationary at Hub (0 km)'}</span>
                       </div>
                     </div>
 
-                    {/* Card 3: Avg Speed & Transit */}
+                    {/* Card 3: Shift Runtime */}
                     <div className="bg-white p-3 rounded-xl border-2 border-slate-200 shadow-2xs flex flex-col justify-between">
                       <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">Speed & Runtime (वेग)</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">Shift Runtime (ड्यूटी वेळ)</span>
                         <Zap className="w-4 h-4 text-amber-500" />
                       </div>
                       <div className="text-xl sm:text-2xl font-black font-mono text-slate-800 leading-tight">
-                        28.4 <span className="text-xs font-bold text-slate-500">KM/H</span>
+                        {activeTarget?.elapsedDisplay || (activeTarget?.status === 'Punched In' ? 'Active Duty' : 'Off-Duty')}
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        Active Transit • 2h 45m elapsed
+                        {activeTarget?.status === 'Punched In' ? '🟢 Clocked In & Tracking' : 'Shift Not Active'}
                       </div>
                     </div>
 
-                    {/* Card 4: Route Legs */}
+                    {/* Card 4: Route Legs & Stops */}
                     <div className="bg-white p-3 rounded-xl border-2 border-emerald-200 shadow-2xs flex flex-col justify-between">
                       <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">Legs & Waypoints (टप्पे)</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">Visited Places (भेट दिलेली ठिकाणे)</span>
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       </div>
                       <div className="text-xl sm:text-2xl font-black font-mono text-emerald-700 leading-tight">
-                        {routeLegs.length} <span className="text-xs font-bold text-slate-500">Legs</span> • {activeRouteDetails.stops.length} <span className="text-xs font-bold text-slate-500">Stops</span>
+                        {activeRouteDetails.stops.length > 1 ? activeRouteDetails.stops.length - 1 : 0} <span className="text-xs font-bold text-slate-500">Visited</span> • {activeRouteDetails.stops.length} <span className="text-xs font-bold text-slate-500">Total</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        Current: {lastStop?.title || 'Active'}
+                        {totalKm > 0 ? `Latest: ${lastStop?.title || 'Active'}` : 'Stationary at Punch-In Hub'}
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Step-by-Step Visited Locations Progression Bar / Timeline */}
+                  <div className="p-3 bg-white border-b border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Visited Locations Timeline (पंच-इन नंतर भेट दिलेली ठिकाणे)</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">
+                        {activeRouteDetails.stops.length} Total Checkpoints • Click any stop to view on map
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {activeRouteDetails.stops.map((stop, idx) => {
+                        const isStart = idx === 0;
+                        const isEnd = idx === activeRouteDetails.stops.length - 1;
+                        const isSelected = selectedStop?.stopNo === stop.stopNo;
+
+                        return (
+                          <React.Fragment key={stop.stopNo || idx}>
+                            {idx > 0 && (
+                              <div className="flex items-center text-slate-300 shrink-0">
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                            <div
+                              onClick={() => handleSelectStaffOnMap(activeTarget, stop)}
+                              className={`p-2.5 rounded-xl border transition-all cursor-pointer shrink-0 min-w-[200px] max-w-[240px] select-none ${
+                                isSelected
+                                  ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-400/50 shadow-md'
+                                  : isStart
+                                    ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-500'
+                                    : isEnd
+                                      ? 'bg-purple-50/70 border-purple-300 hover:border-purple-500'
+                                      : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                                  isStart ? 'bg-emerald-600 text-white' : isEnd ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
+                                }`}>
+                                  {isStart ? '🟢 1. Punch-In' : isEnd ? `📍 ${stop.stopNo}. Current` : `Stop #${stop.stopNo}`}
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-blue-900 bg-white px-1.5 py-0.2 rounded border border-blue-200">
+                                  {stop.distanceKm} KM
+                                </span>
+                              </div>
+                              <div className="font-bold text-slate-900 text-xs truncate" title={stop.title}>
+                                {stop.title}
+                              </div>
+                              <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                {stop.address}
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 mt-1.5 pt-1 border-t border-slate-200/60">
+                                <span className="text-slate-700 font-bold">{stop.time}</span>
+                                {stop.stayMinutes && (
+                                  <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.2 rounded text-[9px]">
+                                    Stay: {stop.stayMinutes}m
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1359,117 +1457,134 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       <table className="w-full text-left border-collapse text-xs">
                         <thead>
                           <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider">
-                            <th className="py-2.5 px-3"># Leg</th>
-                            <th className="py-2.5 px-3">Route Segment (प्रवास टप्पा)</th>
+                            <th className="py-2.5 px-3"># Stop</th>
+                            <th className="py-2.5 px-3">Visited Place & Activity (भेट दिलेले ठिकाण)</th>
                             <th className="py-2.5 px-3 text-center">Leg Distance (टप्प्याचे अंतर)</th>
-                            <th className="py-2.5 px-3 text-center">Cumulative (एकूण अंतर)</th>
+                            <th className="py-2.5 px-3 text-center">Total Run (एकूण अंतर)</th>
                             <th className="py-2.5 px-3">Vehicle Odometer (गाडी मीटर)</th>
                             <th className="py-2.5 px-3">Time & Halt (वेळ)</th>
                             <th className="py-2.5 px-3">Purpose & Activity</th>
-                            <th className="py-2.5 px-3 text-right">Map View</th>
+                            <th className="py-2.5 px-3 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white">
-                          {routeLegs.length === 0 ? (
+                          {activeRouteDetails.stops.length === 0 ? (
                             <tr>
                               <td colSpan="8" className="py-8 px-4 text-center text-slate-500">
                                 <div className="flex flex-col items-center justify-center gap-1.5">
                                   <Route className="w-6 h-6 text-slate-400 stroke-[1.5]" />
                                   <span className="font-semibold text-slate-700 text-xs">No Route Travel Legs Recorded Yet</span>
                                   <span className="text-[11px] text-slate-400 max-w-md">
-                                    Staff is currently at base location with 0.0 KM traveled. Route waypoints and transit legs will automatically log as the device moves.
+                                    Staff is currently at base location with 0.0 KM traveled. Click "+ Add Visited Location" above to record a site checkpoint.
                                   </span>
                                 </div>
                               </td>
                             </tr>
                           ) : (
-                            routeLegs.map((leg) => {
-                            const isSelected = selectedStop?.stopNo === leg.to.stopNo;
-                            return (
-                              <tr
-                                key={leg.legNo}
-                                className={`transition-colors ${
-                                  isSelected ? 'bg-blue-50/90 ring-1 ring-blue-300 font-medium' : 'hover:bg-slate-50/80'
-                                }`}
-                              >
-                                <td className="py-3 px-3 whitespace-nowrap">
-                                  <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 font-black text-[11px] font-mono border border-blue-200">
-                                    Leg #{leg.legNo}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="font-bold text-slate-900 text-xs">
-                                    {leg.from.stopNo}. {leg.from.title}
-                                  </div>
-                                  <div className="text-[11px] text-blue-700 font-bold flex items-center gap-1 mt-0.5">
-                                    <span>➔</span>
-                                    <span>{leg.to.stopNo}. {leg.to.title}</span>
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">
-                                    {leg.to.address}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-center whitespace-nowrap">
-                                  <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-black font-mono text-xs border border-emerald-300 shadow-2xs inline-block">
-                                    +{leg.legDistance} KM
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 text-center whitespace-nowrap">
-                                  <span className="font-mono font-black text-blue-800 text-xs">
-                                    {leg.cumulativeKm} KM
-                                  </span>
-                                  <div className="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mt-1 overflow-hidden border border-slate-200">
-                                    <div 
-                                      className="h-full bg-blue-600 rounded-full" 
-                                      style={{ width: `${Math.min(100, Math.round((leg.cumulativeKm / (totalKm || 1)) * 100))}%` }}
-                                    />
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 font-mono text-slate-800 text-xs whitespace-nowrap">
-                                  <div className="text-slate-500 text-[10px]">{leg.startOdo.toLocaleString()} KM</div>
-                                  <div className="font-bold text-slate-900">➔ <span className="text-amber-700">{leg.endOdo.toLocaleString()} KM</span></div>
-                                </td>
-                                <td className="py-3 px-3 whitespace-nowrap">
-                                  <div className="font-mono text-slate-900 font-bold text-xs">{leg.transitTime}</div>
-                                  <div className="text-[10px] text-slate-500 font-medium">{leg.halt}</div>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 inline-block mb-0.5">
-                                    {leg.to.category}
-                                  </span>
-                                  <div className="text-[10px] text-slate-600 truncate max-w-[180px]">
-                                    {leg.notes}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-right whitespace-nowrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectStaffOnMap(activeTarget, leg.to)}
-                                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-300 font-bold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                                    title="View this stop on the satellite map"
-                                  >
-                                    <MapPin className="w-3 h-3" />
-                                    <span>Show on Map</span>
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
+                            activeRouteDetails.stops.map((stop, idx) => {
+                              const isStart = idx === 0;
+                              const isEnd = idx === activeRouteDetails.stops.length - 1;
+                              const isSelected = selectedStop?.stopNo === stop.stopNo;
+                              const prevStop = idx > 0 ? activeRouteDetails.stops[idx - 1] : null;
+                              const legKm = prevStop ? Number((stop.distanceKm - prevStop.distanceKm).toFixed(1)) : 0;
+                              const currentStopOdo = Number((startOdo + stop.distanceKm).toFixed(1));
+
+                              return (
+                                <tr
+                                  key={stop.stopNo || idx}
+                                  className={`transition-colors ${
+                                    isSelected ? 'bg-blue-50/90 ring-1 ring-blue-300 font-medium' : 'hover:bg-slate-50/80'
+                                  }`}
+                                >
+                                  <td className="py-3 px-3 whitespace-nowrap">
+                                    <span className={`px-2 py-0.5 rounded-md font-black text-[11px] font-mono border ${
+                                      isStart ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : isEnd ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-blue-100 text-blue-900 border-blue-200'
+                                    }`}>
+                                      {isStart ? '🟢 In' : isEnd ? '📍 End' : `Stop #${stop.stopNo}`}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="font-bold text-slate-900 text-xs">
+                                      {stop.title}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">
+                                      {stop.address}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-center whitespace-nowrap">
+                                    <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-black font-mono text-xs border border-emerald-300 shadow-2xs inline-block">
+                                      {isStart ? '0.0 KM' : `+${legKm} KM`}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 text-center whitespace-nowrap">
+                                    <span className="font-mono font-black text-blue-800 text-xs">
+                                      {stop.distanceKm} KM
+                                    </span>
+                                    <div className="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mt-1 overflow-hidden border border-slate-200">
+                                      <div 
+                                        className="h-full bg-blue-600 rounded-full" 
+                                        style={{ width: `${Math.min(100, Math.round((stop.distanceKm / (totalKm || 1)) * 100))}%` }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 font-mono text-slate-800 text-xs whitespace-nowrap">
+                                    <div className="font-bold text-slate-900">{currentStopOdo.toLocaleString()} KM</div>
+                                  </td>
+                                  <td className="py-3 px-3 whitespace-nowrap">
+                                    <div className="font-mono text-slate-900 font-bold text-xs">{stop.time}</div>
+                                    <div className="text-[10px] text-slate-500 font-medium">
+                                      {stop.stayMinutes ? `${stop.stayMinutes}m stay` : (isStart ? 'Biometric Clock-In' : 'Current Active')}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 inline-block mb-0.5">
+                                      {stop.category || 'Site Visit'}
+                                    </span>
+                                    <div className="text-[10px] text-slate-600 truncate max-w-[180px]">
+                                      {stop.notes}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-right whitespace-nowrap">
+                                    <div className="inline-flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSelectStaffOnMap(activeTarget, stop)}
+                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-300 font-bold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                                        title="View this visited stop on the satellite map"
+                                      >
+                                        <MapPin className="w-3 h-3" />
+                                        <span>Show on Map</span>
+                                      </button>
+                                      {!isStart && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveVisitedStop(stop.stopNo)}
+                                          className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                          title="Remove this visited location"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
                       </table>
                     </div>
                   ) : (
                     <div className="px-3 py-2 text-[11px] text-slate-500 flex items-center justify-between bg-white">
                       <span>
-                        Kilometer Ledger minimized ({routeLegs.length} legs, total {totalKm} KM logged).
+                        Visited Locations Ledger minimized ({activeRouteDetails.stops.length} locations, total {totalKm} KM logged).
                       </span>
                       <button
                         type="button"
                         onClick={() => setRouteHistoryExpanded(true)}
                         className="text-blue-600 font-bold hover:underline cursor-pointer"
                       >
-                        Show Full Leg-by-Leg Analysis
+                        Show Full Visited Locations Breakdown
                       </button>
                     </div>
                   )}
@@ -2168,6 +2283,219 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                     <span>Delete Employee</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Add Visited Location Checkpoint Modal */}
+      {showAddVisitedModal && activeTarget && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <MapPin className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-sm">
+                    Record Visited Location (नवीन भेट दिलेले ठिकाण)
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Staff: <strong className="text-emerald-400">{activeTarget.name}</strong> ({activeTarget.employeeId || activeTarget.id})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddVisitedModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-3.5 overflow-y-auto text-xs">
+              {/* Quick 1-Tap Site Presets */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Quick Site Presets (त्वरित ठिकाण निवडा)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(() => {
+                    const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
+                                  String(activeTarget?.role || '').toLowerCase().includes('dispatch');
+                    const presets = isDis ? [
+                      { title: 'Sinhagad Road Logistics Hub, Pune', address: 'Sinhagad Road, Pune, Maharashtra', lat: 18.4980, lng: 73.8320, cat: 'Logistics Hub', stay: 45 },
+                      { title: 'Swargate Regional Transit Desk, Pune', address: 'Swargate, Pune, Maharashtra', lat: 18.5010, lng: 73.8580, cat: 'Dispatch Desk', stay: 30 },
+                      { title: 'Kothrud Pouring Site, Pune', address: 'Kothrud, Pune, Maharashtra', lat: 18.5074, lng: 73.8077, cat: 'Site Pouring', stay: 60 },
+                      { title: 'Hadapsar RMC Batching Hub, Pune', address: 'Hadapsar Industrial Area, Pune', lat: 18.5089, lng: 73.9260, cat: 'Batching Plant', stay: 40 },
+                    ] : [
+                      { title: 'Godrej Green Acres Pier Site', address: 'Near Government Colony, Sangli', lat: 16.8520, lng: 74.5900, cat: 'Site Pouring', stay: 45 },
+                      { title: 'Kadam Nagar High-Rise Project', address: 'Kadam Nagar, Sangli', lat: 16.8550, lng: 74.5960, cat: 'Site Inspection', stay: 40 },
+                      { title: 'Miraj Highway Package B Quality Lab', address: 'Miraj Industrial Corridor, Sangli', lat: 16.8300, lng: 74.6400, cat: 'Quality Test', stay: 60 },
+                      { title: 'APMC Market Yard Commercial Desk', address: 'APMC Market Yard Area, Sangli', lat: 16.8584, lng: 74.5824, cat: 'Office Visit', stay: 45 },
+                      { title: 'Tanang Quarry & Silt Testing Bay', address: 'Tanang Quarry Zone, Sangli', lat: 16.8410, lng: 74.6320, cat: 'Material Testing', stay: 35 },
+                      { title: 'Sangli-Miraj Highway Transit Stop', address: 'NH-166 Highway Corridor, Sangli', lat: 16.8480, lng: 74.6020, cat: 'Highway Transit', stay: 15 },
+                    ];
+
+                    return presets.map((p) => (
+                      <button
+                        key={p.title}
+                        type="button"
+                        onClick={() => {
+                          setNewVisitedTitle(p.title);
+                          setNewVisitedAddress(p.address);
+                          setNewVisitedLat(String(p.lat));
+                          setNewVisitedLng(String(p.lng));
+                          setNewVisitedCategory(p.cat);
+                          setNewVisitedStay(String(p.stay));
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        📍 {p.title.split(' ')[0]} {p.title.split(' ')[1] || ''}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                    Visited Place Name (ठिकाणाचे नाव) *
+                  </label>
+                  <input
+                    type="text"
+                    value={newVisitedTitle}
+                    onChange={(e) => setNewVisitedTitle(e.target.value)}
+                    placeholder="e.g. Godrej Green Acres Pier #4 / Client Site"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                      Activity Category (प्रकार)
+                    </label>
+                    <select
+                      value={newVisitedCategory}
+                      onChange={(e) => setNewVisitedCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
+                    >
+                      <option value="Site Pouring">Site Pouring (काँक्रीट ओतणे)</option>
+                      <option value="Site Inspection">Site Inspection (साइट तपासणी)</option>
+                      <option value="Quality Test">Quality Lab Test (लॅब चाचणी)</option>
+                      <option value="Delivery Checkpoint">Delivery Checkpoint (डिलिव्हरी पॉईंट)</option>
+                      <option value="Material Testing">Material Testing (मटेरिअल टेस्ट)</option>
+                      <option value="Highway Transit">Highway Transit (हायवे प्रवास)</option>
+                      <option value="Client Office">Client Office (क्लायंट ऑफिस)</option>
+                      <option value="Logistics Hub">Logistics Hub (लॉजिस्टिक्स हब)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                      Time Visited (वेळ)
+                    </label>
+                    <input
+                      type="text"
+                      value={newVisitedTime}
+                      onChange={(e) => setNewVisitedTime(e.target.value)}
+                      placeholder="e.g. 10:15 AM"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-blue-500 bg-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                      Stay / Halt Duration (थांबलेले मिनिटे)
+                    </label>
+                    <input
+                      type="number"
+                      value={newVisitedStay}
+                      onChange={(e) => setNewVisitedStay(e.target.value)}
+                      placeholder="e.g. 45"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-blue-500 bg-white font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                      GPS Latitude, Longitude
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={newVisitedLat}
+                        onChange={(e) => setNewVisitedLat(e.target.value)}
+                        placeholder="Lat"
+                        className="w-1/2 px-2 py-2 rounded-xl border border-slate-300 text-[11px] font-mono focus:outline-none focus:border-blue-500 bg-white"
+                      />
+                      <input
+                        type="text"
+                        value={newVisitedLng}
+                        onChange={(e) => setNewVisitedLng(e.target.value)}
+                        placeholder="Lng"
+                        className="w-1/2 px-2 py-2 rounded-xl border border-slate-300 text-[11px] font-mono focus:outline-none focus:border-blue-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                    Address / Landmark (पत्ता)
+                  </label>
+                  <input
+                    type="text"
+                    value={newVisitedAddress}
+                    onChange={(e) => setNewVisitedAddress(e.target.value)}
+                    placeholder="Detailed site address / landmark..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 text-[11px] mb-1">
+                    Work Conducted & Activity Notes (कामाचा तपशील)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={newVisitedNotes}
+                    onChange={(e) => setNewVisitedNotes(e.target.value)}
+                    placeholder="Details about work done, concrete volume poured, cube samples taken, or challans signed..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowAddVisitedModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!newVisitedTitle.trim()}
+                onClick={handleSaveVisitedLocation}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Save Visited Location</span>
               </button>
             </div>
           </div>
