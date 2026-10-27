@@ -576,6 +576,28 @@ export const DIRECT_MARATHI_MAP = {
   'Switch to Simple Guided Mode': 'सोप्या मोडवर जा',
   'Switch to Advanced Technical View': 'तांत्रिक डॅशबोर्ड पहा',
 
+  // Kilometer & Vehicle Route Tracking Analysis
+  'Kilometer Analysis Ledger': 'किलोमीटर प्रवास विश्लेषण खातेवही',
+  'Total Run': 'एकूण धाव',
+  'Total Distance': 'एकूण अंतर',
+  'Total Distance Travelled': 'एकूण प्रवास अंतर',
+  'Odometer': 'ओडोमीटर',
+  'Odometer Reading': 'गाडी मीटर रिडिंग',
+  'Vehicle Odometer': 'गाडी मीटर',
+  'Leg Distance': 'टप्प्याचे अंतर',
+  'Route Segment': 'प्रवास टप्पा',
+  'Speed & Runtime': 'वेग व चालू वेळ',
+  'Legs & Waypoints': 'टप्पे व थांबे',
+  'Show on Map': 'नकाशावर पहा',
+  'View Leg': 'टप्पा पहा',
+  'Distance Discrepancy': 'अंतर तफावत',
+  'Fit Route': 'संपूर्ण मार्ग पहा',
+  'Total Run Today': 'आजचे एकूण अंतर',
+  'Route Legs': 'प्रवास टप्पे',
+  'Locations Visited': 'भेट दिलेली ठिकाणे',
+  'Visited Route Trail': 'प्रवास मार्ग तपशील',
+  'Mixer': 'मिक्सर गाडी',
+
   // Vehicle Management Form & Details
   'Transit Mixer & Concrete Pump Fleet': 'काँक्रीट मिक्सर व पंप वाहने',
   'Fleet management, drum capacity, assigned drivers, and live status': 'वाहन व्यवस्थापन, ड्रम क्षमता, ड्रायव्हर आणि लाईव्ह स्थिती',
