@@ -1,0 +1,24 @@
+{
+  "short_name": "RMC Plant",
+  "name": "SM CONCRETECH - RMC Plant Management",
+  "description": "Ready Mix Concrete Plant Operations, Dispatch, Attendance & Billing ERP",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#123b6d",
+  "display": "standalone",
+  "orientation": "portrait-primary"
+}
