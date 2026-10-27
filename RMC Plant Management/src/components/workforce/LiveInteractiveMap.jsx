@@ -436,7 +436,62 @@ export default function LiveInteractiveMap({
         map.setView([Number(validTarget.lat), Number(validTarget.lng)], 15);
       }
     }
-  }, [mapReady, validTarget?.id, stops, selectedStop?.stopNo, mapRouteMode]);
+
+    // 5. Draw All Other Live Personnel on the Map (Dispatcher, Plant Manager, Accountant, etc.)
+    const otherPersonnel = (telemetryList || []).filter(
+      (s) => !isAdminPerson(s) && s.id !== validTarget?.id && s.lat && s.lng
+    );
+
+    otherPersonnel.forEach((staff) => {
+      const isOnline = staff.status === 'Punched In';
+      const staffIcon = L.divIcon({
+        className: 'bg-transparent border-0',
+        html: `
+          <div class="flex flex-col items-center cursor-pointer select-none transition-transform hover:scale-115 group" title="${staff.name} (${staff.role}) - ${staff.geofenceStatus}">
+            <div class="relative">
+              <div class="w-8 h-8 rounded-full ${
+                staff.isDriver ? 'bg-cyan-600' : isOnline ? 'bg-emerald-600' : 'bg-slate-700'
+              } border-2 border-white shadow-lg text-white font-bold text-xs flex items-center justify-center">
+                ${staff.isDriver ? '🚛' : '👤'}
+              </div>
+              <span class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ${
+                isOnline ? 'bg-emerald-400 border-2 border-white ring-1 ring-emerald-500 animate-pulse' : 'bg-slate-400 border-2 border-white'
+              }"></span>
+            </div>
+            
+            <div class="mt-0.5 px-2 py-0.5 rounded-full bg-white text-slate-900 font-bold text-[10px] border border-slate-300 shadow-md whitespace-nowrap flex items-center gap-1 group-hover:border-blue-500">
+              <span class="max-w-[100px] truncate">${staff.name}</span>
+            </div>
+          </div>
+        `,
+        iconSize: [120, 52],
+        iconAnchor: [60, 48],
+        popupAnchor: [0, -48],
+      });
+
+      L.marker([Number(staff.lat), Number(staff.lng)], { icon: staffIcon })
+        .bindPopup(`
+          <div class="p-2.5 text-xs font-sans min-w-[220px]">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 mb-2">
+              <span class="font-bold text-slate-900 text-xs">${staff.name}</span>
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                isOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+              }">${staff.status}</span>
+            </div>
+            <div class="space-y-1 text-[11px] text-slate-600">
+              <div><strong class="text-slate-800">ID / Role:</strong> ${staff.employeeId || staff.id} • ${staff.role}</div>
+              <div><strong class="text-slate-800">Location:</strong> ${staff.geofenceStatus || 'Plant Zone'}</div>
+              <div><strong class="text-slate-800">GPS:</strong> ${Number(staff.lat).toFixed(4)}°N, ${Number(staff.lng).toFixed(4)}°E</div>
+              ${staff.punchIn ? `<div><strong class="text-slate-800">Clocked In:</strong> ${staff.punchIn}</div>` : ''}
+            </div>
+          </div>
+        `)
+        .on('click', () => {
+          if (onSelectTarget) onSelectTarget(staff);
+        })
+        .addTo(markersGroup);
+    });
+  }, [mapReady, validTarget?.id, stops, selectedStop?.stopNo, mapRouteMode, telemetryList]);
 
   const startOdometer = validTarget?.activeTrip?.startOdometer || 14250.0;
   const currentOdometer = Number((startOdometer + totalKm).toFixed(1));

@@ -42,7 +42,16 @@ service cloud.firestore {
       return isAuthenticated() && (
         isAdmin() ||
         request.auth.token.email in ['manager@smconcretech.com', 'owner@smconcretech.com'] ||
-        getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Owner / Director']
+        getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Owner / Director', 'Site Supervisor', 'Supervisor']
+      );
+    }
+
+    function isSupervisor() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        isManager() ||
+        request.auth.token.email in ['supervisor@smconcretech.com'] ||
+        getUserRole() in ['Site Supervisor', 'Supervisor', 'Site Incharge']
       );
     }
 
@@ -86,6 +95,8 @@ service cloud.firestore {
         isQuality() ||
         isDispatcher() ||
         isDriver() ||
+        isSupervisor() ||
+        getUserRole() in ['Site Supervisor', 'Supervisor', 'Site Incharge'] ||
         request.auth.token.email in [
           'smconcretech@gmail.com',
           'manager@smconcretech.com',
@@ -130,6 +141,7 @@ service cloud.firestore {
           'owner@smconcretech.com',
           'supervisor@smconcretech.com'
         ] ||
+        getUserRole() in ['Site Supervisor', 'Supervisor', 'Site Incharge'] ||
         targetCompanyId == getUserCompanyId() ||
         ((targetCompanyId == 'CMP-SM-001' || targetCompanyId == 'sm-concretech') &&
          (getUserCompanyId() == 'CMP-SM-001' || getUserCompanyId() == 'sm-concretech'))
@@ -212,6 +224,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(request.resource.data.employeeId) ||
         isOwner(request.resource.data.userId) ||
         request.auth.uid == request.resource.data.userId
@@ -221,6 +234,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
@@ -394,6 +408,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(request.resource.data.employeeId) ||
         isOwner(request.resource.data.userId) ||
         request.auth.uid == request.resource.data.userId
@@ -403,6 +418,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
@@ -490,6 +506,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(request.resource.data.employeeId) ||
         isOwner(request.resource.data.userId) ||
         request.auth.uid == request.resource.data.userId
@@ -499,6 +516,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
@@ -586,6 +604,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(request.resource.data.employeeId) ||
         isOwner(request.resource.data.userId) ||
         request.auth.uid == request.resource.data.userId
@@ -595,6 +614,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||
@@ -682,6 +702,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(request.resource.data.employeeId) ||
         isOwner(request.resource.data.userId) ||
         request.auth.uid == request.resource.data.userId
@@ -691,6 +712,7 @@ service cloud.firestore {
         isManager() ||
         isHR() ||
         isDriver() ||
+        isSupervisor() ||
         isOwner(resource.data.employeeId) ||
         isOwner(resource.data.userId) ||
         isOwner(request.resource.data.employeeId) ||

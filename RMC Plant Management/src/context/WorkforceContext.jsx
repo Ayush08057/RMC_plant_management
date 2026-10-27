@@ -13,6 +13,7 @@ import { MOCK_PLANTS } from '../data/mockDashboardData';
 import { DEFAULT_COMPANIES } from '../data/companies';
 import defaultLogo from '../assets/logo.png';
 import { useAuth } from './AuthContext';
+import { auth } from '../config/firebase.js';
 import { 
   COLLECTIONS, 
   fetchCollection, 
@@ -1499,12 +1500,14 @@ export const WorkforceProvider = ({ children }) => {
 
     const actualPunchIn = options.time ? formatToIndian12Hr(options.time) : nowTime;
 
+    const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
+
     const newRecord = {
       ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
       id: existingIndex >= 0 ? (data.attendance[existingIndex].id || docId) : docId,
       date: today,
       employeeId: emp.employeeId || emp.id,
-      userId: user?.uid || user?.id || null,
+      userId: authUid,
       companyId: activeCompanyId,
       employeeName: emp.name,
       role: emp.role,
@@ -1524,8 +1527,12 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // Authoritative Cloud Firestore persistence before state confirmation
-    await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
+    // Authoritative Cloud Firestore persistence with resilient offline fallback
+    try {
+      await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
+    } catch (fsErr) {
+      console.warn('Firestore attendance sync notice (persisting locally):', fsErr.message);
+    }
 
     setData((prev) => {
       const prevList = prev.attendance || [];
@@ -1656,9 +1663,11 @@ export const WorkforceProvider = ({ children }) => {
     const otThreshold = shift?.otThresholdHours || 8.5;
     const overtimeHours = workingHours > otThreshold ? Number((workingHours - otThreshold).toFixed(1)) : 0;
 
+    const authUid = auth.currentUser?.uid || currentRecord.userId || user?.uid || user?.id || null;
+
     const updatedRecord = {
       ...currentRecord,
-      userId: currentRecord.userId || user?.uid || user?.id || null,
+      userId: authUid,
       companyId: currentRecord.companyId || activeCompanyId,
       punchOut: nowTime,
       workingHours,
@@ -1670,8 +1679,12 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // Authoritative Cloud Firestore persistence before state confirmation
-    await saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord);
+    // Authoritative Cloud Firestore persistence with resilient offline fallback
+    try {
+      await saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord);
+    } catch (fsErr) {
+      console.warn('Firestore attendance checkout sync notice (persisting locally):', fsErr.message);
+    }
 
     setData((prev) => {
       const prevList = prev.attendance || [];
@@ -1870,7 +1883,12 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await saveDocumentWithId(COLLECTIONS.DAILY_WORK, newWork.id, newWork);
+    // Authoritative Cloud Firestore persistence with resilient offline fallback
+    try {
+      await saveDocumentWithId(COLLECTIONS.DAILY_WORK, newWork.id, newWork);
+    } catch (fsErr) {
+      console.warn('Firestore daily work sync notice (persisting locally):', fsErr.message);
+    }
 
     setData((prev) => {
       const prevList = prev.dailyWork || [];

@@ -182,45 +182,79 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   // Master list of real workforce employees (strictly excluding Administrator accounts)
   const allEmployees = useMemo(() => {
     const map = new Map();
-    // Only include currently logged in user if they are non-admin operational personnel
+
+    const addOrMerge = (key, data) => {
+      if (!key || isAdminPerson(data) || key === 'ADM-001' || key === 'USR-ADMIN-001') return;
+      const uKey = String(key).trim().toUpperCase();
+      const prev = map.get(uKey) || {};
+      map.set(uKey, {
+        ...prev,
+        ...data,
+        id: uKey,
+        employeeId: data.employeeId || prev.employeeId || uKey,
+        name: data.name || data.employeeName || prev.name || 'Operational Staff',
+        role: data.role || prev.role || 'Staff',
+        department: data.department || prev.department || 'Operations',
+        plant: data.plantLocation || data.plant || prev.plant || 'Main Plant HQ',
+        avatar: (data.name || data.employeeName || prev.name || uKey).substring(0, 2).toUpperCase(),
+        phone: data.phone || data.mobile || prev.phone || '+91 98200 00000',
+        isDriver: (data.role || prev.role || '').toLowerCase().includes('driver') || uKey.startsWith('DRV'),
+      });
+    };
+
+    // 1. Official operational workforce accounts (Dispatcher, Accountant, Plant Manager, QC, Supervisor, Driver)
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
+      const key = acc.employeeId || acc.id;
+      addOrMerge(key, acc);
+    });
+
+    // 2. HR enrolled employees from workforce database
+    (employees || []).forEach((e) => {
+      const key = e.employeeId || e.id;
+      addOrMerge(key, e);
+    });
+
+    // 3. Current active user if non-admin operational
     if (user && !isAdminPerson(user)) {
       const uKey = user.employeeId || user.id || 'EMP-USER-01';
-      map.set(uKey, {
+      addOrMerge(uKey, {
         id: uKey,
         employeeId: uKey,
         name: user.name || 'Current Staff',
         role: user.role || 'Staff',
         department: user.department || 'Operations',
         plant: user.plantLocation || 'Main Plant HQ',
-        avatar: (user.name || 'US').substring(0, 2).toUpperCase(),
         phone: user.phone || '+91 98200 00000',
-        isDriver: (user.role || '').toLowerCase().includes('driver'),
       });
     }
-    (employees || []).forEach((e) => {
-      if (isAdminPerson(e)) return;
-      const key = e.employeeId || e.id;
-      map.set(key, {
-        ...map.get(key),
-        ...e,
+
+    // 4. EVERY employee who has an attendance record (today or recent)
+    (attendance || []).forEach((att) => {
+      if (!att) return;
+      const key = att.employeeId || att.id || att.userId;
+      if (!key) return;
+      addOrMerge(key, {
         id: key,
         employeeId: key,
-        isDriver: (e.role || '').toLowerCase().includes('driver'),
+        name: att.employeeName,
+        role: att.role,
+        department: att.department,
+        plant: att.plantLocation || att.plant,
+        selfieUrl: att.selfieUrl,
       });
     });
 
-    // Also include active transit drivers from driverTrips if not already present
+    // 5. Active transit drivers from driverTrips
     (driverTrips || []).forEach((trip) => {
       const tripKey = trip.driverId || `DRV-${trip.id}`;
-      if (!map.has(tripKey) && trip.driverName) {
-        map.set(tripKey, {
+      if (tripKey && trip.driverName) {
+        addOrMerge(tripKey, {
           id: tripKey,
           employeeId: tripKey,
           name: trip.driverName,
           role: 'Transit Driver',
           department: 'Logistics',
           plant: trip.plant || 'Sangli Main Plant HQ',
-          avatar: trip.driverName.substring(0, 2).toUpperCase(),
           phone: trip.driverPhone || '+91 98220 12345',
           isDriver: true,
         });
@@ -228,7 +262,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     });
 
     return Array.from(map.values()).filter((e) => !isAdminPerson(e));
-  }, [employees, user, driverTrips]);
+  }, [employees, user, driverTrips, attendance]);
 
   const liveTrackedEmployees = useMemo(() => {
     return allEmployees.filter((e) => !isAdminPerson(e));
@@ -238,14 +272,25 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
   const telemetryList = useMemo(() => {
     return liveTrackedEmployees.map((emp) => {
       const record = (attendance || []).find((a) => {
-        const aId = (a.employeeId || '').toUpperCase();
-        const empId = (emp.id || '').toUpperCase();
-        const empEmpId = (emp.employeeId || '').toUpperCase();
-        return (aId === empId || aId === empEmpId) && a.date === todayStr;
+        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        const empId = (emp.id || '').toString().trim().toUpperCase();
+        const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
+        const aName = (a.employeeName || '').toLowerCase().trim();
+        const empName = (emp.name || '').toLowerCase().trim();
+        return (
+          (aId && (aId === empId || aId === empEmpId)) ||
+          (aName && empName && aName === empName)
+        ) && a.date === todayStr;
+      }) || (attendance || []).find((a) => {
+        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        const empId = (emp.id || '').toString().trim().toUpperCase();
+        const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
+        return aId && (aId === empId || aId === empEmpId);
       });
 
-      const isPunchedIn = Boolean(record?.punchIn && !record?.punchOut);
-      const isPunchedOut = Boolean(record?.punchIn && record?.punchOut);
+      const isTodayRecord = Boolean(record && record.date === todayStr);
+      const isPunchedIn = Boolean(isTodayRecord && record?.punchIn && !record?.punchOut);
+      const isPunchedOut = Boolean(isTodayRecord && record?.punchIn && record?.punchOut);
 
       // Check if this employee is the active user on this client device (never admin)
       const isCurrentUser = Boolean(user && !isAdminPerson(user) && (
