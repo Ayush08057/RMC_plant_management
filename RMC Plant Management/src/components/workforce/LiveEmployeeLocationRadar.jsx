@@ -1035,17 +1035,17 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                   : 'w-full'
             } bg-white text-slate-900 border border-slate-200/90 shadow-md rounded-2xl p-3.5 sm:p-4.5 relative overflow-hidden flex flex-col justify-between transition-all`}
           >
-            {/* Top Toolbar: Map Mode, Satellite Toggle, Zoom & Fullscreen Controls */}
+            {/* Top Toolbar: Clean, Unified Control Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center justify-center shrink-0">
-                  <Radio className="w-4 h-4 animate-pulse" />
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center shrink-0">
+                  <Radio className="w-4 h-4 text-blue-600 animate-pulse" />
                 </div>
                 <div>
                   <h3 className="text-xs font-black tracking-tight text-slate-900 uppercase">
-                    Live GPS Telemetry & Transit Map
+                    Live GPS Telemetry
                   </h3>
-                  <div className="text-[10px] text-slate-500 font-medium">
+                  <div className="text-[11px] text-slate-500 font-medium">
                     Tracking: <strong className="text-blue-900 font-bold">{activeTarget?.name || 'Staff Member'}</strong> ({activeTarget?.role || 'Operations'})
                   </div>
                 </div>
@@ -1053,71 +1053,46 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
               {/* Map View Controls */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setMapSatellite(!mapSatellite)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-2xs flex items-center gap-1.5 ${
+                    mapSatellite
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                  title="Toggle Satellite vs Street Map"
+                >
+                  <span>{mapSatellite ? '🛰️ Satellite' : '🗺️ Street'}</span>
+                </button>
+
+                <div className="flex rounded-xl bg-slate-100 p-0.5 border border-slate-200 text-xs">
                   <button
                     type="button"
-                    onClick={() => setMapDisplayType('gis')}
-                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
-                      mapDisplayType === 'gis' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    onClick={() => setMapZoom((z) => Math.min(18, z + 1))}
+                    className="p-1.5 text-slate-700 hover:text-slate-900 rounded-lg cursor-pointer hover:bg-white"
+                    title="Zoom In"
                   >
-                    GIS Map
+                    <ZoomIn className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMapDisplayType('radar')}
-                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
-                      mapDisplayType === 'radar' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    onClick={() => setMapZoom((z) => Math.max(12, z - 1))}
+                    className="p-1.5 text-slate-700 hover:text-slate-900 rounded-lg cursor-pointer hover:bg-white"
+                    title="Zoom Out"
                   >
-                    Radar Scope
+                    <ZoomOut className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {mapDisplayType === 'gis' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setMapSatellite(!mapSatellite)}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
-                        mapSatellite
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                      title="Toggle Satellite vs Street Map"
-                    >
-                      {mapSatellite ? '🛰️ Satellite' : '🗺️ Street'}
-                    </button>
-
-                    <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setMapZoom((z) => Math.min(18, z + 1))}
-                        className="p-1 text-slate-700 hover:text-slate-900 rounded cursor-pointer"
-                        title="Zoom In"
-                      >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMapZoom((z) => Math.max(12, z - 1))}
-                        className="p-1 text-slate-700 hover:text-slate-900 rounded cursor-pointer"
-                        title="Zoom Out"
-                      >
-                        <ZoomOut className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsFullscreenMap(!isFullscreenMap)}
-                      className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-2xs cursor-pointer"
-                      title={isFullscreenMap ? 'Exit Full Width' : 'Expand Full Width'}
-                    >
-                      {isFullscreenMap ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreenMap(!isFullscreenMap)}
+                  className="p-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-2xs cursor-pointer hover:bg-slate-50"
+                  title={isFullscreenMap ? 'Exit Full Width' : 'Expand Full Width'}
+                >
+                  {isFullscreenMap ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 

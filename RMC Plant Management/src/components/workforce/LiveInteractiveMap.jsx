@@ -599,47 +599,6 @@ export default function LiveInteractiveMap({
 
   return (
     <div className="w-full space-y-2">
-      {/* Individual Staff Tracking Selector Bar */}
-      {telemetryList && telemetryList.length > 0 && (
-        <div className="bg-white border border-slate-200/90 p-2 rounded-2xl shadow-2xs">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5 px-1">
-              <User className="w-3.5 h-3.5 text-blue-600" />
-              <span>Dedicated Map:</span>
-            </span>
-            {telemetryList.filter(t => !isAdminPerson(t)).map((emp) => {
-              const isSelected = validTarget?.id === emp.id;
-              const isOnline = emp.status === 'Punched In';
-              return (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => onSelectTarget && onSelectTarget(emp)}
-                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer shrink-0 shadow-2xs ${
-                    isSelected
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400'
-                      : isOnline
-                        ? 'bg-white hover:bg-emerald-50 text-slate-800 border border-emerald-300'
-                        : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
-                  }`}
-                  title={`Switch to isolated map for ${emp.name} (${emp.role})`}
-                >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${
-                    isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
-                  }`} />
-                  <span>{emp.name}</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                    isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {emp.employeeId || emp.id}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Top Telemetry Header Bar - High Visibility Command Center HUD */}
       <div className="bg-slate-900 border border-slate-800 text-white p-3 sm:p-4 rounded-2xl shadow-xl flex flex-col gap-3">
 
@@ -749,52 +708,53 @@ export default function LiveInteractiveMap({
           </div>
         </div>
 
-        {/* Row 2: Metrics Strip - Context-Aware (Odometer ONLY for Drivers!) */}
-        <div className="pt-2.5 border-t border-slate-800/80 flex items-center gap-2 flex-wrap text-xs">
-          {/* Total Run Today */}
-          <div className="bg-gradient-to-r from-blue-900/70 to-blue-950/70 text-white px-3 py-1.5 rounded-xl border border-blue-700/50 shadow-xs flex items-center gap-2">
-            <Route className="w-4 h-4 text-amber-400 shrink-0" />
-            <div className="text-left">
-              <div className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Total Run Today</div>
-              <div className="text-sm sm:text-base font-black font-mono text-white leading-tight">
-                {totalKm} KM
-              </div>
-            </div>
-          </div>
-
-          {/* Odometer Reading: EXCLUSIVELY FOR DRIVERS */}
-          {validTarget?.isDriver ? (
-            <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
-              <Truck className="w-4 h-4 text-cyan-400 shrink-0" />
+        {/* Row 2: Clean, Key Metrics Strip */}
+        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Total Run Today */}
+            <div className="bg-gradient-to-r from-blue-900/70 to-blue-950/70 text-white px-3 py-1.5 rounded-xl border border-blue-700/50 shadow-xs flex items-center gap-2">
+              <Route className="w-4 h-4 text-amber-400 shrink-0" />
               <div className="text-left">
-                <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Vehicle Odometer</div>
-                <div className="text-xs font-mono font-bold text-white leading-tight">
-                  {startOdometer.toLocaleString()} ➔ <span className="text-amber-300 font-black">{currentOdometer.toLocaleString()} KM</span>
+                <div className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Distance Run</div>
+                <div className="text-sm font-black font-mono text-white leading-tight">
+                  {totalKm} KM
                 </div>
               </div>
             </div>
-          ) : (
-            /* Field Locations Visited for Non-Drivers (Site Supervisor, Dispatcher, Manager, QC, etc.) */
-            <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-              <div className="text-left">
-                <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Field Locations</div>
-                <div className="text-xs font-mono font-bold text-white leading-tight">
-                  {stops.length > 1 ? `${stops.length} Stops Logged` : 'Active Field Base'}
+
+            {/* Odometer for Drivers OR Visited Stops for Field Staff */}
+            {validTarget?.isDriver ? (
+              <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
+                <Truck className="w-4 h-4 text-cyan-400 shrink-0" />
+                <div className="text-left">
+                  <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Odometer</div>
+                  <div className="text-xs font-mono font-bold text-white leading-tight">
+                    {startOdometer.toLocaleString()} ➔ <span className="text-amber-300 font-black">{currentOdometer.toLocaleString()} KM</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="text-left">
+                  <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Visited Waypoints</div>
+                  <div className="text-xs font-mono font-bold text-white leading-tight">
+                    {stops.length > 1 ? `${stops.length} Stops Logged` : 'Base Location'}
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Duty Status Badge */}
-          <div className="bg-slate-800/60 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700/60 shadow-xs flex items-center gap-2 font-mono text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Shift Status: <strong className="text-white">{validTarget?.status || 'Active On Duty'}</strong></span>
+            {/* Shift Status Badge */}
+            <div className="bg-slate-800/60 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700/60 shadow-xs flex items-center gap-2 font-mono text-[11px]">
+              <span className={`w-2 h-2 rounded-full ${validTarget?.status === 'Punched In' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+              <span>Status: <strong className="text-white">{validTarget?.status || 'Active On Duty'}</strong></span>
+            </div>
           </div>
 
           {/* GNSS Accuracy */}
-          <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono text-slate-400 ml-auto">
-            <span>GNSS Precision: ±{validTarget?.accuracy || 15}m</span>
+          <div className="text-[10px] font-mono text-slate-400">
+            GNSS Precision: ±{validTarget?.accuracy || 15}m
           </div>
         </div>
       </div>
