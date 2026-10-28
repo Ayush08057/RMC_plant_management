@@ -103,6 +103,7 @@ export const sanitizeAttendance = (attList) => {
     if (!empId) return;
 
     let item = { ...rawItem };
+    const key = String(dateStr) + String.fromCharCode(95) + String(empId);
     if (!map.has(key)) {
       map.set(key, item);
     } else {
