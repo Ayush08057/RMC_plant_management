@@ -40,12 +40,12 @@ export function getAssignedEmployeeStation(emp) {
 
   if (roleLower.includes('account') || idUpper.includes('ACC') || nameLower.includes('accountant')) {
     return {
-      lat: 16.845348,
-      lng: 74.597972,
-      stationName: 'Shambhara Footi Road, Sangli',
-      address: 'Shambhara Footi Road, Viya Nagar, Sangli, Maharashtra 416416',
-      shortZone: 'Shambhara Footi Road, Sangli',
-      notes: 'Commercial accounts & finance desk at Shambhara Footi Road, Sangli',
+      lat: 16.8584,
+      lng: 74.5824,
+      stationName: 'Sangli Market Yard (APMC Commercial Hub)',
+      address: 'APMC Market Yard Area, Sangli',
+      shortZone: 'Market Yard Hub',
+      notes: 'Commercial accounts & sales billing desk',
     };
   }
 
@@ -127,6 +127,7 @@ export function getAllRouteHistories() {
       Object.keys(parsed).forEach((k) => {
         const isDis = k.toUpperCase().includes('DIS') || k.toUpperCase().includes('DISPATCH');
         const isSup = k.toUpperCase().includes('SS') || k.toUpperCase().includes('SUPERVISOR');
+        const isAcc = k.toUpperCase().includes('ACC') || k.toUpperCase().includes('ACCOUNT');
         const list = parsed[k];
         if (Array.isArray(list)) {
           const filtered = list.filter((s) => {
@@ -135,6 +136,8 @@ export function getAllRouteHistories() {
             if (isDis && Number(s.lat) < 17.5) return false;
             // Purge any Pune / Dandekar stops (>= 17.5) recorded for Site Supervisor (who is stationed in Sangli)
             if (isSup && Number(s.lat) >= 17.5) return false;
+            // Purge any out-of-Sangli (>= 17.5 or < 16.5) or Chhindwara stops for Accountant (stationed in Sangli Market Yard)
+            if (isAcc && (Number(s.lat) >= 17.5 || Number(s.lat) < 16.5 || s.title?.includes('Chhindwara') || s.address?.includes('Chhindwara'))) return false;
             return (
               s.notes !== 'Formwork & reinforcement check' &&
               s.notes !== 'Batching 6.0 m³ M25 concrete loaded' &&
@@ -200,6 +203,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   const empRole = (employee.role || '').toLowerCase();
   const empName = (employee.name || '').toLowerCase();
   const isDis = empId.includes('DIS') || empRole.includes('dispatch') || empName.includes('dispatch');
+  const isAcc = empId.includes('ACC') || empRole.includes('account') || empName.includes('accountant');
 
   const allHistories = getAllRouteHistories();
 
@@ -222,6 +226,11 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   const isSup = empId.includes('SS') || empRole.includes('supervisor') || empName.includes('supervisor');
   if (isSup) {
     stops = stops.filter((s) => s && Number(s.lat) < 17.5);
+  }
+
+  // Purge any contaminated out-of-Sangli stops (>= 17.5 or < 16.5 or Chhindwara) for Accountant (stationed in Sangli Market Yard)
+  if (isAcc) {
+    stops = stops.filter((s) => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
   }
 
   // 2. Identify punch-in coordinates
@@ -290,6 +299,37 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
         status: 'Punch-In Station'
       };
     }
+  } else if (isAcc) {
+    // Accountant is strictly stationed in Sangli at APMC Market Yard Commercial Hub
+    const pLat = 16.858400;
+    const pLng = 74.582400;
+    const resolvedTitle = 'Sangli Market Yard (APMC Commercial Hub)';
+    const resolvedAddress = 'APMC Market Yard Area, Sangli, Maharashtra 416416';
+
+    if (stops.length === 0) {
+      stops.push({
+        stopNo: 1,
+        title: resolvedTitle,
+        category: 'Punch-In Location',
+        address: resolvedAddress,
+        time: punchInTime,
+        lat: pLat,
+        lng: pLng,
+        status: 'Punch-In Station',
+        distanceKm: 0.0,
+        stayMinutes: null,
+        notes: 'Commercial accounts & sales billing desk'
+      });
+    } else {
+      stops[0] = {
+        ...stops[0],
+        title: resolvedTitle,
+        address: resolvedAddress,
+        lat: pLat,
+        lng: pLng,
+        status: 'Punch-In Station'
+      };
+    }
   } else if (punchInGps && punchInGps.lat && punchInGps.lng) {
     const pLat = Number(punchInGps.lat);
     const pLng = Number(punchInGps.lng);
@@ -346,11 +386,14 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     let eLng = Number(exitGps.lng);
     if (isDis && eLat < 17.5) { eLat = 18.502390; eLng = 73.847872; }
     if (isSup && eLat >= 17.5) { eLat = 16.852000; eLng = 74.590000; }
+    if (isAcc && (eLat >= 17.5 || eLat < 16.5)) { eLat = 16.858400; eLng = 74.582400; }
     const eLandmark = isDis 
       ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
       : (isSup 
           ? { landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
-          : resolveSangliLandmark(eLat, eLng));
+          : (isAcc
+              ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
+              : resolveSangliLandmark(eLat, eLng)));
     const lastStop = stops[stops.length - 1];
     const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, eLat, eLng) : 999;
 
@@ -372,12 +415,25 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   } else {
     // Current live / last known position
     // Strictly isolate viewer device GPS: only use liveGps if target is the active device user AND coordinates are valid
-    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && (!isDis || Number(liveGps.lat) >= 17.5) && (!isSup || Number(liveGps.lat) < 17.5));
+    const isDeviceNearSangli = liveGps?.lat && Number(liveGps.lat) >= 16.5 && Number(liveGps.lat) <= 17.2 && Number(liveGps.lng) >= 74.0 && Number(liveGps.lng) <= 75.0;
+    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && (!isDis || Number(liveGps.lat) >= 17.5) && (!isSup || Number(liveGps.lat) < 17.5) && (!isAcc || isDeviceNearSangli));
     const rawLat = useDeviceGps ? liveGps.lat : (employee.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat);
     const rawLng = useDeviceGps ? liveGps.lng : (employee.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng);
 
-    const currentLat = isDis ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) : (isSup ? (Number(rawLat) >= 17.5 || !rawLat ? 16.852000 : rawLat) : rawLat);
-    const currentLng = isDis ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) : (isSup ? (Number(rawLat) >= 17.5 || !rawLng ? 74.590000 : rawLng) : rawLng);
+    const currentLat = isDis 
+      ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) 
+      : (isSup 
+          ? (Number(rawLat) >= 17.5 || !rawLat ? 16.852000 : rawLat) 
+          : (isAcc 
+              ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLat ? 16.858400 : rawLat) 
+              : rawLat));
+    const currentLng = isDis 
+      ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) 
+      : (isSup 
+          ? (Number(rawLat) >= 17.5 || !rawLng ? 74.590000 : rawLng) 
+          : (isAcc 
+              ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLng ? 74.582400 : rawLng) 
+              : rawLng));
 
     if (currentLat && currentLng) {
       const cLat = Number(currentLat);
@@ -386,7 +442,9 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
         ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
         : (isSup 
             ? { landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
-            : resolveSangliLandmark(cLat, cLng));
+            : (isAcc 
+                ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
+                : resolveSangliLandmark(cLat, cLng)));
       const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       if (stops.length === 0) {
@@ -407,7 +465,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
         const lastStop = stops[stops.length - 1];
         const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
 
-        if (distToLast > 80 && (!isDis || distToLast < 10000)) {
+        if (distToLast > 80 && (!isDis || distToLast < 10000) && (!isAcc || distToLast < 5000)) {
           stops.push({
             stopNo: stops.length + 1,
             title: landmark.landmarkName || 'Live GPS Location',

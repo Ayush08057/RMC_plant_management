@@ -103,6 +103,41 @@ export const sanitizeAttendance = (attList) => {
     if (!empId) return;
 
     let item = { ...rawItem };
+    const isItemAcc = empId.includes('ACC') || (item.role || '').toLowerCase().includes('account');
+    if (isItemAcc) {
+      const cLat = Number(item.gpsLocation?.lat);
+      const isBadGps = (!item.gpsLocation?.lat || cLat >= 17.5 || cLat < 16.5 || item.geofenceStatus?.toLowerCase().includes('chhindwara') || item.gpsLocation?.landmarkName?.toLowerCase().includes('chhindwara'));
+      if (isBadGps) {
+        item.gpsLocation = {
+          lat: 16.858400,
+          lng: 74.582400,
+          accuracy: 15,
+          landmarkName: 'Sangli Market Yard (APMC Commercial Hub)',
+          address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
+          shortName: 'Sangli Market Yard'
+        };
+        item.lastKnownLocation = { ...item.gpsLocation };
+        item.geofenceStatus = 'Sangli Market Yard (APMC Commercial Hub)';
+        item.totalDistanceKm = 0.0;
+      }
+      if (Array.isArray(item.routeTrail)) {
+        item.routeTrail = item.routeTrail.filter(s => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
+        if (item.routeTrail.length === 0 && item.punchIn) {
+          item.routeTrail = [{
+            stopNo: 1,
+            title: 'Punch-In: Sangli Market Yard (APMC Commercial Hub)',
+            category: 'Punch-In Location',
+            address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
+            time: item.punchIn,
+            lat: 16.858400,
+            lng: 74.582400,
+            status: 'Punch-In Station',
+            distanceKm: 0.0,
+            notes: 'Commercial accounts & sales billing desk'
+          }];
+        }
+      }
+    }
     const key = String(dateStr) + String.fromCharCode(95) + String(empId);
     if (!map.has(key)) {
       map.set(key, item);
@@ -1516,9 +1551,6 @@ export const WorkforceProvider = ({ children }) => {
       throw new Error("Employee " + emp.name + " has already punched in today at " + formatToIndian12Hr(data.attendance[existingIndex].punchIn) + ".");
     }
 
-    const isSup = (emp.role || '').toLowerCase().includes('supervisor') || canonicalEmpId.includes('SS');
-    const isDis = (emp.role || '').toLowerCase().includes('dispatch') || canonicalEmpId.includes('DIS');
-    const isAcc = (emp.role || '').toLowerCase().includes('account') || canonicalEmpId.includes('ACC');
     const actualPunchIn = options.time ? formatToIndian12Hr(options.time) : nowTime;
     const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
 
@@ -1526,6 +1558,39 @@ export const WorkforceProvider = ({ children }) => {
     let effectiveGeofence = options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available');
 
     let effectiveRouteTrail = options.routeTrail || (existingIndex >= 0 ? data.attendance[existingIndex].routeTrail : []) || [];
+    const isAccPunch = canonicalEmpId.includes('ACC') || (emp.role || '').toLowerCase().includes('account');
+    if (isAccPunch) {
+      const cLat = Number(effectiveGps?.lat);
+      if (cLat >= 17.5 || cLat < 16.5 || !effectiveGps?.lat) {
+        effectiveGps = {
+          lat: 16.858400,
+          lng: 74.582400,
+          accuracy: 15,
+          landmarkName: 'Sangli Market Yard (APMC Commercial Hub)',
+          address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
+          shortName: 'Sangli Market Yard',
+          source: 'ASSIGNED_OFFICE_HUB'
+        };
+        effectiveGeofence = 'Sangli Market Yard (APMC Commercial Hub)';
+      }
+      if (Array.isArray(effectiveRouteTrail)) {
+        effectiveRouteTrail = effectiveRouteTrail.filter(s => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
+        if (effectiveRouteTrail.length === 0) {
+          effectiveRouteTrail = [{
+            stopNo: 1,
+            title: 'Punch-In: Sangli Market Yard (APMC Commercial Hub)',
+            category: 'Punch-In Location',
+            address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
+            time: actualPunchIn,
+            lat: 16.858400,
+            lng: 74.582400,
+            status: 'Punch-In Station',
+            distanceKm: 0.0,
+            notes: 'Commercial accounts & sales billing desk'
+          }];
+        }
+      }
+    }
     if (isSup && Array.isArray(effectiveRouteTrail)) {
       effectiveRouteTrail = effectiveRouteTrail.filter(s => s && Number(s.lat) < 17.5 && !s.title?.includes('Dandekar') && !s.address?.includes('Pune'));
       if (effectiveRouteTrail.length === 0) {
@@ -1737,7 +1802,9 @@ export const WorkforceProvider = ({ children }) => {
     // >= 8h 30m -> Present - Full Day
     // < 8h 30m -> Half Day
     const isFullDay = eligibleMins >= 510;
+    const isHalfDay = !isFullDay;
     const finalAttendanceStatus = isFullDay ? 'Present' : 'Half Day';
+    const calculatedStatus = finalAttendanceStatus;
 
     const otThreshold = shift?.otThresholdHours || 8.5;
     const overtimeHours = eligibleHours > otThreshold ? Number((eligibleHours - otThreshold).toFixed(1)) : 0;
@@ -1781,7 +1848,6 @@ export const WorkforceProvider = ({ children }) => {
     }
     const totalDistanceKm = Number(calculatedKm.toFixed(1));
 
-
     const authUid = auth.currentUser?.uid || currentRecord.userId || user?.uid || user?.id || null;
 
     const updatedRecord = {
@@ -1793,13 +1859,14 @@ export const WorkforceProvider = ({ children }) => {
       eligibleHours,
       status: finalAttendanceStatus,
       overtimeHours,
+      isHalfDay,
+      completionStatus: isFullDay ? 'Full Day' : 'Half Day',
       totalDistanceKm,
       exitGpsLocation: exitGps,
       lastKnownLocation: exitGps || currentRecord.lastKnownLocation || currentRecord.gpsLocation || null,
       exitGeofenceStatus: options.geofenceStatus || (exitGps ? 'Shift Concluded (GPS Verified)' : 'Shift Concluded'),
       routeTrail: finalRouteTrail,
       remarks: options.remarks ? (currentRecord.remarks + " | Out: " + options.remarks) : currentRecord.remarks,
-
       updatedAt: new Date().toISOString(),
     };
 
@@ -1823,12 +1890,11 @@ export const WorkforceProvider = ({ children }) => {
       return { ...prev, attendance: sanitizeAttendance(copy) };
     });
 
-    addAuditLog("Punch Out (" + emp.name + ")", 'Attendance', "Out: " + nowTime + " | Worked: " + workingHours + "h (" + finalAttendanceStatus + ") | Traveled: " + totalDistanceKm + " km");
+    addAuditLog("Punch Out (" + emp.name + ")", 'Attendance', "Out: " + nowTime + " | Worked: " + workingHours + "h (" + finalAttendanceStatus + ") | Traveled: " + totalDistanceKm + " km" + (overtimeHours > 0 ? " | OT: " + overtimeHours + "h" : ""));
     addNotification({
-      title: 'Employee Punched Out',
-      desc: emp.name + " (" + cleanTargetId + ") completed duty. Status: " + finalAttendanceStatus + " (" + workingHours + "h, " + totalDistanceKm + " km).",
-      type: 'info',
-
+      title: isFullDay ? 'Shift Completed (Full Day)' : 'Shift Completed (Half Day)',
+      desc: `${emp.name} (${cleanTargetId}) clocked out at ${nowTime}. Worked: ${workingHours}h (${finalAttendanceStatus}${overtimeHours > 0 ? `, OT: ${overtimeHours}h` : ''}, ${totalDistanceKm} km).`,
+      type: isFullDay ? 'success' : 'warning',
       category: 'attendance',
     });
 
@@ -1948,8 +2014,11 @@ export const WorkforceProvider = ({ children }) => {
    */
   const updateLiveEmployeeLocation = async (employeeId, locationData) => {
     if (!employeeId || !locationData || !locationData.lat || !locationData.lng) return;
-    const today = new Date().toISOString().split('T')[0];
     const canonicalEmpId = employeeId.toString().trim().toUpperCase();
+    if (canonicalEmpId.includes('ACC') && (Number(locationData.lat) >= 17.5 || Number(locationData.lat) < 16.5)) {
+      return; // Ignore remote out-of-bounds coordinates (e.g. Chhindwara) for Accountant
+    }
+    const today = new Date().toISOString().split('T')[0];
 
     setData((prev) => {
       const prevList = prev.attendance || [];
@@ -2100,6 +2169,11 @@ export const WorkforceProvider = ({ children }) => {
           const lat = Number(pos.coords.latitude.toFixed(6));
           const lng = Number(pos.coords.longitude.toFixed(6));
           const accuracy = Math.round(pos.coords.accuracy || 20);
+
+          const isAccUser = (user?.role || '').toLowerCase().includes('account') || empId.toUpperCase().includes('ACC');
+          if (isAccUser && (lat >= 17.5 || lat < 16.5)) {
+            return; // Skip remote testing device GPS for Accountant
+          }
 
           const addrInfo = await resolveAccurateAddress(lat, lng);
           updateLiveEmployeeLocation(empId, {

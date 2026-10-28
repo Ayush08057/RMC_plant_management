@@ -320,10 +320,8 @@ export default function MobilePunchWidget({
       const targetId = activeEmployee.employeeId || activeEmployee.id;
       const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
                            (targetId || '').toUpperCase().includes('DIS');
-      const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
-                           (targetId || '').toUpperCase().includes('SS');
-      const isAccountant = (activeEmployee?.role || '').toLowerCase().includes('account') || 
-                           (targetId || '').toUpperCase().includes('ACC');
+      const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || (targetId || '').toUpperCase().includes('SS');
+      const isAccountant = (activeEmployee?.role || '').toLowerCase().includes('account') || (targetId || '').toUpperCase().includes('ACC');
 
       const defaultStation = isSupervisor ? {
         lat: 16.852000,
@@ -338,18 +336,12 @@ export default function MobilePunchWidget({
         address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
         shortZone: 'Narveer Tanaji Malusare Rd, Pune'
       } : (isAccountant ? {
-        lat: 16.845348,
-        lng: 74.597972,
-        stationName: 'Shambhara Footi Road, Sangli',
-        address: 'Shambhara Footi Road, Viya Nagar, Sangli, Maharashtra 416416',
-        shortZone: 'Shambhara Footi Rd, Sangli'
-      } : {
-        lat: 16.845000,
-        lng: 74.620000,
-        stationName: 'SM Concrete Plant HQ, Tanang',
-        address: 'Tanang, Sangli-Miraj Road, Sangli, Maharashtra 416410',
-        shortZone: 'Plant HQ, Sangli'
-      }));
+        lat: 16.858400,
+        lng: 74.582400,
+        stationName: 'Sangli Market Yard (APMC Commercial Hub)',
+        address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
+        shortZone: 'Sangli Market Yard'
+      } : null));
 
       // 2. Obtain fresh, high-precision GPS location
       let currentGps = null;
@@ -380,26 +372,26 @@ export default function MobilePunchWidget({
         }
       }
 
-      // Safeguard: Ensure accountant location in Sangli strictly resolves Shambhara Footi Road
-      if (isAccountant) {
-        const cLat = Number(currentGps?.lat);
-        const isOutsideSangli = (!cLat || cLat > 17.5 || cLat < 16.5);
-        if (isOutsideSangli) {
-          currentGps = {
-            ...currentGps,
-            lat: 16.845348,
-            lng: 74.597972,
-            accuracy: 15,
-            landmarkName: 'Shambhara Footi Road, Sangli',
-            shortName: 'Shambhara Footi Rd',
-            address: 'Shambhara Footi Road, Viya Nagar, Sangli, Maharashtra 416416',
-          };
-        }
-      }
-
       // Safeguard: Ensure dispatcher location is strictly Pune
       if (isDispatcher && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
         currentGps = defaultStation;
+      }
+
+      // Safeguard: Ensure Accountant location is strictly at Sangli Market Yard
+      if (isAccountant) {
+        const cLat = Number(currentGps?.lat);
+        const isOutOfSangli = (cLat >= 17.5 || cLat < 16.5 || !currentGps?.lat);
+        if (isOutOfSangli) {
+          currentGps = {
+            ...currentGps,
+            lat: 16.858400,
+            lng: 74.582400,
+            accuracy: 15,
+            landmarkName: 'Sangli Market Yard (APMC Commercial Hub)',
+            shortName: 'Sangli Market Yard',
+            address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
+          };
+        }
       }
 
       const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isSupervisor ? 'Godrej Green Acres Construction Site, Sangli' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location'));
@@ -749,7 +741,6 @@ export default function MobilePunchWidget({
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] text-slate-300 shadow-xs">
                       <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span className="font-semibold text-white truncate max-w-[220px]">
-                        {userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.geofenceStatus || 'Shambhara Footi Road, Sangli'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 pt-0.5">
