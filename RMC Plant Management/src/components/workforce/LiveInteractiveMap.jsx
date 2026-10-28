@@ -22,10 +22,12 @@ import {
   ShieldCheck,
   AlertCircle,
   X,
-  User
+  User,
+  GitCommit
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { isAdminPerson } from '../../data/mockUsers';
+import { fetchRoadSnappedRoute, snapCoordinateToRoad } from '../../services/roadSnapService';
 
 // Sangli Plant HQ anchor
 const SANGLI_PLANT_HQ = { lat: 16.8450, lng: 74.6200, name: 'SM Concrete Plant HQ, Tanang' };
@@ -135,6 +137,9 @@ export default function LiveInteractiveMap({
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [inputApiKey, setInputApiKey] = useState(leafletApiKey);
   const [keySavedToast, setKeySavedToast] = useState(false);
+  const [roadSnapEnabled, setRoadSnapEnabled] = useState(true);
+  const [snappedRouteState, setSnappedRouteState] = useState(null);
+  const [snappedLiveGps, setSnappedLiveGps] = useState(null);
   const hasFittedRef = useRef(false);
 
   // Validate active target (strictly non-admin)
@@ -242,6 +247,43 @@ export default function LiveInteractiveMap({
     return () => clearTimeout(timer);
   }, [isFullWidth]);
 
+  // Asynchronously resolve road-snapped geometry for stops and live beacon
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (roadSnapEnabled && stops.length > 1) {
+      fetchRoadSnappedRoute(stops)
+        .then((res) => {
+          if (!isCancelled && res) {
+            setSnappedRouteState(res);
+          }
+        })
+        .catch(() => {
+          if (!isCancelled) setSnappedRouteState(null);
+        });
+    } else {
+      setSnappedRouteState(null);
+    }
+
+    if (roadSnapEnabled && validTarget?.lat && validTarget?.lng) {
+      snapCoordinateToRoad(validTarget.lat, validTarget.lng)
+        .then((res) => {
+          if (!isCancelled && res) {
+            setSnappedLiveGps(res);
+          }
+        })
+        .catch(() => {
+          if (!isCancelled) setSnappedLiveGps(null);
+        });
+    } else {
+      setSnappedLiveGps(null);
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [roadSnapEnabled, stops, validTarget?.id, validTarget?.lat, validTarget?.lng]);
+
   // Draw Real Travel Route and Dedicated Live Employee GPS Markers
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !routeLayerGroupRef.current || !markersLayerGroupRef.current) return;
@@ -258,25 +300,40 @@ export default function LiveInteractiveMap({
 
     // 1. Draw Route Trail (only when selected target has multiple visited stops and route mode is on)
     if (mapRouteMode && stops.length > 1) {
-      const latLngs = stops.map((s) => [Number(s.lat), Number(s.lng)]);
+      const rawLatLngs = stops.map((s) => [Number(s.lat), Number(s.lng)]);
+      // Use road-snapped high-fidelity coordinates if available and enabled, otherwise fallback to straight-line waypoints
+      const isRoadSnapped = Boolean(roadSnapEnabled && snappedRouteState && snappedRouteState.snapped && snappedRouteState.coords.length > 1);
+      const activePolylineCoords = isRoadSnapped ? snappedRouteState.coords : rawLatLngs;
 
-      // Glow underlay
-      L.polyline(latLngs, {
-        color: '#0284c7',
-        weight: 8,
-        opacity: 0.35,
+      // Glow underlay along true road geometry
+      L.polyline(activePolylineCoords, {
+        color: isRoadSnapped ? '#0284c7' : '#0284c7',
+        weight: isRoadSnapped ? 9 : 8,
+        opacity: isRoadSnapped ? 0.45 : 0.35,
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(routeGroup);
 
-      // Main route line
-      L.polyline(latLngs, {
-        color: '#2563eb',
-        weight: 5,
+      // Main route line along real street network
+      L.polyline(activePolylineCoords, {
+        color: isRoadSnapped ? '#1d4ed8' : '#2563eb',
+        weight: isRoadSnapped ? 5.5 : 5,
         opacity: 0.95,
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(routeGroup);
+
+      // If road snap is active, render subtle dashed guide to raw waypoints for full transparency
+      if (isRoadSnapped && rawLatLngs.length > 1) {
+        L.polyline(rawLatLngs, {
+          color: '#38bdf8',
+          weight: 1.5,
+          opacity: 0.4,
+          dashArray: '4, 8',
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeGroup);
+      }
 
       // Draw Midpoint Distance Pill Badges on Route Legs
       for (let i = 0; i < stops.length - 1; i++) {
@@ -377,6 +434,29 @@ export default function LiveInteractiveMap({
       const isDis = String(validTarget.employeeId || validTarget.id || '').toUpperCase().includes('DIS') ||
                     String(validTarget.role || '').toLowerCase().includes('dispatch');
 
+      // Use road-snapped live coordinate if snap is enabled and available
+      const isLiveSnapped = Boolean(roadSnapEnabled && snappedLiveGps && snappedLiveGps.snapped);
+      const displayLat = isLiveSnapped ? Number(snappedLiveGps.lat) : targetLat;
+      const displayLng = isLiveSnapped ? Number(snappedLiveGps.lng) : targetLng;
+
+      // If snapped to road with a small offset, draw anchor link between raw GPS pin and snapped road point
+      if (isLiveSnapped && snappedLiveGps.offsetMeters > 3) {
+        L.polyline([[targetLat, targetLng], [displayLat, displayLng]], {
+          color: '#06b6d4',
+          weight: 2,
+          dashArray: '3, 4',
+          opacity: 0.85
+        }).addTo(routeGroup);
+
+        L.circleMarker([targetLat, targetLng], {
+          radius: 4,
+          color: '#0891b2',
+          fillColor: '#67e8f9',
+          fillOpacity: 0.9,
+          weight: 1.5
+        }).bindTooltip('Raw GNSS Device Fix (pre-snap)', { direction: 'top' }).addTo(routeGroup);
+      }
+
       const selectedBeaconIcon = L.divIcon({
         className: 'bg-transparent border-0',
         html: `
@@ -396,6 +476,7 @@ export default function LiveInteractiveMap({
               <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}"></span>
               <span>${validTarget.name}</span>
               <span class="px-1.5 py-0.2 rounded-md bg-blue-600 text-[10px] font-mono">${validTarget.employeeId || validTarget.id}</span>
+              ${isLiveSnapped ? '<span class="px-1 py-0.2 rounded bg-cyan-700 text-[9px] font-mono text-cyan-100 font-bold" title="Snapped to drivable road corridor">🛣️ Road Snap</span>' : ''}
             </div>
 
             <!-- Geofence & Location Landmark Sub-badge -->
@@ -404,12 +485,12 @@ export default function LiveInteractiveMap({
             </div>
           </div>
         `,
-        iconSize: [180, 92],
-        iconAnchor: [90, 52],
+        iconSize: [190, 92],
+        iconAnchor: [95, 52],
         popupAnchor: [0, -52],
       });
 
-      const selectedMarker = L.marker([targetLat, targetLng], { icon: selectedBeaconIcon, zIndexOffset: 1000 })
+      const selectedMarker = L.marker([displayLat, displayLng], { icon: selectedBeaconIcon, zIndexOffset: 1000 })
         .bindPopup(`
           <div class="p-3 text-xs font-sans min-w-[260px]">
             <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-2">
@@ -434,8 +515,15 @@ export default function LiveInteractiveMap({
 
               <div class="flex items-center justify-between font-mono text-[10px] bg-slate-50 p-2 rounded-lg border border-slate-200">
                 <span class="text-slate-500 font-semibold">Live GPS Coordinates:</span>
-                <span class="font-black text-blue-700">${targetLat.toFixed(4)}°N, ${targetLng.toFixed(4)}°E</span>
+                <span class="font-black text-blue-700">${displayLat.toFixed(4)}°N, ${displayLng.toFixed(4)}°E</span>
               </div>
+
+              ${isLiveSnapped ? `
+                <div class="flex items-center justify-between text-[10px] font-mono bg-cyan-50 p-1.5 rounded-lg border border-cyan-200 text-cyan-900">
+                  <span class="flex items-center gap-1 font-bold"><span>🛣️</span> Road Snap Status:</span>
+                  <span class="font-black text-cyan-800">Aligned to Road (offset: ${snappedLiveGps.offsetMeters}m)</span>
+                </div>
+              ` : ''}
 
               ${validTarget.punchIn ? `
                 <div class="flex items-center justify-between text-[11px] px-1">
@@ -458,7 +546,7 @@ export default function LiveInteractiveMap({
                 <span>Active GNSS Fix</span>
               </span>
               <a
-                href="https://www.google.com/maps/search/?api=1&query=${targetLat},${targetLng}"
+                href="https://www.google.com/maps/search/?api=1&query=${displayLat},${displayLng}"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] shadow-2xs transition-all inline-flex items-center gap-1 cursor-pointer"
@@ -471,20 +559,20 @@ export default function LiveInteractiveMap({
         .addTo(markersGroup);
 
       // Smoothly pan or fly to target whenever target changes OR its coordinates update
-      const targetCoordKey = `${validTarget.id}_${targetLat.toFixed(5)}_${targetLng.toFixed(5)}`;
+      const targetCoordKey = `${validTarget.id}_${displayLat.toFixed(5)}_${displayLng.toFixed(5)}`;
       if (!hasFittedRef.current) {
         hasFittedRef.current = true;
         lastTargetIdRef.current = targetCoordKey;
-        map.setView([targetLat, targetLng], 15);
+        map.setView([displayLat, displayLng], 15);
         selectedMarker.openPopup();
       } else if (lastTargetIdRef.current !== targetCoordKey) {
         lastTargetIdRef.current = targetCoordKey;
-        map.flyTo([targetLat, targetLng], 15, { animate: true, duration: 0.8 });
+        map.flyTo([displayLat, displayLng], 15, { animate: true, duration: 0.8 });
         selectedMarker.openPopup();
       }
     }
 
-  }, [mapReady, validTarget?.id, validTarget?.lat, validTarget?.lng, stops, selectedStop?.stopNo, mapRouteMode]);
+  }, [mapReady, validTarget?.id, validTarget?.lat, validTarget?.lng, stops, selectedStop?.stopNo, mapRouteMode, roadSnapEnabled, snappedRouteState, snappedLiveGps]);
 
   const startOdometer = validTarget?.activeTrip?.startOdometer || 14250.0;
   const currentOdometer = Number((startOdometer + totalKm).toFixed(1));
@@ -608,6 +696,21 @@ export default function LiveInteractiveMap({
 
           {/* Action Buttons - Spacious, cleanly styled & never clipped */}
           <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+            {/* Road Snap Toggle Switch */}
+            <button
+              type="button"
+              onClick={() => setRoadSnapEnabled((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
+                roadSnapEnabled 
+                  ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400/50 shadow-cyan-900/30' 
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+              }`}
+              title={roadSnapEnabled ? 'Road Snap is active: GPS aligned to real road network' : 'Click to enable real road snapping'}
+            >
+              <GitCommit className={`w-3.5 h-3.5 ${roadSnapEnabled ? 'text-cyan-200 animate-pulse' : 'text-slate-400'}`} />
+              <span>{roadSnapEnabled ? '🛣️ Road Snap: ON' : 'Road Snap: OFF'}</span>
+            </button>
+
             <button
               type="button"
               onClick={handleFitRoute}
@@ -836,6 +939,14 @@ export default function LiveInteractiveMap({
             <span className="w-3.5 h-1.5 bg-blue-600 rounded-full" />
             <span>{totalKm > 0 ? `Total Run: ${totalKm} KM (${legsCount} Legs)` : 'Total Run: 0 KM (Stationary)'}</span>
           </span>
+          {roadSnapEnabled && (
+            <>
+              <span className="text-slate-300">•</span>
+              <span className="flex items-center gap-1 font-mono text-[11px] text-cyan-800 font-bold bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-200">
+                <span>🛣️ Road-Snapped</span>
+              </span>
+            </>
+          )}
           <span className="text-slate-300">•</span>
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-amber-700 font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs" />
