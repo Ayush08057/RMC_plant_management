@@ -188,13 +188,15 @@ export default function AdminDashboardPage() {
 
       // Canonical employee key to guarantee strictly 1 record per staff member
       let empKey = (a.employeeId || a.id || a.userId || '').toString().trim().toUpperCase();
+      const aRoleLower = (a.role || '').toLowerCase();
+      const aNameLower = (a.employeeName || a.name || '').toLowerCase();
+      if (empKey.includes('SS-001') || empKey.includes('SS001') || empKey.includes('SUP') || aRoleLower.includes('supervisor') || aNameLower.includes('supervisor')) empKey = 'SS-001';
+      else if (empKey.includes('DIS-001') || empKey.includes('DIS001') || empKey.includes('DISP') || aRoleLower.includes('dispatch') || aNameLower.includes('dispatch')) empKey = 'DIS-001';
+      else if (empKey.includes('PM-001') || empKey.includes('PM001') || aRoleLower.includes('plant manager') || aNameLower.includes('plant manager')) empKey = 'PM-001';
+      else if (empKey.includes('ACC-001') || empKey.includes('ACC001') || aRoleLower.includes('account') || aNameLower.includes('account')) empKey = 'ACC-001';
+      else if (empKey.includes('QC-001') || empKey.includes('QC001') || aRoleLower.includes('qc') || aNameLower.includes('quality')) empKey = 'QC-001';
+      else if (empKey.includes('DRV-001') || empKey.includes('DV-001') || empKey.includes('DRIVER') || aRoleLower.includes('driver') || aNameLower.includes('driver')) empKey = 'DRV-001';
       if (!empKey) return;
-      if (empKey === 'USR-SS-001') empKey = 'SS-001';
-      if (empKey === 'USR-DIS-001') empKey = 'DIS-001';
-      if (empKey === 'USR-PM-001') empKey = 'PM-001';
-      if (empKey === 'USR-ACC-001') empKey = 'ACC-001';
-      if (empKey === 'USR-QC-001') empKey = 'QC-001';
-      if (empKey === 'USR-DV-001') empKey = 'DRV-001';
 
       const todayUtcStr = new Date().toISOString().split('T')[0];
       const isToday = (recDate === todayLocalDateStr || recDate === todayUtcStr || (a.createdAt && a.createdAt.startsWith(todayLocalDateStr)) || (a.id && a.id.includes(todayLocalDateStr.replace(/-/g, ''))));

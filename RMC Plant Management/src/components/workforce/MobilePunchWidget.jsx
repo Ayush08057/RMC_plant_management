@@ -741,6 +741,7 @@ export default function MobilePunchWidget({
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] text-slate-300 shadow-xs">
                       <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span className="font-semibold text-white truncate max-w-[220px]">
+                        {userTodayRecord?.geofenceStatus || userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.gpsLocation?.address || 'Workstation Verified'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 pt-0.5">

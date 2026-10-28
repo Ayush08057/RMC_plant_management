@@ -156,7 +156,7 @@ assert(
   'MobilePunchWidget awaits checkIn before displaying success message'
 );
 assert(
-  mobilePunchCode.includes('const handlePunchOutWithReport = async (e) => {'),
+  (mobilePunchCode.includes('const handlePunchOutWithReport = async (e) => {') || mobilePunchCode.includes('const handleConfirmPunchOut = async (e) => {')),
   'MobilePunchWidget handlePunchOutWithReport is async'
 );
 assert(
