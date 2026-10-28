@@ -300,6 +300,18 @@ export default function AttendanceManagementView({
       }
     };
 
+    const fallbackPunchIn = () => {
+      const isSup = (emp.role || '').toLowerCase().includes('supervisor') || (emp.employeeId || emp.id || '').toUpperCase().includes('SS');
+      const isDis = (emp.role || '').toLowerCase().includes('dispatch') || (emp.employeeId || emp.id || '').toUpperCase().includes('DIS');
+      if (isSup) {
+        executePunchIn(16.8520, 74.5900, false);
+      } else if (isDis) {
+        executePunchIn(18.502390, 73.847872, false);
+      } else {
+        executePunchIn(16.8450, 74.6200, false);
+      }
+    };
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -308,12 +320,12 @@ export default function AttendanceManagementView({
           executePunchIn(lat, lng, true);
         },
         () => {
-          executePunchIn(18.5204, 73.8567, false);
+          fallbackPunchIn();
         },
         { enableHighAccuracy: true, timeout: 8000 }
       );
     } else {
-      executePunchIn(18.5204, 73.8567, false);
+      fallbackPunchIn();
     }
   };
 
@@ -677,8 +689,13 @@ export default function AttendanceManagementView({
       let locationSpeed = 0;
 
       if (isEmpSupervisor) {
-        locationSummary = realLocation || (isOnline ? 'Dandekar Pool, Sinhagad Rd, Pune' : 'Dandekar Pool Site Hub');
-        locationCoords = record?.gpsLocation || { lat: 18.506500, lng: 73.847500 };
+        const isPuneContaminated = !realLocation || realLocation.toLowerCase().includes('dandekar') || realLocation.toLowerCase().includes('pune') || (record?.gpsLocation?.lat && Number(record.gpsLocation.lat) >= 17.5);
+        locationSummary = isPuneContaminated 
+          ? (isOnline ? 'Godrej Green Acres Construction Site, Sangli' : 'Godrej Green Acres Site Hub, Sangli')
+          : realLocation;
+        locationCoords = isPuneContaminated 
+          ? { lat: 16.852000, lng: 74.590000, landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
+          : (record?.gpsLocation || { lat: 16.852000, lng: 74.590000 });
       } else if ((emp.role || '').toLowerCase().includes('dispatch')) {
         locationSummary = realLocation || 'Narveer Tanaji Malusare Rd, Pune';
         locationCoords = record?.gpsLocation || { lat: 18.502390, lng: 73.847872 };
@@ -3286,7 +3303,7 @@ export default function AttendanceManagementView({
                         </span>
                       </div>
                       <a
-                        href={`https://maps.google.com/?q=${staff.locationCoords?.lat || 18.5204},${staff.locationCoords?.lng || 73.8567}`}
+                        href={`https://maps.google.com/?q=${staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)},${staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[10px] flex items-center gap-1 shrink-0 transition-colors"
@@ -3300,19 +3317,19 @@ export default function AttendanceManagementView({
                     {/* Clean Map View */}
                     <div className="relative w-full h-32 bg-slate-100 overflow-hidden">
                       <iframe
-                        title="Plant Location Map"
+                        title="Staff Location Map"
                         width="100%"
                         height="100%"
                         frameBorder="0"
                         scrolling="no"
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${(staff.locationCoords?.lng || 73.8567) - 0.006}%2C${(staff.locationCoords?.lat || 18.5204) - 0.006}%2C${(staff.locationCoords?.lng || 73.8567) + 0.006}%2C${(staff.locationCoords?.lat || 18.5204) + 0.006}&layer=mapnik&marker=${staff.locationCoords?.lat || 18.5204}%2C${staff.locationCoords?.lng || 73.8567}`}
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${(staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)) - 0.006}%2C${(staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)) - 0.006}%2C${(staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)) + 0.006}%2C${(staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)) + 0.006}&layer=mapnik&marker=${staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)}%2C${staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)}`}
                         className="w-full h-full opacity-90 contrast-105"
                       />
 
                       {/* Top Overlay */}
                       <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-white/90 backdrop-blur-xs border border-slate-200 text-[10px] font-bold text-slate-800 shadow-xs flex items-center gap-1 pointer-events-none">
                         <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                        <span>Main Plant Unit #01, Pune</span>
+                        <span>{staff.isSupervisor ? 'Godrej Green Acres Site, Sangli' : ((staff.role || '').toLowerCase().includes('dispatch') ? 'Logistics Hub, Pune' : 'SM Concrete Plant HQ, Sangli')}</span>
                       </div>
 
                       {/* Bottom Overlay */}

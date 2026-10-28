@@ -45,6 +45,16 @@ export const SANGLI_LANDMARKS = [
     type: 'FINANCE_COMMERCIAL',
   },
   {
+    id: 'GODREJ_GREEN_ACRES',
+    name: 'Godrej Green Acres Construction Site, Sangli',
+    shortName: 'Godrej Project Site',
+    lat: 16.8520,
+    lng: 74.5900,
+    radiusMeters: 1500,
+    address: 'Near Government Colony, Sangli, Maharashtra 416416',
+    type: 'CONSTRUCTION_SITE',
+  },
+  {
     id: 'SANGLI_CITY_CENTER',
     name: 'Sangli City Center',
     shortName: 'Sangli City',

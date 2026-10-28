@@ -62,12 +62,12 @@ export function getAssignedEmployeeStation(emp) {
 
   if (roleLower.includes('supervisor') || idUpper.includes('SS') || nameLower.includes('supervisor')) {
     return {
-      lat: 18.5065,
-      lng: 73.8475,
-      stationName: 'Dandekar Pool Site / Sinhagad Road Station',
-      address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
-      shortZone: 'Dandekar Pool (Sinhagad Rd)',
-      notes: 'On-site concrete pouring & supervision at Dandekar Pool',
+      lat: 16.8520,
+      lng: 74.5900,
+      stationName: 'Godrej Green Acres Construction Site, Sangli',
+      address: 'Near Government Colony, Sangli, Maharashtra 416416',
+      shortZone: 'Godrej Project Site, Sangli',
+      notes: 'On-site concrete pouring & supervision at Godrej Green Acres',
     };
   }
 
@@ -126,12 +126,15 @@ export function getAllRouteHistories() {
       const cleaned = {};
       Object.keys(parsed).forEach((k) => {
         const isDis = k.toUpperCase().includes('DIS') || k.toUpperCase().includes('DISPATCH');
+        const isSup = k.toUpperCase().includes('SS') || k.toUpperCase().includes('SUPERVISOR');
         const list = parsed[k];
         if (Array.isArray(list)) {
           const filtered = list.filter((s) => {
             if (!s) return false;
             // Purge any Sangli stops (< 17.5) recorded for Dispatcher
             if (isDis && Number(s.lat) < 17.5) return false;
+            // Purge any Pune / Dandekar stops (>= 17.5) recorded for Site Supervisor (who is stationed in Sangli)
+            if (isSup && Number(s.lat) >= 17.5) return false;
             return (
               s.notes !== 'Formwork & reinforcement check' &&
               s.notes !== 'Batching 6.0 m³ M25 concrete loaded' &&
@@ -215,6 +218,12 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     stops = stops.filter((s) => s && Number(s.lat) >= 17.5);
   }
 
+  // Purge any contaminated Pune / Dandekar stops (>= 17.5) for Site Supervisor (who is stationed in Sangli)
+  const isSup = empId.includes('SS') || empRole.includes('supervisor') || empName.includes('supervisor');
+  if (isSup) {
+    stops = stops.filter((s) => s && Number(s.lat) < 17.5);
+  }
+
   // 2. Identify punch-in coordinates
   const punchInGps = employee.gpsLocation || employee.record?.gpsLocation || null;
   const punchInTime = employee.punchIn || employee.record?.punchIn || '09:00 AM';
@@ -239,6 +248,37 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
         distanceKm: 0.0,
         stayMinutes: null,
         notes: 'Verified biometric punch-in in Pune'
+      });
+    } else {
+      stops[0] = {
+        ...stops[0],
+        title: resolvedTitle,
+        address: resolvedAddress,
+        lat: pLat,
+        lng: pLng,
+        status: 'Punch-In Station'
+      };
+    }
+  } else if (isSup) {
+    // Site Supervisor is strictly stationed in Sangli at Godrej Green Acres Site
+    const pLat = 16.852000;
+    const pLng = 74.590000;
+    const resolvedTitle = 'Godrej Green Acres Construction Site, Sangli';
+    const resolvedAddress = 'Near Government Colony, Sangli, Maharashtra 416416';
+
+    if (stops.length === 0) {
+      stops.push({
+        stopNo: 1,
+        title: resolvedTitle,
+        category: 'Punch-In Location',
+        address: resolvedAddress,
+        time: punchInTime,
+        lat: pLat,
+        lng: pLng,
+        status: 'Punch-In Station',
+        distanceKm: 0.0,
+        stayMinutes: null,
+        notes: 'Verified biometric punch-in in Sangli'
       });
     } else {
       stops[0] = {
@@ -302,11 +342,15 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   const punchOutTime = employee.punchOut || employee.record?.punchOut || null;
 
   if (exitGps && exitGps.lat && exitGps.lng) {
-    const eLat = isDis ? (Number(exitGps.lat) < 17.5 ? 18.502390 : Number(exitGps.lat)) : Number(exitGps.lat);
-    const eLng = isDis ? (Number(exitGps.lat) < 17.5 ? 73.847872 : Number(exitGps.lng)) : Number(exitGps.lng);
+    let eLat = Number(exitGps.lat);
+    let eLng = Number(exitGps.lng);
+    if (isDis && eLat < 17.5) { eLat = 18.502390; eLng = 73.847872; }
+    if (isSup && eLat >= 17.5) { eLat = 16.852000; eLng = 74.590000; }
     const eLandmark = isDis 
       ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
-      : resolveSangliLandmark(eLat, eLng);
+      : (isSup 
+          ? { landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
+          : resolveSangliLandmark(eLat, eLng));
     const lastStop = stops[stops.length - 1];
     const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, eLat, eLng) : 999;
 
@@ -328,19 +372,21 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   } else {
     // Current live / last known position
     // Strictly isolate viewer device GPS: only use liveGps if target is the active device user AND coordinates are valid
-    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && (!isDis || Number(liveGps.lat) >= 17.5));
+    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && (!isDis || Number(liveGps.lat) >= 17.5) && (!isSup || Number(liveGps.lat) < 17.5));
     const rawLat = useDeviceGps ? liveGps.lat : (employee.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat);
     const rawLng = useDeviceGps ? liveGps.lng : (employee.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng);
 
-    const currentLat = isDis ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) : rawLat;
-    const currentLng = isDis ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) : rawLng;
+    const currentLat = isDis ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) : (isSup ? (Number(rawLat) >= 17.5 || !rawLat ? 16.852000 : rawLat) : rawLat);
+    const currentLng = isDis ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) : (isSup ? (Number(rawLat) >= 17.5 || !rawLng ? 74.590000 : rawLng) : rawLng);
 
     if (currentLat && currentLng) {
       const cLat = Number(currentLat);
       const cLng = Number(currentLng);
       const landmark = isDis 
         ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
-        : resolveSangliLandmark(cLat, cLng);
+        : (isSup 
+            ? { landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
+            : resolveSangliLandmark(cLat, cLng));
       const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       if (stops.length === 0) {

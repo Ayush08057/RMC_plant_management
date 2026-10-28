@@ -367,11 +367,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
       } else if (isEmpSupervisor) {
         const cLat = Number(lat);
-        const cLng = Number(lng);
-        const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
-        if (isSangli || !lat) {
-          lat = 18.506500;
-          lng = 73.847500;
+        const isContaminatedPune = (cLat >= 17.5);
+        if (isContaminatedPune || !lat) {
+          lat = 16.852000;
+          lng = 74.590000;
           accuracy = 15;
           gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
         }
@@ -428,7 +427,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       } else if (landmark && landmark.isKnownLandmark) {
         geofenceLabel = landmark.landmarkName;
       } else if (isEmpSupervisor) {
-        geofenceLabel = record?.geofenceStatus || (isPunchedIn ? 'Dandekar Pool, Sinhagad Rd, Pune' : assignedStation.stationName);
+        geofenceLabel = record?.geofenceStatus || (isPunchedIn ? 'Godrej Green Acres Construction Site, Sangli' : assignedStation.stationName);
       } else if (assignedStation?.stationName) {
         geofenceLabel = assignedStation.stationName;
       }
@@ -452,8 +451,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
       let finalGeofence = record?.geofenceStatus || geofenceLabel;
       if (isEmpSupervisor) {
-        if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.toLowerCase().includes('shivajinagar') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {
-          finalGeofence = 'Dandekar Pool, Sinhagad Rd, Pune';
+        if (!finalGeofence || finalGeofence.toLowerCase().includes('dandekar') || finalGeofence.toLowerCase().includes('pune') || Number(lat) > 17.5) {
+          finalGeofence = 'Godrej Green Acres Construction Site, Sangli';
         }
       } else if (isDis) {
         if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {

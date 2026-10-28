@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/dashboard/AppLayout';
 import KPICard from '../../components/dashboard/KPICard';
 import DataTable from '../../components/dashboard/DataTable';
@@ -31,7 +31,43 @@ import RolePersonalAttendanceView from '../../components/workforce/RolePersonalA
 
 export default function SiteSupervisorDashboardPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabState] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTab = urlParams.get('tab');
+      if (urlTab) return urlTab;
+      const saved = sessionStorage.getItem('rmc_supervisor_active_tab');
+      if (saved) return saved;
+    } catch {}
+    return 'dashboard';
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    try {
+      sessionStorage.setItem('rmc_supervisor_active_tab', tab);
+      const url = new URL(window.location.href);
+      if (tab === 'dashboard') {
+        url.searchParams.delete('tab');
+      } else {
+        url.searchParams.set('tab', tab);
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlTab = urlParams.get('tab') || 'dashboard';
+        setActiveTabState(urlTab);
+        sessionStorage.setItem('rmc_supervisor_active_tab', urlTab);
+      } catch {}
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const [toastMessage, setToastMessage] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);

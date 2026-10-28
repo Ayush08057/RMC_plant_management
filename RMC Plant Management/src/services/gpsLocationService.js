@@ -97,7 +97,7 @@ export async function resolveAccurateAddress(lat, lng) {
     let puneArea = 'Pune, Maharashtra';
     let shortZone = 'Pune';
 
-    // Priority 1: Dandekar Pool / Sinhagad Road / Parvati micro-zone (Site Supervisor & Dispatch Operations)
+    // Priority 1: Dandekar Pool / Sinhagad Road / Parvati micro-zone (Dispatcher Operations)
     if (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856) {
       puneArea = 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030';
       shortZone = 'Dandekar Pool (Sinhagad Rd)';

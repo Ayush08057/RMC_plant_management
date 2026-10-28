@@ -318,12 +318,12 @@ export default function MobilePunchWidget({
       const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
                            (targetId || '').toUpperCase().includes('SS');
 
-      const defaultPuneStation = isSupervisor ? {
-        lat: 18.506500,
-        lng: 73.847500,
-        stationName: 'Dandekar Pool, Sinhagad Rd, Pune',
-        address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
-        shortZone: 'Dandekar Pool (Sinhagad Rd)'
+      const defaultStation = isSupervisor ? {
+        lat: 16.852000,
+        lng: 74.590000,
+        stationName: 'Godrej Green Acres Construction Site, Sangli',
+        address: 'Near Government Colony, Sangli, Maharashtra 416416',
+        shortZone: 'Godrej Green Acres (Sangli)'
       } : (isDispatcher ? {
         lat: 18.502390,
         lng: 73.847872,
@@ -335,40 +335,38 @@ export default function MobilePunchWidget({
       // 2. Obtain fresh, high-precision GPS location
       let currentGps = null;
       try {
-        currentGps = await acquireGpsLocation(true, defaultPuneStation);
+        currentGps = await acquireGpsLocation(true, defaultStation);
       } catch {
         currentGps = gpsCoords;
       }
 
       if (!currentGps || !currentGps.lat) {
-        currentGps = await acquireGpsLocation(true, defaultPuneStation);
+        currentGps = await acquireGpsLocation(true, defaultStation);
       }
 
-      // Safeguard: Ensure supervisor location in Pune strictly resolves Dandekar Pool
+      // Safeguard: Ensure supervisor location in Sangli strictly resolves Godrej Green Acres Site
       if (isSupervisor) {
         const cLat = Number(currentGps?.lat);
-        const cLng = Number(currentGps?.lng);
-        const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
-        const isNearDandekar = (cLat >= 18.490 && cLat <= 18.535 && cLng >= 73.820 && cLng <= 73.865);
-        if (isSangli || isNearDandekar || !currentGps?.lat) {
+        const isContaminatedPune = (cLat >= 17.5);
+        if (isContaminatedPune || !currentGps?.lat) {
           currentGps = {
             ...currentGps,
-            lat: 18.506500,
-            lng: 73.847500,
+            lat: 16.852000,
+            lng: 74.590000,
             accuracy: 15,
-            landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
-            shortName: 'Dandekar Pool (Sinhagad Rd)',
-            address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+            landmarkName: 'Godrej Green Acres Construction Site, Sangli',
+            shortName: 'Godrej Green Acres (Sangli)',
+            address: 'Near Government Colony, Sangli, Maharashtra 416416',
           };
         }
       }
 
       // Safeguard: Ensure dispatcher location is strictly Pune
       if (isDispatcher && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
-        currentGps = defaultPuneStation;
+        currentGps = defaultStation;
       }
 
-      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isSupervisor ? 'Dandekar Pool, Sinhagad Rd, Pune' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location'));
+      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isSupervisor ? 'Godrej Green Acres Construction Site, Sangli' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location'));
       const address = currentGps?.address || `${Number(currentGps?.lat).toFixed(5)}°N, ${Number(currentGps?.lng).toFixed(5)}°E`;
       const geofenceStatus = landmarkName;
 
@@ -527,12 +525,12 @@ export default function MobilePunchWidget({
       const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
                            (targetId || '').toUpperCase().includes('SS');
 
-      const defaultPuneStation = isSupervisor ? {
-        lat: 18.506500,
-        lng: 73.847500,
-        stationName: 'Dandekar Pool, Sinhagad Rd, Pune',
-        address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
-        shortZone: 'Dandekar Pool (Sinhagad Rd)'
+      const defaultStation = isSupervisor ? {
+        lat: 16.852000,
+        lng: 74.590000,
+        stationName: 'Godrej Green Acres Construction Site, Sangli',
+        address: 'Near Government Colony, Sangli, Maharashtra 416416',
+        shortZone: 'Godrej Green Acres (Sangli)'
       } : (isDispatcher ? {
         lat: 18.502390,
         lng: 73.847872,
@@ -541,26 +539,24 @@ export default function MobilePunchWidget({
         shortZone: 'Narveer Tanaji Malusare Rd, Pune'
       } : null);
 
-      const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation: defaultPuneStation });
+      const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation });
       let finalLoc = loc;
       if (isSupervisor) {
         const cLat = Number(finalLoc?.lat);
-        const cLng = Number(finalLoc?.lng);
-        const isSangli = (cLat < 17.5) || (Math.abs(cLat - 16.8464) < 0.05 && Math.abs(cLng - 74.5990) < 0.05);
-        const isNearDandekar = (cLat >= 18.490 && cLat <= 18.535 && cLng >= 73.820 && cLng <= 73.865);
-        if (isSangli || isNearDandekar || !finalLoc?.lat) {
+        const isContaminatedPune = (cLat >= 17.5);
+        if (isContaminatedPune || !finalLoc?.lat) {
           finalLoc = {
             ...finalLoc,
-            lat: 18.506500,
-            lng: 73.847500,
+            lat: 16.852000,
+            lng: 74.590000,
             accuracy: 15,
-            landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
-            shortName: 'Dandekar Pool (Sinhagad Rd)',
-            address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
+            landmarkName: 'Godrej Green Acres Construction Site, Sangli',
+            shortName: 'Godrej Green Acres (Sangli)',
+            address: 'Near Government Colony, Sangli, Maharashtra 416416',
           };
         }
       } else if (isDispatcher && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
-        finalLoc = defaultPuneStation;
+        finalLoc = defaultStation;
       }
 
       if (finalLoc && finalLoc.lat && finalLoc.lng) {
@@ -717,7 +713,7 @@ export default function MobilePunchWidget({
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] text-slate-300 shadow-xs">
                       <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span className="font-semibold text-white truncate max-w-[220px]">
-                        {userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.geofenceStatus || 'Narveer Tanaji Malusare Rd, Pune'}
+                        {userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.geofenceStatus || (isSupervisor ? 'Godrej Green Acres Construction Site, Sangli' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'SM Concrete Plant HQ, Sangli'))}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 pt-0.5">

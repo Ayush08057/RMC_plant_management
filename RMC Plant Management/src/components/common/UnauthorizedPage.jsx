@@ -7,26 +7,9 @@ import { ROLE_ROUTES } from '../../data/mockUsers';
 export default function UnauthorizedPage({ attemptedPath = '', requiredRoles = [], userRole = '' }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [countdown, setCountdown] = useState(5);
 
   const targetRole = userRole || user?.role;
   const userDashboardUrl = targetRole && ROLE_ROUTES[targetRole] ? ROLE_ROUTES[targetRole] : '/login';
-
-  // Auto-redirect to authorized portal after 5 seconds
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          navigate(userDashboardUrl);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [navigate, userDashboardUrl]);
 
   return (
     <div className="min-h-screen bg-[#0a0c10] text-slate-100 flex items-center justify-center p-4 selection:bg-amber-500 selection:text-black">
@@ -85,7 +68,7 @@ export default function UnauthorizedPage({ attemptedPath = '', requiredRoles = [
             className="w-full py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
           >
             <Home className="w-4 h-4" />
-            <span>Return to Your Authorized Portal ({targetRole}) [Redirecting in {countdown}s]</span>
+            <span>Return to Your Authorized Portal ({targetRole || 'Dashboard'})</span>
           </Link>
 
           <button
