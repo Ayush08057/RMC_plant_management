@@ -1258,391 +1258,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               </div>
             )}
 
-            {/* Dedicated Driver & Staff Kilometer Analysis Ledger */}
-            {activeRouteDetails && (() => {
-              const startOdo = activeTarget?.activeTrip?.startOdometer || 14250.0;
-              const totalKm = activeRouteDetails.totalDistanceKm || 0;
-              const finalOdo = Number((startOdo + totalKm).toFixed(1));
-              const firstStop = activeRouteDetails.stops[0];
-              const lastStop = activeRouteDetails.stops[activeRouteDetails.stops.length - 1];
-
-              return (
-                <div className="mt-3 bg-white border border-slate-300 rounded-2xl shadow-sm overflow-hidden">
-                  {/* Header with Title & Action Controls */}
-                  <div className="p-3 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                        <Route className="w-4.5 h-4.5 text-amber-300" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-black text-white text-sm truncate">
-                            Kilometer Analysis Ledger: {activeRouteDetails.employeeName}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-950 text-blue-200 border border-blue-800">
-                            {routeLegs.length} Route Legs • {activeRouteDetails.stops.length} Locations
-                          </span>
-                          {activeTarget?.isDriver && activeTarget?.activeTrip && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
-                              🚛 Mixer: {activeTarget.activeTrip.vehicleNo}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span>Total Run: <strong className="font-mono text-amber-300 font-bold">{totalKm} KM</strong></span>
-                          <span>•</span>
-                          <span>Vehicle Odo: <strong className="text-white font-mono">{startOdo.toLocaleString()} ➔ {finalOdo.toLocaleString()} KM</strong></span>
-                          <span>•</span>
-                          <span>Start Time: <strong className="text-emerald-400 font-mono">{firstStop?.time || '--:--'}</strong></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
-                                        String(activeTarget?.role || '').toLowerCase().includes('dispatch');
-                          if (isDis) {
-                            setNewVisitedTitle('Sinhagad Road Logistics Hub, Pune');
-                            setNewVisitedCategory('Logistics Hub');
-                            setNewVisitedAddress('Sinhagad Road, Pune, Maharashtra');
-                            setNewVisitedLat('18.4980');
-                            setNewVisitedLng('73.8320');
-                          } else {
-                            setNewVisitedTitle('Godrej Green Acres Construction Site');
-                            setNewVisitedCategory('Site Pouring');
-                            setNewVisitedAddress('Near Government Colony, Sangli');
-                            setNewVisitedLat('16.8520');
-                            setNewVisitedLng('74.5900');
-                          }
-                          setNewVisitedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-                          setNewVisitedStay('45');
-                          setNewVisitedNotes('Operational site visit after punch-in');
-                          setShowAddVisitedModal(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                        title="Record a visited location/checkpoint after punch-in"
-                      >
-                        <Plus className="w-3.5 h-3.5 text-white" />
-                        <span>+ Add Visited Location</span>
-                      </button>
-
-                      <a
-                        href={activeRouteDetails.googleMapsFullRouteUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                        title="Open full turn-by-turn visited route in Google Maps"
-                      >
-                        <Navigation className="w-3.5 h-3.5" />
-                        <span>Google Maps</span>
-                      </a>
-
-                      <button
-                        type="button"
-                        onClick={() => setMapRouteMode(!mapRouteMode)}
-                        className={`px-2.5 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center gap-1 ${
-                          mapRouteMode ? 'bg-cyan-700 text-cyan-100 border-cyan-600' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                        }`}
-                        title="Toggle Polyline Trail on Map"
-                      >
-                        <Route className="w-3.5 h-3.5" />
-                        <span>{mapRouteMode ? 'Hide Path' : 'Show Path'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setRouteHistoryExpanded(!routeHistoryExpanded)}
-                        className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer border border-slate-700"
-                        title={routeHistoryExpanded ? 'Reduce Ledger' : 'Expand Ledger'}
-                      >
-                        {routeHistoryExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 4 Big Visual Metric Cards for Easy Analysis */}
-                  <div className="p-3 bg-slate-50 border-b border-slate-200 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    {/* Card 1: Total Distance */}
-                    <div className="bg-white p-3 rounded-xl border-2 border-blue-200 shadow-2xs flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-900">Total Run (एकूण अंतर)</span>
-                        <Route className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black font-mono text-blue-700 leading-tight">
-                        {totalKm} <span className="text-xs font-bold text-slate-500">KM</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        GPS Verified from Punch-In
-                      </div>
-                    </div>
-
-                    {/* Card 2: Vehicle Odometer */}
-                    <div className="bg-white p-3 rounded-xl border-2 border-amber-200 shadow-2xs flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-900">Odometer (गाडी मीटर)</span>
-                        <Gauge className="w-4 h-4 text-amber-600" />
-                      </div>
-                      <div className="text-base sm:text-lg font-black font-mono text-slate-900 leading-tight">
-                        {startOdo.toLocaleString()} ➔ <span className="text-amber-600">{finalOdo.toLocaleString()}</span>
-                      </div>
-                      <div className="text-[10px] text-emerald-700 font-bold mt-1 truncate flex items-center gap-1">
-                        <span>{totalKm > 0 ? `✓ Diff: +${totalKm} KM logged` : 'Stationary at Hub (0 km)'}</span>
-                      </div>
-                    </div>
-
-                    {/* Card 3: Shift Runtime */}
-                    <div className="bg-white p-3 rounded-xl border-2 border-slate-200 shadow-2xs flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">Shift Runtime (ड्यूटी वेळ)</span>
-                        <Zap className="w-4 h-4 text-amber-500" />
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black font-mono text-slate-800 leading-tight">
-                        {activeTarget?.elapsedDisplay || (activeTarget?.status === 'Punched In' ? 'Active Duty' : 'Off-Duty')}
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        {activeTarget?.status === 'Punched In' ? '🟢 Clocked In & Tracking' : 'Shift Not Active'}
-                      </div>
-                    </div>
-
-                    {/* Card 4: Route Legs & Stops */}
-                    <div className="bg-white p-3 rounded-xl border-2 border-emerald-200 shadow-2xs flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">Visited Places (भेट दिलेली ठिकाणे)</span>
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black font-mono text-emerald-700 leading-tight">
-                        {activeRouteDetails.stops.length > 1 ? activeRouteDetails.stops.length - 1 : 0} <span className="text-xs font-bold text-slate-500">Visited</span> • {activeRouteDetails.stops.length} <span className="text-xs font-bold text-slate-500">Total</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        {totalKm > 0 ? `Latest: ${lastStop?.title || 'Active'}` : 'Stationary at Punch-In Hub'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step-by-Step Visited Locations Progression Bar / Timeline */}
-                  <div className="p-3 bg-white border-b border-slate-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Visited Locations Timeline (पंच-इन नंतर भेट दिलेली ठिकाणे)</span>
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-slate-400">
-                        {activeRouteDetails.stops.length} Total Checkpoints • Click any stop to view on map
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                      {activeRouteDetails.stops.map((stop, idx) => {
-                        const isStart = idx === 0;
-                        const isEnd = idx === activeRouteDetails.stops.length - 1;
-                        const isSelected = selectedStop?.stopNo === stop.stopNo;
-
-                        return (
-                          <React.Fragment key={stop.stopNo || idx}>
-                            {idx > 0 && (
-                              <div className="flex items-center text-slate-300 shrink-0">
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </div>
-                            )}
-                            <div
-                              onClick={() => handleSelectStaffOnMap(activeTarget, stop)}
-                              className={`p-2.5 rounded-xl border transition-all cursor-pointer shrink-0 min-w-[200px] max-w-[240px] select-none ${
-                                isSelected
-                                  ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-400/50 shadow-md'
-                                  : isStart
-                                    ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-500'
-                                    : isEnd
-                                      ? 'bg-purple-50/70 border-purple-300 hover:border-purple-500'
-                                      : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
-                                  isStart ? 'bg-emerald-600 text-white' : isEnd ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
-                                }`}>
-                                  {isStart ? '🟢 1. Punch-In' : isEnd ? `📍 ${stop.stopNo}. Current` : `Stop #${stop.stopNo}`}
-                                </span>
-                                <span className="text-[10px] font-mono font-bold text-blue-900 bg-white px-1.5 py-0.2 rounded border border-blue-200">
-                                  {stop.distanceKm} KM
-                                </span>
-                              </div>
-                              <div className="font-bold text-slate-900 text-xs truncate" title={stop.title}>
-                                {stop.title}
-                              </div>
-                              <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                                {stop.address}
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 mt-1.5 pt-1 border-t border-slate-200/60">
-                                <span className="text-slate-700 font-bold">{stop.time}</span>
-                                {stop.stayMinutes && (
-                                  <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.2 rounded text-[9px]">
-                                    Stay: {stop.stayMinutes}m
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Leg-by-Leg Kilometer Breakdown Ledger Table */}
-                  {routeHistoryExpanded ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider">
-                            <th className="py-2.5 px-3"># Stop</th>
-                            <th className="py-2.5 px-3">Visited Place & Activity (भेट दिलेले ठिकाण)</th>
-                            <th className="py-2.5 px-3 text-center">Leg Distance (टप्प्याचे अंतर)</th>
-                            <th className="py-2.5 px-3 text-center">Total Run (एकूण अंतर)</th>
-                            <th className="py-2.5 px-3">Vehicle Odometer (गाडी मीटर)</th>
-                            <th className="py-2.5 px-3">Time & Halt (वेळ)</th>
-                            <th className="py-2.5 px-3">Purpose & Activity</th>
-                            <th className="py-2.5 px-3 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 bg-white">
-                          {activeRouteDetails.stops.length === 0 ? (
-                            <tr>
-                              <td colSpan="8" className="py-8 px-4 text-center text-slate-500">
-                                <div className="flex flex-col items-center justify-center gap-1.5">
-                                  <Route className="w-6 h-6 text-slate-400 stroke-[1.5]" />
-                                  <span className="font-semibold text-slate-700 text-xs">No Route Travel Legs Recorded Yet</span>
-                                  <span className="text-[11px] text-slate-400 max-w-md">
-                                    Staff is currently at base location with 0.0 KM traveled. Click "+ Add Visited Location" above to record a site checkpoint.
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : (
-                            activeRouteDetails.stops.map((stop, idx) => {
-                              const isStart = idx === 0;
-                              const isEnd = idx === activeRouteDetails.stops.length - 1;
-                              const isSelected = selectedStop?.stopNo === stop.stopNo;
-                              const prevStop = idx > 0 ? activeRouteDetails.stops[idx - 1] : null;
-                              const legKm = prevStop ? Number((stop.distanceKm - prevStop.distanceKm).toFixed(1)) : 0;
-                              const currentStopOdo = Number((startOdo + stop.distanceKm).toFixed(1));
-
-                              return (
-                                <tr
-                                  key={stop.stopNo || idx}
-                                  className={`transition-colors ${
-                                    isSelected ? 'bg-blue-50/90 ring-1 ring-blue-300 font-medium' : 'hover:bg-slate-50/80'
-                                  }`}
-                                >
-                                  <td className="py-3 px-3 whitespace-nowrap">
-                                    <span className={`px-2 py-0.5 rounded-md font-black text-[11px] font-mono border ${
-                                      isStart ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : isEnd ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-blue-100 text-blue-900 border-blue-200'
-                                    }`}>
-                                      {isStart ? '🟢 In' : isEnd ? '📍 End' : `Stop #${stop.stopNo}`}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-3">
-                                    <div className="font-bold text-slate-900 text-xs">
-                                      {stop.title}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">
-                                      {stop.address}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-3 text-center whitespace-nowrap">
-                                    <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-black font-mono text-xs border border-emerald-300 shadow-2xs inline-block">
-                                      {isStart ? '0.0 KM' : `+${legKm} KM`}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-3 text-center whitespace-nowrap">
-                                    <span className="font-mono font-black text-blue-800 text-xs">
-                                      {stop.distanceKm} KM
-                                    </span>
-                                    <div className="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mt-1 overflow-hidden border border-slate-200">
-                                      <div 
-                                        className="h-full bg-blue-600 rounded-full" 
-                                        style={{ width: `${Math.min(100, Math.round((stop.distanceKm / (totalKm || 1)) * 100))}%` }}
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-3 font-mono text-slate-800 text-xs whitespace-nowrap">
-                                    <div className="font-bold text-slate-900">{currentStopOdo.toLocaleString()} KM</div>
-                                  </td>
-                                  <td className="py-3 px-3 whitespace-nowrap">
-                                    <div className="font-mono text-slate-900 font-bold text-xs">{stop.time}</div>
-                                    <div className="text-[10px] text-slate-500 font-medium">
-                                      {stop.stayMinutes ? `${stop.stayMinutes}m stay` : (isStart ? 'Biometric Clock-In' : 'Current Active')}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-3">
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 inline-block mb-0.5">
-                                      {stop.category || 'Site Visit'}
-                                    </span>
-                                    <div className="text-[10px] text-slate-600 truncate max-w-[180px]">
-                                      {stop.notes}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-3 text-right whitespace-nowrap">
-                                    <div className="inline-flex items-center gap-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSelectStaffOnMap(activeTarget, stop)}
-                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-300 font-bold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                                        title="View this visited stop on the satellite map"
-                                      >
-                                        <MapPin className="w-3 h-3" />
-                                        <span>Show on Map</span>
-                                      </button>
-                                      {!isStart && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveVisitedStop(stop.stopNo)}
-                                          className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                          title="Remove this visited location"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="px-3 py-2 text-[11px] text-slate-500 flex items-center justify-between bg-white">
-                      <span>
-                        Visited Locations Ledger minimized ({activeRouteDetails.stops.length} locations, total {totalKm} KM logged).
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setRouteHistoryExpanded(true)}
-                        className="text-blue-600 font-bold hover:underline cursor-pointer"
-                      >
-                        Show Full Visited Locations Breakdown
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Mileage Verification & Hardware Tracking Disclaimer Footer */}
-                  <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span className="font-semibold text-slate-700">
-                        Distance Discrepancy: <strong className="text-emerald-700 font-bold">0.0 KM</strong> (Vehicle Odometer difference exactly reconciles with GPS telemetry readings).
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 italic">
-                      Hardware Tracking Notice: Continuous real-time background tracking is verified via GPS hardware & device GNSS coordinates.
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            
 
           </div>
         )}
@@ -2058,6 +1674,399 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         )}
 
       </div>
+
+            {/* Dedicated Driver & Staff Kilometer Analysis Ledger */}
+            {activeRouteDetails && (() => {
+              const startOdo = activeTarget?.activeTrip?.startOdometer || 14250.0;
+              const totalKm = activeRouteDetails.totalDistanceKm || 0;
+              const finalOdo = Number((startOdo + totalKm).toFixed(1));
+              const firstStop = activeRouteDetails.stops[0];
+              const lastStop = activeRouteDetails.stops[activeRouteDetails.stops.length - 1];
+
+              return (
+                <div className="mt-5 bg-white border border-slate-300 rounded-2xl shadow-md overflow-hidden w-full">
+                  {/* Header with Title & Action Controls */}
+                  <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md mt-0.5 sm:mt-0">
+                        <Route className="w-5 h-5 text-amber-300" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-white text-sm sm:text-base tracking-tight break-normal">
+                            Kilometer Analysis Ledger: {activeRouteDetails.employeeName}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-950 text-blue-200 border border-blue-800 whitespace-nowrap shadow-xs">
+                            {routeLegs.length} Route Legs • {activeRouteDetails.stops.length} Locations
+                          </span>
+                          {activeTarget?.isDriver && activeTarget?.activeTrip && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-800 whitespace-nowrap shadow-xs">
+                              🚛 Mixer: {activeTarget.activeTrip.vehicleNo}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-300 font-medium flex items-center gap-2 sm:gap-3 mt-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-0.5 rounded-lg border border-slate-700/60 whitespace-nowrap">
+                            <span className="text-slate-400">Total Run:</span>
+                            <strong className="font-mono text-amber-300 font-bold">{totalKm} KM</strong>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-0.5 rounded-lg border border-slate-700/60 whitespace-nowrap">
+                            <span className="text-slate-400">Vehicle Odo:</span>
+                            <strong className="text-white font-mono">{startOdo.toLocaleString()} ➔ {finalOdo.toLocaleString()} KM</strong>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-0.5 rounded-lg border border-slate-700/60 whitespace-nowrap">
+                            <span className="text-slate-400">Start Time:</span>
+                            <strong className="text-emerald-400 font-mono">{firstStop?.time || '--:--'}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
+                                        String(activeTarget?.role || '').toLowerCase().includes('dispatch');
+                          if (isDis) {
+                            setNewVisitedTitle('Sinhagad Road Logistics Hub, Pune');
+                            setNewVisitedCategory('Logistics Hub');
+                            setNewVisitedAddress('Sinhagad Road, Pune, Maharashtra');
+                            setNewVisitedLat('18.4980');
+                            setNewVisitedLng('73.8320');
+                          } else {
+                            setNewVisitedTitle('Godrej Green Acres Construction Site');
+                            setNewVisitedCategory('Site Pouring');
+                            setNewVisitedAddress('Near Government Colony, Sangli');
+                            setNewVisitedLat('16.8520');
+                            setNewVisitedLng('74.5900');
+                          }
+                          setNewVisitedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                          setNewVisitedStay('45');
+                          setNewVisitedNotes('Operational site visit after punch-in');
+                          setShowAddVisitedModal(true);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                        title="Record a visited location/checkpoint after punch-in"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-white" />
+                        <span>+ Add Visited Location</span>
+                      </button>
+
+                      <a
+                        href={activeRouteDetails.googleMapsFullRouteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                        title="Open full turn-by-turn visited route in Google Maps"
+                      >
+                        <Navigation className="w-3.5 h-3.5" />
+                        <span>Google Maps</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => setMapRouteMode(!mapRouteMode)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                          mapRouteMode ? 'bg-cyan-700 text-cyan-100 border-cyan-600' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                        }`}
+                        title="Toggle Polyline Trail on Map"
+                      >
+                        <Route className="w-3.5 h-3.5" />
+                        <span>{mapRouteMode ? 'Hide Path' : 'Show Path'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRouteHistoryExpanded(!routeHistoryExpanded)}
+                        className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer border border-slate-700"
+                        title={routeHistoryExpanded ? 'Reduce Ledger' : 'Expand Ledger'}
+                      >
+                        {routeHistoryExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4 Big Visual Metric Cards for Easy Analysis */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Card 1: Total Distance */}
+                    <div className="bg-white p-3 rounded-xl border-2 border-blue-200 shadow-2xs flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-900">Total Run (एकूण अंतर)</span>
+                        <Route className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black font-mono text-blue-700 leading-tight">
+                        {totalKm} <span className="text-xs font-bold text-slate-500">KM</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                        GPS Verified from Punch-In
+                      </div>
+                    </div>
+
+                    {/* Card 2: Vehicle Odometer */}
+                    <div className="bg-white p-3 rounded-xl border-2 border-amber-200 shadow-2xs flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-900">Odometer (गाडी मीटर)</span>
+                        <Gauge className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="text-base sm:text-lg font-black font-mono text-slate-900 leading-tight">
+                        {startOdo.toLocaleString()} ➔ <span className="text-amber-600">{finalOdo.toLocaleString()}</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-700 font-bold mt-1 truncate flex items-center gap-1">
+                        <span>{totalKm > 0 ? `✓ Diff: +${totalKm} KM logged` : 'Stationary at Hub (0 km)'}</span>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Shift Runtime */}
+                    <div className="bg-white p-3 rounded-xl border-2 border-slate-200 shadow-2xs flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">Shift Runtime (ड्यूटी वेळ)</span>
+                        <Zap className="w-4 h-4 text-amber-500" />
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black font-mono text-slate-800 leading-tight">
+                        {activeTarget?.elapsedDisplay || (activeTarget?.status === 'Punched In' ? 'Active Duty' : 'Off-Duty')}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                        {activeTarget?.status === 'Punched In' ? '🟢 Clocked In & Tracking' : 'Shift Not Active'}
+                      </div>
+                    </div>
+
+                    {/* Card 4: Route Legs & Stops */}
+                    <div className="bg-white p-3 rounded-xl border-2 border-emerald-200 shadow-2xs flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">Visited Places (भेट दिलेली ठिकाणे)</span>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black font-mono text-emerald-700 leading-tight">
+                        {activeRouteDetails.stops.length > 1 ? activeRouteDetails.stops.length - 1 : 0} <span className="text-xs font-bold text-slate-500">Visited</span> • {activeRouteDetails.stops.length} <span className="text-xs font-bold text-slate-500">Total</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                        {totalKm > 0 ? `Latest: ${lastStop?.title || 'Active'}` : 'Stationary at Punch-In Hub'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step-by-Step Visited Locations Progression Bar / Timeline */}
+                  <div className="p-3 bg-white border-b border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Visited Locations Timeline (पंच-इन नंतर भेट दिलेली ठिकाणे)</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">
+                        {activeRouteDetails.stops.length} Total Checkpoints • Click any stop to view on map
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {activeRouteDetails.stops.map((stop, idx) => {
+                        const isStart = idx === 0;
+                        const isEnd = idx === activeRouteDetails.stops.length - 1;
+                        const isSelected = selectedStop?.stopNo === stop.stopNo;
+
+                        return (
+                          <React.Fragment key={stop.stopNo || idx}>
+                            {idx > 0 && (
+                              <div className="flex items-center text-slate-300 shrink-0">
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                            <div
+                              onClick={() => handleSelectStaffOnMap(activeTarget, stop)}
+                              className={`p-2.5 rounded-xl border transition-all cursor-pointer shrink-0 min-w-[200px] max-w-[240px] select-none ${
+                                isSelected
+                                  ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-400/50 shadow-md'
+                                  : isStart
+                                    ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-500'
+                                    : isEnd
+                                      ? 'bg-purple-50/70 border-purple-300 hover:border-purple-500'
+                                      : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                                  isStart ? 'bg-emerald-600 text-white' : isEnd ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
+                                }`}>
+                                  {isStart ? '🟢 1. Punch-In' : isEnd ? `📍 ${stop.stopNo}. Current` : `Stop #${stop.stopNo}`}
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-blue-900 bg-white px-1.5 py-0.2 rounded border border-blue-200">
+                                  {stop.distanceKm} KM
+                                </span>
+                              </div>
+                              <div className="font-bold text-slate-900 text-xs truncate" title={stop.title}>
+                                {stop.title}
+                              </div>
+                              <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                {stop.address}
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 mt-1.5 pt-1 border-t border-slate-200/60">
+                                <span className="text-slate-700 font-bold">{stop.time}</span>
+                                {stop.stayMinutes && (
+                                  <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.2 rounded text-[9px]">
+                                    Stay: {stop.stayMinutes}m
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Leg-by-Leg Kilometer Breakdown Ledger Table */}
+                  {routeHistoryExpanded ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider">
+                            <th className="py-2.5 px-3"># Stop</th>
+                            <th className="py-2.5 px-3">Visited Place & Activity (भेट दिलेले ठिकाण)</th>
+                            <th className="py-2.5 px-3 text-center">Leg Distance (टप्प्याचे अंतर)</th>
+                            <th className="py-2.5 px-3 text-center">Total Run (एकूण अंतर)</th>
+                            <th className="py-2.5 px-3">Vehicle Odometer (गाडी मीटर)</th>
+                            <th className="py-2.5 px-3">Time & Halt (वेळ)</th>
+                            <th className="py-2.5 px-3">Purpose & Activity</th>
+                            <th className="py-2.5 px-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 bg-white">
+                          {activeRouteDetails.stops.length === 0 ? (
+                            <tr>
+                              <td colSpan="8" className="py-8 px-4 text-center text-slate-500">
+                                <div className="flex flex-col items-center justify-center gap-1.5">
+                                  <Route className="w-6 h-6 text-slate-400 stroke-[1.5]" />
+                                  <span className="font-semibold text-slate-700 text-xs">No Route Travel Legs Recorded Yet</span>
+                                  <span className="text-[11px] text-slate-400 max-w-md">
+                                    Staff is currently at base location with 0.0 KM traveled. Click "+ Add Visited Location" above to record a site checkpoint.
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            activeRouteDetails.stops.map((stop, idx) => {
+                              const isStart = idx === 0;
+                              const isEnd = idx === activeRouteDetails.stops.length - 1;
+                              const isSelected = selectedStop?.stopNo === stop.stopNo;
+                              const prevStop = idx > 0 ? activeRouteDetails.stops[idx - 1] : null;
+                              const legKm = prevStop ? Number((stop.distanceKm - prevStop.distanceKm).toFixed(1)) : 0;
+                              const currentStopOdo = Number((startOdo + stop.distanceKm).toFixed(1));
+
+                              return (
+                                <tr
+                                  key={stop.stopNo || idx}
+                                  className={`transition-colors ${
+                                    isSelected ? 'bg-blue-50/90 ring-1 ring-blue-300 font-medium' : 'hover:bg-slate-50/80'
+                                  }`}
+                                >
+                                  <td className="py-3 px-3 whitespace-nowrap">
+                                    <span className={`px-2 py-0.5 rounded-md font-black text-[11px] font-mono border ${
+                                      isStart ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : isEnd ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-blue-100 text-blue-900 border-blue-200'
+                                    }`}>
+                                      {isStart ? '🟢 In' : isEnd ? '📍 End' : `Stop #${stop.stopNo}`}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="font-bold text-slate-900 text-xs">
+                                      {stop.title}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">
+                                      {stop.address}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-center whitespace-nowrap">
+                                    <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-black font-mono text-xs border border-emerald-300 shadow-2xs inline-block">
+                                      {isStart ? '0.0 KM' : `+${legKm} KM`}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 text-center whitespace-nowrap">
+                                    <span className="font-mono font-black text-blue-800 text-xs">
+                                      {stop.distanceKm} KM
+                                    </span>
+                                    <div className="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mt-1 overflow-hidden border border-slate-200">
+                                      <div 
+                                        className="h-full bg-blue-600 rounded-full" 
+                                        style={{ width: `${Math.min(100, Math.round((stop.distanceKm / (totalKm || 1)) * 100))}%` }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 font-mono text-slate-800 text-xs whitespace-nowrap">
+                                    <div className="font-bold text-slate-900">{currentStopOdo.toLocaleString()} KM</div>
+                                  </td>
+                                  <td className="py-3 px-3 whitespace-nowrap">
+                                    <div className="font-mono text-slate-900 font-bold text-xs">{stop.time}</div>
+                                    <div className="text-[10px] text-slate-500 font-medium">
+                                      {stop.stayMinutes ? `${stop.stayMinutes}m stay` : (isStart ? 'Biometric Clock-In' : 'Current Active')}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 inline-block mb-0.5">
+                                      {stop.category || 'Site Visit'}
+                                    </span>
+                                    <div className="text-[10px] text-slate-600 truncate max-w-[180px]">
+                                      {stop.notes}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-right whitespace-nowrap">
+                                    <div className="inline-flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSelectStaffOnMap(activeTarget, stop)}
+                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-300 font-bold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                                        title="View this visited stop on the satellite map"
+                                      >
+                                        <MapPin className="w-3 h-3" />
+                                        <span>Show on Map</span>
+                                      </button>
+                                      {!isStart && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveVisitedStop(stop.stopNo)}
+                                          className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                          title="Remove this visited location"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2 text-[11px] text-slate-500 flex items-center justify-between bg-white">
+                      <span>
+                        Visited Locations Ledger minimized ({activeRouteDetails.stops.length} locations, total {totalKm} KM logged).
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRouteHistoryExpanded(true)}
+                        className="text-blue-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Show Full Visited Locations Breakdown
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Mileage Verification & Hardware Tracking Disclaimer Footer */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="font-semibold text-slate-700">
+                        Distance Discrepancy: <strong className="text-emerald-700 font-bold">0.0 KM</strong> (Vehicle Odometer difference exactly reconciles with GPS telemetry readings).
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 italic">
+                      Hardware Tracking Notice: Continuous real-time background tracking is verified via GPS hardware & device GNSS coordinates.
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
       {/* Detail Dossier Modal for Selected Employee */}
       {selectedEmployee && typeof document !== 'undefined' && createPortal(
