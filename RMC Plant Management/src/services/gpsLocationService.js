@@ -268,22 +268,26 @@ export async function getAccurateDeviceLocation(options = {}) {
     }
   }
 
-  // Tier 3: Try IP Geolocation (Resolves Pune accurately if browser GPS permission is denied/blocked)
+  // Tier 3: Try IP Geolocation
   try {
     const ipGeo = await fetchIpGeolocation();
     if (ipGeo) {
-      const addrInfo = await resolveAccurateAddress(ipGeo.lat, ipGeo.lng);
-      return {
-        lat: Number(ipGeo.lat.toFixed(6)),
-        lng: Number(ipGeo.lng.toFixed(6)),
-        accuracy: ipGeo.accuracy || 1000,
-        timestamp: new Date().toISOString(),
-        address: addrInfo.address,
-        landmarkName: addrInfo.landmarkName,
-        shortName: addrInfo.shortName,
-        source: 'IP_GEOLOCATION',
-        isFallback: false
-      };
+      // Validate that IP geolocation is in regional operating corridor (Maharashtra: lat ~15.5 to 20.2, lng ~72.5 to 80.5)
+      const isRegional = ipGeo.lat >= 15.5 && ipGeo.lat <= 20.2 && ipGeo.lng >= 72.5 && ipGeo.lng <= 80.5;
+      if (isRegional || !defaultStation) {
+        const addrInfo = await resolveAccurateAddress(ipGeo.lat, ipGeo.lng);
+        return {
+          lat: Number(ipGeo.lat.toFixed(6)),
+          lng: Number(ipGeo.lng.toFixed(6)),
+          accuracy: ipGeo.accuracy || 1000,
+          timestamp: new Date().toISOString(),
+          address: addrInfo.address,
+          landmarkName: addrInfo.landmarkName,
+          shortName: addrInfo.shortName,
+          source: 'IP_GEOLOCATION',
+          isFallback: false
+        };
+      }
     }
   } catch (ipErr) {
     console.warn('IP geolocation notice:', ipErr.message);

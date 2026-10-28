@@ -1516,6 +1516,9 @@ export const WorkforceProvider = ({ children }) => {
       throw new Error("Employee " + emp.name + " has already punched in today at " + formatToIndian12Hr(data.attendance[existingIndex].punchIn) + ".");
     }
 
+    const isSup = (emp.role || '').toLowerCase().includes('supervisor') || canonicalEmpId.includes('SS');
+    const isDis = (emp.role || '').toLowerCase().includes('dispatch') || canonicalEmpId.includes('DIS');
+    const isAcc = (emp.role || '').toLowerCase().includes('account') || canonicalEmpId.includes('ACC');
     const actualPunchIn = options.time ? formatToIndian12Hr(options.time) : nowTime;
     const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
 

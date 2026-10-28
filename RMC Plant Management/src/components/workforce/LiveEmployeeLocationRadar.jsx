@@ -354,6 +354,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         (emp.employeeId || '').toUpperCase().includes('DIS') ||
         (emp.role || '').toLowerCase().includes('dispatch') ||
         (emp.name || '').toLowerCase().includes('dispatch');
+      const isAcc = 
+        (emp.id || '').toUpperCase().includes('ACC') ||
+        (emp.employeeId || '').toUpperCase().includes('ACC') ||
+        (emp.role || '').toLowerCase().includes('account') ||
+        (emp.name || '').toLowerCase().includes('account');
 
       if (isDis && (lat === null || Number(lat) < 17.5)) {
         lat = 18.502390;
@@ -366,6 +371,15 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         if (isContaminatedPune || !lat) {
           lat = 16.852000;
           lng = 74.590000;
+          accuracy = 15;
+          gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+        }
+      } else if (isAcc) {
+        const cLat = Number(lat);
+        // If Accountant location is outside Sangli (e.g. from an ISP IP proxy), anchor strictly to Shambhara Footi Road, Sangli
+        if (!cLat || cLat > 17.5 || cLat < 16.5) {
+          lat = 16.845348;
+          lng = 74.597972;
           accuracy = 15;
           gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
         }

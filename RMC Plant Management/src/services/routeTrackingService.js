@@ -40,12 +40,12 @@ export function getAssignedEmployeeStation(emp) {
 
   if (roleLower.includes('account') || idUpper.includes('ACC') || nameLower.includes('accountant')) {
     return {
-      lat: 16.8584,
-      lng: 74.5824,
-      stationName: 'Sangli Market Yard (APMC Commercial Hub)',
-      address: 'APMC Market Yard Area, Sangli',
-      shortZone: 'Market Yard Hub',
-      notes: 'Commercial accounts & sales billing desk',
+      lat: 16.845348,
+      lng: 74.597972,
+      stationName: 'Shambhara Footi Road, Sangli',
+      address: 'Shambhara Footi Road, Viya Nagar, Sangli, Maharashtra 416416',
+      shortZone: 'Shambhara Footi Road, Sangli',
+      notes: 'Commercial accounts & finance desk at Shambhara Footi Road, Sangli',
     };
   }
 

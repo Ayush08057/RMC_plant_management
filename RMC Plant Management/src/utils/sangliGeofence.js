@@ -5,6 +5,16 @@
 
 export const SANGLI_LANDMARKS = [
   {
+    id: 'SHAMBHARA_FOOTI_ROAD',
+    name: 'Shambhara Footi Road, Sangli',
+    shortName: 'Shambhara Footi Road',
+    lat: 16.845348,
+    lng: 74.597972,
+    radiusMeters: 1800,
+    address: 'Shambhara Footi Road, Viya Nagar, Sangli, Maharashtra 416416',
+    type: 'SANGLI_ROAD',
+  },
+  {
     id: 'SANGLI_MARKET_YARD',
     name: 'Sangli Market Yard',
     shortName: 'Market Yard',

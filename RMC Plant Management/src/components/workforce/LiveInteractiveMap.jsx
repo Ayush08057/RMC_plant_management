@@ -470,14 +470,15 @@ export default function LiveInteractiveMap({
         `)
         .addTo(markersGroup);
 
-      // Smoothly fly to target on selection change, or center on initial mount
+      // Smoothly pan or fly to target whenever target changes OR its coordinates update
+      const targetCoordKey = `${validTarget.id}_${targetLat.toFixed(5)}_${targetLng.toFixed(5)}`;
       if (!hasFittedRef.current) {
         hasFittedRef.current = true;
-        lastTargetIdRef.current = validTarget.id;
+        lastTargetIdRef.current = targetCoordKey;
         map.setView([targetLat, targetLng], 15);
         selectedMarker.openPopup();
-      } else if (lastTargetIdRef.current !== validTarget.id) {
-        lastTargetIdRef.current = validTarget.id;
+      } else if (lastTargetIdRef.current !== targetCoordKey) {
+        lastTargetIdRef.current = targetCoordKey;
         map.flyTo([targetLat, targetLng], 15, { animate: true, duration: 0.8 });
         selectedMarker.openPopup();
       }
