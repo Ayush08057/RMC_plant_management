@@ -255,6 +255,16 @@ export default function CleanEmployeeLiveTracking() {
             </div>
 
             <div className="pt-2 border-t border-slate-100">
+              <span className="text-slate-400 font-medium block text-[11px]">Road Snap Mode</span>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-cyan-50 text-cyan-800 border border-cyan-200">
+                  <span>🛣️</span>
+                  <span>OSRM Road Match: Active</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100">
               <span className="text-slate-400 font-medium block text-[11px]">Last Updated</span>
               <span className="text-xs font-semibold text-slate-800 mt-0.5 block truncate">
                 {dayRecord?.updatedAt 
