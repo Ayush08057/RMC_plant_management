@@ -99,8 +99,8 @@ export default function MobilePunchWidget({
     });
   }, [employees]);
 
-  const effectiveLockedId = lockedEmployeeId || (!isAdmin ? (user?.employeeId || user?.id) : null);
-  const defaultEmpId = effectiveLockedId || (user?.role !== 'Admin' ? (user?.employeeId || user?.id) : null) || allEmployeesList[0]?.employeeId || allEmployeesList[0]?.id || 'PM-001';
+  const effectiveLockedId = lockedEmployeeId || user?.employeeId || user?.id || null;
+  const defaultEmpId = effectiveLockedId || (allEmployeesList.length > 0 ? (allEmployeesList[0].employeeId || allEmployeesList[0].id) : 'EMP-001');
   const [selectedEmpId, setSelectedEmpId] = useState(defaultEmpId);
 
   useEffect(() => {
@@ -718,7 +718,6 @@ export default function MobilePunchWidget({
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] text-slate-300 shadow-xs">
                       <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span className="font-semibold text-white truncate max-w-[220px]">
-                        {userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.geofenceStatus || (isSupervisor ? 'Godrej Green Acres Construction Site, Sangli' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'SM Concrete Plant HQ, Sangli'))}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 pt-0.5">
@@ -746,7 +745,7 @@ export default function MobilePunchWidget({
                 ) : (
                   <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-blue-950/80 text-blue-300 border border-blue-700/60 flex items-center gap-1.5">
                     <Check className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Shift Concluded ({userTodayRecord?.workingHours || 8} hrs)</span>
+                    <span>Shift Concluded ({userTodayRecord?.workingHours || 8} hrs{userTodayRecord?.totalDistanceKm ? ` • ${userTodayRecord.totalDistanceKm} km traveled` : ''})</span>
                   </span>
                 )}
               </div>

@@ -84,9 +84,9 @@ export default function SiteSupervisorDashboardPage() {
     (a) => (a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr)) || (a.id && a.id.includes(todayStr.replace(/-/g, '')))) &&
       ((a.employeeId && (a.employeeId.toUpperCase() === 'SS-001' || a.employeeId.toUpperCase() === 'USR-SS-001')) ||
        (a.employeeId && user?.employeeId && a.employeeId.toUpperCase() === user.employeeId.toUpperCase()) ||
-       (a.role && a.role.toLowerCase() === 'site supervisor'))
+       (a.employeeId && user?.id && a.employeeId.toUpperCase() === user.id.toUpperCase()))
   );
-  const isSupervisorClockedIn = Boolean(supervisorTodayAttendance?.punchIn || supervisorTodayAttendance?.status === 'Present');
+  const isSupervisorClockedIn = Boolean(supervisorTodayAttendance?.punchIn);
   const isSupervisorShiftEnded = Boolean(supervisorTodayAttendance?.punchOut);
 
   const { kpis, currentSite, todayDeliveries, pouringStatus, siteIssues } = MOCK_SITE_SUPERVISOR_DATA;
