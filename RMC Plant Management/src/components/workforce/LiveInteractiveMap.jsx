@@ -599,163 +599,81 @@ export default function LiveInteractiveMap({
 
   return (
     <div className="w-full space-y-2">
-      {/* Top Telemetry Header Bar - High Visibility Command Center HUD */}
-      <div className="bg-slate-900 border border-slate-800 text-white p-3 sm:p-4 rounded-2xl shadow-xl flex flex-col gap-3">
-
-        {/* Row 1: Profile & Target Info + Action Buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 border-2 border-emerald-400 flex items-center justify-center font-black text-sm shrink-0 text-white shadow-md shadow-blue-900/40">
-              {validTarget ? (validTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                {validTarget?.name && validTarget?.role && validTarget.name.toLowerCase() !== validTarget.role.toLowerCase() ? (
-                  <>
-                    <span className="text-white font-black text-sm sm:text-base tracking-tight">
-                      {validTarget.name}
-                    </span>
-                    <span className="text-xs text-slate-300 font-semibold">
-                      • {validTarget.role}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-white font-black text-sm sm:text-base tracking-tight">
-                    {validTarget?.name || validTarget?.role || 'Operational Staff'}
-                  </span>
-                )}
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-950 text-sky-300 border border-blue-800/80 shrink-0">
-                  {validTarget?.employeeId || validTarget?.id}
-                </span>
-                {validTarget?.isDriver && validTarget?.activeTrip?.vehicleNo && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-700 shrink-0">
-                    🚛 {validTarget.activeTrip.vehicleNo}
-                  </span>
-                )}
-              </div>
-
-              {/* Live Station & GPS Location Telemetry Header */}
-              <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2 truncate mt-0.5 flex-wrap">
-                {validTarget && (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <span>📍 Live: {validTarget.geofenceStatus || validTarget.stationName}</span>
-                    <span className="text-cyan-300 font-mono text-[10px]">
-                      ({Number(validTarget.lat).toFixed(4)}°N, {Number(validTarget.lng).toFixed(4)}°E)
-                    </span>
-                  </span>
-                )}
-                {validTarget?.punchIn && (
-                  <span className="text-slate-400 font-medium flex items-center gap-1">
-                    <span>• Clocked In: {validTarget.punchIn}</span>
-                  </span>
-                )}
-              </div>
-            </div>
+      {/* Clean, Simple Map Header Bar */}
+      <div className="bg-slate-900 border border-slate-800 text-white px-3.5 py-2.5 rounded-2xl shadow-md flex items-center justify-between gap-3 flex-wrap">
+        {/* Left: Active Staff Info */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 border border-blue-400 flex items-center justify-center font-bold text-xs shrink-0 text-white shadow-xs">
+            {validTarget ? (validTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
           </div>
-
-          {/* Action Buttons - Spacious, cleanly styled & never clipped */}
-          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
-            {/* Road Snap Toggle Switch */}
-            <button
-              type="button"
-              onClick={() => setRoadSnapEnabled((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
-                roadSnapEnabled 
-                  ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400/50 shadow-cyan-900/30' 
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-              }`}
-              title={roadSnapEnabled ? 'Road Snap is active: GPS aligned to real road network' : 'Click to enable real road snapping'}
-            >
-              <GitCommit className={`w-3.5 h-3.5 ${roadSnapEnabled ? 'text-cyan-200 animate-pulse' : 'text-slate-400'}`} />
-              <span>{roadSnapEnabled ? '🛣️ Road Snap: ON' : 'Road Snap: OFF'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleFitRoute}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/40 flex items-center gap-1.5 shadow-md shadow-blue-900/30 cursor-pointer active:scale-95 transition-all"
-              title="Fit Entire Traveled Route on Screen"
-            >
-              <Crosshair className="w-3.5 h-3.5 text-white" />
-              <span>Fit Route</span>
-            </button>
-
-            {activeRouteDetails?.googleMapsFullRouteUrl && (
-              <a
-                href={activeRouteDetails.googleMapsFullRouteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 shadow-sm cursor-pointer flex items-center gap-1.5 text-xs font-bold active:scale-95 transition-all"
-                title="Open Full Visited Route in Google Maps"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Google Maps</span>
-              </a>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setInputApiKey(leafletApiKey);
-                setShowKeyModal(true);
-              }}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
-              title="Configure Map Tiles & Satellite Layers"
-            >
-              <Key className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">Layers</span>
-            </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-white font-extrabold text-sm tracking-tight truncate">
+                {validTarget?.name || 'Staff Member'}
+              </span>
+              <span className="text-xs text-slate-300 font-medium">
+                • {validTarget?.role || 'Operations'}
+              </span>
+              <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-blue-950 text-sky-300 border border-blue-800/80">
+                {validTarget?.employeeId || validTarget?.id}
+              </span>
+              <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold ${
+                validTarget?.status === 'Punched In' ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {validTarget?.status || 'Active'}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2 truncate mt-0.5">
+              <span className="text-emerald-400 flex items-center gap-1 font-semibold truncate">
+                <span>📍 {validTarget?.geofenceStatus || validTarget?.stationName || 'Location Verified'}</span>
+              </span>
+              {validTarget?.punchIn && (
+                <span className="text-slate-400 text-[10px]">
+                  • In: {validTarget.punchIn}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Row 2: Clean, Key Metrics Strip */}
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Total Run Today */}
-            <div className="bg-gradient-to-r from-blue-900/70 to-blue-950/70 text-white px-3 py-1.5 rounded-xl border border-blue-700/50 shadow-xs flex items-center gap-2">
-              <Route className="w-4 h-4 text-amber-400 shrink-0" />
-              <div className="text-left">
-                <div className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Distance Run</div>
-                <div className="text-sm font-black font-mono text-white leading-tight">
-                  {totalKm} KM
-                </div>
-              </div>
-            </div>
+        {/* Right: Key Controls (Road Snap, Fit, Google Maps) */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setRoadSnapEnabled((prev) => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+              roadSnapEnabled 
+                ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400/50 shadow-xs' 
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+            }`}
+            title="Snap coordinates along true road network"
+          >
+            <GitCommit className={`w-3.5 h-3.5 ${roadSnapEnabled ? 'text-cyan-200 animate-pulse' : 'text-slate-400'}`} />
+            <span>{roadSnapEnabled ? 'Road Snap: ON' : 'Road Snap: OFF'}</span>
+          </button>
 
-            {/* Odometer for Drivers OR Visited Stops for Field Staff */}
-            {validTarget?.isDriver ? (
-              <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
-                <Truck className="w-4 h-4 text-cyan-400 shrink-0" />
-                <div className="text-left">
-                  <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Odometer</div>
-                  <div className="text-xs font-mono font-bold text-white leading-tight">
-                    {startOdometer.toLocaleString()} ➔ <span className="text-amber-300 font-black">{currentOdometer.toLocaleString()} KM</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-800/90 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-xs flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-                <div className="text-left">
-                  <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Visited Waypoints</div>
-                  <div className="text-xs font-mono font-bold text-white leading-tight">
-                    {stops.length > 1 ? `${stops.length} Stops Logged` : 'Base Location'}
-                  </div>
-                </div>
-              </div>
-            )}
+          <button
+            type="button"
+            onClick={handleFitRoute}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/40 flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 transition-all"
+            title="Fit Entire Traveled Route on Screen"
+          >
+            <Crosshair className="w-3.5 h-3.5 text-white" />
+            <span>Fit Route</span>
+          </button>
 
-            {/* Shift Status Badge */}
-            <div className="bg-slate-800/60 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700/60 shadow-xs flex items-center gap-2 font-mono text-[11px]">
-              <span className={`w-2 h-2 rounded-full ${validTarget?.status === 'Punched In' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-              <span>Status: <strong className="text-white">{validTarget?.status || 'Active On Duty'}</strong></span>
-            </div>
-          </div>
-
-          {/* GNSS Accuracy */}
-          <div className="text-[10px] font-mono text-slate-400">
-            GNSS Precision: ±{validTarget?.accuracy || 15}m
-          </div>
+          {activeRouteDetails?.googleMapsFullRouteUrl && (
+            <a
+              href={activeRouteDetails.googleMapsFullRouteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 shadow-xs cursor-pointer flex items-center gap-1.5 text-xs font-bold active:scale-95 transition-all"
+              title="Open Route in Google Maps"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Google Maps</span>
+            </a>
+          )}
         </div>
       </div>
 
