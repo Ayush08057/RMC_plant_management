@@ -649,22 +649,6 @@ export default function AttendanceManagementView({
       const empId = (emp.id || '').toString().trim().toUpperCase();
       const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
       const empName = (emp.name || '').toString().trim().toLowerCase();
-<<<<<<< HEAD
-      const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
-
-      // Strictly match attendance record for selectedDate (Day-to-day isolation)
-      const record = (attendance || []).find((a) => {
-        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const aName = (a.employeeName || '').toString().trim().toLowerCase();
-        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        const idMatches = (aId === empId || aId === empEmpId || (aName && empName && aName === empName) || (isEmpSupervisor && isASupervisor));
-        const dateMatches = (a.date === selectedDate || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
-        return idMatches && dateMatches;
-      }) || null;
-
-      const hasIn = Boolean(record?.punchIn);
-      const hasOut = Boolean(record?.punchIn && record?.punchOut);
-=======
       const cleanTargetId = empEmpId || empId;
       const record = (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
@@ -676,7 +660,7 @@ export default function AttendanceManagementView({
 
       const hasIn = Boolean(record?.punchIn || (record?.status && record?.status !== 'Absent' && record?.status !== 'Leave' && record?.status !== 'On Leave'));
       const hasOut = Boolean(record?.punchOut);
->>>>>>> a88f669774c91b846d32430d29e169bc02144a84
+
       const isOnline = hasIn && !hasOut;
       const isCompleted = hasIn && hasOut;
       const isTracked = isRoleGpsTracked(emp.role);
