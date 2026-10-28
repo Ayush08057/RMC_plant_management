@@ -2073,22 +2073,20 @@ export const WorkforceProvider = ({ children }) => {
   };
 
   // Continuous background location tracking for authenticated staff actively on duty
+  const currentEmpId = user?.employeeId || user?.id || '';
+  const isCurrentUserPunchedIn = Boolean((data.attendance || []).some((a) => {
+    const today = new Date().toISOString().split('T')[0];
+    const aDate = a.date || '';
+    const aEmpId = (a.employeeId || a.id || '').toUpperCase();
+    return aDate === today && aEmpId === currentEmpId.toUpperCase() && a.punchIn && !a.punchOut;
+  }));
+
   useEffect(() => {
     if (typeof window === 'undefined' || !navigator.geolocation || !user) return;
     if (user.role === 'Admin') return;
 
     const empId = user.employeeId || user.id;
-    if (!empId) return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const todayRecord = (data.attendance || []).find((a) => {
-      const aDate = a.date || '';
-      const aEmpId = (a.employeeId || a.id || '').toUpperCase();
-      return aDate === today && (aEmpId === empId.toUpperCase());
-    });
-
-    const isPunchedIn = Boolean(todayRecord?.punchIn && !todayRecord?.punchOut);
-    if (!isPunchedIn) return;
+    if (!empId || !isCurrentUserPunchedIn) return;
 
     let watchId;
     try {
@@ -2122,7 +2120,7 @@ export const WorkforceProvider = ({ children }) => {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [user, data.attendance]);
+  }, [user?.employeeId, user?.id, user?.role, isCurrentUserPunchedIn]);
 
   const requestAttendanceCorrection = ({ employeeId, date, reason, requestedIn, requestedOut }) => {
     const emp = data.employees.find((e) => e.id === employeeId);
