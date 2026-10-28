@@ -370,10 +370,17 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         const cLat = Number(lat);
         const isContaminatedPune = (cLat >= 17.5);
         if (isContaminatedPune || !lat) {
-          lat = 16.852000;
-          lng = 74.590000;
-          accuracy = 15;
-          gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+          // If supervisor has an attendance record with gpsLocation, use it; otherwise fallback to assignedStation or Godrej
+          if (record?.gpsLocation?.lat && Number(record.gpsLocation.lat) < 17.5) {
+            lat = Number(record.gpsLocation.lat);
+            lng = Number(record.gpsLocation.lng);
+            gpsFixSource = 'ATTENDANCE_PUNCH';
+          } else {
+            lat = 16.852000;
+            lng = 74.590000;
+            accuracy = 15;
+            gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+          }
         }
       } else if (isAcc) {
         const cLat = Number(lat);

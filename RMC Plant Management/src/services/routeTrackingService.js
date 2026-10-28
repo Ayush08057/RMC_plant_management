@@ -460,17 +460,20 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     const rawLat = useDeviceGps ? liveGps.lat : (employee.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat);
     const rawLng = useDeviceGps ? liveGps.lng : (employee.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng);
 
+    const fallbackSupLat = (punchInGps && punchInGps.lat && Number(punchInGps.lat) < 17.5) ? Number(punchInGps.lat) : 16.852000;
+    const fallbackSupLng = (punchInGps && punchInGps.lng && Number(punchInGps.lat) < 17.5) ? Number(punchInGps.lng) : 74.590000;
+
     const currentLat = isDis 
       ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) 
       : (isSup 
-          ? (Number(rawLat) >= 17.5 || !rawLat ? 16.852000 : rawLat) 
+          ? (Number(rawLat) >= 17.5 || !rawLat ? fallbackSupLat : rawLat) 
           : (isAcc 
               ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLat ? 16.858400 : rawLat) 
               : rawLat));
     const currentLng = isDis 
       ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) 
       : (isSup 
-          ? (Number(rawLat) >= 17.5 || !rawLng ? 74.590000 : rawLng) 
+          ? (Number(rawLat) >= 17.5 || !rawLng ? fallbackSupLng : rawLng) 
           : (isAcc 
               ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLng ? 74.582400 : rawLng) 
               : rawLng));
