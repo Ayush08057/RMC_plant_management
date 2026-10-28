@@ -269,35 +269,77 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       };
     }
   } else if (isSup) {
-    // Site Supervisor is strictly stationed in Sangli at Godrej Green Acres Site
-    const pLat = 16.852000;
-    const pLng = 74.590000;
-    const resolvedTitle = 'Godrej Green Acres Construction Site, Sangli';
-    const resolvedAddress = 'Near Government Colony, Sangli, Maharashtra 416416';
+    // If punch-in GPS or stops already has supervisor's actual punch-in location (e.g. Palus, Tasgaon, or on-site)
+    // strictly use the real punch-in location rather than overwriting with Godrej Green Acres
+    const hasExistingPunchIn = (punchInGps && punchInGps.lat && punchInGps.lng && Number(punchInGps.lat) < 17.5) ||
+                               (stops.length > 0 && stops[0].lat && Number(stops[0].lat) < 17.5);
+    
+    if (hasExistingPunchIn) {
+      const pLat = punchInGps && punchInGps.lat ? Number(punchInGps.lat) : Number(stops[0].lat);
+      const pLng = punchInGps && punchInGps.lng ? Number(punchInGps.lng) : Number(stops[0].lng);
+      const landmark = resolveSangliLandmark(pLat, pLng);
+      const resolvedTitle = (punchInGps?.landmarkName && !punchInGps.landmarkName.includes('Sangli Plant Operational'))
+        ? punchInGps.landmarkName
+        : (stops[0]?.title && !stops[0].title.includes('Punch-In: Godrej Green Acres Site') ? stops[0].title : landmark.landmarkName);
+      const resolvedAddress = (punchInGps?.address && !punchInGps.address.includes('Plant HQ Geofence'))
+        ? punchInGps.address
+        : (stops[0]?.address || landmark.address);
 
-    if (stops.length === 0) {
-      stops.push({
-        stopNo: 1,
-        title: resolvedTitle,
-        category: 'Punch-In Location',
-        address: resolvedAddress,
-        time: punchInTime,
-        lat: pLat,
-        lng: pLng,
-        status: 'Punch-In Station',
-        distanceKm: 0.0,
-        stayMinutes: null,
-        notes: 'Verified biometric punch-in in Sangli'
-      });
+      if (stops.length === 0) {
+        stops.push({
+          stopNo: 1,
+          title: resolvedTitle.startsWith('Punch-In') ? resolvedTitle : `Punch-In: ${resolvedTitle}`,
+          category: 'Punch-In Location',
+          address: resolvedAddress,
+          time: punchInTime,
+          lat: pLat,
+          lng: pLng,
+          status: 'Punch-In Station',
+          distanceKm: 0.0,
+          stayMinutes: null,
+          notes: 'Verified biometric punch-in in Sangli District'
+        });
+      } else {
+        stops[0] = {
+          ...stops[0],
+          title: resolvedTitle.startsWith('Punch-In') ? resolvedTitle : `Punch-In: ${resolvedTitle}`,
+          address: resolvedAddress,
+          lat: pLat,
+          lng: pLng,
+          status: 'Punch-In Station'
+        };
+      }
     } else {
-      stops[0] = {
-        ...stops[0],
-        title: resolvedTitle,
-        address: resolvedAddress,
-        lat: pLat,
-        lng: pLng,
-        status: 'Punch-In Station'
-      };
+      // Fallback only if no punch-in location is recorded at all
+      const pLat = 16.852000;
+      const pLng = 74.590000;
+      const resolvedTitle = 'Godrej Green Acres Construction Site, Sangli';
+      const resolvedAddress = 'Near Government Colony, Sangli, Maharashtra 416416';
+
+      if (stops.length === 0) {
+        stops.push({
+          stopNo: 1,
+          title: resolvedTitle,
+          category: 'Punch-In Location',
+          address: resolvedAddress,
+          time: punchInTime,
+          lat: pLat,
+          lng: pLng,
+          status: 'Punch-In Station',
+          distanceKm: 0.0,
+          stayMinutes: null,
+          notes: 'Verified biometric punch-in in Sangli'
+        });
+      } else {
+        stops[0] = {
+          ...stops[0],
+          title: resolvedTitle,
+          address: resolvedAddress,
+          lat: pLat,
+          lng: pLng,
+          status: 'Punch-In Station'
+        };
+      }
     }
   } else if (isAcc) {
     // Accountant is strictly stationed in Sangli at APMC Market Yard Commercial Hub
@@ -389,11 +431,9 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     if (isAcc && (eLat >= 17.5 || eLat < 16.5)) { eLat = 16.858400; eLng = 74.582400; }
     const eLandmark = isDis 
       ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
-      : (isSup 
-          ? { landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
-          : (isAcc
-              ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
-              : resolveSangliLandmark(eLat, eLng)));
+      : (isAcc
+          ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
+          : resolveSangliLandmark(eLat, eLng));
     const lastStop = stops[stops.length - 1];
     const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, eLat, eLng) : 999;
 
@@ -440,11 +480,9 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       const cLng = Number(currentLng);
       const landmark = isDis 
         ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
-        : (isSup 
-            ? { landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
-            : (isAcc 
-                ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
-                : resolveSangliLandmark(cLat, cLng)));
+        : (isAcc 
+            ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
+            : resolveSangliLandmark(cLat, cLng));
       const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       if (stops.length === 0) {

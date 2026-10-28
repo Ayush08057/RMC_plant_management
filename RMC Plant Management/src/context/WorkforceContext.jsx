@@ -1597,17 +1597,21 @@ export const WorkforceProvider = ({ children }) => {
     if (isSup && Array.isArray(effectiveRouteTrail)) {
       effectiveRouteTrail = effectiveRouteTrail.filter(s => s && Number(s.lat) < 17.5 && !s.title?.includes('Dandekar') && !s.address?.includes('Pune'));
       if (effectiveRouteTrail.length === 0) {
+        const supLat = (effectiveGps && effectiveGps.lat && Number(effectiveGps.lat) < 17.5) ? Number(effectiveGps.lat) : 16.852000;
+        const supLng = (effectiveGps && effectiveGps.lng && Number(effectiveGps.lat) < 17.5) ? Number(effectiveGps.lng) : 74.590000;
+        const supTitle = effectiveGps?.landmarkName || effectiveGeofence || 'Godrej Green Acres Construction Site, Sangli';
+        const supAddress = effectiveGps?.address || 'Near Government Colony, Sangli, Maharashtra 416416';
         effectiveRouteTrail = [{
           stopNo: 1,
-          title: 'Punch-In: Godrej Green Acres Site, Sangli',
+          title: supTitle.startsWith('Punch-In') ? supTitle : `Punch-In: ${supTitle}`,
           category: 'Punch-In Location',
-          address: 'Near Government Colony, Sangli, Maharashtra 416416',
+          address: supAddress,
           time: actualPunchIn,
-          lat: 16.852000,
-          lng: 74.590000,
+          lat: supLat,
+          lng: supLng,
           status: 'Punch-In Station',
           distanceKm: 0.0,
-          notes: 'Verified biometric punch-in in Sangli'
+          notes: 'Verified biometric punch-in in Sangli District'
         }];
       }
     }

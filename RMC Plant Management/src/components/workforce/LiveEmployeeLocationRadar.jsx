@@ -462,7 +462,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       let finalGeofence = record?.geofenceStatus || geofenceLabel;
       if (isEmpSupervisor) {
         if (!finalGeofence || finalGeofence.toLowerCase().includes('dandekar') || finalGeofence.toLowerCase().includes('pune') || Number(lat) > 17.5) {
-          finalGeofence = 'Godrej Green Acres Construction Site, Sangli';
+          finalGeofence = landmark?.isKnownLandmark ? landmark.landmarkName : 'Godrej Green Acres Construction Site, Sangli';
         }
       } else if (isDis) {
         if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {
