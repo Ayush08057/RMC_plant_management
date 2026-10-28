@@ -65,6 +65,7 @@ import BillingManagementView from '../../components/billing/BillingManagementVie
 import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
 import LoanManagementView from '../../components/workforce/LoanManagementView';
 import LiveEmployeeLocationRadar from '../../components/workforce/LiveEmployeeLocationRadar';
+import CleanEmployeeLiveTracking from '../../components/workforce/CleanEmployeeLiveTracking';
 
 export default function AdminDashboardPage() {
   const { t } = useLanguage();
@@ -807,7 +808,7 @@ export default function AdminDashboardPage() {
           onMobileAttendanceReset={() => setTriggerMobileAttendance(false)}
         />
       )}
-      {activeTab === 'live-tracking' && <LiveEmployeeLocationRadar />}
+      {activeTab === 'live-tracking' && <CleanEmployeeLiveTracking />}
       {activeTab === 'shifts' && <ShiftManagementView />}
       {activeTab === 'billing' && <BillingManagementView />}
       {activeTab === 'approvals' && <ApprovalsView />}
