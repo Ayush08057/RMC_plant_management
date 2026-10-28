@@ -187,13 +187,14 @@ export default function AdminDashboardPage() {
       }
 
       // Canonical employee key to guarantee strictly 1 record per staff member
-      let empKey = (a.employeeId || a.id || a.userId || a.employeeName || '').toString().trim().toUpperCase();
+      let empKey = (a.employeeId || a.id || a.userId || '').toString().trim().toUpperCase();
       if (!empKey) return;
-      if (empKey === 'USR-SS-001' || (a.role || '').toLowerCase().includes('supervisor')) {
-        empKey = 'SS-001';
-      } else if (empKey === 'USR-DIS-001' || (a.role || '').toLowerCase().includes('dispatch')) {
-        empKey = 'DIS-001';
-      }
+      if (empKey === 'USR-SS-001') empKey = 'SS-001';
+      if (empKey === 'USR-DIS-001') empKey = 'DIS-001';
+      if (empKey === 'USR-PM-001') empKey = 'PM-001';
+      if (empKey === 'USR-ACC-001') empKey = 'ACC-001';
+      if (empKey === 'USR-QC-001') empKey = 'QC-001';
+      if (empKey === 'USR-DV-001') empKey = 'DRV-001';
 
       const todayUtcStr = new Date().toISOString().split('T')[0];
       const isToday = (recDate === todayLocalDateStr || recDate === todayUtcStr || (a.createdAt && a.createdAt.startsWith(todayLocalDateStr)) || (a.id && a.id.includes(todayLocalDateStr.replace(/-/g, ''))));
@@ -303,8 +304,12 @@ export default function AdminDashboardPage() {
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
       let id = (acc.employeeId || acc.id || '').toUpperCase();
       if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
-      if (id === 'USR-SS-001' || (acc.role || '').toLowerCase().includes('supervisor')) id = 'SS-001';
-      if (id === 'USR-DIS-001' || (acc.role || '').toLowerCase().includes('dispatch')) id = 'DIS-001';
+      if (id === 'USR-SS-001') id = 'SS-001';
+      if (id === 'USR-DIS-001') id = 'DIS-001';
+      if (id === 'USR-PM-001') id = 'PM-001';
+      if (id === 'USR-ACC-001') id = 'ACC-001';
+      if (id === 'USR-QC-001') id = 'QC-001';
+      if (id === 'USR-DV-001') id = 'DRV-001';
 
       map.set(id, {
         id,
@@ -324,8 +329,12 @@ export default function AdminDashboardPage() {
     (employees || []).forEach((e) => {
       let id = (e.employeeId || e.id || '').toUpperCase();
       if (!id || isDummyEmployee(e)) return;
-      if (id === 'USR-SS-001' || (e.role || '').toLowerCase().includes('supervisor')) id = 'SS-001';
-      if (id === 'USR-DIS-001' || (e.role || '').toLowerCase().includes('dispatch')) id = 'DIS-001';
+      if (id === 'USR-SS-001') id = 'SS-001';
+      if (id === 'USR-DIS-001') id = 'DIS-001';
+      if (id === 'USR-PM-001') id = 'PM-001';
+      if (id === 'USR-ACC-001') id = 'ACC-001';
+      if (id === 'USR-QC-001') id = 'QC-001';
+      if (id === 'USR-DV-001') id = 'DRV-001';
 
       if (map.has(id)) {
         map.set(id, { ...map.get(id), ...e, id, employeeId: id });
@@ -338,8 +347,12 @@ export default function AdminDashboardPage() {
     (todayAttendanceRecords || []).forEach((att) => {
       let id = (att.employeeId || att.id || '').toUpperCase();
       if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
-      if (id === 'USR-SS-001' || (att.role || '').toLowerCase().includes('supervisor')) id = 'SS-001';
-      if (id === 'USR-DIS-001' || (att.role || '').toLowerCase().includes('dispatch')) id = 'DIS-001';
+      if (id === 'USR-SS-001') id = 'SS-001';
+      if (id === 'USR-DIS-001') id = 'DIS-001';
+      if (id === 'USR-PM-001') id = 'PM-001';
+      if (id === 'USR-ACC-001') id = 'ACC-001';
+      if (id === 'USR-QC-001') id = 'QC-001';
+      if (id === 'USR-DV-001') id = 'DRV-001';
 
       if (!map.has(id)) {
         map.set(id, {

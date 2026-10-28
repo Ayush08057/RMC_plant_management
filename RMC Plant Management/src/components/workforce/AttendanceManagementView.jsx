@@ -648,22 +648,16 @@ export default function AttendanceManagementView({
       const empId = (emp.id || '').toString().trim().toUpperCase();
       const empEmpId = (emp.employeeId || '').toString().trim().toUpperCase();
       const empName = (emp.name || '').toString().trim().toLowerCase();
-      const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
-
-      const record = attendance.find((a) => {
+      const cleanTargetId = empEmpId || empId;
+      const record = (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const aName = (a.employeeName || '').toString().trim().toLowerCase();
-        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        const idMatches = (aId === empId || aId === empEmpId || (aName && empName && aName === empName) || (isEmpSupervisor && isASupervisor));
-        const dateMatches = (a.date === selectedDate || a.date === todayStr || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
+        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const idMatches = (aId === cleanTargetId || aId === empId || aId === empEmpId);
+        const dateMatches = (aDate === selectedDate || aDate === todayStr || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
         return idMatches && dateMatches;
-      }) || (isEmpSupervisor ? attendance.find((a) => {
-        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        return isASupervisor && (a.punchIn || a.status === 'Present');
-      }) : null);
+      });
 
-      const hasIn = Boolean(record?.punchIn || record?.status === 'Present');
+      const hasIn = Boolean(record?.punchIn || (record?.status && record?.status !== 'Absent' && record?.status !== 'Leave' && record?.status !== 'On Leave'));
       const hasOut = Boolean(record?.punchOut);
       const isOnline = hasIn && !hasOut;
       const isCompleted = hasIn && hasOut;
@@ -684,39 +678,9 @@ export default function AttendanceManagementView({
 
       // Dynamic Real-time Location Details
       const realLocation = record?.geofenceStatus || record?.gpsLocation?.landmarkName || record?.gpsLocation?.address;
-      let locationSummary = realLocation || 'Fixed Office Desk / Stationary Console';
-      let locationCoords = record?.gpsLocation || null;
+      let locationSummary = realLocation || (isOnline ? 'Stationary at Assigned Workstation' : 'Off-Duty (Awaiting Punch In)');
+      let locationCoords = record?.gpsLocation || record?.lastKnownLocation || null;
       let locationSpeed = 0;
-
-      if (isEmpSupervisor) {
-        const isPuneContaminated = !realLocation || realLocation.toLowerCase().includes('dandekar') || realLocation.toLowerCase().includes('pune') || (record?.gpsLocation?.lat && Number(record.gpsLocation.lat) >= 17.5);
-        locationSummary = isPuneContaminated 
-          ? (isOnline ? 'Godrej Green Acres Construction Site, Sangli' : 'Godrej Green Acres Site Hub, Sangli')
-          : realLocation;
-        locationCoords = isPuneContaminated 
-          ? { lat: 16.852000, lng: 74.590000, landmarkName: 'Godrej Green Acres Construction Site, Sangli', address: 'Near Government Colony, Sangli, Maharashtra 416416' }
-          : (record?.gpsLocation || { lat: 16.852000, lng: 74.590000 });
-      } else if ((emp.role || '').toLowerCase().includes('dispatch')) {
-        locationSummary = realLocation || 'Narveer Tanaji Malusare Rd, Pune';
-        locationCoords = record?.gpsLocation || { lat: 18.502390, lng: 73.847872 };
-      } else if (isTracked) {
-        if (emp.role.toLowerCase().includes('driver')) {
-          locationSummary = realLocation || (isOnline ? 'Highway Transit (NH-48 Sector 12)' : 'Truck Dispatch Bay 03');
-          locationSpeed = isOnline ? 34 : 0;
-          locationCoords = record?.gpsLocation || { lat: 19.0683, lng: 73.0373 };
-        } else {
-          // Plant Incharge
-          locationSummary = realLocation || (isOnline ? 'Main Plant Unit #01 Operational Hub' : 'Plant Control Office');
-          locationSpeed = 0;
-          locationCoords = record?.gpsLocation || { lat: 19.0558, lng: 73.0163 };
-        }
-      } else {
-        if (emp.role.toLowerCase().includes('accountant')) {
-          locationSummary = 'Accounts & Finance Desk (Fixed Station)';
-        } else {
-          locationSummary = 'Batching Automation Console (Control Room)';
-        }
-      }
 
       // Daily Work Report status: Strictly check if a real daily work report has been submitted
       const staffReport = (dailyWork || []).find(
@@ -790,6 +754,8 @@ export default function AttendanceManagementView({
         locationSummary,
         locationCoords,
         locationSpeed,
+        totalDistanceKm: record?.totalDistanceKm || 0,
+        routeTrail: record?.routeTrail || [],
         shiftTime: '09:00 AM - 06:00 PM',
         email: emp.email || `${(emp.name || 'emp').toLowerCase().replace(/[^a-z]/g, '')}@smconcretech.com`,
         phone: emp.phone || emp.mobile || '+91 98200 44521',
