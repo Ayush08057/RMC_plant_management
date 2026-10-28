@@ -264,16 +264,17 @@ export default function AttendanceManagementView({
     reason: '',
   });
 
-  // Helper: Calculate duty hours & OT
+  // Helper: Calculate duty hours & OT based on company standard (09:00 AM - 06:00 PM, 9h shift, >= 8.5h Full Day, < 8.5h Half Day)
   const calculateDutyHours = (inTime, outTime) => {
-    if (!inTime || !outTime) return { workingHours: 8, overtimeHours: 0 };
+    if (!inTime || !outTime) return { workingHours: 9, overtimeHours: 0, status: 'Present' };
     const totalInMins = parseTimeToMinutes(inTime);
     const totalOutMins = parseTimeToMinutes(outTime);
     let totalMins = totalOutMins - totalInMins;
-    if (totalMins < 0) totalMins += 24 * 60; // night shift
+    if (totalMins < 0) totalMins += 24 * 60; // night shift rollover
     const workingHours = Number((totalMins / 60).toFixed(1));
     const overtimeHours = workingHours > 9.0 ? Number((workingHours - 9.0).toFixed(1)) : 0;
-    return { workingHours, overtimeHours };
+    const status = workingHours >= 8.5 ? 'Present' : 'Half Day';
+    return { workingHours, overtimeHours, status };
   };
 
   // 1-Click Quick Punch In for staff members (with verified live selfie & real device GPS)
@@ -650,21 +651,18 @@ export default function AttendanceManagementView({
       const empName = (emp.name || '').toString().trim().toLowerCase();
       const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
 
-      const record = attendance.find((a) => {
+      // Strictly match attendance record for selectedDate (Day-to-day isolation)
+      const record = (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
         const aName = (a.employeeName || '').toString().trim().toLowerCase();
         const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
         const idMatches = (aId === empId || aId === empEmpId || (aName && empName && aName === empName) || (isEmpSupervisor && isASupervisor));
-        const dateMatches = (a.date === selectedDate || a.date === todayStr || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
+        const dateMatches = (a.date === selectedDate || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
         return idMatches && dateMatches;
-      }) || (isEmpSupervisor ? attendance.find((a) => {
-        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        return isASupervisor && (a.punchIn || a.status === 'Present');
-      }) : null);
+      }) || null;
 
-      const hasIn = Boolean(record?.punchIn || record?.status === 'Present');
-      const hasOut = Boolean(record?.punchOut);
+      const hasIn = Boolean(record?.punchIn);
+      const hasOut = Boolean(record?.punchIn && record?.punchOut);
       const isOnline = hasIn && !hasOut;
       const isCompleted = hasIn && hasOut;
       const isTracked = isRoleGpsTracked(emp.role);
@@ -675,8 +673,14 @@ export default function AttendanceManagementView({
         statusLabel = 'Present (On Duty)';
         statusTheme = 'emerald';
       } else if (isCompleted) {
-        statusLabel = 'Shift Completed';
-        statusTheme = 'blue';
+        const isHalfDay = record?.status === 'Half Day' || (record?.workingHours !== null && record?.workingHours !== undefined && Number(record.workingHours) < 8.5);
+        if (isHalfDay) {
+          statusLabel = 'Shift Completed (Half Day)';
+          statusTheme = 'amber';
+        } else {
+          statusLabel = 'Shift Completed (Full Day)';
+          statusTheme = 'blue';
+        }
       } else if (record?.status === 'Leave') {
         statusLabel = 'On Leave';
         statusTheme = 'purple';

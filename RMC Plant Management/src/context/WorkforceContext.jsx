@@ -1806,9 +1806,16 @@ export const WorkforceProvider = ({ children }) => {
     if (totalMins < 0) totalMins += 24 * 60; // night shift rollover
 
     const workingHours = Number((totalMins / 60).toFixed(1));
-    const shift = data.shifts.find((s) => s.id === emp.shiftId) || data.shifts[0];
-    const otThreshold = shift?.otThresholdHours || 8.5;
-    const overtimeHours = workingHours > otThreshold ? Number((workingHours - otThreshold).toFixed(1)) : 0;
+    
+    // Standard RMC Company Policy:
+    // Scheduled Shift: 09:00 AM - 06:00 PM (9.0 Hours total)
+    // Full Day Present requirement: 8.5 hours (8h 30m) or more -> Present (Day Completed)
+    // Less than 8.5 hours (< 8h 30m) -> Half Day (अर्धा दिवस)
+    // Overtime: worked hours exceeding 9.0 hours -> OT Hours
+    const isFullDay = workingHours >= 8.5;
+    const isHalfDay = !isFullDay;
+    const calculatedStatus = isFullDay ? 'Present' : 'Half Day';
+    const overtimeHours = workingHours > 9.0 ? Number((workingHours - 9.0).toFixed(1)) : 0;
 
     const authUid = auth.currentUser?.uid || currentRecord.userId || user?.uid || user?.id || null;
 
@@ -1819,6 +1826,9 @@ export const WorkforceProvider = ({ children }) => {
       punchOut: nowTime,
       workingHours,
       overtimeHours,
+      status: calculatedStatus,
+      isHalfDay,
+      completionStatus: isFullDay ? 'Full Day' : 'Half Day',
       exitGpsLocation: options.exitGpsLocation || options.gpsLocation || null,
       lastKnownLocation: options.exitGpsLocation || options.gpsLocation || currentRecord.gpsLocation || null,
       exitGeofenceStatus: options.geofenceStatus || (options.exitGpsLocation || options.gpsLocation ? 'Shift Concluded (GPS Verified)' : 'Shift Concluded'),
@@ -1847,11 +1857,11 @@ export const WorkforceProvider = ({ children }) => {
       return { ...prev, attendance: sanitizeAttendance(copy) };
     });
 
-    addAuditLog(`Punch Out (${emp.name})`, 'Attendance', `Out: ${nowTime} | Worked: ${workingHours}h | OT: ${overtimeHours}h`);
+    addAuditLog(`Punch Out (${emp.name})`, 'Attendance', `Out: ${nowTime} | Worked: ${workingHours}h (${calculatedStatus}) | OT: ${overtimeHours}h`);
     addNotification({
-      title: 'Employee Punched Out',
-      desc: `${emp.name} (${emp.employeeId || emp.id}) completed duty. Total hours: ${workingHours}h (OT: ${overtimeHours}h).`,
-      type: 'info',
+      title: isFullDay ? 'Shift Completed (Full Day)' : 'Shift Completed (Half Day)',
+      desc: `${emp.name} (${emp.employeeId || emp.id}) clocked out at ${nowTime}. Worked: ${workingHours}h (${calculatedStatus}${overtimeHours > 0 ? `, OT: ${overtimeHours}h` : ''}).`,
+      type: isFullDay ? 'success' : 'warning',
       category: 'attendance',
     });
 

@@ -294,7 +294,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       const empName = (emp.name || '').toLowerCase().trim();
       const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
 
-      const record = (attendance || []).find((a) => {
+      // Strictly match TODAY's attendance record (day-to-day isolation)
+      const todayRecord = (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
         const aName = (a.employeeName || '').toLowerCase().trim();
         const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
@@ -303,18 +304,12 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                           (isEmpSupervisor && isASupervisor);
         const dateMatches = a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr)) || (a.id && a.id.includes(todayStr.replace(/-/g, '')));
         return idMatches && dateMatches;
-      }) || (attendance || []).find((a) => {
-        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const aName = (a.employeeName || '').toLowerCase().trim();
-        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        return (aId && (aId === empId || aId === empEmpId)) ||
-               (aName && empName && aName === empName) ||
-               (isEmpSupervisor && isASupervisor);
-      });
+      }) || null;
 
-      const isTodayRecord = Boolean(record && (record.date === todayStr || (record.createdAt && record.createdAt.startsWith(todayStr)) || (record.id && record.id.includes(todayStr.replace(/-/g, '')))));
-      const isPunchedIn = Boolean(record && (record.punchIn || record.status === 'Present') && !record.punchOut);
-      const isPunchedOut = Boolean(record && record.punchIn && record.punchOut);
+      const record = todayRecord;
+      const isTodayRecord = Boolean(todayRecord);
+      const isPunchedIn = Boolean(todayRecord && todayRecord.punchIn && !todayRecord.punchOut);
+      const isPunchedOut = Boolean(todayRecord && todayRecord.punchIn && todayRecord.punchOut);
 
       // Check if this employee is the active user on this client device (never admin)
       const isCurrentUser = Boolean(user && !isAdminPerson(user) && (
@@ -332,19 +327,19 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lng = realDeviceGps.lng;
         accuracy = realDeviceGps.accuracy;
         gpsFixSource = 'LIVE_DEVICE';
-      } else if (record?.lastKnownLocation?.lat && record?.lastKnownLocation?.lng) {
-        lat = Number(record.lastKnownLocation.lat);
-        lng = Number(record.lastKnownLocation.lng);
-        accuracy = record.lastKnownLocation.accuracy ? Math.round(record.lastKnownLocation.accuracy) : null;
+      } else if (todayRecord?.lastKnownLocation?.lat && todayRecord?.lastKnownLocation?.lng) {
+        lat = Number(todayRecord.lastKnownLocation.lat);
+        lng = Number(todayRecord.lastKnownLocation.lng);
+        accuracy = todayRecord.lastKnownLocation.accuracy ? Math.round(todayRecord.lastKnownLocation.accuracy) : null;
         gpsFixSource = 'LIVE_TRACKING';
-      } else if (record?.gpsLocation?.lat && record?.gpsLocation?.lng) {
-        lat = Number(record.gpsLocation.lat);
-        lng = Number(record.gpsLocation.lng);
-        accuracy = record.gpsLocation.accuracy ? Math.round(record.gpsLocation.accuracy) : null;
+      } else if (todayRecord?.gpsLocation?.lat && todayRecord?.gpsLocation?.lng) {
+        lat = Number(todayRecord.gpsLocation.lat);
+        lng = Number(todayRecord.gpsLocation.lng);
+        accuracy = todayRecord.gpsLocation.accuracy ? Math.round(todayRecord.gpsLocation.accuracy) : null;
         gpsFixSource = 'ATTENDANCE_PUNCH';
       }
 
-      // Fallback to verified assigned station if no live mobile GNSS fix recorded
+      // Fallback to verified assigned station if no live mobile GNSS fix recorded for today
       const assignedStation = getAssignedEmployeeStation(emp);
       if (lat === null || lng === null) {
         lat = assignedStation.lat;
@@ -462,17 +457,21 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         finalGeofence = assignedStation.stationName || 'SM Plant HQ';
       }
 
+      const isHalfDayOut = isPunchedOut && (todayRecord?.status === 'Half Day' || (todayRecord?.workingHours !== null && todayRecord?.workingHours !== undefined && Number(todayRecord.workingHours) < 8.5));
+      const dutyStatus = isPunchedIn ? 'Punched In' : (isPunchedOut ? (isHalfDayOut ? 'Half Day' : 'Punched Out') : 'Not Checked In');
+
       return {
         ...emp,
-        recordId: record?.id,
-        punchIn: record?.punchIn || null,
-        punchOut: record?.punchOut || null,
-        status: isPunchedIn ? 'Punched In' : (isPunchedOut ? 'Punched Out' : 'Not Checked In'),
-        workingHours: record?.workingHours || (elapsedMins > 0 ? (elapsedMins / 60).toFixed(1) : null),
-        overtimeHours: record?.overtimeHours || 0,
-        elapsedDisplay: formatHours(elapsedMins),
-        lateStatus: record?.lateStatus || false,
-        lateMinutes: record?.lateMinutes || 0,
+        recordId: todayRecord?.id || null,
+        punchIn: isTodayRecord ? (todayRecord?.punchIn || null) : null,
+        punchOut: isTodayRecord ? (todayRecord?.punchOut || null) : null,
+        status: dutyStatus,
+        isHalfDay: isHalfDayOut,
+        workingHours: isTodayRecord ? (todayRecord?.workingHours || (isPunchedIn && elapsedMins > 0 ? (elapsedMins / 60).toFixed(1) : null)) : null,
+        overtimeHours: isTodayRecord ? (todayRecord?.overtimeHours || 0) : 0,
+        elapsedDisplay: isPunchedIn ? formatHours(elapsedMins) : (isPunchedOut ? (todayRecord?.workingHours ? `${todayRecord.workingHours}h` : 'Completed') : '--'),
+        lateStatus: isTodayRecord ? (todayRecord?.lateStatus || false) : false,
+        lateMinutes: isTodayRecord ? (todayRecord?.lateMinutes || 0) : 0,
         lat,
         lng,
         accuracy,

@@ -130,19 +130,24 @@ export default function MobilePunchWidget({
 
   const isDriver = (activeEmployee?.role || '').toLowerCase().includes('driver') || user?.role === 'Driver';
 
-  // Today's attendance record
+  // Today's attendance record (Strictly scoped to the selected employee ID)
   const todayStr = new Date().toISOString().split('T')[0];
   const userTodayRecord = useMemo(() => {
+    const targetEmpId = (activeEmployee?.employeeId || activeEmployee?.id || selectedEmpId || '').toString().trim().toUpperCase();
+    if (!targetEmpId) return null;
     return (attendance || []).find(
       (a) => a.date === todayStr &&
-        ((a.employeeId && (
-          a.employeeId.toUpperCase() === (activeEmployee.employeeId || '').toUpperCase() ||
-          a.employeeId.toUpperCase() === (activeEmployee.id || '').toUpperCase() ||
-          a.employeeId.toUpperCase() === (selectedEmpId || '').toUpperCase()
-        )) ||
-        (a.userId && user?.uid && a.userId === user.uid))
+        a.employeeId && (
+          a.employeeId.toString().trim().toUpperCase() === targetEmpId ||
+          (targetEmpId === 'SS-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-SS-001') ||
+          (targetEmpId === 'DIS-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-DIS-001') ||
+          (targetEmpId === 'PM-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-PM-001') ||
+          (targetEmpId === 'ACC-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-ACC-001') ||
+          (targetEmpId === 'QC-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-QC-001') ||
+          (targetEmpId === 'DRV-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-DV-001')
+        )
     );
-  }, [attendance, todayStr, activeEmployee, selectedEmpId, user]);
+  }, [attendance, todayStr, activeEmployee, selectedEmpId]);
 
   const hasPunchedIn = Boolean(userTodayRecord?.punchIn);
   const hasPunchedOut = Boolean(userTodayRecord?.punchOut);

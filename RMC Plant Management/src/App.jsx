@@ -48,8 +48,8 @@ export default function App() {
       });
 
       // Scrub legacy mock route coordinates (16.8464, 74.5990)
-      const routesRaw = localStorage.getItem('rmc_employee_route_histories_v1');
-      if (routesRaw && (routesRaw.includes('Sangli Plant Operational') || routesRaw.includes('16.8464') || routesRaw.includes('Effotel'))) {
+      const routesRaw = localStorage.getItem('rmc_employee_route_histories_v1') || localStorage.getItem('rmc_employee_route_history_v2');
+      if (routesRaw && (routesRaw.includes('Sangli Plant Operational') || routesRaw.includes('16.8464') || routesRaw.includes('Effotel') || routesRaw.includes('Dandekar'))) {
         try {
           const routesParsed = JSON.parse(routesRaw);
           const cleanedRoutes = {};
@@ -60,13 +60,70 @@ export default function App() {
                 s &&
                 !s.title?.includes('Sangli Plant Operational') &&
                 !s.title?.includes('Effotel') &&
+                !s.title?.includes('Dandekar') &&
                 !(s.lat && s.lng && Math.abs(Number(s.lat) - 16.8464) < 0.01)
               );
             }
           });
-          localStorage.setItem('rmc_employee_route_histories_v1', JSON.stringify(cleanedRoutes));
+          localStorage.setItem('rmc_employee_route_history_v2', JSON.stringify(cleanedRoutes));
         } catch {}
       }
+
+      // Day-to-Day Attendance Isolation: Close any unclosed past-day records and sanitize Supervisor location
+      const todayStr = new Date().toISOString().split('T')[0];
+      const sanitizeAttendanceList = (list) => {
+        if (!Array.isArray(list)) return [];
+        return list.map((a) => {
+          if (!a) return a;
+          const aDate = a.date || (a.createdAt ? a.createdAt.split('T')[0] : '');
+          const isPastDate = aDate && aDate < todayStr;
+          let updated = { ...a };
+
+          // If from past date and was left open (punchIn without punchOut), close it for that past date
+          if (isPastDate && updated.punchIn && !updated.punchOut) {
+            updated.punchOut = '06:00 PM';
+            updated.workingHours = 9.0;
+            updated.status = 'Present';
+            updated.completionStatus = 'Full Day';
+          }
+
+          // Sanitize Site Supervisor location to Sangli Godrej Green Acres
+          const aId = (updated.employeeId || updated.id || '').toUpperCase();
+          if (aId === 'SS-001' || aId.includes('SS') || (updated.role && updated.role.toLowerCase().includes('supervisor'))) {
+            if (updated.geofenceStatus?.toLowerCase().includes('dandekar') || updated.geofenceStatus?.toLowerCase().includes('pune') || Number(updated.gpsLocation?.lat) >= 17.5) {
+              updated.geofenceStatus = 'Godrej Green Acres Site, Sangli';
+              updated.landmarkName = 'Godrej Green Acres Construction Site, Sangli';
+              updated.address = 'Near Government Colony, Sangli, Maharashtra 416416';
+              updated.gpsLocation = {
+                lat: 16.852000,
+                lng: 74.590000,
+                accuracy: 15,
+                timestamp: updated.gpsLocation?.timestamp || new Date().toISOString(),
+                address: 'Near Government Colony, Sangli, Maharashtra 416416',
+                landmarkName: 'Godrej Green Acres Construction Site, Sangli',
+              };
+              updated.lastKnownLocation = { ...updated.gpsLocation };
+            }
+          }
+          return updated;
+        });
+      };
+
+      const attKeys = ['rmc_attendance_v1', 'rmc_workforce_data_v1', 'rmc_workforce_data_v1_company_01', 'rmc_workforce_data_v1_company_default'];
+      attKeys.forEach((key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              localStorage.setItem(key, JSON.stringify(sanitizeAttendanceList(parsed)));
+            } else if (parsed && Array.isArray(parsed.attendance)) {
+              parsed.attendance = sanitizeAttendanceList(parsed.attendance);
+              localStorage.setItem(key, JSON.stringify(parsed));
+            }
+          }
+        } catch {}
+      });
     } catch {}
   }, []);
   return (
