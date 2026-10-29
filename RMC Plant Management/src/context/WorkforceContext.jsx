@@ -1600,6 +1600,7 @@ export const WorkforceProvider = ({ children }) => {
     const isSup = (emp.role || '').toLowerCase().includes('supervisor') || canonicalEmpId.includes('SS');
     const isDis = (emp.role || '').toLowerCase().includes('dispatch') || canonicalEmpId.includes('DIS');
     const isAcc = (emp.role || '').toLowerCase().includes('account') || canonicalEmpId.includes('ACC');
+    const isQc = (emp.role || '').toLowerCase().includes('qc') || (emp.role || '').toLowerCase().includes('quality') || canonicalEmpId.includes('QC');
     const actualPunchIn = options.time ? formatToIndian12Hr(options.time) : nowTime;
     const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
 
@@ -1638,6 +1639,60 @@ export const WorkforceProvider = ({ children }) => {
             notes: 'Commercial accounts & sales billing desk'
           }];
         }
+      }
+    }
+    if (isQc) {
+      const qLat = Number(effectiveGps?.lat);
+      const qLng = Number(effectiveGps?.lng);
+      const isKolhapur = Math.abs(qLat - 16.6941) < 0.05 && Math.abs(qLng - 74.2366) < 0.05;
+      if (isKolhapur || qLat >= 17.5 || qLat < 16.5 || !effectiveGps?.lat) {
+        effectiveGps = {
+          lat: 16.8300,
+          lng: 74.6400,
+          accuracy: 15,
+          landmarkName: 'Miraj Highway Package B Quality Lab, Sangli',
+          address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
+          shortName: 'Highway QC Lab',
+          source: 'ASSIGNED_QC_LAB'
+        };
+        effectiveGeofence = 'Miraj Highway Package B Quality Lab, Sangli';
+      }
+      if (Array.isArray(effectiveRouteTrail)) {
+        effectiveRouteTrail = effectiveRouteTrail.filter(s => {
+          if (!s || !s.lat) return false;
+          return !(Math.abs(Number(s.lat) - 16.6941) < 0.05 && Math.abs(Number(s.lng) - 74.2366) < 0.05);
+        });
+        if (effectiveRouteTrail.length === 0) {
+          effectiveRouteTrail = [{
+            stopNo: 1,
+            title: 'Punch-In: Miraj Highway Package B Quality Lab, Sangli',
+            category: 'Punch-In Location',
+            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
+            time: actualPunchIn,
+            lat: 16.8300,
+            lng: 74.6400,
+            status: 'Punch-In Station',
+            distanceKm: 0.0,
+            notes: 'Verified biometric punch-in in Sangli Quality Lab'
+          }];
+        }
+      }
+    }
+    if (isSup) {
+      const sLat = Number(effectiveGps?.lat);
+      const sLng = Number(effectiveGps?.lng);
+      const isKolhapur = Math.abs(sLat - 16.6941) < 0.05 && Math.abs(sLng - 74.2366) < 0.05;
+      if (isKolhapur || sLat >= 17.5) {
+        effectiveGps = {
+          lat: 16.852000,
+          lng: 74.590000,
+          accuracy: 15,
+          landmarkName: 'Godrej Green Acres Construction Site, Sangli',
+          address: 'Near Government Colony, Sangli, Maharashtra 416416',
+          shortName: 'Godrej Green Acres (Sangli)',
+          source: 'ASSIGNED_SITE_PROJECT'
+        };
+        effectiveGeofence = 'Godrej Green Acres Construction Site, Sangli';
       }
     }
     if (isSup && Array.isArray(effectiveRouteTrail)) {

@@ -429,7 +429,7 @@ export default function LiveInteractiveMap({
 
     // 2. Draw Prominent, Dedicated LIVE BEACON MARKER for the SELECTED EMPLOYEE
     if (validTarget && targetLat !== null && targetLng !== null && !isNaN(targetLat) && !isNaN(targetLng)) {
-      const isOnline = validTarget.status === 'Punched In';
+      const isOnline = validTarget.status === 'Punched In' || validTarget.status === 'Tracking' || Boolean(validTarget.punchIn && !validTarget.punchOut);
       const isDriver = Boolean(validTarget.isDriver);
       const isDis = String(validTarget.employeeId || validTarget.id || '').toUpperCase().includes('DIS') ||
                     String(validTarget.role || '').toLowerCase().includes('dispatch');
@@ -503,7 +503,7 @@ export default function LiveInteractiveMap({
               </div>
               <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
                 isOnline ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300'
-              }">${validTarget.status}</span>
+              }">${isOnline ? 'Punched In' : (validTarget.status || 'Active')}</span>
             </div>
 
             <div class="space-y-2 text-[11px] text-slate-600">
