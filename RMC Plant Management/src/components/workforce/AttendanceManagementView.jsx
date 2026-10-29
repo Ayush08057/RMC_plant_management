@@ -318,16 +318,26 @@ export default function AttendanceManagementView({
       }
     };
 
+    // If native tracking bridge has an active hardware fix, use it immediately!
+    const nativeFix = nativeTracking.getLatestNativeFix();
+    if (nativeFix && nativeFix.lat && nativeFix.lng) {
+      executePunchIn(Number(nativeFix.lat), Number(nativeFix.lng), true);
+      return;
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           let lat = Number(pos.coords.latitude.toFixed(5));
           let lng = Number(pos.coords.longitude.toFixed(5));
           const isQc = (emp.role || '').toLowerCase().includes('qc') || (emp.role || '').toLowerCase().includes('quality') || (emp.employeeId || emp.id || '').toUpperCase().includes('QC');
-          // Reject coarse Kolhapur ISP coordinates for Sangli QC Engineer
-          if (isQc && (Math.abs(lat - 16.6941) < 0.05 || lat >= 17.5 || lat < 16.5)) {
-            lat = 16.8300;
-            lng = 74.6400;
+          const isSup = (emp.role || '').toLowerCase().includes('supervisor') || (emp.employeeId || emp.id || '').toUpperCase().includes('SS');
+          // Reject coarse Kolhapur ISP coordinates (16.69) for Sangli operations
+          const isKolhapur = Math.abs(lat - 16.6941) < 0.05 && Math.abs(lng - 74.2366) < 0.05;
+          if (isKolhapur) {
+            if (isQc) { lat = 16.8300; lng = 74.6400; }
+            else if (isSup) { lat = 16.8520; lng = 74.5900; }
+            else { lat = 16.8450; lng = 74.6200; }
           }
           executePunchIn(lat, lng, true);
         },

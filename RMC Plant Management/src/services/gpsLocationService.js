@@ -201,24 +201,25 @@ export async function getAccurateDeviceLocation(options = {}) {
 
   // Step 0: Priority 1 - Native Flutter Hardware GPS Fix via Bridge (if running in mobile app)
   if (nativeTracking.isNativeApp()) {
-    nativeTracking.requestImmediateFix();
-    const nativeFix = nativeTracking.getLatestNativeFix();
-    if (nativeFix && nativeFix.lat && nativeFix.lng) {
-      const nLat = Number(Number(nativeFix.lat).toFixed(6));
-      const nLng = Number(Number(nativeFix.lng).toFixed(6));
-      const addrInfo = await resolveAccurateAddress(nLat, nLng);
-      return {
-        lat: nLat,
-        lng: nLng,
-        accuracy: Math.round(nativeFix.accuracy || 10),
-        timestamp: nativeFix.timestamp || new Date().toISOString(),
-        address: addrInfo.address,
-        landmarkName: addrInfo.landmarkName,
-        shortName: addrInfo.shortName,
-        source: 'NATIVE_HARDWARE_GPS',
-        isFallback: false
-      };
-    }
+    try {
+      const nativeFix = await nativeTracking.requestImmediateFix(5000);
+      if (nativeFix && nativeFix.lat && nativeFix.lng) {
+        const nLat = Number(Number(nativeFix.lat).toFixed(6));
+        const nLng = Number(Number(nativeFix.lng).toFixed(6));
+        const addrInfo = await resolveAccurateAddress(nLat, nLng);
+        return {
+          lat: nLat,
+          lng: nLng,
+          accuracy: Math.round(nativeFix.accuracy || 10),
+          timestamp: nativeFix.timestamp || new Date().toISOString(),
+          address: addrInfo.address,
+          landmarkName: addrInfo.landmarkName,
+          shortName: addrInfo.shortName,
+          source: 'NATIVE_HARDWARE_GPS',
+          isFallback: false
+        };
+      }
+    } catch (_) {}
   }
 
   // Step 1: Check Browser Geolocation

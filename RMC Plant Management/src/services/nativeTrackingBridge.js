@@ -74,13 +74,39 @@ class NativeTrackingService {
 
   /**
    * Request an immediate high-precision hardware GPS fix from Flutter layer
+   * Returns a Promise that waits up to 6 seconds for the native GNSS ping
    */
-  requestImmediateFix() {
-    if (typeof window === 'undefined') return;
-    const payload = JSON.stringify({ action: 'REQUEST_GPS_NOW' });
-    if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
-      window.NativeTrackingBridge.postMessage(payload);
-    }
+  async requestImmediateFix(timeoutMs = 6000) {
+    if (typeof window === 'undefined') return this.getLatestNativeFix();
+    
+    return new Promise((resolve) => {
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          unsubscribe();
+          resolve(this.getLatestNativeFix());
+        }
+      }, timeoutMs);
+
+      const unsubscribe = this.onLocationPing((data) => {
+        if (!resolved && data && data.lat && data.lng) {
+          resolved = true;
+          clearTimeout(timer);
+          unsubscribe();
+          resolve(data);
+        }
+      });
+
+      const payload = JSON.stringify({ action: 'REQUEST_GPS_NOW' });
+      if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
+        window.NativeTrackingBridge.postMessage(payload);
+      } else {
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(this.getLatestNativeFix());
+      }
+    });
   }
 
   /**
