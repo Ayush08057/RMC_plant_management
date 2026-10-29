@@ -48,6 +48,7 @@ import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
+import { nativeTracking } from '../../services/nativeTrackingBridge';
 import KPICard from '../dashboard/KPICard';
 import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
@@ -295,6 +296,7 @@ export default function AttendanceManagementView({
             timestamp: new Date().toISOString(),
           },
         });
+        nativeTracking.startForegroundTracking(emp.employeeId || emp.id, emp.name);
         setToastMessage(`✓ Clocked IN: ${emp.name} at ${formatToIndian12Hr(rec.punchIn)} (🛰️ Live GPS: ${lat}, ${lng})`);
       } catch (err) {
         setToastMessage(err.message || 'Check-in failed');
@@ -304,10 +306,13 @@ export default function AttendanceManagementView({
     const fallbackPunchIn = () => {
       const isSup = (emp.role || '').toLowerCase().includes('supervisor') || (emp.employeeId || emp.id || '').toUpperCase().includes('SS');
       const isDis = (emp.role || '').toLowerCase().includes('dispatch') || (emp.employeeId || emp.id || '').toUpperCase().includes('DIS');
+      const isQc = (emp.role || '').toLowerCase().includes('qc') || (emp.role || '').toLowerCase().includes('quality') || (emp.employeeId || emp.id || '').toUpperCase().includes('QC');
       if (isSup) {
         executePunchIn(16.8520, 74.5900, false);
       } else if (isDis) {
         executePunchIn(18.502390, 73.847872, false);
+      } else if (isQc) {
+        executePunchIn(16.8300, 74.6400, false);
       } else {
         executePunchIn(16.8450, 74.6200, false);
       }
@@ -316,8 +321,14 @@ export default function AttendanceManagementView({
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const lat = Number(pos.coords.latitude.toFixed(5));
-          const lng = Number(pos.coords.longitude.toFixed(5));
+          let lat = Number(pos.coords.latitude.toFixed(5));
+          let lng = Number(pos.coords.longitude.toFixed(5));
+          const isQc = (emp.role || '').toLowerCase().includes('qc') || (emp.role || '').toLowerCase().includes('quality') || (emp.employeeId || emp.id || '').toUpperCase().includes('QC');
+          // Reject coarse Kolhapur ISP coordinates for Sangli QC Engineer
+          if (isQc && (Math.abs(lat - 16.6941) < 0.05 || lat >= 17.5 || lat < 16.5)) {
+            lat = 16.8300;
+            lng = 74.6400;
+          }
           executePunchIn(lat, lng, true);
         },
         () => {
@@ -349,6 +360,7 @@ export default function AttendanceManagementView({
     }
 
     try {
+      nativeTracking.stopForegroundTracking();
       const rec = await checkOut(targetId, {
         remarks: `Shift completed for ${emp.name}. Daily Report filed.`,
       });

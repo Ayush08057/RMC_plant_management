@@ -4,6 +4,7 @@
  */
 
 import { resolveSangliLandmark, calculateDistanceMeters } from '../utils/sangliGeofence';
+import { nativeTracking } from './nativeTrackingBridge';
 
 // In-memory cache for reverse geocoding to prevent excessive lookups
 const reverseGeocodeCache = new Map();
@@ -198,6 +199,28 @@ async function fetchIpGeolocation() {
 export async function getAccurateDeviceLocation(options = {}) {
   const { forceFresh = false, defaultStation = null } = options;
 
+  // Step 0: Priority 1 - Native Flutter Hardware GPS Fix via Bridge (if running in mobile app)
+  if (nativeTracking.isNativeApp()) {
+    nativeTracking.requestImmediateFix();
+    const nativeFix = nativeTracking.getLatestNativeFix();
+    if (nativeFix && nativeFix.lat && nativeFix.lng) {
+      const nLat = Number(Number(nativeFix.lat).toFixed(6));
+      const nLng = Number(Number(nativeFix.lng).toFixed(6));
+      const addrInfo = await resolveAccurateAddress(nLat, nLng);
+      return {
+        lat: nLat,
+        lng: nLng,
+        accuracy: Math.round(nativeFix.accuracy || 10),
+        timestamp: nativeFix.timestamp || new Date().toISOString(),
+        address: addrInfo.address,
+        landmarkName: addrInfo.landmarkName,
+        shortName: addrInfo.shortName,
+        source: 'NATIVE_HARDWARE_GPS',
+        isFallback: false
+      };
+    }
+  }
+
   // Step 1: Check Browser Geolocation
   if (typeof window !== 'undefined' && navigator.geolocation) {
     // Helper to wrap getCurrentPosition in a promise
@@ -239,7 +262,7 @@ export async function getAccurateDeviceLocation(options = {}) {
       console.warn('GPS High-accuracy acquisition notice, falling back to Wi-Fi/Network positioning:', highErr.message);
     }
 
-    // Tier 2: Try Low Accuracy (Wi-Fi SSID / Cell tower triangulation - instant in urban areas like Pune!)
+    // Tier 2: Try Low Accuracy (Wi-Fi SSID / Cell tower triangulation)
     try {
       const pos = await tryGeo({
         enableHighAccuracy: false,
@@ -250,31 +273,36 @@ export async function getAccurateDeviceLocation(options = {}) {
       const lat = Number(pos.coords.latitude.toFixed(6));
       const lng = Number(pos.coords.longitude.toFixed(6));
       const accuracy = Math.round(pos.coords.accuracy || 45);
-      const addrInfo = await resolveAccurateAddress(lat, lng);
 
-      return {
-        lat,
-        lng,
-        accuracy,
-        timestamp: new Date().toISOString(),
-        address: addrInfo.address,
-        landmarkName: addrInfo.landmarkName,
-        shortName: addrInfo.shortName,
-        source: 'WIFI_CELL_TRIANGULATION',
-        isFallback: false
-      };
+      // If low-accuracy cell tower falls into Kolhapur (~16.69) but default station is Sangli, reject coarse ISP/cell tower
+      const isKolhapurIsp = Math.abs(lat - 16.6941) < 0.05 && Math.abs(lng - 74.2366) < 0.05;
+      if (!isKolhapurIsp || !defaultStation) {
+        const addrInfo = await resolveAccurateAddress(lat, lng);
+
+        return {
+          lat,
+          lng,
+          accuracy,
+          timestamp: new Date().toISOString(),
+          address: addrInfo.address,
+          landmarkName: addrInfo.landmarkName,
+          shortName: addrInfo.shortName,
+          source: 'WIFI_CELL_TRIANGULATION',
+          isFallback: false
+        };
+      }
     } catch (lowErr) {
       console.warn('Network location acquisition notice, attempting IP fallback:', lowErr.message);
     }
   }
 
-  // Tier 3: Try IP Geolocation
+  // Tier 3: Try IP Geolocation (Strictly reject if ISP gateway places user in Kolhapur / outside plant zone)
   try {
     const ipGeo = await fetchIpGeolocation();
     if (ipGeo) {
-      // Validate that IP geolocation is in regional operating corridor (Maharashtra: lat ~15.5 to 20.2, lng ~72.5 to 80.5)
+      const isKolhapurIsp = Math.abs(ipGeo.lat - 16.6941) < 0.05 && Math.abs(ipGeo.lng - 74.2366) < 0.05;
       const isRegional = ipGeo.lat >= 15.5 && ipGeo.lat <= 20.2 && ipGeo.lng >= 72.5 && ipGeo.lng <= 80.5;
-      if (isRegional || !defaultStation) {
+      if (!isKolhapurIsp && (isRegional || !defaultStation)) {
         const addrInfo = await resolveAccurateAddress(ipGeo.lat, ipGeo.lng);
         return {
           lat: Number(ipGeo.lat.toFixed(6)),

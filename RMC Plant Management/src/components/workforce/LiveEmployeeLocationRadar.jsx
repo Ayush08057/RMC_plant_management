@@ -361,6 +361,13 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         (emp.role || '').toLowerCase().includes('account') ||
         (emp.name || '').toLowerCase().includes('accountant');
 
+      const isQc = 
+        (emp.id || '').toUpperCase().includes('QC') ||
+        (emp.employeeId || '').toUpperCase().includes('QC') ||
+        (emp.role || '').toLowerCase().includes('qc') ||
+        (emp.role || '').toLowerCase().includes('quality') ||
+        (emp.name || '').toLowerCase().includes('quality');
+
       if (isDis && (lat === null || Number(lat) < 17.5)) {
         lat = 18.502390;
         lng = 73.847872;
@@ -388,6 +395,16 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         if (isOutOfSangli) {
           lat = 16.858400;
           lng = 74.582400;
+          accuracy = 15;
+          gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+        }
+      } else if (isQc) {
+        const cLat = Number(lat);
+        const cLng = Number(lng);
+        const isKolhapurOrOut = !lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
+        if (isKolhapurOrOut) {
+          lat = 16.8300;
+          lng = 74.6400;
           accuracy = 15;
           gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
         }

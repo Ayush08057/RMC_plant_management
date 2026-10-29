@@ -105,6 +105,8 @@ export default function CleanEmployeeLiveTracking() {
   }, [dayRecord]);
 
   // Construct target object with real location telemetry for map
+  const isPunchedOut = Boolean(dayRecord?.punchOut);
+
   const mapTarget = useMemo(() => {
     if (!activeEmployee) return null;
 
@@ -132,9 +134,9 @@ export default function CleanEmployeeLiveTracking() {
       geofenceStatus: geofence,
       stationName: geofence,
       accuracy: dayRecord?.lastKnownLocation?.accuracy || dayRecord?.gpsLocation?.accuracy || 15,
-      routeTrail: dayRecord?.routeTrail || []
+      routeTrail: isPunchedOut ? (dayRecord?.routeTrail || []) : []
     };
-  }, [activeEmployee, dayRecord, trackingStatus]);
+  }, [activeEmployee, dayRecord, trackingStatus, isPunchedOut]);
 
   // Route details
   const routeDetails = useMemo(() => {
@@ -306,7 +308,7 @@ export default function CleanEmployeeLiveTracking() {
               onSelectTarget={(emp) => setSelectedEmpId(emp.employeeId || emp.id)}
               mapSatellite={mapSatellite}
               onToggleSatellite={() => setMapSatellite((prev) => !prev)}
-              mapRouteMode={true}
+              mapRouteMode={isPunchedOut}
               isFullWidth={isFullWidth}
               onToggleFullWidth={() => setIsFullWidth((prev) => !prev)}
             />

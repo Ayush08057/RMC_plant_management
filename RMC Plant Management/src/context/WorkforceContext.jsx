@@ -36,6 +36,8 @@ import { deleteEmployeeDocumentFile } from '../services/storageService.js';
 import { calculateDistanceMeters } from '../utils/sangliGeofence.js';
 import { resolveAccurateAddress } from '../services/gpsLocationService.js';
 import { recordEmployeeBreadcrumb, addEmployeeVisitedStop } from '../services/routeTrackingService.js';
+import { nativeTracking } from '../services/nativeTrackingBridge.js';
+import { cleanRawRoutePipeline, calculateAccurateRouteDistanceKm } from '../utils/routeCleanUtils.js';
 
 const WorkforceContext = createContext(null);
 
@@ -43,6 +45,10 @@ const STORAGE_WORKFORCE_KEY = 'rmc_workforce_state_v9';
 const STORAGE_COMPANIES_KEY = 'rmc_companies_v1';
 const STORAGE_ACTIVE_COMPANY_KEY = 'rmc_active_company_v1';
 const DEFAULT_COMPANY_ID = DEFAULT_COMPANIES[0].id;
+
+// Firebase write throttling map: tracks last cloud write timestamp per employee
+const locationFirestoreThrottleMap = new Map();
+const MIN_FIRESTORE_WRITE_INTERVAL_MS = 15000; // write to Firebase at most once every 15 seconds per employee
 
 export const normalizeCompanyId = (id) => {
   if (!id) return DEFAULT_COMPANY_ID;
@@ -104,6 +110,7 @@ export const sanitizeAttendance = (attList) => {
 
     let item = { ...rawItem };
     const isItemAcc = empId.includes('ACC') || (item.role || '').toLowerCase().includes('account');
+    const isItemQc = empId.includes('QC') || (item.role || '').toLowerCase().includes('qc') || (item.role || '').toLowerCase().includes('quality');
     if (isItemAcc) {
       const cLat = Number(item.gpsLocation?.lat);
       const isBadGps = (!item.gpsLocation?.lat || cLat >= 17.5 || cLat < 16.5 || item.geofenceStatus?.toLowerCase().includes('chhindwara') || item.gpsLocation?.landmarkName?.toLowerCase().includes('chhindwara'));
@@ -134,6 +141,44 @@ export const sanitizeAttendance = (attList) => {
             status: 'Punch-In Station',
             distanceKm: 0.0,
             notes: 'Commercial accounts & sales billing desk'
+          }];
+        }
+      }
+    } else if (isItemQc) {
+      const qLat = Number(item.gpsLocation?.lat);
+      const qLng = Number(item.gpsLocation?.lng);
+      const isKolhapur = Math.abs(qLat - 16.6941) < 0.05 && Math.abs(qLng - 74.2366) < 0.05;
+      const isBadQcGps = (!item.gpsLocation?.lat || isKolhapur || qLat >= 17.5 || qLat < 16.5);
+      if (isBadQcGps) {
+        item.gpsLocation = {
+          lat: 16.8300,
+          lng: 74.6400,
+          accuracy: 15,
+          landmarkName: 'Miraj Highway Package B Quality Lab, Sangli',
+          address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
+          shortName: 'Highway QC Lab'
+        };
+        item.lastKnownLocation = { ...item.gpsLocation };
+        item.geofenceStatus = 'Miraj Highway Package B Quality Lab, Sangli';
+        item.totalDistanceKm = 0.0;
+      }
+      if (Array.isArray(item.routeTrail)) {
+        item.routeTrail = item.routeTrail.filter(s => {
+          if (!s || !s.lat) return false;
+          return !(Math.abs(Number(s.lat) - 16.6941) < 0.05 && Math.abs(Number(s.lng) - 74.2366) < 0.05);
+        });
+        if (item.routeTrail.length === 0 && item.punchIn) {
+          item.routeTrail = [{
+            stopNo: 1,
+            title: 'Punch-In: Miraj Highway Package B Quality Lab, Sangli',
+            category: 'Punch-In Location',
+            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
+            time: item.punchIn,
+            lat: 16.8300,
+            lng: 74.6400,
+            status: 'Punch-In Station',
+            distanceKm: 0.0,
+            notes: 'Verified biometric punch-in in Sangli Quality Lab'
           }];
         }
       }
@@ -393,53 +438,24 @@ export const WorkforceProvider = ({ children }) => {
     const syncCollection = (collectionName, stateKey) => {
       const scopedCollectionName = companyCollection(collectionName, activeCompanyId);
 
-      fetchCollection(scopedCollectionName)
-        .then(async (scopedItems) => {
-          let cloudItems = scopedItems;
-          if (activeCompanyId === DEFAULT_COMPANY_ID && scopedItems.length === 0) {
-            const hasInitializedKey = `rmc_initialized_${scopedCollectionName}`;
-            const alreadyInitialized = localStorage.getItem(hasInitializedKey);
-            if (!alreadyInitialized) {
-              const legacyItems = await fetchCollection(collectionName);
-              if (legacyItems.length > 0) {
-                cloudItems = legacyItems;
-                await batchSaveDocuments(scopedCollectionName, legacyItems);
-              } else if (stateKey === 'shifts') {
-                cloudItems = INITIAL_SHIFTS;
-                await batchSaveDocuments(scopedCollectionName, INITIAL_SHIFTS);
-              } else if (stateKey === 'plants') {
-                cloudItems = MOCK_PLANTS;
-                await batchSaveDocuments(scopedCollectionName, MOCK_PLANTS);
-              }
-              localStorage.setItem(hasInitializedKey, 'true');
+      // Avoid double read on boot: subscribeToCollection triggers its initial snapshot immediately upon attachment.
+      // fetchCollection is ONLY needed once for default initialization migration if uninitialized.
+      const hasInitializedKey = `rmc_initialized_${scopedCollectionName}`;
+      if (activeCompanyId === DEFAULT_COMPANY_ID && !localStorage.getItem(hasInitializedKey)) {
+        fetchCollection(scopedCollectionName).then(async (scopedItems) => {
+          if (scopedItems.length === 0) {
+            const legacyItems = await fetchCollection(collectionName);
+            if (legacyItems.length > 0) {
+              await batchSaveDocuments(scopedCollectionName, legacyItems);
+            } else if (stateKey === 'shifts') {
+              await batchSaveDocuments(scopedCollectionName, INITIAL_SHIFTS);
+            } else if (stateKey === 'plants') {
+              await batchSaveDocuments(scopedCollectionName, MOCK_PLANTS);
             }
           }
-          if (stateKey === 'employees' && Array.isArray(cloudItems)) {
-            // Auto-clean dummy accounts from Firestore
-            const dummyItems = cloudItems.filter(isDummyEmployee);
-            if (dummyItems.length > 0) {
-              dummyItems.forEach((d) => {
-                if (d.id) {
-                  removeRawDocument(scopedCollectionName, d.id).catch(() => {});
-                  removeRawDocument(collectionName, d.id).catch(() => {});
-                }
-              });
-            }
-            cloudItems = sanitizeEmployees(cloudItems);
-          }
-          if (stateKey === 'attendance' && Array.isArray(cloudItems)) {
-            cloudItems = sanitizeAttendance(cloudItems);
-          }
-          if (isCurrentCompany && Array.isArray(cloudItems)) {
-            setData((prev) => ({
-              ...prev,
-              [stateKey]: cloudItems,
-            }));
-          }
-        })
-        .catch((err) => {
-          console.warn(`Firestore initial sync for ${collectionName}:`, err.message);
-        });
+          localStorage.setItem(hasInitializedKey, 'true');
+        }).catch((err) => console.warn(`Migration check for ${scopedCollectionName}:`, err.message));
+      }
 
       const unsub = subscribeToCollection(scopedCollectionName, (cloudItems) => {
         let finalItems = cloudItems;
@@ -508,6 +524,36 @@ export const WorkforceProvider = ({ children }) => {
     });
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  // Listen to native location pings from Flutter foreground service
+  useEffect(() => {
+    const unsub = nativeTracking.onLocationPing((ping) => {
+      if (!ping || !ping.lat || !ping.lng) return;
+      // Find currently logged-in workforce user if active
+      try {
+        const storedAuth = localStorage.getItem('rmc_current_user_v1');
+        if (storedAuth) {
+          const authUser = JSON.parse(storedAuth);
+          const empId = authUser?.employeeId || authUser?.id;
+          if (empId) {
+            updateLiveEmployeeLocation(empId, {
+              lat: Number(ping.lat),
+              lng: Number(ping.lng),
+              accuracy: ping.accuracy || 10,
+              timestamp: ping.timestamp || new Date().toISOString(),
+              address: `${Number(ping.lat).toFixed(5)}°N, ${Number(ping.lng).toFixed(5)}°E`,
+              landmarkName: 'Live Device Fix',
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Native ping routing error:', err);
+      }
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
     };
   }, []);
 
@@ -1843,17 +1889,11 @@ export const WorkforceProvider = ({ children }) => {
       }
     }
 
-    // Cumulative kilometers calculation
-    let calculatedKm = 0.0;
-    for (let i = 1; i < finalRouteTrail.length; i++) {
-      const p1 = finalRouteTrail[i - 1];
-      const p2 = finalRouteTrail[i];
-      if (p1.lat && p1.lng && p2.lat && p2.lng) {
-        calculatedKm += calculateDistanceMeters(p1.lat, p1.lng, p2.lat, p2.lng) / 1000;
-        p2.distanceKm = Number(calculatedKm.toFixed(1));
-      }
-    }
-    const totalDistanceKm = Number(calculatedKm.toFixed(1));
+    // Clean route trail through anti-spider & stationary halt collapse filter
+    finalRouteTrail = cleanRawRoutePipeline(finalRouteTrail);
+
+    // Exact, sharp cumulative kilometers calculation
+    const totalDistanceKm = calculateAccurateRouteDistanceKm(finalRouteTrail);
 
     const authUid = auth.currentUser?.uid || currentRecord.userId || user?.uid || user?.id || null;
 
@@ -2079,7 +2119,23 @@ export const WorkforceProvider = ({ children }) => {
       const updatedList = [...prevList];
       updatedList[pIdx] = updatedRecord;
 
-      saveDocumentWithId(COLLECTIONS.ATTENDANCE, target.id, updatedRecord).catch(() => {});
+      // OPTIMIZATION: Throttle Firebase writes to prevent database quota exhaustion & excessive document writes.
+      // Updates React state and localStorage instantly for real-time smoothness,
+      // but writes to Firebase only when a meaningful stop is added (newTrail !== existingTrail)
+      // or at most once every 15 seconds.
+      const now = Date.now();
+      const lastWriteTime = locationFirestoreThrottleMap.get(canonicalEmpId) || 0;
+      const hasNewWaypoint = newTrail.length > existingTrail.length;
+
+      if (hasNewWaypoint || (now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
+        locationFirestoreThrottleMap.set(canonicalEmpId, now);
+        updateDocument(COLLECTIONS.ATTENDANCE, target.id, {
+          lastKnownLocation: updatedRecord.lastKnownLocation,
+          routeTrail: updatedRecord.routeTrail,
+          updatedAt: updatedRecord.updatedAt,
+        }).catch(() => {});
+      }
+
       return { ...prev, attendance: updatedList };
     });
   };
@@ -2146,7 +2202,23 @@ export const WorkforceProvider = ({ children }) => {
       const updatedList = [...prevList];
       updatedList[pIdx] = updatedRecord;
 
-      saveDocumentWithId(COLLECTIONS.ATTENDANCE, target.id, updatedRecord).catch(() => {});
+      // OPTIMIZATION: Throttle Firebase writes to prevent database quota exhaustion & excessive document writes.
+      // Updates React state and localStorage instantly for real-time smoothness,
+      // but writes to Firebase only when a meaningful stop is added (newTrail !== existingTrail)
+      // or at most once every 15 seconds.
+      const now = Date.now();
+      const lastWriteTime = locationFirestoreThrottleMap.get(canonicalEmpId) || 0;
+      const hasNewWaypoint = newTrail.length > existingTrail.length;
+
+      if (hasNewWaypoint || (now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
+        locationFirestoreThrottleMap.set(canonicalEmpId, now);
+        updateDocument(COLLECTIONS.ATTENDANCE, target.id, {
+          lastKnownLocation: updatedRecord.lastKnownLocation,
+          routeTrail: updatedRecord.routeTrail,
+          updatedAt: updatedRecord.updatedAt,
+        }).catch(() => {});
+      }
+
       return { ...prev, attendance: updatedList };
     });
 

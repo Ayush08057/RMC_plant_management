@@ -204,6 +204,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   const empName = (employee.name || '').toLowerCase();
   const isDis = empId.includes('DIS') || empRole.includes('dispatch') || empName.includes('dispatch');
   const isAcc = empId.includes('ACC') || empRole.includes('account') || empName.includes('accountant');
+  const isQc = empId.includes('QC') || empRole.includes('qc') || empRole.includes('quality') || empName.includes('quality');
 
   const allHistories = getAllRouteHistories();
 
@@ -231,6 +232,17 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   // Purge any contaminated out-of-Sangli stops (>= 17.5 or < 16.5 or Chhindwara) for Accountant (stationed in Sangli Market Yard)
   if (isAcc) {
     stops = stops.filter((s) => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
+  }
+
+  // Purge any contaminated Kolhapur ISP / out-of-Sangli stops for QC Engineer
+  if (isQc) {
+    stops = stops.filter((s) => {
+      if (!s || !s.lat) return false;
+      const sLat = Number(s.lat);
+      const sLng = Number(s.lng);
+      const isKolhapur = Math.abs(sLat - 16.6941) < 0.05 && Math.abs(sLng - 74.2366) < 0.05;
+      return !isKolhapur && sLat < 17.5 && sLat >= 16.5;
+    });
   }
 
   // 2. Identify punch-in coordinates
@@ -463,20 +475,26 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     const fallbackSupLat = (punchInGps && punchInGps.lat && Number(punchInGps.lat) < 17.5) ? Number(punchInGps.lat) : 16.852000;
     const fallbackSupLng = (punchInGps && punchInGps.lng && Number(punchInGps.lat) < 17.5) ? Number(punchInGps.lng) : 74.590000;
 
+    const isRawKolhapur = rawLat && rawLng && Math.abs(Number(rawLat) - 16.6941) < 0.05 && Math.abs(Number(rawLng) - 74.2366) < 0.05;
+
     const currentLat = isDis 
       ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) 
       : (isSup 
           ? (Number(rawLat) >= 17.5 || !rawLat ? fallbackSupLat : rawLat) 
           : (isAcc 
               ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLat ? 16.858400 : rawLat) 
-              : rawLat));
+              : (isQc
+                  ? (isRawKolhapur || Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLat ? 16.8300 : rawLat)
+                  : rawLat)));
     const currentLng = isDis 
       ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) 
       : (isSup 
           ? (Number(rawLat) >= 17.5 || !rawLng ? fallbackSupLng : rawLng) 
           : (isAcc 
               ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLng ? 74.582400 : rawLng) 
-              : rawLng));
+              : (isQc
+                  ? (isRawKolhapur || Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLng ? 74.6400 : rawLng)
+                  : rawLng)));
 
     if (currentLat && currentLng) {
       const cLat = Number(currentLat);

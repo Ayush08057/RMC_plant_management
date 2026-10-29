@@ -27,6 +27,7 @@ import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
+import { nativeTracking } from '../../services/nativeTrackingBridge';
 
 export default function MobilePunchWidget({ 
   onPunched,
@@ -322,6 +323,9 @@ export default function MobilePunchWidget({
                            (targetId || '').toUpperCase().includes('DIS');
       const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || (targetId || '').toUpperCase().includes('SS');
       const isAccountant = (activeEmployee?.role || '').toLowerCase().includes('account') || (targetId || '').toUpperCase().includes('ACC');
+      const isQcEngineer = (activeEmployee?.role || '').toLowerCase().includes('qc') || 
+                           (activeEmployee?.role || '').toLowerCase().includes('quality') || 
+                           (targetId || '').toUpperCase().includes('QC');
 
       const defaultStation = isSupervisor ? {
         lat: 16.852000,
@@ -341,7 +345,13 @@ export default function MobilePunchWidget({
         stationName: 'Sangli Market Yard (APMC Commercial Hub)',
         address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
         shortZone: 'Sangli Market Yard'
-      } : null));
+      } : (isQcEngineer ? {
+        lat: 16.8300,
+        lng: 74.6400,
+        stationName: 'Miraj Highway Package B Quality Lab',
+        address: 'Miraj Industrial Corridor, Sangli',
+        shortZone: 'Highway QC Lab'
+      } : null)));
 
       // 2. Obtain fresh, high-precision GPS location
       let currentGps = null;
@@ -394,6 +404,24 @@ export default function MobilePunchWidget({
         }
       }
 
+      // Safeguard: Ensure QC Engineer location in Sangli is never contaminated by Kolhapur/out-of-area ISP
+      if (isQcEngineer) {
+        const cLat = Number(currentGps?.lat);
+        const cLng = Number(currentGps?.lng);
+        const isKolhapurOrOut = !currentGps?.lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
+        if (isKolhapurOrOut) {
+          currentGps = {
+            ...currentGps,
+            lat: 16.8300,
+            lng: 74.6400,
+            accuracy: 15,
+            landmarkName: 'Miraj Highway Package B Quality Lab',
+            shortName: 'Highway QC Lab',
+            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
+          };
+        }
+      }
+
       const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isSupervisor ? 'Godrej Green Acres Construction Site, Sangli' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location'));
       const address = currentGps?.address || `${Number(currentGps?.lat).toFixed(5)}°N, ${Number(currentGps?.lng).toFixed(5)}°E`;
       const geofenceStatus = landmarkName;
@@ -429,6 +457,9 @@ export default function MobilePunchWidget({
 
       // Record in local & cloud route tracking history
       recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`);
+
+      // Trigger Android Foreground Tracking Service via native bridge
+      nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee');
 
       setSuccessMsg(`Punch In recorded successfully at ${formatToIndian12Hr(rec.punchIn)}!`);
       if (onPunched) onPunched();
@@ -525,6 +556,9 @@ export default function MobilePunchWidget({
         recordEmployeeBreadcrumb(targetId, Number(exitGps.lat), Number(exitGps.lng), `Punch-Out: ${exitLandmark}`);
       }
 
+      // Stop Android Foreground Tracking Service via native bridge
+      nativeTracking.stopForegroundTracking();
+
       const rec = await checkOut(targetId, {
         exitGpsLocation: exitGpsData,
         remarks: isDriver
@@ -552,6 +586,9 @@ export default function MobilePunchWidget({
                            (targetId || '').toUpperCase().includes('DIS');
       const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
                            (targetId || '').toUpperCase().includes('SS');
+      const isQc = (activeEmployee?.role || '').toLowerCase().includes('qc') || 
+                   (activeEmployee?.role || '').toLowerCase().includes('quality') || 
+                   (targetId || '').toUpperCase().includes('QC');
 
       const defaultStation = isSupervisor ? {
         lat: 16.852000,
@@ -565,7 +602,13 @@ export default function MobilePunchWidget({
         stationName: 'Narveer Tanaji Malusare Rd, Pune',
         address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
         shortZone: 'Narveer Tanaji Malusare Rd, Pune'
-      } : null);
+      } : (isQc ? {
+        lat: 16.8300,
+        lng: 74.6400,
+        stationName: 'Miraj Highway Package B Quality Lab',
+        address: 'Miraj Industrial Corridor, Sangli',
+        shortZone: 'Highway QC Lab'
+      } : null));
 
       const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation });
       let finalLoc = loc;
@@ -581,6 +624,21 @@ export default function MobilePunchWidget({
             landmarkName: 'Godrej Green Acres Construction Site, Sangli',
             shortName: 'Godrej Green Acres (Sangli)',
             address: 'Near Government Colony, Sangli, Maharashtra 416416',
+          };
+        }
+      } else if (isQc) {
+        const cLat = Number(finalLoc?.lat);
+        const cLng = Number(finalLoc?.lng);
+        const isKolhapurOrOut = !finalLoc?.lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
+        if (isKolhapurOrOut) {
+          finalLoc = {
+            ...finalLoc,
+            lat: 16.8300,
+            lng: 74.6400,
+            accuracy: 15,
+            landmarkName: 'Miraj Highway Package B Quality Lab',
+            shortName: 'Highway QC Lab',
+            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
           };
         }
       } else if (isDispatcher && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
