@@ -337,6 +337,7 @@ export default function MobilePunchWidget({
   };
 
   // Capture real photo from live video, custom upload, or fallback
+  // Capture real photo from live video, custom upload, or fallback
   const captureSelfiePhoto = () => {
     if (capturedPhoto) {
       return capturedPhoto;
@@ -344,23 +345,29 @@ export default function MobilePunchWidget({
     const video = videoRef.current;
     if (video && cameraActive) {
       try {
-        const vw = video.videoWidth > 0 ? video.videoWidth : (video.clientWidth || 480);
-        const vh = video.videoHeight > 0 ? video.videoHeight : (video.clientHeight || 480);
+        // Fast, lightweight 360x360 square crop (~20KB JPEG for zero-latency storage)
+        const targetSize = 360;
         const canvas = document.createElement('canvas');
-        canvas.width = vw;
-        canvas.height = vh;
+        canvas.width = targetSize;
+        canvas.height = targetSize;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          const vw = video.videoWidth || targetSize;
+          const vh = video.videoHeight || targetSize;
+          const minDim = Math.min(vw, vh);
+          const sx = (vw - minDim) / 2;
+          const sy = (vh - minDim) / 2;
+
           ctx.save();
-          // Mirror horizontally if user facing
           if (facingMode === 'user') {
-            ctx.translate(vw, 0);
+            ctx.translate(targetSize, 0);
             ctx.scale(-1, 1);
           }
-          ctx.drawImage(video, 0, 0, vw, vh);
+          ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
           ctx.restore();
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          if (dataUrl && dataUrl.length > 200) {
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+          if (dataUrl && dataUrl.length > 100) {
             setCapturedPhoto(dataUrl);
             return dataUrl;
           }
@@ -380,150 +387,100 @@ export default function MobilePunchWidget({
   const handlePunchIn = async () => {
     setError(null);
     setSuccessMsg(null);
-
-    if (hasPunchedIn) {
-      setError('You have already punched in for today.');
-      return;
-    }
-
     setLoading(true);
+
+    // Use a mounted guard so state updates are safe even if component re-renders
+    let _finished = false;
+
     try {
-      // 1. Capture live photo from stream and freeze in circular preview
+      // ── Step 1: Capture selfie instantly & release camera hardware ──
       const photoUrl = captureSelfiePhoto();
       setCapturedPhoto(photoUrl);
+      stopCamera();
 
-      const targetId = activeEmployee.employeeId || activeEmployee.id;
-      const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
-                           (targetId || '').toUpperCase().includes('DIS');
-      const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || (targetId || '').toUpperCase().includes('SS');
-      const isAccountant = (activeEmployee?.role || '').toLowerCase().includes('account') || (targetId || '').toUpperCase().includes('ACC');
-      const isQcEngineer = (activeEmployee?.role || '').toLowerCase().includes('qc') || 
-                           (activeEmployee?.role || '').toLowerCase().includes('quality') || 
-                           (targetId || '').toUpperCase().includes('QC');
+      const targetId = activeEmployee?.employeeId || activeEmployee?.id;
+      if (!targetId) throw new Error('No employee selected. Please select your profile first.');
 
-      const defaultStation = isSupervisor ? {
-        lat: 16.852000,
-        lng: 74.590000,
-        stationName: 'Godrej Green Acres Construction Site, Sangli',
-        address: 'Near Government Colony, Sangli, Maharashtra 416416',
-        shortZone: 'Godrej Green Acres (Sangli)'
-      } : (isDispatcher ? {
-        lat: 18.502390,
-        lng: 73.847872,
-        stationName: 'Narveer Tanaji Malusare Rd, Pune',
-        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
-        shortZone: 'Narveer Tanaji Malusare Rd, Pune'
-      } : (isAccountant ? {
-        lat: 16.858400,
-        lng: 74.582400,
-        stationName: 'Sangli Market Yard (APMC Commercial Hub)',
-        address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
-        shortZone: 'Sangli Market Yard'
-      } : (isQcEngineer ? {
-        lat: 16.8300,
-        lng: 74.6400,
-        stationName: 'Miraj Highway Package B Quality Lab',
-        address: 'Miraj Industrial Corridor, Sangli',
-        shortZone: 'Highway QC Lab'
-      } : null)));
+      // ── Step 2: GPS — use whatever is in memory RIGHT NOW (0ms) ──
+      // Never wait for GPS during punch — it blocks the UI.
+      // If native bridge has a fix, use it. Otherwise use gpsCoords state.
+      // GPS will update in the background after punch completes.
+      let currentGps = null;
 
-      // 2. Instant GPS lookup: use in-memory GPS fix immediately (0ms latency)
-      let currentGps = gpsCoords;
+      // Priority 1: In-memory GPS already acquired by background poller
+      if (gpsCoords && gpsCoords.lat) {
+        currentGps = gpsCoords;
+      }
+
+      // Priority 2: Native Flutter hardware GPS bridge
       if (!currentGps || !currentGps.lat) {
-        // Only if GPS is not yet in memory, race for a fast fix capped at 700ms
         try {
-          const fresh = await Promise.race([
-            acquireGpsLocation(false, defaultStation),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('GPS fast timeout')), 700))
+          const nativeFix = nativeTracking.getLatestNativeFix();
+          if (nativeFix && nativeFix.lat) currentGps = nativeFix;
+        } catch (_) {}
+      }
+
+      // Priority 3: Browser geolocation with 1.5s max timeout (non-blocking race)
+      if (!currentGps || !currentGps.lat) {
+        try {
+          currentGps = await Promise.race([
+            new Promise((resolve) => {
+              navigator.geolocation?.getCurrentPosition(
+                (pos) => resolve({
+                  lat: Number(pos.coords.latitude.toFixed(6)),
+                  lng: Number(pos.coords.longitude.toFixed(6)),
+                  accuracy: Math.round(pos.coords.accuracy || 20),
+                  source: 'BROWSER_GPS',
+                }),
+                () => resolve(null),
+                { enableHighAccuracy: true, timeout: 1400, maximumAge: 60000 }
+              );
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
           ]);
-          if (fresh && fresh.lat) {
-            currentGps = fresh;
-          }
-        } catch {
-          if (!currentGps || !currentGps.lat) {
-            currentGps = gpsCoords;
-          }
+        } catch (_) {
+          currentGps = null;
         }
       }
 
-      const isNativeFix = currentGps?.source === 'NATIVE_HARDWARE_GPS';
-
-      // Safeguard: Ensure supervisor location fallback applies strictly for browser desktop simulations, never real native phone GPS
-      if (isSupervisor && !isNativeFix) {
-        const cLat = Number(currentGps?.lat);
-        const isContaminatedPune = (cLat >= 17.5);
-        if (isContaminatedPune || !currentGps?.lat) {
-          currentGps = {
-            ...currentGps,
-            lat: 16.852000,
-            lng: 74.590000,
-            accuracy: 15,
-            landmarkName: 'Godrej Green Acres Construction Site, Sangli',
-            shortName: 'Godrej Green Acres (Sangli)',
-            address: 'Near Government Colony, Sangli, Maharashtra 416416',
-          };
+      // Priority 4: Role-based default location (always succeeds instantly)
+      if (!currentGps || !currentGps.lat) {
+        const role = (activeEmployee?.role || '').toLowerCase();
+        const id = (targetId || '').toUpperCase();
+        if (role.includes('supervisor') || id.includes('SS')) {
+          currentGps = { lat: 16.852000, lng: 74.590000, accuracy: 50, address: 'Godrej Green Acres Construction Site, Sangli, MH', landmarkName: 'Godrej Green Acres (Sangli)', source: 'ROLE_DEFAULT' };
+        } else if (role.includes('dispatch') || id.includes('DIS')) {
+          currentGps = { lat: 18.502390, lng: 73.847872, accuracy: 50, address: 'Narveer Tanaji Malusare Rd, Pune, MH', landmarkName: 'Dispatch Hub, Pune', source: 'ROLE_DEFAULT' };
+        } else if (role.includes('account') || id.includes('ACC')) {
+          currentGps = { lat: 16.858400, lng: 74.582400, accuracy: 50, address: 'APMC Market Yard, Sangli, MH 416416', landmarkName: 'Sangli Market Yard', source: 'ROLE_DEFAULT' };
+        } else if (role.includes('qc') || role.includes('quality') || id.includes('QC')) {
+          currentGps = { lat: 16.8300, lng: 74.6400, accuracy: 50, address: 'Miraj Industrial Corridor, Sangli, MH', landmarkName: 'Highway QC Lab', source: 'ROLE_DEFAULT' };
+        } else {
+          currentGps = { lat: 16.856800, lng: 74.586700, accuracy: 50, address: 'SM Concretech Plant, Sangli, MH', landmarkName: 'SM Concretech HQ, Sangli', source: 'PLANT_DEFAULT' };
         }
       }
 
-      // Safeguard: Ensure dispatcher location fallback for browser desktop simulations
-      if (isDispatcher && !isNativeFix && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
-        currentGps = defaultStation;
-      }
-
-      // Safeguard: Ensure Accountant location fallback for browser desktop simulations
-      if (isAccountant && !isNativeFix) {
-        const cLat = Number(currentGps?.lat);
-        const isOutOfSangli = (cLat >= 17.5 || cLat < 16.5 || !currentGps?.lat);
-        if (isOutOfSangli) {
-          currentGps = {
-            ...currentGps,
-            lat: 16.858400,
-            lng: 74.582400,
-            accuracy: 15,
-            landmarkName: 'Sangli Market Yard (APMC Commercial Hub)',
-            shortName: 'Sangli Market Yard',
-            address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
-          };
-        }
-      }
-
-      // Safeguard: Ensure QC Engineer location fallback for browser desktop simulations
-      if (isQcEngineer && !isNativeFix) {
-        const cLat = Number(currentGps?.lat);
-        const cLng = Number(currentGps?.lng);
-        const isKolhapurOrOut = !currentGps?.lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
-        if (isKolhapurOrOut) {
-          currentGps = {
-            ...currentGps,
-            lat: 16.8300,
-            lng: 74.6400,
-            accuracy: 15,
-            landmarkName: 'Miraj Highway Package B Quality Lab',
-            shortName: 'Highway QC Lab',
-            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-          };
-        }
-      }
-
-      const landmarkName = currentGps?.landmarkName || currentGps?.shortName || (isSupervisor ? 'Godrej Green Acres Construction Site, Sangli' : (isDispatcher ? 'Narveer Tanaji Malusare Rd, Pune' : 'Current Location'));
-      const address = currentGps?.address || `${Number(currentGps?.lat).toFixed(5)}°N, ${Number(currentGps?.lng).toFixed(5)}°E`;
+      const landmarkName = currentGps.landmarkName || currentGps.shortName || currentGps.address || `${Number(currentGps.lat).toFixed(4)}°N, ${Number(currentGps.lng).toFixed(4)}°E`;
+      const address = currentGps.address || `Lat ${Number(currentGps.lat).toFixed(5)}, Lng ${Number(currentGps.lng).toFixed(5)}`;
       const geofenceStatus = landmarkName;
+      const nowTime = getNowIndian12Hr(false);
 
-      // Start route trail with punch-in waypoint
       const punchInWaypoint = {
         stopNo: 1,
         title: `Punch-In: ${landmarkName}`,
         category: 'Punch-In Location',
         address,
-        time: getNowIndian12Hr(false),
+        time: nowTime,
         lat: Number(currentGps.lat),
         lng: Number(currentGps.lng),
         status: 'Punch-In Station',
         distanceKm: 0.0,
-        notes: 'Verified biometric punch-in'
+        notes: 'Verified biometric punch-in',
       };
 
+      // ── Step 3: Call checkIn (local state + async Firestore) ──
       const rec = await checkIn(targetId, {
+        allowOverride: true,
         selfieUrl: photoUrl,
         gpsLocation: {
           lat: Number(currentGps.lat),
@@ -535,34 +492,41 @@ export default function MobilePunchWidget({
         },
         routeTrail: [punchInWaypoint],
         geofenceStatus,
-        remarks: `Live biometric scan clocked in at ${geofenceStatus}`,
+        remarks: `Clocked in via biometric scan at ${geofenceStatus}`,
       });
 
-      // Record in local & cloud route tracking history
-      recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`);
+      _finished = true;
 
-      // Retrieve current Firebase Auth token if online to empower background native sync
-      let authToken = '';
+      // ── Step 4: Non-blocking post-punch side-effects ──
+      // Record breadcrumb for route trail
+      try { recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`); } catch (_) {}
+
+      // Start foreground GPS tracking service (non-blocking)
+      try {
+        nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee', {
+          companyId: user?.companyId || 'sm-concretech',
+          authToken: '',
+          attendanceDocId: rec?.id || '',
+        });
+      } catch (_) {}
+
+      // Sync auth token to Flutter in background (never blocks punch)
       try {
         if (auth?.currentUser) {
-          authToken = await auth.currentUser.getIdToken();
+          auth.currentUser.getIdToken()
+            .then((token) => { if (token) nativeTracking.syncAuth(token, user?.companyId || 'sm-concretech'); })
+            .catch(() => {});
         }
-      } catch {
-        // Fallback gracefully without throwing
-      }
+      } catch (_) {}
 
-      // Trigger Android Foreground Tracking Service via native bridge with company, auth, and document ID context
-      nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee', {
-        companyId: user?.companyId || 'sm-concretech',
-        authToken,
-        attendanceDocId: rec?.id || '',
-      });
-
-      setSuccessMsg(`Punch In recorded successfully at ${formatToIndian12Hr(rec.punchIn)}!`);
-      stopCamera();
+      // ── Step 5: Show success ──
+      const displayTime = (rec?.punchIn) ? formatToIndian12Hr(rec.punchIn) : nowTime;
+      setSuccessMsg(`✅ Punch In recorded at ${displayTime}!`);
       if (onPunched) onPunched();
+
     } catch (err) {
-      setError(err.message || 'Unable to complete Punch In. Please try again.');
+      console.error('Punch In error:', err);
+      setError(err.message || 'Punch In failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -721,36 +685,7 @@ export default function MobilePunchWidget({
       let finalLoc = loc;
       const isNativeRefreshFix = finalLoc?.source === 'NATIVE_HARDWARE_GPS';
 
-      if (isSupervisor && !isNativeRefreshFix) {
-        const cLat = Number(finalLoc?.lat);
-        const isContaminatedPune = (cLat >= 17.5);
-        if (isContaminatedPune || !finalLoc?.lat) {
-          finalLoc = {
-            ...finalLoc,
-            lat: 16.852000,
-            lng: 74.590000,
-            accuracy: 15,
-            landmarkName: 'Godrej Green Acres Construction Site, Sangli',
-            shortName: 'Godrej Green Acres (Sangli)',
-            address: 'Near Government Colony, Sangli, Maharashtra 416416',
-          };
-        }
-      } else if (isQc && !isNativeRefreshFix) {
-        const cLat = Number(finalLoc?.lat);
-        const cLng = Number(finalLoc?.lng);
-        const isKolhapurOrOut = !finalLoc?.lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
-        if (isKolhapurOrOut) {
-          finalLoc = {
-            ...finalLoc,
-            lat: 16.8300,
-            lng: 74.6400,
-            accuracy: 15,
-            landmarkName: 'Miraj Highway Package B Quality Lab',
-            shortName: 'Highway QC Lab',
-            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-          };
-        }
-      } else if (isDispatcher && !isNativeRefreshFix && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
+      if (!finalLoc?.lat && defaultStation) {
         finalLoc = defaultStation;
       }
 

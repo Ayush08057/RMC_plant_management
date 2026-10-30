@@ -368,45 +368,28 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         (emp.role || '').toLowerCase().includes('quality') ||
         (emp.name || '').toLowerCase().includes('quality');
 
-      if (isDis && (lat === null || Number(lat) < 17.5)) {
-        lat = 18.502390;
-        lng = 73.847872;
-        accuracy = 15;
-        gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
-      } else if (isEmpSupervisor) {
-        const cLat = Number(lat);
-        const isContaminatedPune = (cLat >= 17.5);
-        if (isContaminatedPune || !lat) {
-          // If supervisor has an attendance record with gpsLocation, use it; otherwise fallback to assignedStation or Godrej
-          if (record?.gpsLocation?.lat && Number(record.gpsLocation.lat) < 17.5) {
-            lat = Number(record.gpsLocation.lat);
-            lng = Number(record.gpsLocation.lng);
-            gpsFixSource = 'ATTENDANCE_PUNCH';
-          } else {
-            lat = 16.852000;
-            lng = 74.590000;
-            accuracy = 15;
-            gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
-          }
-        }
-      } else if (isAcc) {
-        const cLat = Number(lat);
-        const isOutOfSangli = (cLat >= 17.5 || cLat < 16.5 || !lat);
-        if (isOutOfSangli) {
+      // PRESERVE ACTUAL MOBILE GPS: Only use assigned station fallback if device telemetry is completely null
+      if (lat === null || lat === undefined) {
+        if (isDis) {
+          lat = 18.502390;
+          lng = 73.847872;
+          accuracy = 15;
+          gpsFixSource = 'ASSIGNED_STATION';
+        } else if (isEmpSupervisor) {
+          lat = 16.852000;
+          lng = 74.590000;
+          accuracy = 15;
+          gpsFixSource = 'ASSIGNED_STATION';
+        } else if (isAcc) {
           lat = 16.858400;
           lng = 74.582400;
           accuracy = 15;
-          gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
-        }
-      } else if (isQc) {
-        const cLat = Number(lat);
-        const cLng = Number(lng);
-        const isKolhapurOrOut = !lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
-        if (isKolhapurOrOut) {
+          gpsFixSource = 'ASSIGNED_STATION';
+        } else if (isQc) {
           lat = 16.8300;
           lng = 74.6400;
           accuracy = 15;
-          gpsFixSource = record?.punchIn ? 'ATTENDANCE_PUNCH' : 'ASSIGNED_STATION';
+          gpsFixSource = 'ASSIGNED_STATION';
         }
       }
 

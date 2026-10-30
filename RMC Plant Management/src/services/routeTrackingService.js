@@ -132,20 +132,13 @@ export function getAllRouteHistories() {
         if (Array.isArray(list)) {
           const filtered = list.filter((s) => {
             if (!s) return false;
-            // Purge any Sangli stops (< 17.5) recorded for Dispatcher
-            if (isDis && Number(s.lat) < 17.5) return false;
-            // Purge any Pune / Dandekar stops (>= 17.5) recorded for Site Supervisor (who is stationed in Sangli)
-            if (isSup && Number(s.lat) >= 17.5) return false;
-            // Purge any out-of-Sangli (>= 17.5 or < 16.5) or Chhindwara stops for Accountant (stationed in Sangli Market Yard)
-            if (isAcc && (Number(s.lat) >= 17.5 || Number(s.lat) < 16.5 || s.title?.includes('Chhindwara') || s.address?.includes('Chhindwara'))) return false;
             return (
               s.notes !== 'Formwork & reinforcement check' &&
               s.notes !== 'Batching 6.0 m³ M25 concrete loaded' &&
               s.title !== 'Plant HQ (Loading Bay)' &&
               s.title !== 'Godrej Green Acres Pier Site' &&
               !s.title?.includes('Sangli Plant Operational Zone') &&
-              !s.title?.includes('Effotel') &&
-              !(s.lat && s.lng && Math.abs(Number(s.lat) - 16.8464) < 0.01 && Math.abs(Number(s.lng) - 74.5990) < 0.01)
+              !s.title?.includes('Effotel')
             );
           });
           if (filtered.length !== list.length) {
@@ -247,160 +240,24 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
 
   // 2. Identify punch-in coordinates
   const punchInGps = employee.gpsLocation || employee.record?.gpsLocation || null;
+  // 2. Identify punch-in coordinates:
+  // HIGHEST PRIORITY: If employee has actual punch-in GPS coordinates, ALWAYS use them!
+  const hasRealPunchIn = punchInGps && punchInGps.lat && punchInGps.lng;
   const punchInTime = employee.punchIn || employee.record?.punchIn || '09:00 AM';
 
-  if (isDis) {
-    // Dispatcher is strictly stationed in Pune at Narveer Tanaji Malusare Rd
-    const pLat = 18.502390;
-    const pLng = 73.847872;
-    const resolvedTitle = 'Narveer Tanaji Malusare Rd, Pune';
-    const resolvedAddress = 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030';
-
-    if (stops.length === 0) {
-      stops.push({
-        stopNo: 1,
-        title: resolvedTitle,
-        category: 'Punch-In Location',
-        address: resolvedAddress,
-        time: punchInTime,
-        lat: pLat,
-        lng: pLng,
-        status: 'Punch-In Station',
-        distanceKm: 0.0,
-        stayMinutes: null,
-        notes: 'Verified biometric punch-in in Pune'
-      });
-    } else {
-      stops[0] = {
-        ...stops[0],
-        title: resolvedTitle,
-        address: resolvedAddress,
-        lat: pLat,
-        lng: pLng,
-        status: 'Punch-In Station'
-      };
-    }
-  } else if (isSup) {
-    // If punch-in GPS or stops already has supervisor's actual punch-in location (e.g. Palus, Tasgaon, or on-site)
-    // strictly use the real punch-in location rather than overwriting with Godrej Green Acres
-    const hasExistingPunchIn = (punchInGps && punchInGps.lat && punchInGps.lng && Number(punchInGps.lat) < 17.5) ||
-                               (stops.length > 0 && stops[0].lat && Number(stops[0].lat) < 17.5);
-    
-    if (hasExistingPunchIn) {
-      const pLat = punchInGps && punchInGps.lat ? Number(punchInGps.lat) : Number(stops[0].lat);
-      const pLng = punchInGps && punchInGps.lng ? Number(punchInGps.lng) : Number(stops[0].lng);
-      const landmark = resolveSangliLandmark(pLat, pLng);
-      const resolvedTitle = (punchInGps?.landmarkName && !punchInGps.landmarkName.includes('Sangli Plant Operational'))
-        ? punchInGps.landmarkName
-        : (stops[0]?.title && !stops[0].title.includes('Punch-In: Godrej Green Acres Site') ? stops[0].title : landmark.landmarkName);
-      const resolvedAddress = (punchInGps?.address && !punchInGps.address.includes('Plant HQ Geofence'))
-        ? punchInGps.address
-        : (stops[0]?.address || landmark.address);
-
-      if (stops.length === 0) {
-        stops.push({
-          stopNo: 1,
-          title: resolvedTitle.startsWith('Punch-In') ? resolvedTitle : `Punch-In: ${resolvedTitle}`,
-          category: 'Punch-In Location',
-          address: resolvedAddress,
-          time: punchInTime,
-          lat: pLat,
-          lng: pLng,
-          status: 'Punch-In Station',
-          distanceKm: 0.0,
-          stayMinutes: null,
-          notes: 'Verified biometric punch-in in Sangli District'
-        });
-      } else {
-        stops[0] = {
-          ...stops[0],
-          title: resolvedTitle.startsWith('Punch-In') ? resolvedTitle : `Punch-In: ${resolvedTitle}`,
-          address: resolvedAddress,
-          lat: pLat,
-          lng: pLng,
-          status: 'Punch-In Station'
-        };
-      }
-    } else {
-      // Fallback only if no punch-in location is recorded at all
-      const pLat = 16.852000;
-      const pLng = 74.590000;
-      const resolvedTitle = 'Godrej Green Acres Construction Site, Sangli';
-      const resolvedAddress = 'Near Government Colony, Sangli, Maharashtra 416416';
-
-      if (stops.length === 0) {
-        stops.push({
-          stopNo: 1,
-          title: resolvedTitle,
-          category: 'Punch-In Location',
-          address: resolvedAddress,
-          time: punchInTime,
-          lat: pLat,
-          lng: pLng,
-          status: 'Punch-In Station',
-          distanceKm: 0.0,
-          stayMinutes: null,
-          notes: 'Verified biometric punch-in in Sangli'
-        });
-      } else {
-        stops[0] = {
-          ...stops[0],
-          title: resolvedTitle,
-          address: resolvedAddress,
-          lat: pLat,
-          lng: pLng,
-          status: 'Punch-In Station'
-        };
-      }
-    }
-  } else if (isAcc) {
-    // Accountant is strictly stationed in Sangli at APMC Market Yard Commercial Hub
-    const pLat = 16.858400;
-    const pLng = 74.582400;
-    const resolvedTitle = 'Sangli Market Yard (APMC Commercial Hub)';
-    const resolvedAddress = 'APMC Market Yard Area, Sangli, Maharashtra 416416';
-
-    if (stops.length === 0) {
-      stops.push({
-        stopNo: 1,
-        title: resolvedTitle,
-        category: 'Punch-In Location',
-        address: resolvedAddress,
-        time: punchInTime,
-        lat: pLat,
-        lng: pLng,
-        status: 'Punch-In Station',
-        distanceKm: 0.0,
-        stayMinutes: null,
-        notes: 'Commercial accounts & sales billing desk'
-      });
-    } else {
-      stops[0] = {
-        ...stops[0],
-        title: resolvedTitle,
-        address: resolvedAddress,
-        lat: pLat,
-        lng: pLng,
-        status: 'Punch-In Station'
-      };
-    }
-  } else if (punchInGps && punchInGps.lat && punchInGps.lng) {
+  if (hasRealPunchIn) {
     const pLat = Number(punchInGps.lat);
     const pLng = Number(punchInGps.lng);
     const landmark = resolveSangliLandmark(pLat, pLng);
-    const resolvedTitle = (punchInGps.landmarkName && !punchInGps.landmarkName.includes('Sangli Plant Operational'))
-      ? punchInGps.landmarkName 
-      : landmark.landmarkName;
-    const resolvedAddress = (punchInGps.address && !punchInGps.address.includes('Plant HQ Geofence'))
-      ? punchInGps.address
-      : landmark.address;
+    const resolvedTitle = punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station';
+    const resolvedAddress = punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`;
 
     if (stops.length === 0) {
       stops.push({
         stopNo: 1,
-        title: resolvedTitle || 'Punch-In Station',
+        title: resolvedTitle.startsWith('Punch-In') ? resolvedTitle : `Punch-In: ${resolvedTitle}`,
         category: 'Punch-In Location',
-        address: resolvedAddress || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
+        address: resolvedAddress,
         time: punchInTime,
         lat: pLat,
         lng: pLng,
@@ -410,25 +267,35 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
         notes: 'Verified biometric punch-in'
       });
     } else {
-      // Ensure stop 1 matches punch-in location
-      const firstStop = stops[0];
-      const dist = calculateDistanceMeters(firstStop.lat, firstStop.lng, pLat, pLng);
-      if (dist > 150) {
-        stops.unshift({
-          stopNo: 1,
-          title: resolvedTitle || 'Punch-In Station',
-          category: 'Punch-In Location',
-          address: resolvedAddress || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`,
-          time: punchInTime,
-          lat: pLat,
-          lng: pLng,
-          status: 'Punch-In Station',
-          distanceKm: 0.0,
-          stayMinutes: null,
-          notes: 'Verified biometric punch-in'
-        });
-      }
+      stops[0] = {
+        ...stops[0],
+        title: resolvedTitle.startsWith('Punch-In') ? resolvedTitle : `Punch-In: ${resolvedTitle}`,
+        address: resolvedAddress,
+        lat: pLat,
+        lng: pLng,
+        status: 'Punch-In Station'
+      };
     }
+  } else if (stops.length > 0 && stops[0].lat && stops[0].lng) {
+    // Keep first recorded stop from route history
+    stops[0].title = stops[0].title || 'Punch-In Station';
+    stops[0].status = 'Punch-In Station';
+  } else {
+    // Default fallback ONLY when no GPS or stop exists at all
+    const defaultStation = getAssignedEmployeeStation(employee);
+    stops.push({
+      stopNo: 1,
+      title: defaultStation.stationName,
+      category: 'Punch-In Location',
+      address: defaultStation.address,
+      time: punchInTime,
+      lat: defaultStation.lat,
+      lng: defaultStation.lng,
+      status: 'Punch-In Station',
+      distanceKm: 0.0,
+      stayMinutes: null,
+      notes: defaultStation.notes || 'Assigned operations station'
+    });
   }
 
   // 3. Identify exit / current coordinates
@@ -438,14 +305,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   if (exitGps && exitGps.lat && exitGps.lng) {
     let eLat = Number(exitGps.lat);
     let eLng = Number(exitGps.lng);
-    if (isDis && eLat < 17.5) { eLat = 18.502390; eLng = 73.847872; }
-    if (isSup && eLat >= 17.5) { eLat = 16.852000; eLng = 74.590000; }
-    if (isAcc && (eLat >= 17.5 || eLat < 16.5)) { eLat = 16.858400; eLng = 74.582400; }
-    const eLandmark = isDis 
-      ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
-      : (isAcc
-          ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
-          : resolveSangliLandmark(eLat, eLng));
+    const eLandmark = resolveSangliLandmark(eLat, eLng);
     const lastStop = stops[stops.length - 1];
     const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, eLat, eLng) : 999;
 
@@ -466,44 +326,19 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     }
   } else {
     // Current live / last known position
-    // Strictly isolate viewer device GPS: only use liveGps if target is the active device user AND coordinates are valid
-    const isDeviceNearSangli = liveGps?.lat && Number(liveGps.lat) >= 16.5 && Number(liveGps.lat) <= 17.2 && Number(liveGps.lng) >= 74.0 && Number(liveGps.lng) <= 75.0;
-    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && (!isDis || Number(liveGps.lat) >= 17.5) && (!isSup || Number(liveGps.lat) < 17.5) && (!isAcc || isDeviceNearSangli));
+    // Strictly isolate viewer device GPS: only use liveGps if target is the active device user
+    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && liveGps?.lng);
     const rawLat = useDeviceGps ? liveGps.lat : (employee.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat);
     const rawLng = useDeviceGps ? liveGps.lng : (employee.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng);
 
-    const fallbackSupLat = (punchInGps && punchInGps.lat && Number(punchInGps.lat) < 17.5) ? Number(punchInGps.lat) : 16.852000;
-    const fallbackSupLng = (punchInGps && punchInGps.lng && Number(punchInGps.lat) < 17.5) ? Number(punchInGps.lng) : 74.590000;
-
-    const isRawKolhapur = rawLat && rawLng && Math.abs(Number(rawLat) - 16.6941) < 0.05 && Math.abs(Number(rawLng) - 74.2366) < 0.05;
-
-    const currentLat = isDis 
-      ? (Number(rawLat) < 17.5 ? 18.502390 : rawLat) 
-      : (isSup 
-          ? (Number(rawLat) >= 17.5 || !rawLat ? fallbackSupLat : rawLat) 
-          : (isAcc 
-              ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLat ? 16.858400 : rawLat) 
-              : (isQc
-                  ? (isRawKolhapur || Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLat ? 16.8300 : rawLat)
-                  : rawLat)));
-    const currentLng = isDis 
-      ? (Number(rawLat) < 17.5 ? 73.847872 : rawLng) 
-      : (isSup 
-          ? (Number(rawLat) >= 17.5 || !rawLng ? fallbackSupLng : rawLng) 
-          : (isAcc 
-              ? (Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLng ? 74.582400 : rawLng) 
-              : (isQc
-                  ? (isRawKolhapur || Number(rawLat) >= 17.5 || Number(rawLat) < 16.5 || !rawLng ? 74.6400 : rawLng)
-                  : rawLng)));
+    const defaultStation = getAssignedEmployeeStation(employee);
+    const currentLat = rawLat !== null && rawLat !== undefined ? Number(rawLat) : defaultStation.lat;
+    const currentLng = rawLng !== null && rawLng !== undefined ? Number(rawLng) : defaultStation.lng;
 
     if (currentLat && currentLng) {
       const cLat = Number(currentLat);
       const cLng = Number(currentLng);
-      const landmark = isDis 
-        ? { landmarkName: 'Narveer Tanaji Malusare Rd, Pune', address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030' }
-        : (isAcc 
-            ? { landmarkName: 'Sangli Market Yard (APMC Commercial Hub)', address: 'APMC Market Yard Area, Sangli, Maharashtra 416416' }
-            : resolveSangliLandmark(cLat, cLng));
+      const landmark = resolveSangliLandmark(cLat, cLng);
       const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       if (stops.length === 0) {

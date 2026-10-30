@@ -38,34 +38,49 @@ export function getSyncCollectionName() {
  */
 export function isDummyStoreItem(item) {
   if (!item) return true;
-  const str = JSON.stringify(item).toLowerCase();
-  return (
-    str.includes('godrej') ||
-    str.includes('rohan builders') ||
-    str.includes('kolte patil') ||
-    str.includes('vtp realty') ||
-    str.includes('ramesh pawar') ||
-    str.includes('sanjay kumar yadav') ||
-    str.includes('sanjay yadav') ||
-    str.includes('mahesh shinde') ||
-    str.includes('deepak gaikwad') ||
-    str.includes('ultratech') ||
-    str.includes('mahalaxmi stone') ||
-    str.includes('sangamner') ||
-    str.includes('fosroc') ||
-    str.includes('inv-ut-9021') ||
-    str.includes('ch-ut-9901') ||
-    str.includes('mukta') ||
-    str.includes('aayush') ||
-    str.includes('pranav') ||
-    str.includes('adm-001') ||
-    str.includes('acc-001') ||
-    str.includes('mh-10-cr-1212') ||
-    str.includes('mh-10-cr-1313') ||
-    str.includes('mh-10-cr-1414') ||
-    str.includes('mh-12-rn-4401') ||
-    str.includes('mh-12-rn-8822')
-  );
+  // Strictly filter only items that are explicitly flagged as mock/dummy test entries
+  if (item.isMock === true || item.isDummy === true) return true;
+  if (typeof item.id === 'string' && (item.id.startsWith('DUMMY-') || item.id.startsWith('MOCK-'))) return true;
+  return false;
+}
+
+/**
+ * Records an item ID as explicitly deleted to prevent resurrection by cross-device sync
+ */
+export function markItemAsDeleted(localKey, itemId) {
+  if (!localKey || !itemId) return;
+  try {
+    const delKey = `${localKey}_deleted_ids`;
+    const raw = localStorage.getItem(delKey);
+    const set = new Set(raw ? JSON.parse(raw) : []);
+    set.add(String(itemId).trim().toLowerCase());
+    localStorage.setItem(delKey, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+/**
+ * Returns set of deleted IDs for a given store
+ */
+export function getDeletedItemIds(localKey) {
+  if (!localKey) return new Set();
+  try {
+    const delKey = `${localKey}_deleted_ids`;
+    const raw = localStorage.getItem(delKey);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Checks if an item has been deleted
+ */
+export function isItemDeleted(item, deletedIds) {
+  if (!item || !deletedIds || deletedIds.size === 0) return false;
+  const id = item.id ? String(item.id).trim().toLowerCase() : '';
+  const billNo = item.billNo ? String(item.billNo).trim().toLowerCase() : '';
+  const voucherNo = item.voucherNo ? String(item.voucherNo).trim().toLowerCase() : '';
+  return (id && deletedIds.has(id)) || (billNo && deletedIds.has(billNo)) || (voucherNo && deletedIds.has(voucherNo));
 }
 
 /**
@@ -91,13 +106,16 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
   let isMounted = true;
 
   // 1. First load from local storage if available and sanitize immediately
+  const deletedIds = getDeletedItemIds(localKey);
   let localData = initialDefault;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const rawLocal = localStorage.getItem(localKey);
       if (rawLocal) {
         const parsed = JSON.parse(rawLocal);
-        localData = Array.isArray(parsed) ? sanitizeStoreItems(parsed) : parsed;
+        localData = Array.isArray(parsed) 
+          ? sanitizeStoreItems(parsed).filter((it) => !isItemDeleted(it, deletedIds))
+          : parsed;
         if (Array.isArray(parsed) && localData.length !== parsed.length) {
           localStorage.setItem(localKey, JSON.stringify(localData));
         }
@@ -115,34 +133,25 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
       if (snap.exists()) {
         const cloudPayload = snap.data();
         if (cloudPayload && cloudPayload.items !== undefined) {
-          const cleanItems = Array.isArray(cloudPayload.items)
+          const cleanItems = (Array.isArray(cloudPayload.items)
             ? sanitizeStoreItems(cloudPayload.items)
-            : cloudPayload.items;
-          if (Array.isArray(cloudPayload.items) && cleanItems.length !== cloudPayload.items.length) {
-            // Permanent cloud purge of legacy dummy records
-            try {
-              await setDoc(docRef, {
-                items: cleanItems,
-                updatedAt: Date.now(),
-                source: 'clean_cloud_purge'
-              }, { merge: true });
-            } catch (err) {
-              console.warn('[CloudSync] Cloud purge error:', err.message);
-            }
-          }
+            : cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
+          
+          // Merge local cache with cloud items so local unsynced records are never discarded
+          const merged = mergeCollectionItems(localData, cleanItems).filter((it) => !isItemDeleted(it, deletedIds));
           if (typeof window !== 'undefined' && window.localStorage) {
             try {
-              localStorage.setItem(localKey, JSON.stringify(cleanItems));
+              localStorage.setItem(localKey, JSON.stringify(merged));
             } catch {}
           }
-          onDataUpdated(cleanItems);
+          onDataUpdated(merged);
           return;
         }
       }
 
       // If cloud is empty and localData has only clean valid items, push clean localData
       if (Array.isArray(localData) && localData.length > 0) {
-        const cleanLocal = sanitizeStoreItems(localData);
+        const cleanLocal = sanitizeStoreItems(localData).filter((it) => !isItemDeleted(it, deletedIds));
         if (cleanLocal.length > 0) {
           try {
             await setDoc(docRef, {
@@ -168,20 +177,22 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data && data.items !== undefined) {
-          const cleanItems = Array.isArray(data.items)
+          const activeDeletedIds = getDeletedItemIds(localKey);
+          const cleanItems = (Array.isArray(data.items)
             ? sanitizeStoreItems(data.items)
-            : data.items;
-          if (Array.isArray(data.items) && cleanItems.length !== data.items.length) {
-            setDoc(docRef, {
-              items: cleanItems,
-              updatedAt: Date.now(),
-              source: 'clean_cloud_purge'
-            }, { merge: true }).catch(() => {});
+            : data.items).filter((it) => !isItemDeleted(it, activeDeletedIds));
+          let currentLocal = [];
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              const raw = localStorage.getItem(localKey);
+              if (raw) currentLocal = JSON.parse(raw);
+            } catch {}
           }
+          const merged = mergeCollectionItems(currentLocal, cleanItems).filter((it) => !isItemDeleted(it, activeDeletedIds));
           try {
-            localStorage.setItem(localKey, JSON.stringify(cleanItems));
+            localStorage.setItem(localKey, JSON.stringify(merged));
           } catch {}
-          onDataUpdated(cleanItems);
+          onDataUpdated(merged);
         }
       }
     }, (err) => {
@@ -222,6 +233,7 @@ export function mergeCollectionItems(localItems, cloudItems) {
     if (!item) return `idx_${idx}`;
     return String(
       item.id ||
+      item.billNo ||
       item.dispatchId ||
       item.tripId ||
       item.challanNo ||
@@ -283,7 +295,10 @@ export function mergeCollectionItems(localItems, cloudItems) {
  * @param {any} data - array or object to save
  */
 export async function pushCloudStore(docKey, localKey, data) {
-  const cleanData = Array.isArray(data) ? sanitizeStoreItems(data) : data;
+  const deletedIds = getDeletedItemIds(localKey);
+  const cleanData = Array.isArray(data)
+    ? sanitizeStoreItems(data).filter((it) => !isItemDeleted(it, deletedIds))
+    : data;
 
   // 1. Immediately update localStorage for zero latency
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -308,9 +323,9 @@ export async function pushCloudStore(docKey, localKey, data) {
         if (cloudSnap.exists()) {
           const cloudPayload = cloudSnap.data();
           if (cloudPayload && Array.isArray(cloudPayload.items)) {
-            const cleanCloud = sanitizeStoreItems(cloudPayload.items);
+            const cleanCloud = sanitizeStoreItems(cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
             // Merge to prevent overwriting records added concurrently by other users
-            finalPayload = mergeCollectionItems(cleanData, cleanCloud);
+            finalPayload = mergeCollectionItems(cleanData, cleanCloud).filter((it) => !isItemDeleted(it, deletedIds));
           }
         }
       } catch (fetchErr) {

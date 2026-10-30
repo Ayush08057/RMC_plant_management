@@ -112,8 +112,7 @@ export const sanitizeAttendance = (attList) => {
     const isItemAcc = empId.includes('ACC') || (item.role || '').toLowerCase().includes('account');
     const isItemQc = empId.includes('QC') || (item.role || '').toLowerCase().includes('qc') || (item.role || '').toLowerCase().includes('quality');
     if (isItemAcc) {
-      const cLat = Number(item.gpsLocation?.lat);
-      const isBadGps = (!item.gpsLocation?.lat || cLat >= 17.5 || cLat < 16.5 || item.geofenceStatus?.toLowerCase().includes('chhindwara') || item.gpsLocation?.landmarkName?.toLowerCase().includes('chhindwara'));
+      const isBadGps = (!item.gpsLocation || item.gpsLocation.lat === null || item.gpsLocation.lat === undefined);
       if (isBadGps) {
         item.gpsLocation = {
           lat: 16.858400,
@@ -127,28 +126,8 @@ export const sanitizeAttendance = (attList) => {
         item.geofenceStatus = 'Sangli Market Yard (APMC Commercial Hub)';
         item.totalDistanceKm = 0.0;
       }
-      if (Array.isArray(item.routeTrail)) {
-        item.routeTrail = item.routeTrail.filter(s => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
-        if (item.routeTrail.length === 0 && item.punchIn) {
-          item.routeTrail = [{
-            stopNo: 1,
-            title: 'Punch-In: Sangli Market Yard (APMC Commercial Hub)',
-            category: 'Punch-In Location',
-            address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
-            time: item.punchIn,
-            lat: 16.858400,
-            lng: 74.582400,
-            status: 'Punch-In Station',
-            distanceKm: 0.0,
-            notes: 'Commercial accounts & sales billing desk'
-          }];
-        }
-      }
     } else if (isItemQc) {
-      const qLat = Number(item.gpsLocation?.lat);
-      const qLng = Number(item.gpsLocation?.lng);
-      const isKolhapur = Math.abs(qLat - 16.6941) < 0.05 && Math.abs(qLng - 74.2366) < 0.05;
-      const isBadQcGps = (!item.gpsLocation?.lat || isKolhapur || qLat >= 17.5 || qLat < 16.5);
+      const isBadQcGps = (!item.gpsLocation || item.gpsLocation.lat === null || item.gpsLocation.lat === undefined);
       if (isBadQcGps) {
         item.gpsLocation = {
           lat: 16.8300,
@@ -161,26 +140,6 @@ export const sanitizeAttendance = (attList) => {
         item.lastKnownLocation = { ...item.gpsLocation };
         item.geofenceStatus = 'Miraj Highway Package B Quality Lab, Sangli';
         item.totalDistanceKm = 0.0;
-      }
-      if (Array.isArray(item.routeTrail)) {
-        item.routeTrail = item.routeTrail.filter(s => {
-          if (!s || !s.lat) return false;
-          return !(Math.abs(Number(s.lat) - 16.6941) < 0.05 && Math.abs(Number(s.lng) - 74.2366) < 0.05);
-        });
-        if (item.routeTrail.length === 0 && item.punchIn) {
-          item.routeTrail = [{
-            stopNo: 1,
-            title: 'Punch-In: Miraj Highway Package B Quality Lab, Sangli',
-            category: 'Punch-In Location',
-            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-            time: item.punchIn,
-            lat: 16.8300,
-            lng: 74.6400,
-            status: 'Punch-In Station',
-            distanceKm: 0.0,
-            notes: 'Verified biometric punch-in in Sangli Quality Lab'
-          }];
-        }
       }
     }
     const key = String(dateStr) + String.fromCharCode(95) + String(empId);
@@ -1579,9 +1538,27 @@ export const WorkforceProvider = ({ children }) => {
       saveDocumentWithId(COLLECTIONS.EMPLOYEES, emp.id, emp).catch(() => {});
     }
 
-    // 4. If employee record is not found in workforce, do NOT auto-create a ghost employee in Firestore
+    // 4. Safe fallback for any legitimate portal staff member
     if (!emp) {
-      throw new Error("Employee record \"" + targetId + "\" is not registered in active workforce. Please contact Administrator.");
+      emp = {
+        id: targetId,
+        employeeId: targetId,
+        name: user?.name || options.employeeName || (user?.role ? `${user.role} User` : 'Staff Member'),
+        role: user?.role || options.role || 'Staff',
+        department: user?.department || 'Operations',
+        plant: user?.plantLocation || (data.plants && data.plants[0]?.name) || 'Main Plant HQ',
+        status: 'Active',
+        salary: 40000,
+        mobile: user?.phone || '+91 98200 00000',
+        email: user?.email || `${targetId.toLowerCase()}@smconcretech.com`,
+        joiningDate: today,
+        shiftId: data.shifts[0]?.id || 'SFT-01',
+      };
+      setData((prev) => ({
+        ...prev,
+        employees: [emp, ...prev.employees],
+      }));
+      saveDocumentWithId(COLLECTIONS.EMPLOYEES, emp.id, emp).catch(() => {});
     }
 
     const shift = data.shifts.find((s) => s.id === emp.shiftId) || data.shifts[0];
@@ -1621,13 +1598,13 @@ export const WorkforceProvider = ({ children }) => {
     const authUid = auth.currentUser?.uid || user?.uid || user?.id || null;
 
     let effectiveGps = options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null);
-    let effectiveGeofence = options.geofenceStatus || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available');
+    let effectiveGeofence = options.geofenceStatus || options.gpsLocation?.landmarkName || options.gpsLocation?.address || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available');
 
     let effectiveRouteTrail = options.routeTrail || (existingIndex >= 0 ? data.attendance[existingIndex].routeTrail : []) || [];
-    const isAccPunch = canonicalEmpId.includes('ACC') || (emp.role || '').toLowerCase().includes('account');
-    if (isAccPunch) {
-      const cLat = Number(effectiveGps?.lat);
-      if (cLat >= 17.5 || cLat < 16.5 || !effectiveGps?.lat) {
+    // PRESERVE TRUE HARDWARE GPS: Never overwrite real coordinates returned by the mobile phone!
+    // Fallback stations ONLY apply if the phone device returned null/empty coordinates.
+    if (!effectiveGps || !effectiveGps.lat) {
+      if (isAcc) {
         effectiveGps = {
           lat: 16.858400,
           lng: 74.582400,
@@ -1635,33 +1612,21 @@ export const WorkforceProvider = ({ children }) => {
           landmarkName: 'Sangli Market Yard (APMC Commercial Hub)',
           address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
           shortName: 'Sangli Market Yard',
-          source: 'ASSIGNED_OFFICE_HUB'
+          source: 'DEFAULT_OFFICE_HUB'
         };
         effectiveGeofence = 'Sangli Market Yard (APMC Commercial Hub)';
-      }
-      if (Array.isArray(effectiveRouteTrail)) {
-        effectiveRouteTrail = effectiveRouteTrail.filter(s => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
-        if (effectiveRouteTrail.length === 0) {
-          effectiveRouteTrail = [{
-            stopNo: 1,
-            title: 'Punch-In: Sangli Market Yard (APMC Commercial Hub)',
-            category: 'Punch-In Location',
-            address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
-            time: actualPunchIn,
-            lat: 16.858400,
-            lng: 74.582400,
-            status: 'Punch-In Station',
-            distanceKm: 0.0,
-            notes: 'Commercial accounts & sales billing desk'
-          }];
-        }
-      }
-    }
-    if (isQc) {
-      const qLat = Number(effectiveGps?.lat);
-      const qLng = Number(effectiveGps?.lng);
-      const isKolhapur = Math.abs(qLat - 16.6941) < 0.05 && Math.abs(qLng - 74.2366) < 0.05;
-      if (isKolhapur || qLat >= 17.5 || qLat < 16.5 || !effectiveGps?.lat) {
+      } else if (isDis) {
+        effectiveGps = {
+          lat: 18.502390,
+          lng: 73.847872,
+          accuracy: 25,
+          landmarkName: 'Narveer Tanaji Malusare Rd, Pune',
+          address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
+          shortName: 'Narveer Tanaji Malusare Rd, Pune',
+          source: 'DEFAULT_DISPATCH_HUB'
+        };
+        effectiveGeofence = 'Narveer Tanaji Malusare Rd, Pune';
+      } else if (isQc) {
         effectiveGps = {
           lat: 16.8300,
           lng: 74.6400,
@@ -1669,36 +1634,10 @@ export const WorkforceProvider = ({ children }) => {
           landmarkName: 'Miraj Highway Package B Quality Lab, Sangli',
           address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
           shortName: 'Highway QC Lab',
-          source: 'ASSIGNED_QC_LAB'
+          source: 'DEFAULT_QC_LAB'
         };
         effectiveGeofence = 'Miraj Highway Package B Quality Lab, Sangli';
-      }
-      if (Array.isArray(effectiveRouteTrail)) {
-        effectiveRouteTrail = effectiveRouteTrail.filter(s => {
-          if (!s || !s.lat) return false;
-          return !(Math.abs(Number(s.lat) - 16.6941) < 0.05 && Math.abs(Number(s.lng) - 74.2366) < 0.05);
-        });
-        if (effectiveRouteTrail.length === 0) {
-          effectiveRouteTrail = [{
-            stopNo: 1,
-            title: 'Punch-In: Miraj Highway Package B Quality Lab, Sangli',
-            category: 'Punch-In Location',
-            address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-            time: actualPunchIn,
-            lat: 16.8300,
-            lng: 74.6400,
-            status: 'Punch-In Station',
-            distanceKm: 0.0,
-            notes: 'Verified biometric punch-in in Sangli Quality Lab'
-          }];
-        }
-      }
-    }
-    if (isSup) {
-      const sLat = Number(effectiveGps?.lat);
-      const sLng = Number(effectiveGps?.lng);
-      const isKolhapur = Math.abs(sLat - 16.6941) < 0.05 && Math.abs(sLng - 74.2366) < 0.05;
-      if (isKolhapur || sLat >= 17.5) {
+      } else if (isSup) {
         effectiveGps = {
           lat: 16.852000,
           lng: 74.590000,
@@ -1706,30 +1645,9 @@ export const WorkforceProvider = ({ children }) => {
           landmarkName: 'Godrej Green Acres Construction Site, Sangli',
           address: 'Near Government Colony, Sangli, Maharashtra 416416',
           shortName: 'Godrej Green Acres (Sangli)',
-          source: 'ASSIGNED_SITE_PROJECT'
+          source: 'DEFAULT_SITE_PROJECT'
         };
         effectiveGeofence = 'Godrej Green Acres Construction Site, Sangli';
-      }
-    }
-    if (isSup && Array.isArray(effectiveRouteTrail)) {
-      effectiveRouteTrail = effectiveRouteTrail.filter(s => s && Number(s.lat) < 17.5 && !s.title?.includes('Dandekar') && !s.address?.includes('Pune'));
-      if (effectiveRouteTrail.length === 0) {
-        const supLat = (effectiveGps && effectiveGps.lat && Number(effectiveGps.lat) < 17.5) ? Number(effectiveGps.lat) : 16.852000;
-        const supLng = (effectiveGps && effectiveGps.lng && Number(effectiveGps.lat) < 17.5) ? Number(effectiveGps.lng) : 74.590000;
-        const supTitle = effectiveGps?.landmarkName || effectiveGeofence || 'Godrej Green Acres Construction Site, Sangli';
-        const supAddress = effectiveGps?.address || 'Near Government Colony, Sangli, Maharashtra 416416';
-        effectiveRouteTrail = [{
-          stopNo: 1,
-          title: supTitle.startsWith('Punch-In') ? supTitle : `Punch-In: ${supTitle}`,
-          category: 'Punch-In Location',
-          address: supAddress,
-          time: actualPunchIn,
-          lat: supLat,
-          lng: supLng,
-          status: 'Punch-In Station',
-          distanceKm: 0.0,
-          notes: 'Verified biometric punch-in in Sangli District'
-        }];
       }
     }
 

@@ -69,7 +69,7 @@ import {
   formatCurrency,
   getBillDescription,
 } from '../../utils/billingPayments';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 
 export { normalizeBill };
 
@@ -361,11 +361,20 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   });
   const [paymentError, setPaymentError] = useState(null);
 
+  // In-App Delete Confirmation Modal State (Safe against Android WebView alert drops)
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState({
+    isOpen: false,
+    item: null,
+    extra: null,
+    type: 'bill', // 'bill' | 'purchase' | 'payment'
+  });
+
   useExclusiveModal(otpModalOpen, () => setOtpModalOpen(false));
   useExclusiveModal(showBillFormModal, () => setShowBillFormModal(false));
   useExclusiveModal(showPurchaseFormModal, () => setShowPurchaseFormModal(false));
   useExclusiveModal(isTableFullScreen, () => setIsTableFullScreen(false));
   useExclusiveModal(!!paymentModalBill, () => setPaymentModalBill(null));
+  useExclusiveModal(deleteConfirmModal.isOpen, () => setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' }));
 
   const showToast = (msg) => {
     setNotification(msg);
@@ -986,6 +995,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
     setActiveSection('cash_memos');
     setSearchQuery('');
+    setPaymentFilter('ALL');
+    setSelectedCustomer('ALL');
+    setAppliedDateFilter({ fromDate: '', toDate: '' });
+    setTableFromDate('');
+    setTableToDate('');
   };
 
   // Save / Update Plant Material Purchase
@@ -1032,23 +1046,183 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setShowPurchaseFormModal(false);
   };
 
-  // Delete Bill
+  // Delete Bill Handlers (Opens in-app confirmation modal)
+  const handleRequestDeleteBill = (bill) => {
+    if (!bill) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      item: bill,
+      extra: null,
+      type: 'bill',
+    });
+  };
+
   const handleDeleteBill = (id, billNo) => {
-    if (confirm(`Are you sure you want to delete Cash Memo #${billNo}?`)) {
-      const nextBills = bills.filter((b) => b.id !== id);
+    const target = bills.find((b) => b.id === id || b.billNo === billNo) || { id, billNo };
+    handleRequestDeleteBill(target);
+  };
+
+  // Delete Purchase Handlers
+  const handleRequestDeletePurchase = (purchase) => {
+    if (!purchase) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      item: purchase,
+      extra: null,
+      type: 'purchase',
+    });
+  };
+
+  const handleDeletePurchase = (id, voucherNo) => {
+    const target = purchases.find((p) => p.id === id || p.voucherNo === voucherNo) || { id, voucherNo };
+    handleRequestDeletePurchase(target);
+  };
+
+  // Delete Payment Handlers
+  const handleRequestDeletePayment = (payment) => {
+    if (!payment || !paymentModalBill) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      item: payment,
+      extra: paymentModalBill,
+      type: 'payment',
+    });
+  };
+
+  const handleDeletePayment = (paymentId) => {
+    if (!paymentModalBill) return;
+    const targetPayment = (paymentModalBill.payments || []).find((p) => p.id === paymentId);
+    if (!targetPayment) return;
+    handleRequestDeletePayment(targetPayment);
+  };
+
+  // Unified In-App Confirm Delete Execution
+  const handleConfirmDeleteAction = async () => {
+    if (!deleteConfirmModal.item) return;
+    const { item, extra, type } = deleteConfirmModal;
+
+    if (type === 'bill') {
+      const billId = item.id;
+      const billNo = item.billNo;
+
+      // 1. Mark in tombstone set so sync never resurrects it
+      markItemAsDeleted(BILLING_STORAGE_KEY, billId);
+      if (billNo) {
+        markItemAsDeleted(BILLING_STORAGE_KEY, billNo);
+      }
+
+      // 2. Remove from state immediately
+      const nextBills = bills.filter((b) => b.id !== billId && (!billNo || b.billNo !== billNo));
       setBills(nextBills);
+
+      // 3. Update localStorage
       try {
         localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(nextBills));
       } catch (e) {
         console.error('Storage error:', e);
       }
-      showToast(`Bill #${billNo} removed.`);
+
+      // 4. Concurrently push to Firestore cloud
+      pushCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, nextBills);
+
+      // 5. Close related active views if open
+      if (paymentModalBill && (paymentModalBill.id === billId || paymentModalBill.billNo === billNo)) {
+        setPaymentModalBill(null);
+      }
+      if (printingBill && (printingBill.id === billId || printingBill.billNo === billNo)) {
+        setPrintingBill(null);
+      }
+
+      if (addAuditLog) {
+        addAuditLog(
+          `Cash Memo Deleted (#${billNo})`,
+          'Billing',
+          `Cash Memo #${billNo} (${item.customerName || 'Cash Customer'}, ₹${Number(item.finalAmount || 0).toLocaleString('en-IN')}) permanently deleted`
+        );
+      }
+
+      showToast(`✓ Cash Memo #${billNo} deleted successfully.`);
+    } else if (type === 'purchase') {
+      const voucherNo = item.voucherNo;
+      const purchaseId = item.id;
+
+      markItemAsDeleted(PURCHASES_STORAGE_KEY, purchaseId);
+      if (voucherNo) {
+        markItemAsDeleted(PURCHASES_STORAGE_KEY, voucherNo);
+      }
+
+      const nextPurchases = purchases.filter((p) => p.id !== purchaseId && (!voucherNo || p.voucherNo !== voucherNo));
+      setPurchases(nextPurchases);
+
+      try {
+        localStorage.setItem(PURCHASES_STORAGE_KEY, JSON.stringify(nextPurchases));
+      } catch (e) {
+        console.error('Storage error:', e);
+      }
+
+      pushCloudStore('cloud_billing_purchases', PURCHASES_STORAGE_KEY, nextPurchases);
+
+      showToast(`✓ Purchase Voucher #${voucherNo} deleted successfully.`);
+    } else if (type === 'payment') {
+      const targetPayment = item;
+      const targetBill = extra || paymentModalBill;
+      if (!targetBill) return;
+
+      const updatedBills = bills.map((b) => {
+        if (b.id === targetBill.id) {
+          const updatedPayments = (b.payments || []).filter((p) => p.id !== targetPayment.id);
+          const newPaid = updatedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          const newBalance = Math.max(0, (Number(b.finalAmount) || 0) - newPaid);
+          const newStatus = newBalance <= 0 ? 'Paid' : (newPaid > 0 ? 'Partially Paid' : 'Unpaid');
+
+          return normalizeBill({
+            ...b,
+            payments: updatedPayments,
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            paymentStatus: newStatus,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        return b;
+      });
+
+      setBills(updatedBills);
+      try {
+        localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedBills));
+      } catch (err) {
+        console.error('Storage error:', err);
+      }
+
+      pushCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, updatedBills);
+
+      if (addAuditLog) {
+        addAuditLog(
+          `Payment Voided (${targetBill.billNo})`,
+          'Billing',
+          `Reverted ₹${Number(targetPayment.amount).toLocaleString('en-IN')} (${targetPayment.mode})`
+        );
+      }
+
+      const refreshedBill = updatedBills.find((b) => b.id === targetBill.id);
+      setPaymentModalBill(refreshedBill);
+      showToast(`Payment of ₹${Number(targetPayment.amount).toLocaleString('en-IN')} reversed.`);
     }
+
+    setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' });
   };
 
   // Open Payment Collection & History Modal
-  const handleOpenPaymentModal = (bill) => {
-    const norm = normalizeBill(bill);
+  const handleOpenPaymentModal = (bill = null) => {
+    let target = bill;
+    if (!target) {
+      if (bills.length === 0) {
+        showToast('⚠️ Please generate a Cash Memo first before recording payments.');
+        return;
+      }
+      target = bills.find((b) => Number(b.balanceAmount || 0) > 0) || bills[0];
+    }
+    const norm = normalizeBill(target);
     setPaymentModalBill(norm);
     setPaymentForm({
       amount: norm.balanceAmount > 0 ? norm.balanceAmount : '',
@@ -1079,9 +1253,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
     const currentBalance = Number(paymentModalBill.balanceAmount || 0);
     if (payAmt > currentBalance && currentBalance > 0) {
-      if (!confirm(`Entered payment (₹${payAmt.toLocaleString('en-IN')}) exceeds the pending balance (₹${currentBalance.toLocaleString('en-IN')}). Do you want to proceed with this payment?`)) {
-        return;
-      }
+      showToast(`ℹ️ Payment of ₹${payAmt.toLocaleString('en-IN')} exceeds current pending balance (₹${currentBalance.toLocaleString('en-IN')}).`);
     }
 
     const enteredDescription = (paymentForm.description || paymentForm.remarks || '').trim();
@@ -1148,68 +1320,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     showToast(`✓ Payment of ₹${payAmt.toLocaleString('en-IN')} (${paymentForm.mode}) recorded for Bill #${paymentModalBill.billNo}!`);
   };
 
-  // Delete / Revert an incorrect payment record
-  const handleDeletePayment = (paymentId) => {
-    if (!paymentModalBill) return;
-    const targetPayment = (paymentModalBill.payments || []).find((p) => p.id === paymentId);
-    if (!targetPayment) return;
 
-    if (!confirm(`Are you sure you want to void/delete this payment record of ₹${Number(targetPayment.amount).toLocaleString('en-IN')} (${targetPayment.mode})? The bill balance will be restored.`)) {
-      return;
-    }
-
-    const updatedBills = bills.map((b) => {
-      if (b.id === paymentModalBill.id) {
-        const updatedPayments = (b.payments || []).filter((p) => p.id !== paymentId);
-        const newPaid = updatedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-        const newBalance = Math.max(0, (Number(b.finalAmount) || 0) - newPaid);
-        const newStatus = newBalance <= 0 ? 'Paid' : (newPaid > 0 ? 'Partially Paid' : 'Unpaid');
-
-        return normalizeBill({
-          ...b,
-          payments: updatedPayments,
-          paidAmount: newPaid,
-          balanceAmount: newBalance,
-          paymentStatus: newStatus,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-      return b;
-    });
-
-    setBills(updatedBills);
-    try {
-      localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedBills));
-    } catch (err) {
-      console.error('Storage error:', err);
-    }
-
-    if (addAuditLog) {
-      addAuditLog(
-        `Payment Voided (${paymentModalBill.billNo})`,
-        'Billing',
-        `Reverted ₹${Number(targetPayment.amount).toLocaleString('en-IN')} (${targetPayment.mode})`
-      );
-    }
-
-    const refreshedBill = updatedBills.find((b) => b.id === paymentModalBill.id);
-    setPaymentModalBill(refreshedBill);
-    showToast(`Payment of ₹${Number(targetPayment.amount).toLocaleString('en-IN')} reversed.`);
-  };
-
-  // Delete Purchase
-  const handleDeletePurchase = (id, voucherNo) => {
-    if (confirm(`Are you sure you want to delete Purchase Voucher #${voucherNo}?`)) {
-      const nextPurchases = purchases.filter((p) => p.id !== id);
-      setPurchases(nextPurchases);
-      try {
-        localStorage.setItem(PURCHASES_STORAGE_KEY, JSON.stringify(nextPurchases));
-      } catch (e) {
-        console.error('Storage error:', e);
-      }
-      showToast(`Voucher #${voucherNo} removed.`);
-    }
-  };
 
   // Inline Description Editor (for manual typing in the table)
   const handleInlineUpdateDescription = (billId, newDesc) => {
@@ -1325,14 +1436,25 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           </button>
 
           {activeSection === 'cash_memos' && (
-            <button
-              type="button"
-              onClick={handleOpenCreateBill}
-              className="px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
-            >
-              <Plus className="w-4 h-4 shrink-0" />
-              <span>Generate Cash Memo</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleOpenPaymentModal()}
+                className="px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+                title="Record Payment Received (Cash, Online UPI, Bank Transfer, Cheque)"
+              >
+                <CreditCard className="w-4 h-4 shrink-0" />
+                <span>+ Payment Received</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenCreateBill}
+                className="px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>Generate Cash Memo</span>
+              </button>
+            </>
           )}
 
           {activeSection === 'purchases' && (
@@ -1550,6 +1672,18 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
                       <span className="hidden sm:inline">Export Excel</span>
                       <span className="sm:hidden">Excel</span>
+                    </button>
+
+                    {/* 1-Click Payment Received Quick Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPaymentModal()}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                      title="Record Payment Received (Cash, Online UPI, Bank Transfer)"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-white" />
+                      <span className="hidden sm:inline">Payment Received</span>
+                      <span className="sm:hidden">+ Pay</span>
                     </button>
 
                     {/* 1-Click New Cash Memo Shortcut */}
@@ -1922,7 +2056,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                     {/* Delete Button */}
                                     <button
                                       type="button"
-                                      onClick={() => handleDeleteBill(bill.id, bill.billNo)}
+                                      onClick={() => handleRequestDeleteBill(bill)}
                                       className="p-1 rounded-md border border-slate-200 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all cursor-pointer"
                                       title="Delete Memo"
                                     >
@@ -2112,7 +2246,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteBill(bill.id, bill.billNo)}
+                                  onClick={() => handleRequestDeleteBill(bill)}
                                   className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
                                   title="Delete Memo"
                                 >
@@ -2297,7 +2431,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                                   <button
                                     type="button"
-                                    onClick={() => handleDeletePurchase(purchase.id, purchase.voucherNo)}
+                                    onClick={() => handleRequestDeletePurchase(purchase)}
                                     className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95 shrink-0"
                                     title="Delete Voucher"
                                   >
@@ -2405,7 +2539,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
                               <button
                                 type="button"
-                                onClick={() => handleDeletePurchase(purchase.id, purchase.voucherNo)}
+                                onClick={() => handleRequestDeletePurchase(purchase)}
                                 className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-colors cursor-pointer active:scale-95"
                                 title="Delete Voucher"
                               >
@@ -3691,6 +3825,30 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             {/* Modal Body: Scrollable */}
             <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-slate-50/50">
               
+              {/* Bill Selector (Allows choosing any bill when opening from top Payment Received button) */}
+              {bills.length > 1 && (
+                <div className="bg-white rounded-2xl border border-slate-200/90 p-3 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 text-slate-800 font-bold text-xs shrink-0">
+                    <ReceiptText className="w-4 h-4 text-emerald-600" />
+                    <span>Select Cash Memo / Party:</span>
+                  </div>
+                  <select
+                    value={paymentModalBill.id}
+                    onChange={(e) => {
+                      const found = bills.find((b) => b.id === e.target.value);
+                      if (found) handleOpenPaymentModal(found);
+                    }}
+                    className="flex-1 min-w-[240px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 font-bold text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-emerald-600 cursor-pointer"
+                  >
+                    {bills.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        Bill #{b.billNo} — {b.customerName || 'Cash Customer'} • Balance Due: ₹{Number(b.balanceAmount || 0).toLocaleString('en-IN')} {Number(b.balanceAmount || 0) <= 0 ? '(Paid ✓)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* 3 High-Impact Financial Overview Cards */}
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs">
@@ -3951,7 +4109,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                           <div className="flex items-center justify-end gap-2 shrink-0">
                             <button
                               type="button"
-                              onClick={() => handleDeletePayment(p.id)}
+                              onClick={() => handleRequestDeletePayment(p)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
                               title="Revert / Void this payment entry"
                             >
@@ -4010,6 +4168,121 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           bill={printingBill}
           onClose={() => setPrintingBill(null)}
         />
+      )}
+
+      {/* ========================================================
+          DELETE CONFIRMATION MODAL (IN-APP DIALOG FOR ALL DEVICES)
+          ======================================================== */}
+      {deleteConfirmModal.isOpen && deleteConfirmModal.item && createPortal(
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-6 text-center bg-rose-50/70 border-b border-rose-100">
+              <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 shadow-xs ring-4 ring-rose-50">
+                <Trash2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                {deleteConfirmModal.type === 'bill' && 'Confirm Delete Cash Memo'}
+                {deleteConfirmModal.type === 'purchase' && 'Confirm Delete Purchase Voucher'}
+                {deleteConfirmModal.type === 'payment' && 'Confirm Void Payment Entry'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                {deleteConfirmModal.type === 'bill' && `Are you sure you want to permanently delete Cash Memo #${deleteConfirmModal.item.billNo}?`}
+                {deleteConfirmModal.type === 'purchase' && `Are you sure you want to permanently delete Purchase Voucher #${deleteConfirmModal.item.voucherNo}?`}
+                {deleteConfirmModal.type === 'payment' && `Are you sure you want to void this payment record? The bill balance will be restored.`}
+              </p>
+            </div>
+
+            {/* Details Summary */}
+            <div className="p-5 space-y-3 bg-white">
+              {deleteConfirmModal.type === 'bill' && (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Cash Memo #:</span>
+                    <span className="font-mono font-bold text-slate-900">#{deleteConfirmModal.item.billNo}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Customer / Party:</span>
+                    <span className="font-bold text-slate-900">{deleteConfirmModal.item.customerName || 'Cash Customer'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Date:</span>
+                    <span className="font-medium text-slate-700">{deleteConfirmModal.item.date}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-slate-800">
+                    <span className="font-bold">Total Bill Amount:</span>
+                    <span className="font-black text-sm text-slate-950 font-mono">
+                      ₹{Number(deleteConfirmModal.item.finalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {deleteConfirmModal.type === 'purchase' && (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Voucher #:</span>
+                    <span className="font-mono font-bold text-slate-900">#{deleteConfirmModal.item.voucherNo}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Supplier:</span>
+                    <span className="font-bold text-slate-900">{deleteConfirmModal.item.supplierName}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-slate-800">
+                    <span className="font-bold">Total Amount:</span>
+                    <span className="font-black text-sm text-slate-950 font-mono">
+                      ₹{Number(deleteConfirmModal.item.finalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {deleteConfirmModal.type === 'payment' && (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Amount to Void:</span>
+                    <span className="font-mono font-black text-sm text-rose-600">
+                      ₹{Number(deleteConfirmModal.item.amount || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Mode:</span>
+                    <span className="font-bold text-slate-900">{deleteConfirmModal.item.mode || 'Cash'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold text-slate-400">Date:</span>
+                    <span className="font-medium text-slate-700">{deleteConfirmModal.item.date} {deleteConfirmModal.item.time}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px]">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>This record will be permanently deleted from local cache and cloud sync.</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' })}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteAction}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Delete Record</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================

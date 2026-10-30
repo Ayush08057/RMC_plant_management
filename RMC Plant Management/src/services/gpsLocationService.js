@@ -31,58 +31,9 @@ export async function resolveAccurateAddress(lat, lng) {
     return reverseGeocodeCache.get(cacheKey);
   }
 
-  // 1. Try OpenStreetMap Nominatim reverse geocoding first for real-world landmark resolution
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1000);
-
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLng}&zoom=18&addressdetails=1`,
-      {
-        signal: controller.signal,
-        headers: { 'Accept': 'application/json' }
-      }
-    );
-    clearTimeout(timeoutId);
-
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data && data.display_name) {
-        const addr = data.address || {};
-        const road = addr.road || addr.suburb || addr.neighbourhood || addr.bridge || '';
-        const city = addr.city || addr.town || addr.district || addr.county || 'Pune';
-        const fullAddress = data.display_name;
-
-        // Special detection for Dandekar Pool / Sinhagad Road vicinity
-        let shortName = road || addr.suburb || city;
-        let landmarkName = road ? `${road}, ${city}` : city;
-        if (
-          fullAddress.toLowerCase().includes('dandekar') || 
-          fullAddress.toLowerCase().includes('malusare') || 
-          fullAddress.toLowerCase().includes('sinhagad') ||
-          (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856)
-        ) {
-          shortName = 'Dandekar Pool (Sinhagad Rd)';
-          landmarkName = 'Dandekar Pool, Sinhagad Rd, Pune';
-        }
-
-        const res = {
-          landmarkName,
-          address: fullAddress,
-          shortName,
-          city
-        };
-        reverseGeocodeCache.set(cacheKey, res);
-        return res;
-      }
-    }
-  } catch {
-    // Graceful fallback to offline regional landmarks if Nominatim is unreachable or offline
-  }
-
-  // 2. Check known Sangli landmarks
+  // 1. Check if user is genuinely INSIDE an operational landmark (tight <= 150m boundary)
   const sangliCheck = resolveSangliLandmark(numLat, numLng);
-  if (sangliCheck.isKnownLandmark && sangliCheck.type !== 'REGIONAL' && sangliCheck.type !== 'COORDINATES' && sangliCheck.type !== 'PUNE_URBAN') {
+  if (sangliCheck.isKnownLandmark && sangliCheck.distanceMeters !== null && sangliCheck.distanceMeters <= 150) {
     const res = {
       landmarkName: sangliCheck.landmarkName,
       address: sangliCheck.address,
@@ -93,50 +44,66 @@ export async function resolveAccurateAddress(lat, lng) {
     return res;
   }
 
-  // 3. High-Precision Pune Urban Geofences & Sub-zones
-  if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
-    let puneArea = 'Pune, Maharashtra';
-    let shortZone = 'Pune';
+  // 2. Resolve genuine real-world street / neighborhood address via BigDataCloud & OpenStreetMap Nominatim
+  try {
+    const bdcPromise = fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${numLat}&longitude=${numLng}&localityLanguage=en`
+    ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
-    // Priority 1: Dandekar Pool / Sinhagad Road / Parvati micro-zone (Dispatcher Operations)
-    if (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856) {
-      puneArea = 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030';
-      shortZone = 'Dandekar Pool (Sinhagad Rd)';
-    } else if (numLat >= 18.475 && numLat <= 18.515 && numLng >= 73.805 && numLng <= 73.842) {
-      puneArea = 'Sinhagad Road / Hingne Khurd, Pune, Maharashtra 411051';
-      shortZone = 'Sinhagad Rd';
-    } else if (numLat >= 18.490 && numLat <= 18.520 && numLng >= 73.835 && numLng <= 73.865) {
-      puneArea = 'Dandekar Pool, Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030';
-      shortZone = 'Dandekar Pool (Sinhagad Rd)';
-    } else if (numLat >= 18.495 && numLat <= 18.515 && numLng >= 73.856 && numLng <= 73.875) {
-      puneArea = 'Swargate / Sarasbaug, Pune, Maharashtra 411009';
-      shortZone = 'Swargate';
-    } else if (numLat >= 18.525 && numLat <= 18.545 && numLng >= 73.835 && numLng <= 73.860) {
-      // Strictly north of Mutha River: Deccan Gymkhana / Shivajinagar
-      puneArea = 'Deccan Gymkhana / Shivajinagar, Pune, Maharashtra 411005';
-      shortZone = 'Shivajinagar';
-    } else if (numLat >= 18.500 && numLat <= 18.540 && numLng >= 73.910 && numLng <= 73.960) {
-      puneArea = 'Hadapsar / Magarpatta, Pune, Maharashtra 411028';
-      shortZone = 'Hadapsar';
-    } else if (numLat >= 18.600 && numLat <= 18.680 && numLng >= 73.780 && numLng <= 73.880) {
-      puneArea = 'PCMC / Pimpri-Chinchwad, Pune, Maharashtra';
-      shortZone = 'PCMC';
+    const nomController = new AbortController();
+    const nomTimeout = setTimeout(() => nomController.abort(), 800);
+    const nomPromise = fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLng}&zoom=18&addressdetails=1`,
+      { signal: nomController.signal, headers: { Accept: 'application/json' } }
+    ).then((r) => {
+      clearTimeout(nomTimeout);
+      return r.ok ? r.json() : null;
+    }).catch(() => null);
+
+    // Ultra-fast resolution: capped at 400ms to keep mobile punch under 1 second
+    const bdcData = await Promise.race([
+      bdcPromise,
+      new Promise((res) => setTimeout(() => res(null), 400))
+    ]);
+
+    if (bdcData && (bdcData.locality || bdcData.city)) {
+      const loc = bdcData.locality || bdcData.city;
+      const city = bdcData.city || loc;
+      const state = bdcData.principalSubdivision || 'Maharashtra';
+      const landmarkName = loc ? `${loc}, ${city}` : city;
+      const address = `${loc}, ${city}, ${state}`;
+      const res = {
+        landmarkName,
+        address,
+        shortName: loc,
+        city
+      };
+      reverseGeocodeCache.set(cacheKey, res);
+      return res;
     }
 
-    const res = {
-      landmarkName: shortZone,
-      address: puneArea,
-      shortName: shortZone,
-      city: 'Pune'
-    };
-    reverseGeocodeCache.set(cacheKey, res);
-    return res;
-  }
+    const nomData = await nomPromise;
+    if (nomData && nomData.display_name) {
+      const addr = nomData.address || {};
+      const road = addr.road || addr.suburb || addr.neighbourhood || addr.residential || '';
+      const city = addr.city || addr.town || addr.district || 'Sangli';
+      const landmarkName = road ? `${road}, ${city}` : city;
+      const res = {
+        landmarkName,
+        address: nomData.display_name,
+        shortName: road || city,
+        city
+      };
+      reverseGeocodeCache.set(cacheKey, res);
+      return res;
+    }
+  } catch {}
 
-  // 4. Default coordinates format
+  // 3. Fallback: Clean coordinates format without fake landmarks
+  const cityGuess = numLat < 17.5 ? 'Sangli' : 'Pune';
   const coordRes = {
     landmarkName: `${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E`,
-    address: `Location: ${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E`,
+    address: `Location: ${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E (${cityGuess})`,
     shortName: `${numLat.toFixed(3)}°, ${numLng.toFixed(3)}°`,
     city: 'Location Verified'
   };
@@ -220,7 +187,7 @@ export async function getAccurateDeviceLocation(options = {}) {
         };
       }
 
-      const nativeFix = await nativeTracking.requestImmediateFix(2500);
+      const nativeFix = await nativeTracking.requestImmediateFix(1200);
       if (nativeFix && nativeFix.lat && nativeFix.lng) {
         const nLat = Number(Number(nativeFix.lat).toFixed(6));
         const nLng = Number(Number(nativeFix.lng).toFixed(6));

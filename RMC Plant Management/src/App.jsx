@@ -47,9 +47,9 @@ export default function App() {
         }
       });
 
-      // Scrub legacy mock route coordinates (16.8464, 74.5990)
+      // Scrub legacy mock route coordinates
       const routesRaw = localStorage.getItem('rmc_employee_route_histories_v1') || localStorage.getItem('rmc_employee_route_history_v2');
-      if (routesRaw && (routesRaw.includes('Sangli Plant Operational') || routesRaw.includes('16.8464') || routesRaw.includes('Effotel') || routesRaw.includes('Dandekar'))) {
+      if (routesRaw && (routesRaw.includes('Sangli Plant Operational') || routesRaw.includes('Effotel') || routesRaw.includes('Dandekar'))) {
         try {
           const routesParsed = JSON.parse(routesRaw);
           const cleanedRoutes = {};
@@ -60,8 +60,7 @@ export default function App() {
                 s &&
                 !s.title?.includes('Sangli Plant Operational') &&
                 !s.title?.includes('Effotel') &&
-                !s.title?.includes('Dandekar') &&
-                !(s.lat && s.lng && Math.abs(Number(s.lat) - 16.8464) < 0.01)
+                !s.title?.includes('Dandekar')
               );
             }
           });
@@ -87,10 +86,10 @@ export default function App() {
             updated.completionStatus = 'Full Day';
           }
 
-          // Sanitize Site Supervisor location to Sangli Godrej Green Acres
+          // Preserve real mobile GPS from device; only provide station fallback if GPS is completely missing
           const aId = (updated.employeeId || updated.id || '').toUpperCase();
-          if (aId === 'SS-001' || aId.includes('SS') || (updated.role && updated.role.toLowerCase().includes('supervisor'))) {
-            if (updated.geofenceStatus?.toLowerCase().includes('dandekar') || updated.geofenceStatus?.toLowerCase().includes('pune') || Number(updated.gpsLocation?.lat) >= 17.5) {
+          if (!updated.gpsLocation || !updated.gpsLocation.lat) {
+            if (aId === 'SS-001' || aId.includes('SS') || (updated.role && updated.role.toLowerCase().includes('supervisor'))) {
               updated.geofenceStatus = 'Godrej Green Acres Site, Sangli';
               updated.landmarkName = 'Godrej Green Acres Construction Site, Sangli';
               updated.address = 'Near Government Colony, Sangli, Maharashtra 416416';
@@ -98,20 +97,12 @@ export default function App() {
                 lat: 16.852000,
                 lng: 74.590000,
                 accuracy: 15,
-                timestamp: updated.gpsLocation?.timestamp || new Date().toISOString(),
+                timestamp: new Date().toISOString(),
                 address: 'Near Government Colony, Sangli, Maharashtra 416416',
                 landmarkName: 'Godrej Green Acres Construction Site, Sangli',
               };
               updated.lastKnownLocation = { ...updated.gpsLocation };
-            }
-          }
-
-          // Sanitize QC Engineer location to Sangli Quality Lab if contaminated by Kolhapur ISP or out-of-range fix
-          if (aId === 'QC-001' || aId.includes('QC') || (updated.role && (updated.role.toLowerCase().includes('qc') || updated.role.toLowerCase().includes('quality')))) {
-            const qLat = Number(updated.gpsLocation?.lat);
-            const qLng = Number(updated.gpsLocation?.lng);
-            const isKolhapur = Math.abs(qLat - 16.6941) < 0.05 && Math.abs(qLng - 74.2366) < 0.05;
-            if (isKolhapur || qLat >= 17.5 || qLat < 16.5 || !updated.gpsLocation?.lat) {
+            } else if (aId === 'QC-001' || aId.includes('QC') || (updated.role && (updated.role.toLowerCase().includes('qc') || updated.role.toLowerCase().includes('quality')))) {
               updated.geofenceStatus = 'Miraj Highway Package B Quality Lab, Sangli';
               updated.landmarkName = 'Miraj Highway Package B Quality Lab, Sangli';
               updated.address = 'Miraj Industrial Corridor, Sangli, Maharashtra 416410';
@@ -119,31 +110,11 @@ export default function App() {
                 lat: 16.8300,
                 lng: 74.6400,
                 accuracy: 15,
-                timestamp: updated.gpsLocation?.timestamp || new Date().toISOString(),
+                timestamp: new Date().toISOString(),
                 address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
                 landmarkName: 'Miraj Highway Package B Quality Lab, Sangli',
               };
               updated.lastKnownLocation = { ...updated.gpsLocation };
-              if (Array.isArray(updated.routeTrail)) {
-                updated.routeTrail = updated.routeTrail.filter(s => {
-                  if (!s || !s.lat) return false;
-                  return !(Math.abs(Number(s.lat) - 16.6941) < 0.05 && Math.abs(Number(s.lng) - 74.2366) < 0.05);
-                });
-                if (updated.routeTrail.length === 0 && updated.punchIn) {
-                  updated.routeTrail = [{
-                    stopNo: 1,
-                    title: 'Punch-In: Miraj Highway Package B Quality Lab, Sangli',
-                    category: 'Punch-In Location',
-                    address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-                    time: updated.punchIn,
-                    lat: 16.8300,
-                    lng: 74.6400,
-                    status: 'Punch-In Station',
-                    distanceKm: 0.0,
-                    notes: 'Verified biometric punch-in in Sangli Quality Lab'
-                  }];
-                }
-              }
             }
           }
           return updated;

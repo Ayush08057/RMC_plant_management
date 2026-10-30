@@ -203,6 +203,10 @@ class NativeTrackingService {
     if (this.lastPing && this.lastPing.lat && this.lastPing.lng) {
       return this.lastPing;
     }
+    if (typeof window !== 'undefined' && window.__latestNativeGpsFix && window.__latestNativeGpsFix.lat && window.__latestNativeGpsFix.lng) {
+      this.lastPing = window.__latestNativeGpsFix;
+      return window.__latestNativeGpsFix;
+    }
     return null;
   }
 
