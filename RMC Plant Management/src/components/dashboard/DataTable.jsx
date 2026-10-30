@@ -133,40 +133,40 @@ export default function DataTable({
       }
     >
       <div
-        className={`w-full max-w-full bg-white border border-[#D4E4F7] rounded-xl md:rounded-2xl overflow-hidden shadow-xs transition-all duration-300 min-w-0 relative flex flex-col ${isFullscreen ? 'h-full max-h-full shadow-2xl ring-1 ring-[#123B6D]/20 flex-1 min-h-0' : ''
+        className={`w-full max-w-full bg-white/75 backdrop-blur-xl border border-white/80 ring-1 ring-slate-900/[0.04] rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.03)] transition-all duration-300 min-w-0 relative flex flex-col ${isFullscreen ? 'h-full max-h-full shadow-2xl ring-1 ring-slate-900/20 flex-1 min-h-0' : ''
           }`}
       >
         {/* Top Gradient Accent Bar */}
-        <div className="h-1 bg-gradient-to-r from-[#123B6D] via-[#1D5FA7] to-[#246BCE] shrink-0" />
+        <div className="h-[2.5px] bg-gradient-to-r from-blue-400 via-indigo-400 to-sky-400 shrink-0" />
 
         {/* Table Header & Search Controls */}
-        <div className={`border-b border-[#D4E4F7] flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full min-w-0 bg-[#F5F9FF] shrink-0 ${compact ? 'p-1.5 sm:px-2.5 sm:py-2' : 'p-2 sm:p-2.5'}`}>
-          <div className="flex items-center gap-2 min-w-0">
+        <div className={`border-b border-slate-100/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full min-w-0 bg-white/50 backdrop-blur-md shrink-0 ${compact ? 'p-2 sm:px-3.5 sm:py-2.5' : 'p-3 sm:px-4 sm:py-3'}`}>
+          <div className="flex items-center gap-2.5 min-w-0">
             {Icon && (
-              <div className={`rounded-xl bg-[#1D5FA7] text-white shrink-0 shadow-xs ${compact ? 'p-1.5' : 'p-1.5 sm:p-2'}`}>
+              <div className={`rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shrink-0 shadow-xs ${compact ? 'p-1.5' : 'p-2'}`}>
                 <Icon className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
               </div>
             )}
             <div className="min-w-0">
-              <h3 className={`font-bold text-black tracking-tight flex items-center gap-1.5 flex-wrap ${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
+              <h3 className={`font-bold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap ${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
                 <span className="whitespace-nowrap">{typeof title === 'string' ? t(title) : title}</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#EAF3FF] text-black border border-[#D4E4F7] font-mono font-bold shrink-0 shadow-2xs">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100/80 text-slate-700 border border-slate-200/70 font-mono font-semibold shrink-0 shadow-2xs">
                   {filteredData.length} {language === 'mr' ? 'नोंदी' : 'records'}
                 </span>
                 {isFullscreen && (
-                  <span className="hidden md:inline-flex items-center gap-1 text-[10px] sm:text-[11px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#EAF3FF] text-[#1D5FA7] border border-[#D4E4F7] shrink-0 font-mono">
+                  <span className="hidden md:inline-flex items-center gap-1 text-[10px] sm:text-[11px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 shrink-0 font-mono">
                     {language === 'mr' ? 'फुल स्क्रीन मोड' : 'Full Screen Mode'}
                   </span>
                 )}
               </h3>
-              {subtitle && <p className="text-xs text-slate-700 font-medium line-clamp-1 mt-0.5">{typeof subtitle === 'string' ? t(subtitle) : subtitle}</p>}
+              {subtitle && <p className="text-xs text-slate-500 font-medium line-clamp-1 mt-0.5">{typeof subtitle === 'string' ? t(subtitle) : subtitle}</p>}
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-start sm:justify-end min-w-0">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-start sm:justify-end min-w-0">
             {searchable && (
               <div className="relative w-full sm:w-56 lg:w-64 max-w-full">
-                <Search className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1D5FA7] ${compact ? 'w-3.5 h-3.5 left-2.5' : 'w-4 h-4 left-3.5'}`} />
+                <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400`} />
                 <input
                   type="text"
                   value={searchQuery}
@@ -175,7 +175,7 @@ export default function DataTable({
                     setCurrentPage(1);
                   }}
                   placeholder={typeof searchPlaceholder === 'string' ? t(searchPlaceholder) : searchPlaceholder}
-                  className={`w-full bg-white border border-[#D4E4F7] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-black placeholder:text-slate-500 focus:bg-white focus:outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20 transition-all font-medium shadow-2xs ${compact ? 'pl-8 pr-7 py-1 sm:py-1.5' : 'pl-9 pr-7 py-1.5 sm:py-2'}`}
+                  className={`w-full bg-white/80 border border-slate-200/80 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/15 transition-all font-medium shadow-2xs pl-8.5 pr-7 py-1.5 sm:py-1.5`}
                 />
                 {searchQuery && (
                   <button
@@ -198,15 +198,15 @@ export default function DataTable({
 
         {/* Optional Secondary Filter / Toolbar Strip */}
         {toolbar && (
-          <div className="px-3 py-1.5 bg-[#FAFCFF] border-b border-[#D4E4F7] flex items-center justify-between gap-2 flex-wrap shrink-0 text-xs">
+          <div className="px-3.5 py-2 bg-slate-50/40 border-b border-slate-200/80 flex items-center justify-between gap-2 flex-wrap shrink-0 text-xs">
             {toolbar}
           </div>
         )}
 
         {/* DESKTOP TABLE VIEW - STRICT 100% CONTAINER FIT WITH PROPER ALIGNMENT */}
         <div className={`hidden md:block w-full max-w-full ${noScroll ? 'overflow-x-hidden' : 'overflow-x-auto'}`}>
-          <table className={`w-full ${tableMinWidth ? tableMinWidth : 'w-full'} text-left text-xs sm:text-sm text-black border-collapse ${tableFixed || noScroll ? 'table-fixed' : 'table-auto'}`}>
-            <thead className="table-header-main bg-gradient-to-r from-[#123B6D] via-[#164785] to-[#1D5FA7] text-white font-mono font-bold uppercase text-[11px] sm:text-xs tracking-wider border-b-2 border-[#0B2546] select-none shadow-xs">
+          <table className={`w-full ${tableMinWidth ? tableMinWidth : 'w-full'} text-left text-xs sm:text-sm text-slate-800 border-collapse ${tableFixed || noScroll ? 'table-fixed' : 'table-auto'}`}>
+            <thead className="table-header-main bg-slate-50/90 backdrop-blur-md text-slate-600 font-sans font-semibold uppercase text-[11px] tracking-wider border-b border-slate-200/80 select-none">
               <tr>
                 {columns.map((col, idx) => {
                   const colStyle = {
@@ -222,17 +222,13 @@ export default function DataTable({
                   return (
                     <th
                       key={idx}
-                      style={{
-                        ...(Object.keys(colStyle).length > 0 ? colStyle : {}),
-                        color: '#FFFFFF',
-                      }}
-                      className={`${isDense ? 'py-2 px-1.5 sm:px-2 text-[10px] sm:text-[11px]' : 'py-3 px-3.5 text-[11px] sm:text-xs'} font-bold uppercase text-white border-r border-white/20 last:border-r-0 overflow-hidden ${isFirst ? (isDense ? 'pl-2 sm:pl-2.5' : 'pl-4 sm:pl-4.5') : ''
-                        } ${isLast ? (isDense ? 'pr-2 sm:pr-2.5' : 'pr-4 sm:pr-4.5') : ''
+                      style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
+                      className={`${isDense ? 'py-2.5 px-2.5 sm:px-3 text-[10.5px] sm:text-[11px]' : 'py-3 px-3.5 sm:px-4 text-[11px] sm:text-xs'} font-semibold uppercase text-slate-600 border-r border-slate-200/50 last:border-r-0 overflow-hidden ${isFirst ? (isDense ? 'pl-2.5 sm:pl-3' : 'pl-4 sm:pl-4.5') : ''
+                        } ${isLast ? (isDense ? 'pr-2.5 sm:pr-3' : 'pr-4 sm:pr-4.5') : ''
                         } ${alignClass} ${col.headerClassName || ''}`}
                     >
                       <span
-                        style={{ color: '#FFFFFF' }}
-                        className={`${isDense ? 'font-sans font-bold tracking-tight text-[10.5px] sm:text-[11px]' : 'font-mono font-bold tracking-wider text-[11px] sm:text-xs'} text-white block truncate drop-shadow-xs`}
+                        className={`${isDense ? 'font-sans font-semibold tracking-tight text-[10.5px] sm:text-[11px]' : 'font-sans font-semibold tracking-wider text-[11px] sm:text-xs'} text-slate-700 block truncate`}
                         title={typeof col.header === 'string' ? t(col.header) : undefined}
                       >
                         {typeof col.header === 'string' ? t(col.header) : col.header}
@@ -242,30 +238,30 @@ export default function DataTable({
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#D4E4F7]">
+            <tbody className="divide-y divide-slate-100/80">
               {isLoading ? (
                 <tr>
-                  <td colSpan={columns.length} className="py-14 text-center text-slate-700 bg-[#F5F9FF]">
-                    <div className="w-12 h-12 rounded-2xl bg-[#EAF3FF] border border-[#D4E4F7] flex items-center justify-center mx-auto mb-3 shadow-2xs">
-                      <Loader2 className="w-6 h-6 text-[#1D5FA7] animate-spin" />
+                  <td colSpan={columns.length} className="py-14 text-center text-slate-600 bg-slate-50/50">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200/70 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                      <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
                     </div>
-                    <div className="text-sm font-bold text-black tracking-tight">Loading records...</div>
+                    <div className="text-sm font-bold text-slate-900 tracking-tight">Loading records...</div>
                     <p className="text-xs text-slate-500 mt-1">Connecting to plant telemetry and database</p>
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={columns.length} className="py-14 text-center text-slate-700 bg-[#F5F9FF]">
+                  <td colSpan={columns.length} className="py-14 text-center text-slate-600 bg-slate-50/50">
                     <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto mb-3 shadow-2xs">
                       <AlertCircle className="w-6 h-6 text-rose-600" />
                     </div>
-                    <div className="text-sm font-bold text-black tracking-tight">{typeof error === 'string' ? error : 'Failed to retrieve records'}</div>
+                    <div className="text-sm font-bold text-slate-900 tracking-tight">{typeof error === 'string' ? error : 'Failed to retrieve records'}</div>
                     <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Database request encountered an error or access restriction.</p>
                     {onRetry && (
                       <button
                         type="button"
                         onClick={onRetry}
-                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1D5FA7] hover:bg-[#123B6D] text-white text-xs font-semibold shadow-2xs cursor-pointer transition-all"
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-2xs cursor-pointer transition-all"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>Retry</span>
@@ -278,7 +274,7 @@ export default function DataTable({
                   <tr
                     key={row.id || rIdx}
                     onClick={() => onRowClick && onRowClick(row)}
-                    className={`group transition-all duration-150 even:bg-[#F5F9FF]/50 odd:bg-white hover:bg-[#EAF3FF] ${onRowClick ? 'cursor-pointer' : ''}`}
+                    className={`group transition-all duration-150 even:bg-slate-50/40 odd:bg-white hover:bg-blue-50/35 ${onRowClick ? 'cursor-pointer' : ''}`}
                   >
                     {columns.map((col, cIdx) => {
                       const colStyle = {
@@ -295,8 +291,8 @@ export default function DataTable({
                         <td
                           key={cIdx}
                           style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                          className={`${isDense ? 'py-1 px-1.5 sm:px-2 text-xs' : 'py-1.5 px-3'} align-middle min-w-0 ${isFirst ? (isDense ? 'pl-2 sm:pl-2.5' : 'pl-3.5 sm:pl-4') : ''
-                            } ${isLast ? (isDense ? 'pr-2 sm:pr-2.5' : 'pr-3.5 sm:pr-4') : ''
+                          className={`${isDense ? 'py-2 px-2.5 sm:px-3 text-xs' : 'py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm'} align-middle min-w-0 ${isFirst ? (isDense ? 'pl-2.5 sm:pl-3' : 'pl-4 sm:pl-4.5') : ''
+                            } ${isLast ? (isDense ? 'pr-2.5 sm:pr-3' : 'pr-4 sm:pr-4.5') : ''
                             } ${col.className || ''}`}
                         >
                           <div className={`w-full min-w-0 flex items-center ${alignClass}`}>
@@ -305,7 +301,7 @@ export default function DataTable({
                             ) : col.type === 'status' ? (
                               <StatusBadge status={row[col.accessor]} />
                             ) : (
-                              <span className="font-semibold text-black block truncate" title={String(row[col.accessor] ?? '')}>
+                              <span className="font-medium text-slate-800 block truncate" title={String(row[col.accessor] ?? '')}>
                                 {row[col.accessor]}
                               </span>
                             )}

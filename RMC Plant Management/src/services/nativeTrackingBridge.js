@@ -38,20 +38,107 @@ class NativeTrackingService {
    * Notify native Android layer that employee punched in
    * Starts high-precision Background Foreground Service with persistent notification
    */
-  startForegroundTracking(employeeId, employeeName) {
+  startForegroundTracking(employeeId, employeeName, options = {}) {
     if (typeof window === 'undefined') return;
+
+    let companyId = 'sm-concretech';
+    let authToken = '';
+    let attendanceDocId = '';
+
+    if (typeof options === 'string') {
+      companyId = options;
+    } else if (options && typeof options === 'object') {
+      companyId = options.companyId || 'sm-concretech';
+      authToken = options.authToken || '';
+      attendanceDocId = options.attendanceDocId || options.docId || '';
+    }
 
     const payload = JSON.stringify({
       action: 'START_TRACKING',
       employeeId: String(employeeId),
       employeeName: String(employeeName || 'Employee'),
+      companyId: String(companyId || 'sm-concretech'),
+      authToken: String(authToken || ''),
+      attendanceDocId: String(attendanceDocId || ''),
     });
 
     if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
       window.NativeTrackingBridge.postMessage(payload);
-      console.log('[NativeTracking] Foreground tracking started for:', employeeId);
+      console.log('[NativeTracking] Foreground tracking started for:', employeeId, 'company:', companyId, 'docId:', attendanceDocId);
     } else {
       console.log('[NativeTracking] Native bridge not detected (running in browser mode)');
+    }
+  }
+
+  /**
+   * Sync active Firebase Auth token and company ID to Flutter background service
+   */
+  syncAuth(authToken, companyId = 'sm-concretech') {
+    if (typeof window === 'undefined') return;
+
+    const payload = JSON.stringify({
+      action: 'SYNC_AUTH',
+      authToken: String(authToken || ''),
+      companyId: String(companyId || 'sm-concretech'),
+    });
+
+    if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
+      window.NativeTrackingBridge.postMessage(payload);
+      console.log('[NativeTracking] Auth credentials synced to native host');
+    }
+  }
+
+  /**
+   * Request locally recorded shift breadcrumb trail from Flutter isolate
+   */
+  async requestLocalTrail(employeeId, timeoutMs = 4000) {
+    if (typeof window === 'undefined') return [];
+
+    return new Promise((resolve) => {
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          window.__onNativeTrailExport = null;
+          resolve([]);
+        }
+      }, timeoutMs);
+
+      window.__onNativeTrailExport = (trailData) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          window.__onNativeTrailExport = null;
+          resolve(Array.isArray(trailData) ? trailData : []);
+        }
+      };
+
+      const payload = JSON.stringify({
+        action: 'GET_LOCAL_TRAIL',
+        employeeId: String(employeeId),
+      });
+
+      if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
+        window.NativeTrackingBridge.postMessage(payload);
+      } else {
+        clearTimeout(timer);
+        window.__onNativeTrailExport = null;
+        resolve([]);
+      }
+    });
+  }
+
+  /**
+   * Clear local trail buffer from device
+   */
+  clearLocalTrail(employeeId) {
+    if (typeof window === 'undefined') return;
+    const payload = JSON.stringify({
+      action: 'CLEAR_LOCAL_TRAIL',
+      employeeId: String(employeeId),
+    });
+    if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
+      window.NativeTrackingBridge.postMessage(payload);
     }
   }
 

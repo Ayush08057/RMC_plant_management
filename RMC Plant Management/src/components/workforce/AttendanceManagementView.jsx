@@ -49,6 +49,7 @@ import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian1
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import { nativeTracking } from '../../services/nativeTrackingBridge';
+import { auth } from '../../config/firebase';
 import KPICard from '../dashboard/KPICard';
 import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
@@ -296,7 +297,21 @@ export default function AttendanceManagementView({
             timestamp: new Date().toISOString(),
           },
         });
-        nativeTracking.startForegroundTracking(emp.employeeId || emp.id, emp.name);
+        
+        let authToken = '';
+        try {
+          if (auth?.currentUser) {
+            authToken = await auth.currentUser.getIdToken();
+          }
+        } catch {
+          // Graceful fallback
+        }
+
+        nativeTracking.startForegroundTracking(emp.employeeId || emp.id, emp.name, {
+          companyId: user?.companyId || 'sm-concretech',
+          authToken,
+          attendanceDocId: rec?.id || '',
+        });
         setToastMessage(`✓ Clocked IN: ${emp.name} at ${formatToIndian12Hr(rec.punchIn)} (🛰️ Live GPS: ${lat}, ${lng})`);
       } catch (err) {
         setToastMessage(err.message || 'Check-in failed');

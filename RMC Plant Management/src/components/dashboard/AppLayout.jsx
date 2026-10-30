@@ -72,7 +72,11 @@ export default function AppLayout({
   }, []);
 
   return (
-    <div className="app-shell relative h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden bg-[#F5F9FF] text-black flex flex-col antialiased selection:bg-[#246BCE] selection:text-white">
+    <div className="app-shell relative h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#edf2f7] text-slate-800 flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+      {/* Soft Ambient Frosted Glass Mesh Backdrops */}
+      <div className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-300/20 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute top-1/3 -right-32 w-96 h-96 rounded-full bg-indigo-300/15 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -bottom-32 left-1/3 w-96 h-96 rounded-full bg-teal-300/15 blur-3xl" aria-hidden="true" />
       {/* Sidebar Navigation */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -164,14 +168,14 @@ export default function AppLayout({
           const displayBadge = isPlantOps ? 'PLANT OPS' : badge;
 
           return (
-            <div className="px-3 sm:px-4 pt-1.5 pb-1 shrink-0">
-              <div className="bg-white border border-[#D4E4F7] rounded-xl px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 min-w-0">
+            <div className="px-3 sm:px-5 pt-2 pb-1 shrink-0">
+              <div className="bg-white/70 backdrop-blur-xl border border-white/80 ring-1 ring-slate-900/[0.04] rounded-2xl px-4 py-2.5 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] flex items-center justify-between gap-3 min-w-0">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <h1 className="text-xs sm:text-sm md:text-base font-bold text-black tracking-tight truncate leading-tight">
+                  <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate leading-tight">
                     {t(displayTitle)}
                   </h1>
                   {displayBadge && (
-                    <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-[#EAF3FF] text-black border border-[#D4E4F7] shrink-0">
+                    <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/80 shrink-0">
                       {t(displayBadge)}
                     </span>
                   )}
@@ -188,7 +192,7 @@ export default function AppLayout({
         })()}
 
         {/* Page Inner Content - Only this area scrolls vertically */}
-        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-4 py-1.5 sm:py-2 overflow-y-auto overflow-x-hidden flex flex-col text-black">
+        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-5 py-2 sm:py-3 overflow-y-auto overflow-x-hidden flex flex-col text-slate-900">
           {(() => {
             const isPlantOps = activeTab && (
               activeTab === 'plant-operations' ||
@@ -209,31 +213,31 @@ export default function AppLayout({
         </main>
 
         {/* Pinned Operational Footer - Display Active Logged In Session Below */}
-        <footer className="border-t border-[#D4E4F7] py-2 px-3 sm:px-4 bg-white text-center text-xs text-slate-700 w-full max-w-full shrink-0 shadow-2xs">
+        <footer className="border-t border-white/70 py-2.5 px-4 sm:px-6 bg-white/60 backdrop-blur-xl text-center text-xs text-slate-500 w-full max-w-full shrink-0 shadow-2xs">
           <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-1.5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-[#246BCE] shrink-0" />
-              <div className="text-black font-medium truncate text-xs flex items-center gap-1.5">
-                <span className="text-slate-600 hidden sm:inline">{t('Active Session:', 'Active Session:')}</span>
-                <strong className="text-black font-semibold truncate">{user?.name || 'Administrator'}</strong>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              <div className="text-slate-800 font-medium truncate text-xs flex items-center gap-1.5">
+                <span className="text-slate-400 hidden sm:inline">{t('Active Session:', 'Active Session:')}</span>
+                <strong className="text-slate-900 font-semibold truncate">{user?.name || 'Administrator'}</strong>
                 {user?.role && (
-                  <span className="px-2 py-0.5 rounded bg-[#EAF3FF] text-black border border-[#D4E4F7] text-[11px] font-mono font-semibold shrink-0">
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/80 text-[10px] font-mono font-semibold shrink-0">
                     {t(user.role)}
                   </span>
                 )}
                 {user?.employeeId && (
-                  <span className="text-slate-600 font-mono text-[11px] hidden md:inline">
+                  <span className="text-slate-400 font-mono text-[11px] hidden md:inline">
                     [{user.employeeId}]
                   </span>
                 )}
-                <span className="text-[#D4E4F7] hidden lg:inline">•</span>
-                <span className="text-slate-700 text-[11px] hidden lg:inline">
+                <span className="text-slate-300 hidden lg:inline">•</span>
+                <span className="text-slate-500 text-[11px] hidden lg:inline">
                   Plant: {user?.plant || user?.plantLocation || 'Main Plant Unit #01'}
                 </span>
               </div>
             </div>
-            <div className="font-mono text-[11px] text-slate-700 font-medium truncate flex items-center gap-2">
-              <span className="hidden sm:inline text-black font-semibold">● SCADA Connected</span>
+            <div className="font-mono text-[11px] text-slate-500 font-medium truncate flex items-center gap-2">
+              <span className="hidden sm:inline text-slate-700 font-semibold">● SCADA Connected</span>
               <span>SM CONCRETECH Enterprise v2.4</span>
             </div>
           </div>

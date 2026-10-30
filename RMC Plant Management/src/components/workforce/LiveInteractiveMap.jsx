@@ -298,8 +298,11 @@ export default function LiveInteractiveMap({
     const targetLat = validTarget?.lat ? Number(validTarget.lat) : null;
     const targetLng = validTarget?.lng ? Number(validTarget.lng) : null;
 
-    // 1. Draw Route Trail (only when selected target has multiple visited stops and route mode is on)
-    if (mapRouteMode && stops.length > 1) {
+    // 1. Draw Route Trail strictly for CONCLUDED shifts (after punch out), or if Admin explicitly toggled Route Mode
+    const isShiftConcluded = Boolean(validTarget?.status === 'Shift Ended' || validTarget?.record?.punchOut);
+    const shouldDrawTrail = (mapRouteMode || isShiftConcluded) && stops.length > 1;
+
+    if (shouldDrawTrail) {
       const rawLatLngs = stops.map((s) => [Number(s.lat), Number(s.lng)]);
       // Use road-snapped high-fidelity coordinates if available and enabled, otherwise fallback to straight-line waypoints
       const isRoadSnapped = Boolean(roadSnapEnabled && snappedRouteState && snappedRouteState.snapped && snappedRouteState.coords.length > 1);

@@ -529,24 +529,40 @@ export const WorkforceProvider = ({ children }) => {
 
   // Listen to native location pings from Flutter foreground service
   useEffect(() => {
-    const unsub = nativeTracking.onLocationPing((ping) => {
+    const unsub = nativeTracking.onLocationPing(async (ping) => {
       if (!ping || !ping.lat || !ping.lng) return;
-      // Find currently logged-in workforce user if active
+      // Route location pings to active clocked-in employee
       try {
-        const storedAuth = localStorage.getItem('rmc_current_user_v1');
-        if (storedAuth) {
-          const authUser = JSON.parse(storedAuth);
-          const empId = authUser?.employeeId || authUser?.id;
-          if (empId) {
-            updateLiveEmployeeLocation(empId, {
-              lat: Number(ping.lat),
-              lng: Number(ping.lng),
-              accuracy: ping.accuracy || 10,
-              timestamp: ping.timestamp || new Date().toISOString(),
-              address: `${Number(ping.lat).toFixed(5)}°N, ${Number(ping.lng).toFixed(5)}°E`,
-              landmarkName: 'Live Device Fix',
-            });
+        let empId = user?.employeeId || user?.id;
+        if (!empId) {
+          const storedAuth = sessionStorage.getItem('rmc_current_user_v3') || 
+                             localStorage.getItem('rmc_current_user_v3') ||
+                             localStorage.getItem('active_tracking_emp_id');
+          if (storedAuth) {
+            try {
+              const authUser = JSON.parse(storedAuth);
+              empId = authUser?.employeeId || authUser?.id || storedAuth;
+            } catch {
+              empId = storedAuth;
+            }
           }
+        }
+        if (empId) {
+          const lat = Number(Number(ping.lat).toFixed(6));
+          const lng = Number(Number(ping.lng).toFixed(6));
+          const addrInfo = await resolveAccurateAddress(lat, lng);
+          const landmarkName = addrInfo?.landmarkName || ping.landmarkName || 'Live Device Fix';
+          const address = addrInfo?.address || `${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E`;
+
+          updateLiveEmployeeLocation(empId, {
+            lat,
+            lng,
+            accuracy: Math.round(ping.accuracy || 10),
+            timestamp: ping.timestamp || new Date().toISOString(),
+            address,
+            landmarkName,
+          });
+          recordEmployeeBreadcrumb(empId, lat, lng, landmarkName);
         }
       } catch (err) {
         console.warn('Native ping routing error:', err);
@@ -555,7 +571,7 @@ export const WorkforceProvider = ({ children }) => {
     return () => {
       if (typeof unsub === 'function') unsub();
     };
-  }, []);
+  }, [user]);
 
   const switchCompany = (companyId) => {
     if (companyId === activeCompanyId || !companies.some((company) => company.id === companyId)) return;
@@ -1920,6 +1936,36 @@ export const WorkforceProvider = ({ children }) => {
     // Finalize route trail and cumulative kilometers traveled
     const exitGps = options.exitGpsLocation || options.gpsLocation || null;
     let finalRouteTrail = Array.isArray(options.routeTrail) ? [...options.routeTrail] : (Array.isArray(currentRecord.routeTrail) ? [...currentRecord.routeTrail] : []);
+
+    // If native device passed raw breadcrumb trail collected locally during shift, merge and convert to waypoints
+    if (Array.isArray(options.rawTrailPoints) && options.rawTrailPoints.length > 0) {
+      let cumulativeMeters = 0;
+      let lastPt = null;
+      const convertedPoints = options.rawTrailPoints.map((pt, idx) => {
+        const pLat = Number(pt.lat);
+        const pLng = Number(pt.lng);
+        if (lastPt) {
+          cumulativeMeters += calculateDistanceMeters(lastPt.lat, lastPt.lng, pLat, pLng);
+        }
+        lastPt = { lat: pLat, lng: pLng };
+        return {
+          stopNo: idx + 1,
+          title: idx === 0 ? 'Punch-In Station' : `Waypoint #${idx + 1}`,
+          category: idx === 0 ? 'Punch-In Location' : 'En Route',
+          address: `${pLat.toFixed(5)}°N, ${pLng.toFixed(5)}°E`,
+          time: pt.timestamp ? new Date(pt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : nowTime,
+          lat: pLat,
+          lng: pLng,
+          status: 'Recorded',
+          distanceKm: Number((cumulativeMeters / 1000).toFixed(2)),
+          notes: 'High-precision mobile GPS fix',
+        };
+      });
+
+      if (convertedPoints.length > 0) {
+        finalRouteTrail = convertedPoints;
+      }
+    }
     
     if (exitGps && exitGps.lat && exitGps.lng) {
       const exitLat = Number(exitGps.lat);
@@ -2174,19 +2220,16 @@ export const WorkforceProvider = ({ children }) => {
       const updatedList = [...prevList];
       updatedList[pIdx] = updatedRecord;
 
-      // OPTIMIZATION: Throttle Firebase writes to prevent database quota exhaustion & excessive document writes.
-      // Updates React state and localStorage instantly for real-time smoothness,
-      // but writes to Firebase only when a meaningful stop is added (newTrail !== existingTrail)
-      // or at most once every 15 seconds.
+      // OPTIMIZATION: Zero unwanted route trail writes during active duty!
+      // While on duty, update only `lastKnownLocation` and `updatedAt` throttled to at most once per 20 seconds.
+      // Route trail is kept in local memory until shift punch-out.
       const now = Date.now();
       const lastWriteTime = locationFirestoreThrottleMap.get(canonicalEmpId) || 0;
-      const hasNewWaypoint = newTrail.length > existingTrail.length;
 
-      if (hasNewWaypoint || (now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
+      if ((now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
         locationFirestoreThrottleMap.set(canonicalEmpId, now);
         updateDocument(COLLECTIONS.ATTENDANCE, target.id, {
           lastKnownLocation: updatedRecord.lastKnownLocation,
-          routeTrail: updatedRecord.routeTrail,
           updatedAt: updatedRecord.updatedAt,
         }).catch(() => {});
       }
@@ -2257,19 +2300,16 @@ export const WorkforceProvider = ({ children }) => {
       const updatedList = [...prevList];
       updatedList[pIdx] = updatedRecord;
 
-      // OPTIMIZATION: Throttle Firebase writes to prevent database quota exhaustion & excessive document writes.
-      // Updates React state and localStorage instantly for real-time smoothness,
-      // but writes to Firebase only when a meaningful stop is added (newTrail !== existingTrail)
-      // or at most once every 15 seconds.
+      // OPTIMIZATION: Zero unwanted route trail writes during active duty!
+      // While on duty, update only `lastKnownLocation` and `updatedAt` throttled to at most once per 20 seconds.
+      // Route trail is kept in local memory until shift punch-out.
       const now = Date.now();
       const lastWriteTime = locationFirestoreThrottleMap.get(canonicalEmpId) || 0;
-      const hasNewWaypoint = newTrail.length > existingTrail.length;
 
-      if (hasNewWaypoint || (now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
+      if ((now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
         locationFirestoreThrottleMap.set(canonicalEmpId, now);
         updateDocument(COLLECTIONS.ATTENDANCE, target.id, {
           lastKnownLocation: updatedRecord.lastKnownLocation,
-          routeTrail: updatedRecord.routeTrail,
           updatedAt: updatedRecord.updatedAt,
         }).catch(() => {});
       }

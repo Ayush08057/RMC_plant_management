@@ -28,6 +28,7 @@ import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
 import { nativeTracking } from '../../services/nativeTrackingBridge';
+import { auth } from '../../config/firebase';
 
 export default function MobilePunchWidget({ 
   onPunched,
@@ -63,9 +64,11 @@ export default function MobilePunchWidget({
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Background GPS states
   const [gpsCoords, setGpsCoords] = useState(null);
@@ -152,6 +155,7 @@ export default function MobilePunchWidget({
 
   const hasPunchedIn = Boolean(userTodayRecord?.punchIn);
   const hasPunchedOut = Boolean(userTodayRecord?.punchOut);
+  const displayPhoto = capturedPhoto || (hasPunchedIn ? userTodayRecord?.selfieUrl : null);
 
   // Past attendance records for this employee (for Activity tab)
   const employeeHistoryRecords = useMemo(() => {
@@ -191,31 +195,77 @@ export default function MobilePunchWidget({
     acquireGpsLocation().catch(() => {});
   }, []);
 
-  // Real-time Camera Management (runs automatically on mount)
+  // Native device photo file capture handler (100% reliable fallback on all devices)
+  const handlePhotoFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result;
+      if (result) {
+        setCapturedPhoto(result);
+        setCameraActive(true);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Real-time Camera Management with robust multi-tier device fallback
   const startCamera = async (mode = facingMode) => {
     setCameraError(null);
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 640 } },
-          audio: false,
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-        setCameraActive(true);
-      } else {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setCameraActive(false);
+        return false;
       }
+
+      // Multi-tier constraints: prevents OverconstrainedError on varied Android camera HALs
+      const constraintTiers = [
+        { video: { facingMode: { ideal: mode }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+        { video: { facingMode: mode }, audio: false },
+        { video: { facingMode: { ideal: mode } }, audio: false },
+        { video: { facingMode: { exact: mode } }, audio: false },
+        { video: true, audio: false }
+      ];
+
+      let stream = null;
+      let lastErr = null;
+      for (const constraints of constraintTiers) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (stream) break;
+        } catch (tierErr) {
+          lastErr = tierErr;
+        }
+      }
+
+      if (!stream) {
+        throw lastErr || new Error('All camera constraints failed');
+      }
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.muted = true;
+        video.onloadedmetadata = () => {
+          video.play().catch(() => {});
+        };
+        video.play().catch(() => {});
+      }
+      setCameraActive(true);
+      return true;
     } catch (err) {
       console.warn('Webcam stream unavailable:', err);
       setCameraActive(false);
       setCameraError('Camera access unavailable. Fallback photo verification ready.');
+      return false;
     }
   };
 
@@ -228,8 +278,17 @@ export default function MobilePunchWidget({
   };
 
   useEffect(() => {
-    startCamera('user');
+    let retryTimer;
+    startCamera('user').then((ok) => {
+      // Auto-retry once after 1.5s to seamlessly acquire stream if OS permission was just granted
+      if (!ok) {
+        retryTimer = setTimeout(() => {
+          startCamera('user');
+        }, 1500);
+      }
+    });
     return () => {
+      if (retryTimer) clearTimeout(retryTimer);
       stopCamera();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,28 +336,42 @@ export default function MobilePunchWidget({
     return canvas.toDataURL('image/jpeg', 0.85);
   };
 
-  // Capture real photo from live video or fallback
+  // Capture real photo from live video, custom upload, or fallback
   const captureSelfiePhoto = () => {
-    if (videoRef.current && cameraActive) {
+    if (capturedPhoto) {
+      return capturedPhoto;
+    }
+    const video = videoRef.current;
+    if (video && cameraActive) {
       try {
-        const video = videoRef.current;
-        const canvas = canvasRef.current || document.createElement('canvas');
-        canvas.width = video.videoWidth || 360;
-        canvas.height = video.videoHeight || 360;
+        const vw = video.videoWidth > 0 ? video.videoWidth : (video.clientWidth || 480);
+        const vh = video.videoHeight > 0 ? video.videoHeight : (video.clientHeight || 480);
+        const canvas = document.createElement('canvas');
+        canvas.width = vw;
+        canvas.height = vh;
         const ctx = canvas.getContext('2d');
-        
-        // Mirror horizontally if user facing
-        if (facingMode === 'user') {
-          ctx.translate(canvas.width, 0);
-          ctx.scale(-1, 1);
+        if (ctx) {
+          ctx.save();
+          // Mirror horizontally if user facing
+          if (facingMode === 'user') {
+            ctx.translate(vw, 0);
+            ctx.scale(-1, 1);
+          }
+          ctx.drawImage(video, 0, 0, vw, vh);
+          ctx.restore();
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          if (dataUrl && dataUrl.length > 200) {
+            setCapturedPhoto(dataUrl);
+            return dataUrl;
+          }
         }
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', 0.85);
       } catch (e) {
         console.warn('Canvas frame capture error, falling back:', e);
       }
     }
-    return generateSimulatedSelfie();
+    const fallback = generateSimulatedSelfie();
+    setCapturedPhoto(fallback);
+    return fallback;
   };
 
   // ==========================================================
@@ -315,8 +388,9 @@ export default function MobilePunchWidget({
 
     setLoading(true);
     try {
-      // 1. Capture live photo from stream
+      // 1. Capture live photo from stream and freeze in circular preview
       const photoUrl = captureSelfiePhoto();
+      setCapturedPhoto(photoUrl);
 
       const targetId = activeEmployee.employeeId || activeEmployee.id;
       const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
@@ -353,20 +427,26 @@ export default function MobilePunchWidget({
         shortZone: 'Highway QC Lab'
       } : null)));
 
-      // 2. Obtain fresh, high-precision GPS location
-      let currentGps = null;
+      // 2. Obtain fresh, high-precision GPS location (fast race to avoid freezing UI)
+      let currentGps = gpsCoords;
       try {
-        currentGps = await acquireGpsLocation(true, defaultStation);
+        const fresh = await Promise.race([
+          acquireGpsLocation(true, defaultStation),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('GPS fast timeout')), 3000))
+        ]);
+        if (fresh && fresh.lat) {
+          currentGps = fresh;
+        }
       } catch {
-        currentGps = gpsCoords;
+        if (!currentGps || !currentGps.lat) {
+          currentGps = gpsCoords;
+        }
       }
 
-      if (!currentGps || !currentGps.lat) {
-        currentGps = await acquireGpsLocation(true, defaultStation);
-      }
+      const isNativeFix = currentGps?.source === 'NATIVE_HARDWARE_GPS';
 
-      // Safeguard: Ensure supervisor location in Sangli strictly resolves Godrej Green Acres Site
-      if (isSupervisor) {
+      // Safeguard: Ensure supervisor location fallback applies strictly for browser desktop simulations, never real native phone GPS
+      if (isSupervisor && !isNativeFix) {
         const cLat = Number(currentGps?.lat);
         const isContaminatedPune = (cLat >= 17.5);
         if (isContaminatedPune || !currentGps?.lat) {
@@ -382,13 +462,13 @@ export default function MobilePunchWidget({
         }
       }
 
-      // Safeguard: Ensure dispatcher location is strictly Pune
-      if (isDispatcher && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
+      // Safeguard: Ensure dispatcher location fallback for browser desktop simulations
+      if (isDispatcher && !isNativeFix && (!currentGps?.lat || (Math.abs(Number(currentGps.lat) - 16.8464) < 0.01 && Math.abs(Number(currentGps.lng) - 74.5990) < 0.01))) {
         currentGps = defaultStation;
       }
 
-      // Safeguard: Ensure Accountant location is strictly at Sangli Market Yard
-      if (isAccountant) {
+      // Safeguard: Ensure Accountant location fallback for browser desktop simulations
+      if (isAccountant && !isNativeFix) {
         const cLat = Number(currentGps?.lat);
         const isOutOfSangli = (cLat >= 17.5 || cLat < 16.5 || !currentGps?.lat);
         if (isOutOfSangli) {
@@ -404,8 +484,8 @@ export default function MobilePunchWidget({
         }
       }
 
-      // Safeguard: Ensure QC Engineer location in Sangli is never contaminated by Kolhapur/out-of-area ISP
-      if (isQcEngineer) {
+      // Safeguard: Ensure QC Engineer location fallback for browser desktop simulations
+      if (isQcEngineer && !isNativeFix) {
         const cLat = Number(currentGps?.lat);
         const cLng = Number(currentGps?.lng);
         const isKolhapurOrOut = !currentGps?.lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
@@ -458,10 +538,25 @@ export default function MobilePunchWidget({
       // Record in local & cloud route tracking history
       recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`);
 
-      // Trigger Android Foreground Tracking Service via native bridge
-      nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee');
+      // Retrieve current Firebase Auth token if online to empower background native sync
+      let authToken = '';
+      try {
+        if (auth?.currentUser) {
+          authToken = await auth.currentUser.getIdToken();
+        }
+      } catch {
+        // Fallback gracefully without throwing
+      }
+
+      // Trigger Android Foreground Tracking Service via native bridge with company, auth, and document ID context
+      nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee', {
+        companyId: user?.companyId || 'sm-concretech',
+        authToken,
+        attendanceDocId: rec?.id || '',
+      });
 
       setSuccessMsg(`Punch In recorded successfully at ${formatToIndian12Hr(rec.punchIn)}!`);
+      stopCamera();
       if (onPunched) onPunched();
     } catch (err) {
       setError(err.message || 'Unable to complete Punch In. Please try again.');
@@ -556,11 +651,20 @@ export default function MobilePunchWidget({
         recordEmployeeBreadcrumb(targetId, Number(exitGps.lat), Number(exitGps.lng), `Punch-Out: ${exitLandmark}`);
       }
 
-      // Stop Android Foreground Tracking Service via native bridge
+      // Fetch all high-resolution route points collected locally on the mobile phone during the shift
+      let localPoints = [];
+      try {
+        localPoints = await nativeTracking.requestLocalTrail(targetId, 2500);
+      } catch {
+        localPoints = [];
+      }
+
+      // Stop Android Foreground Tracking Service via native bridge & clear phone storage
       nativeTracking.stopForegroundTracking();
 
       const rec = await checkOut(targetId, {
         exitGpsLocation: exitGpsData,
+        rawTrailPoints: localPoints,
         remarks: isDriver
           ? `Mixer ${dailyReportData.vehicleNo} | ${dailyReportData.tripsCount} Trips (${dailyReportData.deliveredM3} m³)`
           : dailyReportData.workDescription,
@@ -612,7 +716,9 @@ export default function MobilePunchWidget({
 
       const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation });
       let finalLoc = loc;
-      if (isSupervisor) {
+      const isNativeRefreshFix = finalLoc?.source === 'NATIVE_HARDWARE_GPS';
+
+      if (isSupervisor && !isNativeRefreshFix) {
         const cLat = Number(finalLoc?.lat);
         const isContaminatedPune = (cLat >= 17.5);
         if (isContaminatedPune || !finalLoc?.lat) {
@@ -626,7 +732,7 @@ export default function MobilePunchWidget({
             address: 'Near Government Colony, Sangli, Maharashtra 416416',
           };
         }
-      } else if (isQc) {
+      } else if (isQc && !isNativeRefreshFix) {
         const cLat = Number(finalLoc?.lat);
         const cLng = Number(finalLoc?.lng);
         const isKolhapurOrOut = !finalLoc?.lat || (Math.abs(cLat - 16.6941) < 0.05 && Math.abs(cLng - 74.2366) < 0.05) || cLat >= 17.5 || cLat < 16.5;
@@ -641,7 +747,7 @@ export default function MobilePunchWidget({
             address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
           };
         }
-      } else if (isDispatcher && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
+      } else if (isDispatcher && !isNativeRefreshFix && (!loc?.lat || (Math.abs(Number(loc.lat) - 16.8464) < 0.01 && Math.abs(Number(loc.lng) - 74.5990) < 0.01))) {
         finalLoc = defaultStation;
       }
 
@@ -670,6 +776,8 @@ export default function MobilePunchWidget({
       const targetId = activeEmployee.employeeId || activeEmployee.id;
       if (typeof resetTodayAttendance === 'function') {
         await resetTodayAttendance(targetId);
+        setCapturedPhoto(null);
+        startCamera(facingMode);
         setSuccessMsg("Clock-in cleared. You can now punch in fresh.");
       }
     } catch (err) {
@@ -683,6 +791,16 @@ export default function MobilePunchWidget({
     <div className="w-full max-w-sm sm:max-w-md mx-auto">
       {/* Hidden canvas for video frame grab */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Hidden file input for native device camera fallback */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        onChange={handlePhotoFileChange}
+        className="hidden"
+      />
 
       {/* Main Terminal Card (Styled strictly after Image 2) */}
       <div className="bg-[#0b101b] text-white rounded-3xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col justify-between min-h-[580px] sm:min-h-[620px] relative">
@@ -736,8 +854,21 @@ export default function MobilePunchWidget({
         {activeNavTab === 'punch' && (
           <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between items-center relative">
             
-            {/* Top Right Floating Camera Switch / Scan Button (matches Image 2 circle icon) */}
-            <div className="w-full flex justify-end mb-1">
+            {/* Top Right Floating Controls */}
+            <div className="w-full flex justify-end items-center gap-2 mb-1">
+              {displayPhoto && !hasPunchedIn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCapturedPhoto(null);
+                    startCamera(facingMode);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Retake</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleCameraFacing}
@@ -752,35 +883,67 @@ export default function MobilePunchWidget({
             <div className="my-auto py-2 relative flex flex-col items-center">
               <div className="w-60 h-60 sm:w-68 sm:h-68 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-[0_0_35px_rgba(16,185,129,0.2)] bg-black relative flex items-center justify-center">
                 
-                {/* Live Video Stream */}
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-                />
+                {/* Live Video Stream or Captured Photo */}
+                {displayPhoto ? (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={displayPhoto}
+                      alt="Captured biometric preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-3 inset-x-0 flex justify-center z-20">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/60 shadow-md backdrop-blur-xs flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span>PHOTO CAPTURED</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+                  />
+                )}
 
                 {/* Fallback View if camera stream is blocked */}
-                {!cameraActive && (
-                  <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
-                    <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center mb-2">
-                      <User className="w-8 h-8 text-emerald-400" />
+                {!cameraActive && !displayPhoto && (
+                  <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-3 text-center z-10">
+                    <div className="w-14 h-14 rounded-full bg-slate-900 border border-emerald-500/40 flex items-center justify-center mb-1.5 shadow-inner">
+                      <Camera className="w-7 h-7 text-emerald-400" />
                     </div>
-                    <span className="text-xs font-bold text-slate-200">Biometric Camera Ready</span>
-                    <button
-                      type="button"
-                      onClick={() => startCamera(facingMode)}
-                      className="mt-2 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-700/60 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Start Camera</span>
-                    </button>
+                    <span className="text-xs font-bold text-slate-200">Front Camera Standby</span>
+                    <p className="text-[10px] text-slate-400 mt-0.5 max-w-[190px]">
+                      Position face in circle or tap to start camera
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-2.5">
+                      <button
+                        type="button"
+                        onClick={() => startCamera(facingMode)}
+                        className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/70 border border-emerald-700/70 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Start Camera</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 bg-blue-950/70 border border-blue-700/70 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                        title="Take selfie using device camera"
+                      >
+                        <Camera className="w-3 h-3" />
+                        <span>Take Selfie</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* Animated Green Laser Scanning Bar (matches Image 2 exact green scanning bar) */}
-                <div className="absolute inset-x-3 h-0.5 bg-emerald-400 shadow-[0_0_12px_#34d399] rounded-full pointer-events-none animate-scan-laser" />
+                {!displayPhoto && (
+                  <div className="absolute inset-x-3 h-0.5 bg-emerald-400 shadow-[0_0_12px_#34d399] rounded-full pointer-events-none animate-scan-laser" />
+                )}
               </div>
 
               {/* Status Indicator Under Circle */}

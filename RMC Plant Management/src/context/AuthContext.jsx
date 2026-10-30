@@ -31,6 +31,7 @@ import {
   saveEmployeeCredentials,
   getEmployeeStoredCredentials
 } from '../services/employeeAuthService.js';
+import { nativeTracking } from '../services/nativeTrackingBridge.js';
 import LogoutConfirmModal from '../components/common/LogoutConfirmModal.jsx';
 
 const AuthContext = createContext(null);
@@ -180,11 +181,22 @@ export const AuthProvider = ({ children }) => {
 
             setUser(restoredUser);
             sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(restoredUser));
+
+            // Sync fresh auth token and company context to native Android bridge
+            try {
+              const token = await firebaseUser.getIdToken();
+              const company = normalizeCompanyId(restoredUser.companyId || localStorage.getItem('rmc_active_company_v1'));
+              nativeTracking.syncAuth(token, company);
+            } catch {
+              // Ignore background sync errors
+            }
           }
         } catch (err) {
           console.warn('Firebase session restoration notice:', err.message);
         }
       } else {
+        // Clear native bridge auth on signout
+        nativeTracking.syncAuth('', '');
         if (typeof window !== 'undefined') {
           const stored = sessionStorage.getItem(STORAGE_SESSION_KEY);
           if (stored) {
@@ -901,6 +913,7 @@ export const AuthProvider = ({ children }) => {
     roleRoutes: ROLE_ROUTES,
     officialRoleAccounts: OFFICIAL_ROLE_ACCOUNTS,
     syncRolesToFirebase,
+    getIdToken: async (forceRefresh = false) => (auth.currentUser ? auth.currentUser.getIdToken(forceRefresh) : null),
   };
 
   return (

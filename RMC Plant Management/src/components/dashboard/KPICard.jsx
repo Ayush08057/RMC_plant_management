@@ -10,84 +10,84 @@ import { useLanguage } from '../../context/LanguageContext';
  */
 const COLOR_THEMES = {
   emerald: {
-    cardBorder: 'border-emerald-400 hover:border-emerald-500',
-    bgGradient: 'bg-gradient-to-b from-emerald-50/35 via-white to-white',
-    topBar: 'bg-emerald-500',
-    iconBox: 'bg-emerald-100/90 border-emerald-300 text-emerald-700',
-    divider: 'border-emerald-200/90',
-    trendBadge: 'text-emerald-800 bg-emerald-50 border-emerald-300',
+    cardBorder: 'border-white/70 hover:border-emerald-200/90 ring-1 ring-emerald-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-emerald-50/40 via-white/85 to-teal-50/20',
+    topBar: 'bg-gradient-to-r from-emerald-400 to-teal-400',
+    iconBox: 'bg-emerald-50/90 text-emerald-600 border-emerald-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-emerald-700 bg-emerald-50/80 border-emerald-200/70',
     trendIcon: 'text-emerald-600',
-    hoverGlow: 'hover:shadow-emerald-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(16,185,129,0.12)] hover:-translate-y-1',
   },
   blue: {
-    cardBorder: 'border-blue-400 hover:border-blue-500',
-    bgGradient: 'bg-gradient-to-b from-blue-50/35 via-white to-white',
-    topBar: 'bg-[#136dec]',
-    iconBox: 'bg-blue-100/90 border-blue-300 text-[#136dec]',
-    divider: 'border-blue-200/90',
-    trendBadge: 'text-blue-800 bg-blue-50 border-blue-300',
-    trendIcon: 'text-[#136dec]',
-    hoverGlow: 'hover:shadow-blue-500/20 hover:shadow-md',
+    cardBorder: 'border-white/70 hover:border-blue-200/90 ring-1 ring-blue-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-blue-50/40 via-white/85 to-sky-50/20',
+    topBar: 'bg-gradient-to-r from-blue-400 to-sky-400',
+    iconBox: 'bg-blue-50/90 text-blue-600 border-blue-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-blue-700 bg-blue-50/80 border-blue-200/70',
+    trendIcon: 'text-blue-600',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(59,130,246,0.12)] hover:-translate-y-1',
   },
   amber: {
-    cardBorder: 'border-amber-400 hover:border-amber-500',
-    bgGradient: 'bg-gradient-to-b from-amber-50/35 via-white to-white',
-    topBar: 'bg-amber-500',
-    iconBox: 'bg-amber-100/90 border-amber-300 text-amber-700',
-    divider: 'border-amber-200/90',
-    trendBadge: 'text-amber-800 bg-amber-50 border-amber-300',
+    cardBorder: 'border-white/70 hover:border-amber-200/90 ring-1 ring-amber-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-amber-50/40 via-white/85 to-orange-50/20',
+    topBar: 'bg-gradient-to-r from-amber-400 to-orange-400',
+    iconBox: 'bg-amber-50/90 text-amber-600 border-amber-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-amber-700 bg-amber-50/80 border-amber-200/70',
     trendIcon: 'text-amber-600',
-    hoverGlow: 'hover:shadow-amber-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(245,158,11,0.12)] hover:-translate-y-1',
   },
   rose: {
-    cardBorder: 'border-rose-400 hover:border-rose-500',
-    bgGradient: 'bg-gradient-to-b from-rose-50/35 via-white to-white',
-    topBar: 'bg-rose-500',
-    iconBox: 'bg-rose-100/90 border-rose-300 text-rose-700',
-    divider: 'border-rose-200/90',
-    trendBadge: 'text-rose-800 bg-rose-50 border-rose-300',
+    cardBorder: 'border-white/70 hover:border-rose-200/90 ring-1 ring-rose-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-rose-50/40 via-white/85 to-pink-50/20',
+    topBar: 'bg-gradient-to-r from-rose-400 to-pink-400',
+    iconBox: 'bg-rose-50/90 text-rose-600 border-rose-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-rose-700 bg-rose-50/80 border-rose-200/70',
     trendIcon: 'text-rose-600',
-    hoverGlow: 'hover:shadow-rose-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(244,63,94,0.12)] hover:-translate-y-1',
   },
   purple: {
-    cardBorder: 'border-purple-400 hover:border-purple-500',
-    bgGradient: 'bg-gradient-to-b from-purple-50/35 via-white to-white',
-    topBar: 'bg-purple-500',
-    iconBox: 'bg-purple-100/90 border-purple-300 text-purple-700',
-    divider: 'border-purple-200/90',
-    trendBadge: 'text-purple-800 bg-purple-50 border-purple-300',
+    cardBorder: 'border-white/70 hover:border-purple-200/90 ring-1 ring-purple-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-purple-50/40 via-white/85 to-fuchsia-50/20',
+    topBar: 'bg-gradient-to-r from-purple-400 to-fuchsia-400',
+    iconBox: 'bg-purple-50/90 text-purple-600 border-purple-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-purple-700 bg-purple-50/80 border-purple-200/70',
     trendIcon: 'text-purple-600',
-    hoverGlow: 'hover:shadow-purple-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(168,85,247,0.12)] hover:-translate-y-1',
   },
   cyan: {
-    cardBorder: 'border-cyan-400 hover:border-cyan-500',
-    bgGradient: 'bg-gradient-to-b from-cyan-50/35 via-white to-white',
-    topBar: 'bg-cyan-500',
-    iconBox: 'bg-cyan-100/90 border-cyan-300 text-cyan-700',
-    divider: 'border-cyan-200/90',
-    trendBadge: 'text-cyan-800 bg-cyan-50 border-cyan-300',
+    cardBorder: 'border-white/70 hover:border-cyan-200/90 ring-1 ring-cyan-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-cyan-50/40 via-white/85 to-blue-50/20',
+    topBar: 'bg-gradient-to-r from-cyan-400 to-blue-400',
+    iconBox: 'bg-cyan-50/90 text-cyan-600 border-cyan-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-cyan-700 bg-cyan-50/80 border-cyan-200/70',
     trendIcon: 'text-cyan-600',
-    hoverGlow: 'hover:shadow-cyan-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(6,182,212,0.12)] hover:-translate-y-1',
   },
   indigo: {
-    cardBorder: 'border-indigo-400 hover:border-indigo-500',
-    bgGradient: 'bg-gradient-to-b from-indigo-50/35 via-white to-white',
-    topBar: 'bg-indigo-500',
-    iconBox: 'bg-indigo-100/90 border-indigo-300 text-indigo-700',
-    divider: 'border-indigo-200/90',
-    trendBadge: 'text-indigo-800 bg-indigo-50 border-indigo-300',
+    cardBorder: 'border-white/70 hover:border-indigo-200/90 ring-1 ring-indigo-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-indigo-50/40 via-white/85 to-purple-50/20',
+    topBar: 'bg-gradient-to-r from-indigo-400 to-purple-400',
+    iconBox: 'bg-indigo-50/90 text-indigo-600 border-indigo-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-indigo-700 bg-indigo-50/80 border-indigo-200/70',
     trendIcon: 'text-indigo-600',
-    hoverGlow: 'hover:shadow-indigo-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(99,102,241,0.12)] hover:-translate-y-1',
   },
   slate: {
-    cardBorder: 'border-slate-300 hover:border-slate-400',
-    bgGradient: 'bg-gradient-to-b from-slate-50/35 via-white to-white',
-    topBar: 'bg-slate-500',
-    iconBox: 'bg-slate-100 border-slate-300 text-slate-700',
-    divider: 'border-slate-200',
-    trendBadge: 'text-slate-800 bg-slate-50 border-slate-300',
+    cardBorder: 'border-white/70 hover:border-slate-300 ring-1 ring-slate-500/[0.08]',
+    bgGradient: 'bg-white/75 backdrop-blur-xl bg-gradient-to-br from-slate-50/40 via-white/85 to-slate-100/20',
+    topBar: 'bg-gradient-to-r from-slate-400 to-slate-500',
+    iconBox: 'bg-slate-50/90 text-slate-600 border-slate-200/70 shadow-xs',
+    divider: 'border-slate-100/80',
+    trendBadge: 'text-slate-700 bg-slate-50/80 border-slate-200/70',
     trendIcon: 'text-slate-600',
-    hoverGlow: 'hover:shadow-slate-500/20 hover:shadow-md',
+    hoverGlow: 'hover:shadow-[0_12px_32px_rgba(100,116,139,0.12)] hover:-translate-y-1',
   }
 };
 
@@ -128,39 +128,39 @@ export default function KPICard({
             handleCardClick(e);
           }
         }}
-        className={`p-2 sm:px-2.5 sm:py-2 pt-2.5 rounded-xl ${theme.bgGradient} border-2 ${theme.cardBorder} ${theme.hoverGlow} transition-all duration-200 flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer shadow-xs`}
+        className={`p-3.5 sm:p-4 pt-4 rounded-2xl ${theme.bgGradient} ${theme.cardBorder} ${theme.hoverGlow} transition-all duration-300 flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden group relative cursor-pointer shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)]`}
       >
         {/* Top Accent Lining Highlight */}
         <div 
-          className={`absolute top-0 left-0 right-0 h-[3px] ${theme.topBar} transition-all duration-300 group-hover:h-[4px]`} 
+          className={`absolute top-0 left-0 right-0 h-[2.5px] ${theme.topBar} transition-all duration-300 group-hover:h-[3.5px]`} 
           aria-hidden="true"
         />
 
         <div>
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider leading-tight block truncate font-sans">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider leading-tight block truncate font-sans">
               {typeof title === 'string' ? t(title) : title}
             </span>
             {Icon && (
-              <div className={`w-5 h-5 rounded-md ${theme.iconBox} border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-2xs`}>
-                <Icon className="w-3 h-3" />
+              <div className={`w-7 h-7 rounded-xl ${theme.iconBox} border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-2xs`}>
+                <Icon className="w-3.5 h-3.5" />
               </div>
             )}
           </div>
-          <div className="text-xs sm:text-sm font-black text-slate-900 tracking-tight font-sans tabular-nums my-0.5 leading-tight">
+          <div className="text-base sm:text-lg font-bold text-slate-900 tracking-tight font-sans tabular-nums mt-1 mb-0.5 leading-tight">
             {typeof value === 'string' ? t(value) : value}
           </div>
         </div>
 
         {(subtext || trend) && (
-          <div className={`mt-0.5 pt-1.5 border-t ${theme.divider} flex items-center justify-between text-[10px] text-slate-700 gap-1 min-w-0`}>
+          <div className={`mt-2 pt-2 border-t ${theme.divider} flex items-center justify-between text-[11px] text-slate-500 gap-1.5 min-w-0`}>
             {subtext && (
-              <span className="text-slate-600 text-[10px] font-medium leading-tight truncate flex-1 min-w-0" title={typeof subtext === 'string' ? t(subtext) : subtext}>
+              <span className="text-slate-500 text-[11px] font-medium leading-tight truncate flex-1 min-w-0" title={typeof subtext === 'string' ? t(subtext) : subtext}>
                 {typeof subtext === 'string' ? t(subtext) : subtext}
               </span>
             )}
             {trend && (
-              <span className={`inline-flex items-center gap-1 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${theme.trendBadge}`}>
+              <span className={`inline-flex items-center gap-1 shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${theme.trendBadge}`}>
                 {trendType === 'up' ? (
                   <TrendingUp className={`w-2.5 h-2.5 ${theme.trendIcon} shrink-0`} />
                 ) : trendType === 'down' ? (

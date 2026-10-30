@@ -202,7 +202,25 @@ export async function getAccurateDeviceLocation(options = {}) {
   // Step 0: Priority 1 - Native Flutter Hardware GPS Fix via Bridge (if running in mobile app)
   if (nativeTracking.isNativeApp()) {
     try {
-      const nativeFix = await nativeTracking.requestImmediateFix(5000);
+      const cached = nativeTracking.getLatestNativeFix();
+      if (cached && cached.lat && cached.lng && !forceFresh) {
+        const nLat = Number(Number(cached.lat).toFixed(6));
+        const nLng = Number(Number(cached.lng).toFixed(6));
+        const addrInfo = await resolveAccurateAddress(nLat, nLng);
+        return {
+          lat: nLat,
+          lng: nLng,
+          accuracy: Math.round(cached.accuracy || 10),
+          timestamp: cached.timestamp || new Date().toISOString(),
+          address: addrInfo.address,
+          landmarkName: addrInfo.landmarkName,
+          shortName: addrInfo.shortName,
+          source: 'NATIVE_HARDWARE_GPS',
+          isFallback: false
+        };
+      }
+
+      const nativeFix = await nativeTracking.requestImmediateFix(2500);
       if (nativeFix && nativeFix.lat && nativeFix.lng) {
         const nLat = Number(Number(nativeFix.lat).toFixed(6));
         const nLng = Number(Number(nativeFix.lng).toFixed(6));
@@ -239,7 +257,7 @@ export async function getAccurateDeviceLocation(options = {}) {
     try {
       const pos = await tryGeo({
         enableHighAccuracy: true,
-        timeout: 9000,
+        timeout: 3500,
         maximumAge: forceFresh ? 0 : 30000
       });
 
@@ -267,7 +285,7 @@ export async function getAccurateDeviceLocation(options = {}) {
     try {
       const pos = await tryGeo({
         enableHighAccuracy: false,
-        timeout: 8000,
+        timeout: 2500,
         maximumAge: forceFresh ? 0 : 120000
       });
 

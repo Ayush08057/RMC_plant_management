@@ -42,8 +42,8 @@
 
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background-color: #F5F9FF;
-    color: #000000;
+    background-color: #f8fafc;
+    color: #0f172a;
     overflow: hidden !important;
     letter-spacing: -0.011em;
     line-height: 1.5;
@@ -287,39 +287,27 @@ body,
   color: #0f172a;
 }
 
-/* Headings, KPI values, bold titles, table header labels on light surfaces */
+/* Professional Typography Contrast & Balance */
 .app-shell main h1,
 .app-shell main h2,
-.app-shell main h3,
-.app-shell main h4,
-.app-shell main h5,
-.app-shell main h6,
-.app-shell table th:not([class*="text-white"]):not([class*="text-emerald-"]):not([class*="text-amber-"]):not(thead[class*="bg-"] *):not(tr[class*="bg-"] *):not(thead *),
-.app-shell table td:not([class*="text-white"]):not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-red-"]),
-.bg-white .font-black:not(thead *),
-.bg-white .font-bold:not(thead *),
-.bg-white .font-semibold:not(thead *),
-[class*="text-slate-950"]:not(thead *),
-[class*="text-slate-900"]:not(thead *),
-[class*="text-slate-800"]:not(thead *),
-[class*="text-slate-700"]:not(thead *),
-[class*="text-gray-900"]:not(thead *),
-[class*="text-gray-800"]:not(thead *),
-[class*="text-gray-700"]:not(thead *) {
+.app-shell main h3 {
   color: #0f172a !important;
+  letter-spacing: -0.022em;
 }
 
-/* Make all muted/secondary labels, descriptions, and subtexts dark and readable */
+.app-shell main h4,
+.app-shell main h5,
+.app-shell main h6 {
+  color: #1e293b !important;
+  letter-spacing: -0.015em;
+}
+
+/* Clear Visual Hierarchy for Secondary text */
 .app-shell main p:not([class*="text-white"]):not(.app-sidebar *):not(thead *),
-.app-shell main label:not([class*="text-white"]):not(.app-sidebar *):not(thead *),
-.app-shell main span:not([class*="text-white"]):not(button *):not(.app-sidebar *):not(thead *):not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-red-"]),
-.app-shell main [class*="text-slate-600"]:not(.app-sidebar *):not(thead *),
+.app-shell main .text-muted,
 .app-shell main [class*="text-slate-500"]:not(.app-sidebar *):not(thead *),
-.app-shell main [class*="text-slate-400"]:not(.app-sidebar *):not(thead *),
-.app-shell main [class*="text-gray-600"]:not(.app-sidebar *):not(thead *),
-.app-shell main [class*="text-gray-500"]:not(.app-sidebar *):not(thead *),
-.app-shell main [class*="text-gray-400"]:not(.app-sidebar *):not(thead *) {
-  color: #1e293b !important; /* Deep dark slate - high readability */
+.app-shell main [class*="text-slate-400"]:not(.app-sidebar *):not(thead *) {
+  color: #475569 !important; /* Refined Slate-600: clean, readable, not harsh pitch-black */
 }
 
 /* Input, select & textarea text visibility */
@@ -328,7 +316,7 @@ input, select, textarea {
   font-weight: 500;
 }
 input::placeholder, textarea::placeholder {
-  color: #64748b !important;
+  color: #94a3b8 !important;
 }
 
 /* ========================================================
@@ -489,26 +477,20 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* Elevate sub-11px micro-text to legible mobile standards across all cards, tags, and tables */
+/* Elevate sub-11px micro-text cleanly on mobile without distorting hierarchy */
 @media screen and (max-width: 640px) {
   [class*="text-[8px]"],
   [class*="text-[8.5px]"],
   [class*="text-[9px]"],
   [class*="text-[9.5px]"] {
-    font-size: 11px !important;
-    line-height: 1.2rem !important;
-    letter-spacing: 0.02em !important;
+    font-size: 10px;
+    line-height: 1.15rem;
   }
 
   [class*="text-[10px]"],
   [class*="text-[10.5px]"] {
-    font-size: 11.5px !important;
-    line-height: 1.25rem !important;
-  }
-
-  [class*="text-[11px]"] {
-    font-size: 12px !important;
-    line-height: 1.25rem !important;
+    font-size: 10.5px;
+    line-height: 1.2rem;
   }
 }
 

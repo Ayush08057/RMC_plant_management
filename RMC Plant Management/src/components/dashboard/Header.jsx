@@ -228,7 +228,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
   return (
     <>
-      <header className="sticky top-0 z-40 h-14 w-full bg-gradient-to-r from-white via-[#F8FAFF] to-[#EAF3FF]/80 backdrop-blur-md border-b border-[#D4E4F7] shadow-2xs flex items-center justify-between px-2 sm:px-4 lg:px-6 gap-1.5 sm:gap-4 shrink-0">
+      <header className="sticky top-0 z-40 h-14 w-full bg-white/75 backdrop-blur-xl border-b border-white/80 ring-1 ring-slate-900/[0.04] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] flex items-center justify-between px-3 sm:px-5 lg:px-6 gap-2 sm:gap-4 shrink-0">
         {/* Left: Sidebar Toggle & Workspace Selector */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 max-w-[55%] sm:max-w-none">
           {/* Mobile-only menu toggle (hidden on desktop) */}
@@ -236,10 +236,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             type="button"
             onClick={() => (onToggleSidebar ? onToggleSidebar() : onOpenSidebar())}
             aria-label="Open sidebar menu"
-            className="md:hidden p-1.5 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-[#1D5FA7] hover:text-[#123B6D] hover:bg-[#EAF3FF] transition-colors cursor-pointer shrink-0"
+            className="md:hidden p-1.5 rounded-xl bg-white/70 border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-700 hover:text-slate-900 hover:bg-white transition-colors cursor-pointer shrink-0"
             title="Open Menu"
           >
-            <Menu className="w-4 h-4 text-[#1D5FA7]" />
+            <Menu className="w-4 h-4 text-slate-700" />
           </button>
 
           {/* Plant / Company Selector */}
@@ -255,10 +255,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 setShowPlantPicker((prev) => !prev);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] border border-[#D4E4F7] text-black transition-colors cursor-pointer shadow-2xs min-w-0"
+              className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 transition-all cursor-pointer shadow-2xs min-w-0"
               title={`Active: ${selectedCompany.name} • Click to switch, add, or delete company`}
             >
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#EAF3FF] border border-[#D4E4F7] text-[#1D5FA7] flex items-center justify-center shrink-0 overflow-hidden">
+              <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
                 <img 
                   src={selectedCompany?.logo || defaultLogo} 
                   alt={selectedCompany.name} 
@@ -270,15 +270,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 />
               </div>
               <div className="text-left min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-black block leading-tight truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[180px] md:max-w-none">
+                <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
                   {selectedCompany.name}
                 </span>
-                <span className="text-[11px] text-slate-700 font-normal hidden sm:flex items-center gap-1">
-                  <MapPin className="w-2.5 h-2.5 shrink-0 text-[#1D5FA7]" />
-                  <span className="truncate max-w-[120px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
+                <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
+                  <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                  <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
                 </span>
               </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-[#1D5FA7] shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Plant Picker Dropdown */}
@@ -287,15 +287,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 id="company-dropdown-menu"
                 role="listbox"
                 aria-label="Company Workspaces"
-                className="fixed inset-x-3 top-15 sm:inset-x-auto sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-1.5 w-auto sm:w-88 max-w-[calc(100vw-24px)] rounded-xl bg-white border border-[#D4E4F7] text-black shadow-xl p-3 z-50 animate-pop-in text-xs"
+                className="fixed inset-x-3 top-15 sm:inset-x-auto sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-1.5 w-auto sm:w-88 max-w-[calc(100vw-24px)] rounded-2xl bg-white/90 backdrop-blur-2xl border border-white/80 ring-1 ring-slate-900/[0.06] text-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-3 z-50 animate-pop-in text-xs"
               >
-                <div className="flex items-center justify-between pb-2 border-b border-[#D4E4F7] mb-2 gap-2">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <Building2 className="w-4 h-4 text-[#1D5FA7] shrink-0" />
-                    <span className="font-bold text-black uppercase tracking-wide text-xs truncate">{t('Company Workspaces')}</span>
+                    <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span className="font-bold text-slate-900 uppercase tracking-wide text-xs truncate">{t('Company Workspaces')}</span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[11px] text-black font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
+                    <span className="text-[11px] text-slate-700 font-mono font-semibold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                       {companies.length} {companies.length === 1 ? t('Company') : t('Companies')}
                     </span>
                   </div>
@@ -307,10 +307,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                     return (
                       <div
                         key={company.id}
-                        className={`group w-full p-2 rounded-lg text-left transition-colors flex items-center justify-between border ${
+                        className={`group w-full p-2 rounded-xl text-left transition-colors flex items-center justify-between border ${
                           isActive
-                            ? 'bg-[#EAF3FF] border-[#246BCE] text-black font-medium'
-                            : 'bg-white hover:bg-[#F5F9FF] border-[#D4E4F7] text-black'
+                            ? 'bg-blue-50/70 border-blue-200 text-slate-900 font-medium'
+                            : 'bg-white hover:bg-slate-50 border-slate-100 text-slate-800'
                         }`}
                       >
                         <button
@@ -323,8 +323,8 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                         >
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border overflow-hidden ${
                             isActive
-                              ? 'bg-[#1D5FA7] border-[#1D5FA7] text-white shadow-xs'
-                              : 'bg-[#F5F9FF] border-[#D4E4F7] text-[#1D5FA7]'
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                              : 'bg-slate-50 border-slate-200 text-blue-600'
                           }`}>
                             <img 
                               src={company.logo || defaultLogo} 
@@ -338,16 +338,16 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                           </div>
                           <div className="min-w-0 flex-1 pr-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="block font-bold text-xs sm:text-sm truncate text-black">{company.name}</span>
-                              {isActive && <Check className="w-3.5 h-3.5 text-[#1D5FA7] shrink-0" />}
+                              <span className="block font-bold text-xs sm:text-sm truncate text-slate-900">{company.name}</span>
+                              {isActive && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
                             </div>
-                            <span className="text-[11px] text-slate-700 flex items-center gap-1 truncate">
-                              <MapPin className="w-2.5 h-2.5 shrink-0 text-[#1D5FA7]" />
+                            <span className="text-[11px] text-slate-500 flex items-center gap-1 truncate">
+                              <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
                               <span className="truncate">{company.location || t('Company workspace')}</span>
                               {company.type && (
                                 <>
                                   <span>•</span>
-                                  <span className="text-[10px] font-mono text-black font-bold">{t(company.type)}</span>
+                                  <span className="text-[10px] font-mono text-slate-600 font-semibold">{t(company.type)}</span>
                                 </>
                               )}
                             </span>
@@ -365,10 +365,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                                 setShowPlantPicker(false);
                               }}
                               title={`Delete company ${company.name}`}
-                              className="p-1.5 rounded-md text-red-600 hover:text-black hover:bg-red-600 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
                               aria-label={`Delete ${company.name}`}
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-black hover:text-black" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         )}
@@ -378,11 +378,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 </div>
 
                 {canManageCompanies && (
-                  <div className="mt-2.5 pt-2 border-t border-[#D4E4F7]">
+                  <div className="mt-2.5 pt-2 border-t border-slate-100">
                     <button
                       type="button"
                       onClick={openAddPlantModal}
-                      className="w-full py-2 px-3 rounded-lg text-center text-xs font-bold text-white bg-[#1D5FA7] hover:bg-[#123B6D] transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                      className="w-full py-2 px-3 rounded-xl text-center text-xs font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-3.5 h-3.5 text-white" />
                       <span>{t('Add New Company Workspace')}</span>
@@ -395,17 +395,17 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
         </div>
 
         {/* Right: Language Switcher, Notifications & Sign Out */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
           {/* Distinct Language Options (English & Marathi Separate with Mobile Shortcut) */}
-          <div className="flex items-center bg-[#F5F9FF] p-0.5 rounded-lg border border-[#D4E4F7] text-xs font-bold shrink-0">
+          <div className="flex items-center bg-white/60 backdrop-blur-md p-0.5 rounded-xl border border-white/80 ring-1 ring-slate-900/[0.04] text-xs font-semibold shrink-0">
             <button
               type="button"
               onClick={() => setLanguage('en')}
-              className={`px-1.5 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer text-[11px] sm:text-xs ${
+              className={`px-2 sm:px-3 py-1 rounded-lg transition-all cursor-pointer text-[11px] sm:text-xs font-semibold ${
                 language === 'en'
-                  ? 'bg-[#1D5FA7] text-white shadow-2xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
               title="English"
             >
@@ -415,10 +415,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             <button
               type="button"
               onClick={() => setLanguage('mr')}
-              className={`px-1.5 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer text-[11px] sm:text-xs ${
+              className={`px-2 sm:px-3 py-1 rounded-lg transition-all cursor-pointer text-[11px] sm:text-xs font-semibold ${
                 language === 'mr'
-                  ? 'bg-[#1D5FA7] text-white shadow-2xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
               title="मराठी"
             >
@@ -439,11 +439,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 setShowNotifications((prev) => !prev);
                 setShowPlantPicker(false);
               }}
-              className="p-1.5 sm:p-2 rounded-lg bg-[#F5F9FF] border border-[#D4E4F7] text-black hover:bg-[#EAF3FF] relative cursor-pointer shadow-2xs transition-colors shrink-0"
+              className="p-2 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-700 relative cursor-pointer shadow-2xs transition-colors shrink-0"
             >
-              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1D5FA7]" />
+              <Bell className="w-4 h-4 text-slate-600" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 w-2 h-2 rounded-full bg-[#246BCE]" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
               )}
             </button>
 
@@ -452,16 +452,16 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 id="notifications-popover-menu"
                 role="region"
                 aria-label="Notifications Panel"
-                className="fixed inset-x-3 top-15 sm:inset-x-auto sm:absolute sm:right-0 sm:left-auto sm:top-full sm:mt-1.5 w-auto sm:w-80 max-w-[calc(100vw-24px)] rounded-xl bg-white border border-[#D4E4F7] text-black shadow-xl p-3 z-50 animate-pop-in text-xs"
+                className="fixed inset-x-3 top-15 sm:inset-x-auto sm:absolute sm:right-0 sm:left-auto sm:top-full sm:mt-1.5 w-auto sm:w-80 max-w-[calc(100vw-24px)] rounded-2xl bg-white/90 backdrop-blur-2xl border border-white/80 ring-1 ring-slate-900/[0.06] text-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-3 z-50 animate-pop-in text-xs"
               >
-                <div className="flex items-center justify-between pb-2 border-b border-[#D4E4F7] mb-2 gap-2">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-xs sm:text-sm font-bold text-black truncate">{t('Notifications')}</span>
-                    <span className="text-[11px] text-[#1D5FA7] font-mono font-bold bg-[#EAF3FF] px-2 py-0.5 rounded border border-[#D4E4F7]">
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">{t('Notifications')}</span>
+                    <span className="text-[11px] text-blue-700 font-mono font-semibold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/80">
                       {(notifications || []).length}
                     </span>
                     {unreadCount > 0 && (
-                      <span className="text-[11px] font-mono font-bold bg-blue-100 px-2 py-0.5 rounded text-blue-800">
+                      <span className="text-[11px] font-mono font-semibold bg-blue-100 px-2 py-0.5 rounded-full text-blue-800">
                         {unreadCount} {t('new')}
                       </span>
                     )}
@@ -471,7 +471,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       <button
                         type="button"
                         onClick={() => (notifications || []).filter((n) => !n.read).forEach((n) => markNotificationRead(n.id))}
-                        className="text-[11px] text-[#1D5FA7] hover:underline font-bold cursor-pointer"
+                        className="text-[11px] text-blue-600 hover:underline font-semibold cursor-pointer"
                       >
                         {t('Mark all read')}
                       </button>
@@ -480,7 +480,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                       <button
                         type="button"
                         onClick={clearNotifications}
-                        className="text-[11px] text-slate-700 hover:text-black hover:underline font-mono font-bold cursor-pointer"
+                        className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline font-mono font-medium cursor-pointer"
                       >
                         {t('Clear All')}
                       </button>
@@ -491,34 +491,34 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                 <div className="space-y-1.5 max-h-[60vh] sm:max-h-64 overflow-y-auto pr-0.5">
                   {!notifications || notifications.length === 0 ? (
                     <div className="text-center py-6 px-4">
-                      <div className="w-9 h-9 mx-auto rounded-full bg-[#F5F9FF] border border-[#D4E4F7] flex items-center justify-center text-[#1D5FA7] mb-2">
+                      <div className="w-9 h-9 mx-auto rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 mb-2">
                         <Bell className="w-4 h-4 opacity-60" />
                       </div>
-                      <p className="text-sm font-bold text-black">{t('No notifications')}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{t("You're all caught up with current updates.")}</p>
+                      <p className="text-sm font-bold text-slate-900">{t('No notifications')}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{t("You're all caught up with current updates.")}</p>
                     </div>
                   ) : (
                     notifications.map((n) => (
                       <div
                         key={n.id}
                         onClick={() => !n.read && markNotificationRead(n.id)}
-                        className={`p-2.5 rounded-lg border text-left transition-colors ${
+                        className={`p-2.5 rounded-xl border text-left transition-colors ${
                           n.read
-                            ? 'bg-[#F5F9FF] border-[#D4E4F7] opacity-75 cursor-default'
-                            : 'bg-[#EAF3FF] border-[#246BCE]/40 hover:border-[#246BCE] cursor-pointer'
+                            ? 'bg-slate-50/70 border-slate-100 opacity-75 cursor-default'
+                            : 'bg-blue-50/50 border-blue-200 hover:border-blue-300 cursor-pointer'
                         }`}
                         title={n.read ? 'Notification read' : 'Click to mark as read'}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {!n.read && (
-                              <span className="w-2 h-2 rounded-full bg-[#1D5FA7] shrink-0" />
+                              <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
                             )}
-                            <span className="text-xs sm:text-sm font-bold text-black truncate">{typeof n.title === 'string' ? t(n.title) : n.title}</span>
+                            <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">{typeof n.title === 'string' ? t(n.title) : n.title}</span>
                           </div>
-                          <span className="text-[11px] text-slate-600 font-mono shrink-0">{n.time}</span>
+                          <span className="text-[11px] text-slate-400 font-mono shrink-0">{n.time}</span>
                         </div>
-                        <p className="text-xs text-slate-800 mt-0.5 leading-relaxed break-words">{typeof n.desc === 'string' ? t(n.desc) : n.desc}</p>
+                        <p className="text-xs text-slate-600 mt-0.5 leading-relaxed break-words">{typeof n.desc === 'string' ? t(n.desc) : n.desc}</p>
                       </div>
                     ))
                   )}
@@ -531,11 +531,11 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           <button
             type="button"
             onClick={logout}
-            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-[#F5F9FF] hover:bg-[#EAF3FF] text-black border border-[#D4E4F7] hover:border-[#1D5FA7] text-xs font-bold transition-colors cursor-pointer shadow-2xs shrink-0"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-rose-50/80 backdrop-blur-md text-slate-700 hover:text-rose-600 border border-white/80 hover:border-rose-200/80 ring-1 ring-slate-900/[0.04] text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0"
             title={t('Sign Out of active session')}
             aria-label={t('Sign Out')}
           >
-            <LogOut className="w-3.5 h-3.5 text-[#1D5FA7]" />
+            <LogOut className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">{t('Sign Out')}</span>
           </button>
         </div>
