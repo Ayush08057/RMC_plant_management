@@ -427,19 +427,22 @@ export default function MobilePunchWidget({
         shortZone: 'Highway QC Lab'
       } : null)));
 
-      // 2. Obtain fresh, high-precision GPS location (fast race to avoid freezing UI)
+      // 2. Instant GPS lookup: use in-memory GPS fix immediately (0ms latency)
       let currentGps = gpsCoords;
-      try {
-        const fresh = await Promise.race([
-          acquireGpsLocation(true, defaultStation),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('GPS fast timeout')), 3000))
-        ]);
-        if (fresh && fresh.lat) {
-          currentGps = fresh;
-        }
-      } catch {
-        if (!currentGps || !currentGps.lat) {
-          currentGps = gpsCoords;
+      if (!currentGps || !currentGps.lat) {
+        // Only if GPS is not yet in memory, race for a fast fix capped at 700ms
+        try {
+          const fresh = await Promise.race([
+            acquireGpsLocation(false, defaultStation),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('GPS fast timeout')), 700))
+          ]);
+          if (fresh && fresh.lat) {
+            currentGps = fresh;
+          }
+        } catch {
+          if (!currentGps || !currentGps.lat) {
+            currentGps = gpsCoords;
+          }
         }
       }
 

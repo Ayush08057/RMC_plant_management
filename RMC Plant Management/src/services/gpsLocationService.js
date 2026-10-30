@@ -34,7 +34,7 @@ export async function resolveAccurateAddress(lat, lng) {
   // 1. Try OpenStreetMap Nominatim reverse geocoding first for real-world landmark resolution
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 1000);
 
     const resp = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLng}&zoom=18&addressdetails=1`,

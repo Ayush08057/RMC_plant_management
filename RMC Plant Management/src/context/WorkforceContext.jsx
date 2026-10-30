@@ -1762,12 +1762,10 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // Authoritative Cloud Firestore persistence with resilient offline fallback
-    try {
-      await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
-    } catch (fsErr) {
+    // Authoritative Cloud Firestore persistence with resilient offline fallback (asynchronous non-blocking)
+    saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch((fsErr) => {
       console.warn('Firestore attendance sync notice (persisting locally):', fsErr.message);
-    }
+    });
 
     setData((prev) => {
       const prevList = prev.attendance || [];
@@ -2018,12 +2016,10 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // Authoritative Cloud Firestore persistence with resilient offline fallback
-    try {
-      await saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord);
-    } catch (fsErr) {
+    // Authoritative Cloud Firestore persistence with resilient offline fallback (asynchronous non-blocking)
+    saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord).catch((fsErr) => {
       console.warn('Firestore attendance checkout sync notice (persisting locally):', fsErr.message);
-    }
+    });
 
     setData((prev) => {
       const prevList = prev.attendance || [];
