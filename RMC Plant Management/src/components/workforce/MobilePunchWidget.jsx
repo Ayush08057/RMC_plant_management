@@ -498,6 +498,18 @@ export default function MobilePunchWidget({
       _finished = true;
 
       // ── Step 4: Non-blocking post-punch side-effects ──
+      // Broadcast live initial GPS position immediately to admin dashboard radar
+      try {
+        updateLiveEmployeeLocation(targetId, {
+          lat: Number(currentGps.lat),
+          lng: Number(currentGps.lng),
+          accuracy: currentGps.accuracy || 20,
+          timestamp: currentGps.timestamp || new Date().toISOString(),
+          address,
+          landmarkName,
+        });
+      } catch (_) {}
+
       // Record breadcrumb for route trail
       try { recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`); } catch (_) {}
 

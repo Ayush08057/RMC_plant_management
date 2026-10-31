@@ -38,6 +38,7 @@ import { resolveAccurateAddress } from '../services/gpsLocationService.js';
 import { recordEmployeeBreadcrumb, addEmployeeVisitedStop } from '../services/routeTrackingService.js';
 import { nativeTracking } from '../services/nativeTrackingBridge.js';
 import { cleanRawRoutePipeline, calculateAccurateRouteDistanceKm } from '../utils/routeCleanUtils.js';
+import { realtimeSync } from '../services/realtimeTelemetrySync.js';
 
 const WorkforceContext = createContext(null);
 
@@ -432,10 +433,33 @@ export const WorkforceProvider = ({ children }) => {
           finalItems = sanitizeLoans(cloudItems);
         }
         if (isCurrentCompany && Array.isArray(finalItems)) {
-          setData((prev) => ({
-            ...prev,
-            [stateKey]: finalItems,
-          }));
+          setData((prev) => {
+            if (stateKey === 'attendance') {
+              // Merge cloud items with local state so un-synced punches (or rate-limited writes) are not wiped out by an empty cloud collection
+              const prevAtt = prev.attendance || [];
+              const mergedMap = new Map();
+              
+              // Seed from existing local state first
+              prevAtt.forEach((item) => {
+                if (item && item.id) mergedMap.set(item.id, item);
+              });
+
+              // Apply authoritative cloud updates over local state
+              finalItems.forEach((item) => {
+                if (item && item.id) mergedMap.set(item.id, item);
+              });
+
+              return {
+                ...prev,
+                attendance: sanitizeAttendance(Array.from(mergedMap.values())),
+              };
+            }
+
+            return {
+              ...prev,
+              [stateKey]: finalItems,
+            };
+          });
         }
       });
       if (typeof unsub === 'function') unsubs.push(unsub);
@@ -483,6 +507,54 @@ export const WorkforceProvider = ({ children }) => {
     });
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  // Real-time bidirectional telemetry & punch-in sync (Zero-delay WebSocket <50ms)
+  useEffect(() => {
+    const unsubAtt = realtimeSync.onAttendance((incomingRecord) => {
+      if (!incomingRecord || (!incomingRecord.id && !incomingRecord.employeeId)) return;
+      const today = new Date().toISOString().split('T')[0];
+      const recDate = incomingRecord.date || (incomingRecord.createdAt ? incomingRecord.createdAt.split('T')[0] : today);
+      const recEmpId = (incomingRecord.employeeId || incomingRecord.id || '').toString().trim().toUpperCase();
+
+      setData((prev) => {
+        const prevList = prev.attendance || [];
+        const idx = prevList.findIndex((a) => {
+          const aId = (a.id || '').toString().trim().toUpperCase();
+          const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+          const aDate = a.date || (a.createdAt ? a.createdAt.split('T')[0] : '');
+          const isSameId = aId === (incomingRecord.id || '').toUpperCase() || aEmpId === recEmpId;
+          const isSameRole = (
+            (recEmpId.includes('DIS') && aEmpId.includes('DIS')) ||
+            (recEmpId.includes('SS') && aEmpId.includes('SS')) ||
+            (recEmpId.includes('PM') && aEmpId.includes('PM')) ||
+            (recEmpId.includes('QC') && aEmpId.includes('QC')) ||
+            (recEmpId.includes('ACC') && aEmpId.includes('ACC')) ||
+            (recEmpId.includes('DRV') && aEmpId.includes('DRV'))
+          );
+          return (aId === (incomingRecord.id || '').toUpperCase()) || (aDate === recDate && (isSameId || isSameRole));
+        });
+
+        let updatedList;
+        if (idx >= 0) {
+          updatedList = [...prevList];
+          updatedList[idx] = { ...prevList[idx], ...incomingRecord };
+        } else {
+          updatedList = [incomingRecord, ...prevList];
+        }
+        return { ...prev, attendance: sanitizeAttendance(updatedList) };
+      });
+    });
+
+    const unsubLoc = realtimeSync.onLocation(({ employeeId, location }) => {
+      if (!employeeId || !location || !location.lat) return;
+      updateLiveEmployeeLocation(employeeId, location, { skipBroadcast: true });
+    });
+
+    return () => {
+      if (typeof unsubAtt === 'function') unsubAtt();
+      if (typeof unsubLoc === 'function') unsubLoc();
     };
   }, []);
 
@@ -1680,6 +1752,9 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
+    // Instant Broadcast to Admin Dashboard via real-time telemetry (<50ms)
+    realtimeSync.publishAttendance(newRecord);
+
     // Authoritative Cloud Firestore persistence with resilient offline fallback (asynchronous non-blocking)
     saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch((fsErr) => {
       console.warn('Firestore attendance sync notice (persisting locally):', fsErr.message);
@@ -1934,6 +2009,9 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
+    // Instant Broadcast to Admin Dashboard via real-time telemetry (<50ms)
+    realtimeSync.publishAttendance(updatedRecord);
+
     // Authoritative Cloud Firestore persistence with resilient offline fallback (asynchronous non-blocking)
     saveDocumentWithId(COLLECTIONS.ATTENDANCE, updatedRecord.id, updatedRecord).catch((fsErr) => {
       console.warn('Firestore attendance checkout sync notice (persisting locally):', fsErr.message);
@@ -2074,12 +2152,18 @@ export const WorkforceProvider = ({ children }) => {
    * Continuous real-time location update for clocked-in personnel
    * Appends GPS breadcrumbs into routeTrail and updates lastKnownLocation
    */
-  const updateLiveEmployeeLocation = async (employeeId, locationData) => {
+  const updateLiveEmployeeLocation = async (employeeId, locationData, options = {}) => {
     if (!employeeId || !locationData || !locationData.lat || !locationData.lng) return;
     const canonicalEmpId = employeeId.toString().trim().toUpperCase();
     if (canonicalEmpId.includes('ACC') && (Number(locationData.lat) >= 17.5 || Number(locationData.lat) < 16.5)) {
       return; // Ignore remote out-of-bounds coordinates (e.g. Chhindwara) for Accountant
     }
+
+    // Broadcast moving telemetry immediately across network (<50ms)
+    if (!options.skipBroadcast) {
+      realtimeSync.publishLocation(canonicalEmpId, locationData);
+    }
+
     const today = new Date().toISOString().split('T')[0];
 
     setData((prev) => {
@@ -2087,10 +2171,58 @@ export const WorkforceProvider = ({ children }) => {
       const pIdx = prevList.findIndex((a) => {
         const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
         const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        return aDate === today && (aEmpId === canonicalEmpId || a.id?.toUpperCase().includes(canonicalEmpId));
+        const isMatch = aEmpId === canonicalEmpId || a.id?.toUpperCase().includes(canonicalEmpId) ||
+          (canonicalEmpId.includes('DIS') && aEmpId.includes('DIS')) ||
+          (canonicalEmpId.includes('SS') && aEmpId.includes('SS')) ||
+          (canonicalEmpId.includes('PM') && aEmpId.includes('PM')) ||
+          (canonicalEmpId.includes('QC') && aEmpId.includes('QC')) ||
+          (canonicalEmpId.includes('ACC') && aEmpId.includes('ACC')) ||
+          (canonicalEmpId.includes('DRV') && aEmpId.includes('DRV'));
+        return aDate === today && isMatch;
       });
 
-      if (pIdx < 0) return prev;
+      if (pIdx < 0) {
+        // If employee is actively transmitting GPS telemetry today, automatically materialize attendance record!
+        const emp = (prev.employees || []).find((e) => (e.employeeId || e.id || '').toUpperCase() === canonicalEmpId) ||
+                    OFFICIAL_ROLE_ACCOUNTS.find((r) => (r.employeeId || r.id || '').toUpperCase() === canonicalEmpId);
+        const docId = "ATT-" + today.replace(/-/g, '') + "-" + canonicalEmpId.replace(/[^A-Z0-9_-]/g, '');
+        const timeNow = getNowIndian12Hr(false);
+        const autoPunchRecord = {
+          id: docId,
+          date: today,
+          employeeId: canonicalEmpId,
+          employeeName: emp?.name || canonicalEmpId,
+          role: emp?.role || 'Staff',
+          plant: emp?.plantLocation || (prev.plants && prev.plants[0]?.name) || 'Main Plant HQ',
+          punchIn: timeNow,
+          punchOut: null,
+          status: 'Present',
+          geofenceStatus: locationData.landmarkName || locationData.address || 'Live GPS Active',
+          lastKnownLocation: {
+            lat: Number(locationData.lat),
+            lng: Number(locationData.lng),
+            accuracy: locationData.accuracy || 20,
+            timestamp: new Date().toISOString(),
+            address: locationData.address || 'Live Telemetry',
+            landmarkName: locationData.landmarkName || 'Live Position'
+          },
+          routeTrail: [{
+            stopNo: 1,
+            title: locationData.landmarkName || 'Live Position',
+            category: 'Punch In',
+            address: locationData.address || `${Number(locationData.lat).toFixed(5)}°N, ${Number(locationData.lng).toFixed(5)}°E`,
+            time: timeNow,
+            lat: Number(locationData.lat),
+            lng: Number(locationData.lng),
+            status: 'Live',
+            distanceKm: 0.0,
+            notes: 'Real-time GPS telemetry'
+          }],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        return { ...prev, attendance: sanitizeAttendance([autoPunchRecord, ...prevList]) };
+      }
       const target = prevList[pIdx];
       const existingTrail = Array.isArray(target.routeTrail) ? [...target.routeTrail] : [];
 

@@ -695,7 +695,29 @@ export default function AttendanceManagementView({
         const aName = (a.employeeName || '').toString().trim().toLowerCase();
         const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
         const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        const idMatches = (aId === cleanTargetId || aId === empId || aId === empEmpId || (aName && empName && aName === empName) || (isEmpSupervisor && isASupervisor));
+        const isADispatcher = aId === 'DIS-001' || aId === 'USR-DIS-001' || aId.includes('DIS') || (a.role || '').toLowerCase().includes('dispatch');
+        const isEmpDispatcher = empId === 'DIS-001' || empEmpId === 'DIS-001' || empId === 'USR-DIS-001' || (emp.role || '').toLowerCase().includes('dispatch');
+        const isAQc = aId === 'QC-001' || aId === 'USR-QC-001' || aId.includes('QC') || (a.role || '').toLowerCase().includes('qc');
+        const isEmpQc = empId === 'QC-001' || empEmpId === 'QC-001' || empId === 'USR-QC-001' || (emp.role || '').toLowerCase().includes('qc');
+        const isAAcc = aId === 'ACC-001' || aId === 'USR-ACC-001' || aId.includes('ACC') || (a.role || '').toLowerCase().includes('account');
+        const isEmpAcc = empId === 'ACC-001' || empEmpId === 'ACC-001' || empId === 'USR-ACC-001' || (emp.role || '').toLowerCase().includes('account');
+        const isAPm = aId === 'PM-001' || aId === 'USR-PM-001' || aId.includes('PM') || (a.role || '').toLowerCase().includes('manager');
+        const isEmpPm = empId === 'PM-001' || empEmpId === 'PM-001' || empId === 'USR-PM-001' || (emp.role || '').toLowerCase().includes('manager');
+        const isADrv = aId === 'DRV-001' || aId === 'USR-DRV-001' || aId.includes('DRV') || (a.role || '').toLowerCase().includes('driver');
+        const isEmpDrv = empId === 'DRV-001' || empEmpId === 'DRV-001' || empId === 'USR-DRV-001' || (emp.role || '').toLowerCase().includes('driver');
+
+        const idMatches = (
+          aId === cleanTargetId || 
+          aId === empId || 
+          aId === empEmpId || 
+          (aName && empName && aName === empName) || 
+          (isEmpSupervisor && isASupervisor) ||
+          (isEmpDispatcher && isADispatcher) ||
+          (isEmpQc && isAQc) ||
+          (isEmpAcc && isAAcc) ||
+          (isEmpPm && isAPm) ||
+          (isEmpDrv && isADrv)
+        );
         const dateMatches = (aDate === selectedDate || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, ''))));
         return idMatches && dateMatches;
       }) || null;

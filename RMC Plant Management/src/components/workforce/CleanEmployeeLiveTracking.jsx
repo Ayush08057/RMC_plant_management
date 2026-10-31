@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { isAdminPerson } from '../../data/mockUsers';
+import { isAdminPerson, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { getEmployeeRouteDetails } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
@@ -39,15 +39,36 @@ export default function CleanEmployeeLiveTracking() {
 
   // Build authorized workforce list (strictly non-admin operational personnel)
   const staffList = useMemo(() => {
-    return (employees || [])
-      .filter((e) => !isAdminPerson(e))
-      .map((e) => ({
-        id: (e.id || e.employeeId || '').toString(),
-        employeeId: (e.employeeId || e.id || '').toString(),
-        name: e.name || 'Unnamed Employee',
-        role: e.role || 'Staff',
-        department: e.department || 'Operations'
-      }));
+    const map = new Map();
+
+    const addPerson = (person) => {
+      if (!person || isAdminPerson(person)) return;
+      const rawId = (person.employeeId || person.id || '').toString().trim().toUpperCase();
+      if (!rawId) return;
+      // Canonical key (e.g. DIS-001, QC-001, SS-001, ACC-001, PM-001, DRV-001)
+      let canonicalKey = rawId.replace(/^USR-/, '');
+      if (canonicalKey.includes('DIS')) canonicalKey = 'DIS-001';
+      else if (canonicalKey.includes('QC')) canonicalKey = 'QC-001';
+      else if (canonicalKey.includes('SS')) canonicalKey = 'SS-001';
+      else if (canonicalKey.includes('ACC')) canonicalKey = 'ACC-001';
+      else if (canonicalKey.includes('PM')) canonicalKey = 'PM-001';
+      else if (canonicalKey.includes('DRV')) canonicalKey = 'DRV-001';
+
+      if (!map.has(canonicalKey)) {
+        map.set(canonicalKey, {
+          id: canonicalKey,
+          employeeId: canonicalKey,
+          name: person.name || 'Staff Member',
+          role: person.role || 'Staff',
+          department: person.department || 'Operations'
+        });
+      }
+    };
+
+    (employees || []).forEach(addPerson);
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach(addPerson);
+
+    return Array.from(map.values());
   }, [employees]);
 
   // Auto-select first employee if none selected
@@ -77,15 +98,25 @@ export default function CleanEmployeeLiveTracking() {
   // Attendance record for active employee on the selected date
   const dayRecord = useMemo(() => {
     if (!activeEmployee) return null;
-    const cleanId = (activeEmployee.employeeId || activeEmployee.id).toUpperCase();
+    const cleanId = (activeEmployee.employeeId || activeEmployee.id || '').toString().trim().toUpperCase();
     const cleanName = (activeEmployee.name || '').toLowerCase().trim();
 
     return (attendance || []).find((a) => {
       const aDate = a.date || (a.createdAt ? a.createdAt.split('T')[0] : '');
       const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
       const aName = (a.employeeName || '').toString().trim().toLowerCase();
-      const isDateMatch = aDate === selectedDate;
-      const isIdMatch = aEmpId === cleanId || aEmpId.includes(cleanId) || (aName && cleanName && aName === cleanName);
+      const isDateMatch = aDate === selectedDate || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, '')));
+      const isIdMatch = (
+        aEmpId === cleanId ||
+        aEmpId.includes(cleanId) ||
+        (cleanId.includes('DIS') && aEmpId.includes('DIS')) ||
+        (cleanId.includes('SS') && aEmpId.includes('SS')) ||
+        (cleanId.includes('PM') && aEmpId.includes('PM')) ||
+        (cleanId.includes('ACC') && aEmpId.includes('ACC')) ||
+        (cleanId.includes('QC') && aEmpId.includes('QC')) ||
+        (cleanId.includes('DRV') && (aEmpId.includes('DRV') || aEmpId.includes('DV'))) ||
+        (aName && cleanName && aName === cleanName)
+      );
       return isDateMatch && isIdMatch;
     }) || null;
   }, [attendance, activeEmployee, selectedDate]);
@@ -134,7 +165,7 @@ export default function CleanEmployeeLiveTracking() {
       geofenceStatus: geofence,
       stationName: geofence,
       accuracy: dayRecord?.lastKnownLocation?.accuracy || dayRecord?.gpsLocation?.accuracy || 15,
-      routeTrail: isPunchedOut ? (dayRecord?.routeTrail || []) : []
+      routeTrail: dayRecord?.routeTrail || []
     };
   }, [activeEmployee, dayRecord, trackingStatus, isPunchedOut]);
 
