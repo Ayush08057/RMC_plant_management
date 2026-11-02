@@ -325,6 +325,17 @@ export default function MobilePunchWidget({
     return () => clearInterval(interval);
   }, [hasPunchedIn, hasPunchedOut, userTodayRecord?.punchIn]);
 
+  // Ensure native background foreground service stays active while on duty (even after app close/reopen)
+  useEffect(() => {
+    if (hasPunchedIn && !hasPunchedOut && activeEmployee) {
+      const targetId = activeEmployee.employeeId || activeEmployee.id;
+      nativeTracking.startForegroundTracking(targetId, activeEmployee.name || 'Employee', {
+        companyId: user?.companyId || 'sm-concretech',
+        attendanceDocId: userTodayRecord?.id || '',
+      });
+    }
+  }, [hasPunchedIn, hasPunchedOut, activeEmployee, userTodayRecord?.id, user?.companyId]);
+
   // Flip camera toggle
   const toggleCameraFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
