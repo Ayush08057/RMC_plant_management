@@ -415,8 +415,10 @@ export default function MobilePunchWidget({
       // Priority 2: Native Flutter hardware GPS bridge
       if (!currentGps || !currentGps.lat) {
         try {
-          const nativeFix = nativeTracking.getLatestNativeFix();
-          if (nativeFix && nativeFix.lat) currentGps = nativeFix;
+          currentGps = nativeTracking.getLatestNativeFix();
+          if (!currentGps || !currentGps.lat) {
+            currentGps = await nativeTracking.requestImmediateFix(1200);
+          }
         } catch (_) {}
       }
 
@@ -443,21 +445,15 @@ export default function MobilePunchWidget({
         }
       }
 
-      // Priority 4: Role-based default location (always succeeds instantly)
       if (!currentGps || !currentGps.lat) {
-        const role = (activeEmployee?.role || '').toLowerCase();
-        const id = (targetId || '').toUpperCase();
-        if (role.includes('supervisor') || id.includes('SS')) {
-          currentGps = { lat: 16.852000, lng: 74.590000, accuracy: 50, address: 'Godrej Green Acres Construction Site, Sangli, MH', landmarkName: 'Godrej Green Acres (Sangli)', source: 'ROLE_DEFAULT' };
-        } else if (role.includes('dispatch') || id.includes('DIS')) {
-          currentGps = { lat: 18.502390, lng: 73.847872, accuracy: 50, address: 'Narveer Tanaji Malusare Rd, Pune, MH', landmarkName: 'Dispatch Hub, Pune', source: 'ROLE_DEFAULT' };
-        } else if (role.includes('account') || id.includes('ACC')) {
-          currentGps = { lat: 16.858400, lng: 74.582400, accuracy: 50, address: 'APMC Market Yard, Sangli, MH 416416', landmarkName: 'Sangli Market Yard', source: 'ROLE_DEFAULT' };
-        } else if (role.includes('qc') || role.includes('quality') || id.includes('QC')) {
-          currentGps = { lat: 16.8300, lng: 74.6400, accuracy: 50, address: 'Miraj Industrial Corridor, Sangli, MH', landmarkName: 'Highway QC Lab', source: 'ROLE_DEFAULT' };
-        } else {
-          currentGps = { lat: 16.856800, lng: 74.586700, accuracy: 50, address: 'SM Concretech Plant, Sangli, MH', landmarkName: 'SM Concretech HQ, Sangli', source: 'PLANT_DEFAULT' };
-        }
+        currentGps = {
+          lat: 16.8568,
+          lng: 74.5867,
+          accuracy: 50,
+          address: 'Location Awaiting GPS Signal',
+          landmarkName: 'Awaiting Hardware GPS',
+          source: 'GPS_STANDBY'
+        };
       }
 
       const landmarkName = currentGps.landmarkName || currentGps.shortName || currentGps.address || `${Number(currentGps.lat).toFixed(4)}°N, ${Number(currentGps.lng).toFixed(4)}°E`;

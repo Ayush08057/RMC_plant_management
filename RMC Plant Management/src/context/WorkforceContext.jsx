@@ -1671,57 +1671,7 @@ export const WorkforceProvider = ({ children }) => {
 
     let effectiveGps = options.gpsLocation || (existingIndex >= 0 ? data.attendance[existingIndex].gpsLocation : null);
     let effectiveGeofence = options.geofenceStatus || options.gpsLocation?.landmarkName || options.gpsLocation?.address || (options.gpsLocation ? 'Live GPS Verified' : 'Location Not Available');
-
     let effectiveRouteTrail = options.routeTrail || (existingIndex >= 0 ? data.attendance[existingIndex].routeTrail : []) || [];
-    // PRESERVE TRUE HARDWARE GPS: Never overwrite real coordinates returned by the mobile phone!
-    // Fallback stations ONLY apply if the phone device returned null/empty coordinates.
-    if (!effectiveGps || !effectiveGps.lat) {
-      if (isAcc) {
-        effectiveGps = {
-          lat: 16.858400,
-          lng: 74.582400,
-          accuracy: 15,
-          landmarkName: 'Sangli Market Yard (APMC Commercial Hub)',
-          address: 'APMC Market Yard Area, Sangli, Maharashtra 416416',
-          shortName: 'Sangli Market Yard',
-          source: 'DEFAULT_OFFICE_HUB'
-        };
-        effectiveGeofence = 'Sangli Market Yard (APMC Commercial Hub)';
-      } else if (isDis) {
-        effectiveGps = {
-          lat: 18.502390,
-          lng: 73.847872,
-          accuracy: 25,
-          landmarkName: 'Narveer Tanaji Malusare Rd, Pune',
-          address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
-          shortName: 'Narveer Tanaji Malusare Rd, Pune',
-          source: 'DEFAULT_DISPATCH_HUB'
-        };
-        effectiveGeofence = 'Narveer Tanaji Malusare Rd, Pune';
-      } else if (isQc) {
-        effectiveGps = {
-          lat: 16.8300,
-          lng: 74.6400,
-          accuracy: 15,
-          landmarkName: 'Miraj Highway Package B Quality Lab, Sangli',
-          address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-          shortName: 'Highway QC Lab',
-          source: 'DEFAULT_QC_LAB'
-        };
-        effectiveGeofence = 'Miraj Highway Package B Quality Lab, Sangli';
-      } else if (isSup) {
-        effectiveGps = {
-          lat: 16.852000,
-          lng: 74.590000,
-          accuracy: 15,
-          landmarkName: 'Godrej Green Acres Construction Site, Sangli',
-          address: 'Near Government Colony, Sangli, Maharashtra 416416',
-          shortName: 'Godrej Green Acres (Sangli)',
-          source: 'DEFAULT_SITE_PROJECT'
-        };
-        effectiveGeofence = 'Godrej Green Acres Construction Site, Sangli';
-      }
-    }
 
     const newRecord = {
       ...(existingIndex >= 0 ? data.attendance[existingIndex] : {}),
@@ -2366,60 +2316,6 @@ export const WorkforceProvider = ({ children }) => {
     addAuditLog(`Visited Location Logged (${stopData.title})`, 'Tracking', `Staff: ${canonicalEmpId} | Site: ${stopData.title} | Time: ${stopData.time || '--'}`);
   };
 
-  // Continuous background location tracking for authenticated staff actively on duty
-  const currentEmpId = user?.employeeId || user?.id || '';
-  const isCurrentUserPunchedIn = Boolean((data.attendance || []).some((a) => {
-    const today = new Date().toISOString().split('T')[0];
-    const aDate = a.date || '';
-    const aEmpId = (a.employeeId || a.id || '').toUpperCase();
-    return aDate === today && aEmpId === currentEmpId.toUpperCase() && a.punchIn && !a.punchOut;
-  }));
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation || !user) return;
-    if (user.role === 'Admin') return;
-
-    const empId = user.employeeId || user.id;
-    if (!empId || !isCurrentUserPunchedIn) return;
-
-    let watchId;
-    try {
-      watchId = navigator.geolocation.watchPosition(
-        async (pos) => {
-          const lat = Number(pos.coords.latitude.toFixed(6));
-          const lng = Number(pos.coords.longitude.toFixed(6));
-          const accuracy = Math.round(pos.coords.accuracy || 20);
-
-          const isAccUser = (user?.role || '').toLowerCase().includes('account') || empId.toUpperCase().includes('ACC');
-          if (isAccUser && (lat >= 17.5 || lat < 16.5)) {
-            return; // Skip remote testing device GPS for Accountant
-          }
-
-          const addrInfo = await resolveAccurateAddress(lat, lng);
-          updateLiveEmployeeLocation(empId, {
-            lat,
-            lng,
-            accuracy,
-            address: addrInfo.address,
-            landmarkName: addrInfo.landmarkName
-          });
-          recordEmployeeBreadcrumb(empId, lat, lng, addrInfo.landmarkName);
-        },
-        (err) => {
-          console.warn('Live staff tracking watch notice:', err.message);
-        },
-        { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 }
-      );
-    } catch (e) {
-      console.warn('Geolocation watch failed:', e);
-    }
-
-    return () => {
-      if (watchId && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
-  }, [user?.employeeId, user?.id, user?.role, isCurrentUserPunchedIn]);
 
   const requestAttendanceCorrection = ({ employeeId, date, reason, requestedIn, requestedOut }) => {
     const emp = data.employees.find((e) => e.id === employeeId);
