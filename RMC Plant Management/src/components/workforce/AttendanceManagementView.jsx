@@ -55,6 +55,29 @@ import Modal from '../dashboard/Modal';
 import Toast from '../dashboard/Toast';
 import MobilePunchWidget from './MobilePunchWidget';
 
+function calculateLiveElapsedHours(punchIn, punchOut, storedWorkingHours, isOnline) {
+  if (storedWorkingHours !== undefined && storedWorkingHours !== null && Number(storedWorkingHours) > 0) {
+    return Number(Number(storedWorkingHours).toFixed(1));
+  }
+  if (punchIn && punchOut) {
+    const inMins = parseTimeToMinutes(punchIn);
+    const outMins = parseTimeToMinutes(punchOut);
+    let diff = outMins - inMins;
+    if (diff < 0) diff += 1440;
+    return Number(Math.max(0.1, diff / 60).toFixed(1));
+  }
+  if (isOnline && punchIn) {
+    const now = new Date();
+    const inMins = parseTimeToMinutes(punchIn);
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    let diff = nowMins - inMins;
+    if (diff < 0) diff += 1440;
+    const hrs = Number((diff / 60).toFixed(1));
+    return hrs > 0 ? hrs : 0.1;
+  }
+  return 0;
+}
+
 export default function AttendanceManagementView({
   defaultPlant = 'All Plants',
   employeeFilter = null,
@@ -245,6 +268,13 @@ export default function AttendanceManagementView({
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Live timer tick to dynamically recalculate working hours every 15 seconds
+  const [liveDutyTick, setLiveDutyTick] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setLiveDutyTick(Date.now()), 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Helper: Reliable staff profile photo / verified biometric selfie
   const getStaffPhoto = (staff) => {
@@ -791,8 +821,8 @@ export default function AttendanceManagementView({
         }
       }
 
-      // 2. Given Time / Duty Hours: Working for the given time or not? (Shift is for 9hr for all)
-      const currentHours = Number(record?.workingHours || (isOnline ? 4.5 : 0));
+      // 2. Given Time / Duty Hours: Dynamically calculate real live elapsed hours
+      const currentHours = calculateLiveElapsedHours(record?.punchIn, record?.punchOut, record?.workingHours, isOnline);
       const overtimeHours = Number(record?.overtimeHours || 0);
       let dutyComplianceLabel = 'Pending';
       let dutyComplianceBadge = 'slate';
@@ -823,7 +853,7 @@ export default function AttendanceManagementView({
         isReportDone,
         punchIn: record?.punchIn || null,
         punchOut: record?.punchOut || null,
-        workingHours: record?.workingHours || (isOnline ? 4.5 : null),
+        workingHours: currentHours,
         overtimeHours,
         statusLabel,
         statusTheme,
@@ -846,7 +876,7 @@ export default function AttendanceManagementView({
         todayWorkSummary,
       };
     });
-  }, [staffFiveRolesList, attendance, dailyWork, selectedDate]);
+  }, [staffFiveRolesList, attendance, dailyWork, selectedDate, liveDutyTick]);
 
   const fiveRolesStats = useMemo(() => {
     const total = fiveRolesAttendanceDirectory.length;
@@ -1316,7 +1346,9 @@ export default function AttendanceManagementView({
                   {displayedStaffList.map((staff) => {
                     const roleCat = getRoleCategory(staff.role);
                     const isClockedIn = Boolean(staff.punchIn);
-                    const hours = staff.workingHours || (staff.isOnline ? 4.5 : 0);
+                    const hours = (staff.workingHours !== null && staff.workingHours !== undefined)
+                      ? staff.workingHours
+                      : calculateLiveElapsedHours(staff.punchIn, staff.punchOut, null, staff.isOnline);
                     const progressPct = isClockedIn ? Math.min(100, Math.round((hours / 9) * 100)) : 0;
 
                     const roleBadgeStyles = {
@@ -1510,7 +1542,9 @@ export default function AttendanceManagementView({
               {displayedStaffList.map((staff) => {
                 const roleCat = getRoleCategory(staff.role);
                 const isClockedIn = Boolean(staff.punchIn);
-                const hours = staff.workingHours || (staff.isOnline ? 4.5 : 0);
+                const hours = (staff.workingHours !== null && staff.workingHours !== undefined)
+                  ? staff.workingHours
+                  : calculateLiveElapsedHours(staff.punchIn, staff.punchOut, null, staff.isOnline);
                 const hasReport = Boolean(staff.isReportDone && (staff.todayReport?.workDescription || staff.todayWorkSummary));
                 const reportSnippet = staff.todayReport?.workDescription || staff.todayWorkSummary || '';
 

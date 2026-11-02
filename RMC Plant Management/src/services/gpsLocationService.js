@@ -308,8 +308,8 @@ export async function getAccurateDeviceLocation(options = {}) {
   }
 
   // Tier 4: Fallback to assigned station or plant HQ as safety net
-  const fallbackLat = defaultStation?.lat || 18.502390; // Default to user's real Pune operations coordinates
-  const fallbackLng = defaultStation?.lng || 73.847872;
+  const fallbackLat = defaultStation?.lat || 18.5204;
+  const fallbackLng = defaultStation?.lng || 73.8567;
   const addrInfo = await resolveAccurateAddress(fallbackLat, fallbackLng);
 
   return {
@@ -317,9 +317,9 @@ export async function getAccurateDeviceLocation(options = {}) {
     lng: fallbackLng,
     accuracy: 50,
     timestamp: new Date().toISOString(),
-    address: defaultStation?.address || addrInfo.address,
-    landmarkName: defaultStation?.stationName || addrInfo.landmarkName,
-    shortName: defaultStation?.shortZone || addrInfo.shortName,
+    address: defaultStation?.address || addrInfo.address || `Location (${fallbackLat.toFixed(4)}°N, ${fallbackLng.toFixed(4)}°E)`,
+    landmarkName: defaultStation?.stationName || addrInfo.landmarkName || `GPS (${fallbackLat.toFixed(4)}°N, ${fallbackLng.toFixed(4)}°E)`,
+    shortName: defaultStation?.shortZone || addrInfo.shortName || 'Location Verified',
     source: 'DEFAULT_STATION_FALLBACK',
     isFallback: true
   };

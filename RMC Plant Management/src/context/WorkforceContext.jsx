@@ -143,6 +143,16 @@ export const sanitizeAttendance = (attList) => {
         item.totalDistanceKm = 0.0;
       }
     }
+    if (typeof item.geofenceStatus === 'string' && item.geofenceStatus.toLowerCase().includes('narveer')) {
+      item.geofenceStatus = (item.lastKnownLocation && !item.lastKnownLocation.address?.toLowerCase().includes('narveer'))
+        ? (item.lastKnownLocation.landmarkName || item.lastKnownLocation.address)
+        : 'Live GPS Active';
+    }
+    if (typeof item.lastKnownLocation?.address === 'string' && item.lastKnownLocation.address.toLowerCase().includes('narveer')) {
+      item.lastKnownLocation.address = `${Number(item.lastKnownLocation.lat || 0).toFixed(4)}°N, ${Number(item.lastKnownLocation.lng || 0).toFixed(4)}°E`;
+      item.lastKnownLocation.landmarkName = 'Live Position';
+    }
+
     const key = String(dateStr) + String.fromCharCode(95) + String(empId);
     if (!map.has(key)) {
       map.set(key, item);
@@ -2201,6 +2211,7 @@ export const WorkforceProvider = ({ children }) => {
 
       const updatedRecord = {
         ...target,
+        geofenceStatus: locationData.landmarkName || locationData.address || target.geofenceStatus || 'Live Telemetry Active',
         lastKnownLocation: {
           lat: Number(locationData.lat),
           lng: Number(locationData.lng),

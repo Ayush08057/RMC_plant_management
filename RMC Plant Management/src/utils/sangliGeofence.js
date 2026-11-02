@@ -159,43 +159,14 @@ export function resolveSangliLandmark(lat, lng) {
   }
 
   // Check Pune Urban Region (lat: 18.35 to 18.70, lng: 73.65 to 74.05)
+  // Set isKnownLandmark: false so real reverse-geocoding (Nominatim / BigDataCloud) resolves true street
   if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
-    if (numLat >= 18.500 && numLat <= 18.514 && numLng >= 73.840 && numLng <= 73.856) {
-      return {
-        landmarkName: 'Dandekar Pool, Sinhagad Rd, Pune',
-        shortName: 'Dandekar Pool',
-        address: 'Dandekar Pool, Sinhagad Road, Parvati, Pune, Maharashtra 411030',
-        distanceMeters: null,
-        isKnownLandmark: true,
-        type: 'PUNE_URBAN',
-      };
-    }
-    if (numLat >= 18.490 && numLat <= 18.520 && numLng >= 73.835 && numLng <= 73.865) {
-      return {
-        landmarkName: 'Dandekar Pool / Sinhagad Rd, Pune',
-        shortName: 'Dandekar Pool',
-        address: 'Narveer Tanaji Malusare Rd, Dandekar Pool, Pune, Maharashtra 411030',
-        distanceMeters: null,
-        isKnownLandmark: true,
-        type: 'PUNE_URBAN',
-      };
-    }
-    if (numLat >= 18.480 && numLat <= 18.515 && numLng >= 73.810 && numLng <= 73.845) {
-      return {
-        landmarkName: 'Sinhagad Road, Pune',
-        shortName: 'Sinhagad Rd',
-        address: 'Sinhagad Road / Hingne, Pune, Maharashtra',
-        distanceMeters: null,
-        isKnownLandmark: true,
-        type: 'PUNE_URBAN',
-      };
-    }
     return {
-      landmarkName: 'Pune Operational Hub',
+      landmarkName: `Pune (${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E)`,
       shortName: 'Pune',
-      address: `Pune Metropolitan Region (${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E)`,
+      address: `Pune Metropolitan Region (${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E)`,
       distanceMeters: null,
-      isKnownLandmark: true,
+      isKnownLandmark: false,
       type: 'PUNE_URBAN',
     };
   }

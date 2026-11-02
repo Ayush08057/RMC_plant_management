@@ -51,11 +51,11 @@ export function getAssignedEmployeeStation(emp) {
 
   if (roleLower.includes('dispatch') || idUpper.includes('DIS') || nameLower.includes('dispatcher')) {
     return {
-      lat: 18.502390,
-      lng: 73.847872,
-      stationName: 'Pune Central Dispatch Operations Hub',
-      address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
-      shortZone: 'Narveer Tanaji Malusare Rd, Pune',
+      lat: 18.5204,
+      lng: 73.8567,
+      stationName: 'Pune Dispatch Operations Hub',
+      address: 'Central Logistics Dispatch Hub, Pune',
+      shortZone: 'Pune Dispatch Hub',
       notes: 'Central logistics dispatch & batching control',
     };
   }

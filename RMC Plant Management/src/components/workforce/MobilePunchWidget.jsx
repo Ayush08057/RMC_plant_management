@@ -18,11 +18,12 @@ import {
   ShieldCheck, 
   X,
   History,
-  Briefcase
+  Briefcase,
+  Radio
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatToIndian12Hr, getNowIndian12Hr } from '../../utils/shiftUtils';
+import { formatToIndian12Hr, getNowIndian12Hr, parseTimeToMinutes } from '../../utils/shiftUtils';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
@@ -278,6 +279,12 @@ export default function MobilePunchWidget({
   };
 
   useEffect(() => {
+    // If already clocked in today, completely shut off camera to save battery & remove camera view
+    if (hasPunchedIn) {
+      stopCamera();
+      return;
+    }
+
     let retryTimer;
     startCamera('user').then((ok) => {
       // Auto-retry once after 1.5s to seamlessly acquire stream if OS permission was just granted
@@ -292,7 +299,31 @@ export default function MobilePunchWidget({
       stopCamera();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasPunchedIn]);
+
+  // Live ticking duty timer when on duty
+  const [elapsedDutySeconds, setElapsedDutySeconds] = useState(0);
+
+  useEffect(() => {
+    if (!hasPunchedIn || hasPunchedOut) return;
+
+    const calcElapsed = () => {
+      if (!userTodayRecord?.punchIn) return 0;
+      const punchMins = parseTimeToMinutes(userTodayRecord.punchIn);
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      let diffMins = nowMins - punchMins;
+      if (diffMins < 0) diffMins += 1440;
+      return (diffMins * 60) + now.getSeconds();
+    };
+
+    setElapsedDutySeconds(calcElapsed());
+    const interval = setInterval(() => {
+      setElapsedDutySeconds(calcElapsed());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [hasPunchedIn, hasPunchedOut, userTodayRecord?.punchIn]);
 
   // Flip camera toggle
   const toggleCameraFacing = () => {
@@ -655,83 +686,37 @@ export default function MobilePunchWidget({
     }
   };
 
-  // Re-sync live GPS location while on duty
-  const handleRefreshLiveLocation = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const targetId = activeEmployee.employeeId || activeEmployee.id;
-      const isDispatcher = (activeEmployee?.role || '').toLowerCase().includes('dispatch') || 
-                           (targetId || '').toUpperCase().includes('DIS');
-      const isSupervisor = (activeEmployee?.role || '').toLowerCase().includes('supervisor') || 
-                           (targetId || '').toUpperCase().includes('SS');
-      const isQc = (activeEmployee?.role || '').toLowerCase().includes('qc') || 
-                   (activeEmployee?.role || '').toLowerCase().includes('quality') || 
-                   (targetId || '').toUpperCase().includes('QC');
+  // Live dynamic timer values for post-punch duty screen
+  const timerHours = Math.floor(elapsedDutySeconds / 3600);
+  const timerMinutes = Math.floor((elapsedDutySeconds % 3600) / 60);
+  const timerSeconds = elapsedDutySeconds % 60;
+  const formattedDutyTimer = `${String(timerHours).padStart(2, '0')} : ${String(timerMinutes).padStart(2, '0')} : ${String(timerSeconds).padStart(2, '0')}`;
+  const elapsedDutyHoursDecimal = (elapsedDutySeconds / 3600).toFixed(1);
+  const shiftProgressPercentage = Math.min(100, Math.round((elapsedDutySeconds / (9 * 3600)) * 100));
 
-      const defaultStation = isSupervisor ? {
-        lat: 16.852000,
-        lng: 74.590000,
-        stationName: 'Godrej Green Acres Construction Site, Sangli',
-        address: 'Near Government Colony, Sangli, Maharashtra 416416',
-        shortZone: 'Godrej Green Acres (Sangli)'
-      } : (isDispatcher ? {
-        lat: 18.502390,
-        lng: 73.847872,
-        stationName: 'Narveer Tanaji Malusare Rd, Pune',
-        address: 'Narveer Tanaji Malusare Rd, Pune, Maharashtra 411030',
-        shortZone: 'Narveer Tanaji Malusare Rd, Pune'
-      } : (isQc ? {
-        lat: 16.8300,
-        lng: 74.6400,
-        stationName: 'Miraj Highway Package B Quality Lab',
-        address: 'Miraj Industrial Corridor, Sangli',
-        shortZone: 'Highway QC Lab'
-      } : null));
-
-      const loc = await getAccurateDeviceLocation({ forceFresh: true, defaultStation });
-      let finalLoc = loc;
-      const isNativeRefreshFix = finalLoc?.source === 'NATIVE_HARDWARE_GPS';
-
-      if (!finalLoc?.lat && defaultStation) {
-        finalLoc = defaultStation;
-      }
-
-      if (finalLoc && finalLoc.lat && finalLoc.lng) {
-        setGpsCoords(finalLoc);
-        if (typeof updateLiveEmployeeLocation === 'function') {
-          updateLiveEmployeeLocation(targetId, finalLoc);
-        }
-        recordEmployeeBreadcrumb(targetId, Number(finalLoc.lat), Number(finalLoc.lng), `Live GPS: ${finalLoc.landmarkName}`);
-        setSuccessMsg(`GPS location updated: ${finalLoc.landmarkName}!`);
-      }
-    } catch (err) {
-      setError('Unable to acquire fresh GPS: ' + (err.message || 'Timeout'));
-    } finally {
-      setLoading(false);
+  const currentLiveFix = nativeTracking.getLatestNativeFix() || gpsCoords;
+  const liveLocationDisplay = useMemo(() => {
+    const raw = userTodayRecord?.lastKnownLocation?.landmarkName || 
+                currentLiveFix?.landmarkName || 
+                userTodayRecord?.geofenceStatus || 
+                userTodayRecord?.gpsLocation?.landmarkName;
+    if (raw && !raw.toLowerCase().includes('narveer')) return raw;
+    if (currentLiveFix?.lat && currentLiveFix?.lng) {
+      return `${Number(currentLiveFix.lat).toFixed(4)}°N, ${Number(currentLiveFix.lng).toFixed(4)}°E`;
     }
-  };
+    return 'Workstation GPS Active';
+  }, [userTodayRecord, currentLiveFix]);
 
-  // Reset clock-in to allow re-punching in fresh
-  const handleResetTodayClockIn = async () => {
-    if (!window.confirm("Reset today's punch-in? This clears today's record so you can clock in again with fresh biometric photo & GPS.")) {
-      return;
+  const liveAddressDisplay = useMemo(() => {
+    const raw = userTodayRecord?.lastKnownLocation?.address || 
+                currentLiveFix?.address || 
+                userTodayRecord?.gpsLocation?.address;
+    if (raw && !raw.toLowerCase().includes('narveer')) return raw;
+    if (currentLiveFix?.lat && currentLiveFix?.lng) {
+      return `Coordinates: ${Number(currentLiveFix.lat).toFixed(5)}°N, ${Number(currentLiveFix.lng).toFixed(5)}°E`;
     }
-    setLoading(true);
-    try {
-      const targetId = activeEmployee.employeeId || activeEmployee.id;
-      if (typeof resetTodayAttendance === 'function') {
-        await resetTodayAttendance(targetId);
-        setCapturedPhoto(null);
-        startCamera(facingMode);
-        setSuccessMsg("Clock-in cleared. You can now punch in fresh.");
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to reset attendance.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return 'Real-time location verified';
+  }, [userTodayRecord, currentLiveFix]);
 
   return (
     <div className="w-full max-w-sm sm:max-w-md mx-auto">
@@ -800,147 +785,201 @@ export default function MobilePunchWidget({
         {activeNavTab === 'punch' && (
           <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between items-center relative">
             
-            {/* Top Right Floating Controls */}
-            <div className="w-full flex justify-end items-center gap-2 mb-1">
-              {displayPhoto && !hasPunchedIn && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCapturedPhoto(null);
-                    startCamera(facingMode);
-                  }}
-                  className="px-2.5 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Retake</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={toggleCameraFacing}
-                title="Switch Camera / Scan Mode"
-                className="w-10 h-10 rounded-full bg-slate-900/90 border border-slate-700 text-emerald-400 flex items-center justify-center hover:bg-slate-800 hover:border-emerald-500 shadow-md transition-all active:scale-95 cursor-pointer"
-              >
-                <ScanFace className="w-5 h-5 text-emerald-400" />
-              </button>
-            </div>
+            {/* State 1: NOT Clocked In - Biometric Selfie Camera Scanner */}
+            {!hasPunchedIn ? (
+              <>
+                {/* Top Right Floating Controls */}
+                <div className="w-full flex justify-end items-center gap-2 mb-1">
+                  {displayPhoto && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCapturedPhoto(null);
+                        startCamera(facingMode);
+                      }}
+                      className="px-2.5 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Retake</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={toggleCameraFacing}
+                    title="Switch Camera / Scan Mode"
+                    className="w-10 h-10 rounded-full bg-slate-900/90 border border-slate-700 text-emerald-400 flex items-center justify-center hover:bg-slate-800 hover:border-emerald-500 shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <ScanFace className="w-5 h-5 text-emerald-400" />
+                  </button>
+                </div>
 
-            {/* Center Circular Live Camera Viewfinder (matches Image 2 circle viewport) */}
-            <div className="my-auto py-2 relative flex flex-col items-center">
-              <div className="w-60 h-60 sm:w-68 sm:h-68 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-[0_0_35px_rgba(16,185,129,0.2)] bg-black relative flex items-center justify-center">
-                
-                {/* Live Video Stream or Captured Photo */}
-                {displayPhoto ? (
-                  <div className="relative w-full h-full">
-                    <img
-                      src={displayPhoto}
-                      alt="Captured biometric preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute bottom-3 inset-x-0 flex justify-center z-20">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/60 shadow-md backdrop-blur-xs flex items-center gap-1">
-                        <Check className="w-3 h-3 text-emerald-400" />
-                        <span>PHOTO CAPTURED</span>
-                      </span>
-                    </div>
+                {/* Center Circular Live Camera Viewfinder */}
+                <div className="my-auto py-2 relative flex flex-col items-center">
+                  <div className="w-60 h-60 sm:w-68 sm:h-68 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-[0_0_35px_rgba(16,185,129,0.2)] bg-black relative flex items-center justify-center">
+                    
+                    {displayPhoto ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={displayPhoto}
+                          alt="Captured biometric preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-3 inset-x-0 flex justify-center z-20">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/60 shadow-md backdrop-blur-xs flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>PHOTO CAPTURED</span>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+                      />
+                    )}
+
+                    {!cameraActive && !displayPhoto && (
+                      <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-3 text-center z-10">
+                        <div className="w-14 h-14 rounded-full bg-slate-900 border border-emerald-500/40 flex items-center justify-center mb-1.5 shadow-inner">
+                          <Camera className="w-7 h-7 text-emerald-400" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-200">Front Camera Standby</span>
+                        <p className="text-[10px] text-slate-400 mt-0.5 max-w-[190px]">
+                          Position face in circle or tap to start camera
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2.5">
+                          <button
+                            type="button"
+                            onClick={() => startCamera(facingMode)}
+                            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/70 border border-emerald-700/70 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Start Camera</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 bg-blue-950/70 border border-blue-700/70 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                            title="Take selfie using device camera"
+                          >
+                            <Camera className="w-3 h-3" />
+                            <span>Take Selfie</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!displayPhoto && (
+                      <div className="absolute inset-x-3 h-0.5 bg-emerald-400 shadow-[0_0_12px_#34d399] rounded-full pointer-events-none animate-scan-laser" />
+                    )}
                   </div>
-                ) : (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-                  />
-                )}
 
-                {/* Fallback View if camera stream is blocked */}
-                {!cameraActive && !displayPhoto && (
-                  <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-3 text-center z-10">
-                    <div className="w-14 h-14 rounded-full bg-slate-900 border border-emerald-500/40 flex items-center justify-center mb-1.5 shadow-inner">
-                      <Camera className="w-7 h-7 text-emerald-400" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-200">Front Camera Standby</span>
-                    <p className="text-[10px] text-slate-400 mt-0.5 max-w-[190px]">
-                      Position face in circle or tap to start camera
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-2.5">
-                      <button
-                        type="button"
-                        onClick={() => startCamera(facingMode)}
-                        className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/70 border border-emerald-700/70 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        <span>Start Camera</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 bg-blue-950/70 border border-blue-700/70 px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                        title="Take selfie using device camera"
-                      >
-                        <Camera className="w-3 h-3" />
-                        <span>Take Selfie</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Animated Green Laser Scanning Bar (matches Image 2 exact green scanning bar) */}
-                {!displayPhoto && (
-                  <div className="absolute inset-x-3 h-0.5 bg-emerald-400 shadow-[0_0_12px_#34d399] rounded-full pointer-events-none animate-scan-laser" />
-                )}
-              </div>
-
-              {/* Status Indicator Under Circle */}
-              <div className="mt-3 flex flex-col items-center gap-2">
-                {!hasPunchedIn ? (
-                  <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>Position Face in Circle to Clock In</span>
-                  </span>
-                ) : !hasPunchedOut ? (
-                  <>
-                    <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span>On Duty • Clocked In: {formatToIndian12Hr(userTodayRecord?.punchIn)}</span>
+                  <div className="mt-3 flex flex-col items-center gap-2">
+                    <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <span>Position Face in Circle to Clock In</span>
                     </span>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] text-slate-300 shadow-xs">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="font-semibold text-white truncate max-w-[220px]">
-                        {userTodayRecord?.geofenceStatus || userTodayRecord?.gpsLocation?.landmarkName || userTodayRecord?.gpsLocation?.address || 'Workstation Verified'}
+                  </div>
+                </div>
+              </>
+            ) : !hasPunchedOut ? (
+              /* State 2: PUNCHED IN - Gorgeous Live Duty Dashboard (NO CAMERA) */
+              <div className="w-full my-auto py-2 flex flex-col items-center">
+                <div className="w-full rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900/95 to-[#0b1320] border border-slate-800 p-5 shadow-2xl relative overflow-hidden flex flex-col items-center">
+                  
+                  {/* Subtle ambient lighting */}
+                  <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+                  <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                  {/* Pulsing Status Pill */}
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold tracking-wide uppercase shadow-xs mb-4">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <span>On Duty • Shift in Progress</span>
+                  </div>
+
+                  {/* High-Tech Digital Timer Display */}
+                  <div className="flex flex-col items-center justify-center mb-4">
+                    <div className="text-4xl sm:text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-emerald-300 font-mono drop-shadow-md">
+                      {formattedDutyTimer}
+                    </div>
+                    <div className="flex items-center gap-6 sm:gap-7 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                      <span>Hours</span>
+                      <span>Minutes</span>
+                      <span>Seconds</span>
+                    </div>
+                  </div>
+
+                  {/* Shift Progress Bar (9 Hours Shift) */}
+                  <div className="w-full space-y-1.5 mb-4 px-1">
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-slate-400">Shift Target (9h)</span>
+                      <span className="text-emerald-400 font-mono">{elapsedDutyHoursDecimal}h / 9.0h ({shiftProgressPercentage}%)</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-800/90 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500 shadow-sm"
+                        style={{ width: `${Math.max(2, shiftProgressPercentage)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Info Cards Grid */}
+                  <div className="w-full grid grid-cols-2 gap-2 pt-3 border-t border-slate-800/80">
+                    <div className="p-2.5 rounded-xl bg-slate-800/40 border border-slate-700/50 flex flex-col">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400 uppercase font-semibold">
+                        <Clock className="w-3 h-3 text-cyan-400" />
+                        <span>Clocked In</span>
+                      </div>
+                      <span className="text-xs font-bold text-white mt-1">
+                        {formatToIndian12Hr(userTodayRecord?.punchIn) || 'Recorded'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 pt-0.5">
-                      <button
-                        type="button"
-                        disabled={loading}
-                        onClick={handleRefreshLiveLocation}
-                        className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-900/90 border border-slate-700 hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Re-acquire fresh device GPS coordinates"
-                      >
-                        <RefreshCw className="w-2.5 h-2.5" />
-                        <span>Update GPS</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={loading}
-                        onClick={handleResetTodayClockIn}
-                        className="text-[10px] font-medium text-slate-400 hover:text-red-400 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
-                        title="Clear clock-in to punch in fresh with real GPS"
-                      >
-                        <span>Reset Clock-In</span>
-                      </button>
+
+                    <div className="p-2.5 rounded-xl bg-slate-800/40 border border-slate-700/50 flex flex-col">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400 uppercase font-semibold">
+                        <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+                        <span>GPS Radar</span>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-300 mt-1 truncate" title={liveLocationDisplay}>
+                        {liveLocationDisplay}
+                      </span>
                     </div>
-                  </>
-                ) : (
-                  <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-blue-950/80 text-blue-300 border border-blue-700/60 flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Shift Concluded ({userTodayRecord?.workingHours || 8} hrs{userTodayRecord?.totalDistanceKm ? ` • ${userTodayRecord.totalDistanceKm} km traveled` : ''})</span>
-                  </span>
-                )}
+                  </div>
+
+                  {/* Verified Address Pill */}
+                  <div className="w-full mt-2.5 p-2 rounded-xl bg-slate-800/30 border border-slate-800 text-[11px] text-slate-300 flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="truncate text-slate-300 font-medium">
+                      {liveAddressDisplay}
+                    </span>
+                  </div>
+
+                </div>
               </div>
-            </div>
+            ) : (
+              /* State 3: PUNCHED OUT - Shift Concluded */
+              <div className="w-full my-auto py-4 flex flex-col items-center">
+                <div className="w-full rounded-3xl bg-slate-900 border border-slate-800 p-6 text-center space-y-3">
+                  <div className="w-14 h-14 rounded-full bg-emerald-950/80 border border-emerald-500/50 flex items-center justify-center mx-auto shadow-inner">
+                    <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">Shift Concluded</h3>
+                  <p className="text-xs text-slate-400">
+                    Logged: {userTodayRecord?.workingHours || 9} hrs on duty
+                    {userTodayRecord?.totalDistanceKm ? ` • ${userTodayRecord.totalDistanceKm} km traveled` : ''}
+                  </p>
+                  <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-700 text-xs text-slate-300">
+                    <p className="font-medium text-emerald-300">Biometrics & daily report verified.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Bottom Action Button (matches Image 2 exact big button style) */}
             <div className="w-full pt-4 pb-2">
