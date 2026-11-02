@@ -572,39 +572,46 @@ export const WorkforceProvider = ({ children }) => {
   useEffect(() => {
     const unsub = nativeTracking.onLocationPing(async (ping) => {
       if (!ping || !ping.lat || !ping.lng) return;
-      // Route location pings to active clocked-in employee
-      try {
-        let empId = user?.employeeId || user?.id;
-        if (!empId) {
-          const storedAuth = sessionStorage.getItem('rmc_current_user_v3') || 
-                             localStorage.getItem('rmc_current_user_v3') ||
-                             localStorage.getItem('active_tracking_emp_id');
-          if (storedAuth) {
-            try {
-              const authUser = JSON.parse(storedAuth);
-              empId = authUser?.employeeId || authUser?.id || storedAuth;
-            } catch {
-              empId = storedAuth;
-            }
-          }
-        }
-        if (empId) {
-          const lat = Number(Number(ping.lat).toFixed(6));
-          const lng = Number(Number(ping.lng).toFixed(6));
-          const addrInfo = await resolveAccurateAddress(lat, lng);
-          const landmarkName = addrInfo?.landmarkName || ping.landmarkName || 'Live Device Fix';
-          const address = addrInfo?.address || `${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E`;
+      
+      const empId = user?.employeeId || user?.id;
+      if (!empId) {
+        // No user logged in: ensure background tracking is stopped
+        nativeTracking.stopForegroundTracking();
+        return;
+      }
 
-          updateLiveEmployeeLocation(empId, {
-            lat,
-            lng,
-            accuracy: Math.round(ping.accuracy || 10),
-            timestamp: ping.timestamp || new Date().toISOString(),
-            address,
-            landmarkName,
-          });
-          recordEmployeeBreadcrumb(empId, lat, lng, landmarkName);
-        }
+      const today = new Date().toISOString().split('T')[0];
+      const targetCanonical = empId.toString().trim().toUpperCase();
+      const currentAttendance = data?.attendance || [];
+      const todayRecord = currentAttendance.find((a) => {
+        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+        return aDate === today && (aEmpId === targetCanonical || a.id?.toUpperCase().includes(targetCanonical));
+      });
+
+      // STRICT CHECK: Only process telemetry if employee has MANUALLY punched in and NOT punched out
+      if (!todayRecord || !todayRecord.punchIn || todayRecord.punchOut) {
+        // Not on duty: make sure background tracking does not run
+        nativeTracking.stopForegroundTracking();
+        return;
+      }
+
+      try {
+        const lat = Number(Number(ping.lat).toFixed(6));
+        const lng = Number(Number(ping.lng).toFixed(6));
+        const addrInfo = await resolveAccurateAddress(lat, lng);
+        const landmarkName = addrInfo?.landmarkName || ping.landmarkName || 'Live Device Fix';
+        const address = addrInfo?.address || `${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E`;
+
+        updateLiveEmployeeLocation(empId, {
+          lat,
+          lng,
+          accuracy: Math.round(ping.accuracy || 10),
+          timestamp: ping.timestamp || new Date().toISOString(),
+          address,
+          landmarkName,
+        });
+        recordEmployeeBreadcrumb(empId, lat, lng, landmarkName);
       } catch (err) {
         console.warn('Native ping routing error:', err);
       }
@@ -612,7 +619,7 @@ export const WorkforceProvider = ({ children }) => {
     return () => {
       if (typeof unsub === 'function') unsub();
     };
-  }, [user]);
+  }, [user, data?.attendance]);
 
   const switchCompany = (companyId) => {
     if (companyId === activeCompanyId || !companies.some((company) => company.id === companyId)) return;
@@ -2142,48 +2149,14 @@ export const WorkforceProvider = ({ children }) => {
       });
 
       if (pIdx < 0) {
-        // If employee is actively transmitting GPS telemetry today, automatically materialize attendance record!
-        const emp = (prev.employees || []).find((e) => (e.employeeId || e.id || '').toUpperCase() === canonicalEmpId) ||
-                    OFFICIAL_ROLE_ACCOUNTS.find((r) => (r.employeeId || r.id || '').toUpperCase() === canonicalEmpId);
-        const docId = "ATT-" + today.replace(/-/g, '') + "-" + canonicalEmpId.replace(/[^A-Z0-9_-]/g, '');
-        const timeNow = getNowIndian12Hr(false);
-        const autoPunchRecord = {
-          id: docId,
-          date: today,
-          employeeId: canonicalEmpId,
-          employeeName: emp?.name || canonicalEmpId,
-          role: emp?.role || 'Staff',
-          plant: emp?.plantLocation || (prev.plants && prev.plants[0]?.name) || 'Main Plant HQ',
-          punchIn: timeNow,
-          punchOut: null,
-          status: 'Present',
-          geofenceStatus: locationData.landmarkName || locationData.address || 'Live GPS Active',
-          lastKnownLocation: {
-            lat: Number(locationData.lat),
-            lng: Number(locationData.lng),
-            accuracy: locationData.accuracy || 20,
-            timestamp: new Date().toISOString(),
-            address: locationData.address || 'Live Telemetry',
-            landmarkName: locationData.landmarkName || 'Live Position'
-          },
-          routeTrail: [{
-            stopNo: 1,
-            title: locationData.landmarkName || 'Live Position',
-            category: 'Punch In',
-            address: locationData.address || `${Number(locationData.lat).toFixed(5)}°N, ${Number(locationData.lng).toFixed(5)}°E`,
-            time: timeNow,
-            lat: Number(locationData.lat),
-            lng: Number(locationData.lng),
-            status: 'Live',
-            distanceKm: 0.0,
-            notes: 'Real-time GPS telemetry'
-          }],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        return { ...prev, attendance: sanitizeAttendance([autoPunchRecord, ...prevList]) };
+        // Employee has NOT clocked in today. Strictly NO auto-punching!
+        return prev;
       }
       const target = prevList[pIdx];
+      // Only track if employee has manually punched in AND has not punched out yet
+      if (!target.punchIn || target.punchOut) {
+        return prev;
+      }
       const existingTrail = Array.isArray(target.routeTrail) ? [...target.routeTrail] : [];
 
       const lastStop = existingTrail[existingTrail.length - 1];

@@ -848,6 +848,9 @@ export const AuthProvider = ({ children }) => {
   const executeLogout = async () => {
     setIsLoggingOut(true);
     try {
+      nativeTracking.stopForegroundTracking();
+    } catch (_) {}
+    try {
       await signOut(auth);
     } catch (err) {
       console.warn('Firebase signOut notice:', err);
