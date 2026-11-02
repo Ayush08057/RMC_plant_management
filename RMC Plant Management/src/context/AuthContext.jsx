@@ -43,7 +43,7 @@ const STORAGE_REMEMBER_KEY = 'rmc_remember_choice_v3';
 const normalizeCompanyId = (id) => (id === 'CMP-SM-001' ? 'sm-concretech' : (id || 'sm-concretech'));
 
 export const AuthProvider = ({ children }) => {
-  // Clear any legacy persistent login sessions so opening the website always asks for login first
+  // Set Firebase Auth persistence to local so login state survives closing the app
   useEffect(() => {
     try {
       localStorage.removeItem('rmc_users_db_v1');
@@ -51,8 +51,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('rmc_current_user_v2');
       sessionStorage.removeItem('rmc_current_user_v2');
       localStorage.removeItem('rmc_remember_choice_v2');
-      localStorage.removeItem(STORAGE_SESSION_KEY);
-      localStorage.removeItem(STORAGE_REMEMBER_KEY);
+      setPersistence(auth, browserLocalPersistence).catch(() => {});
     } catch {
       // ignore
     }
@@ -83,12 +82,13 @@ export const AuthProvider = ({ children }) => {
 
   const [user, setUser] = useState(() => {
     try {
-      // Active sessions are only preserved within current tab/window (sessionStorage) across page refreshes.
-      const stored = sessionStorage.getItem(STORAGE_SESSION_KEY);
+      // Check localStorage first (persists across app closes/restarts), then sessionStorage
+      const stored = localStorage.getItem(STORAGE_SESSION_KEY) || sessionStorage.getItem(STORAGE_SESSION_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && (parsed.id || parsed.uid) && parsed.role) {
           if (parsed.sessionExpiresAt && Date.now() > parsed.sessionExpiresAt) {
+            localStorage.removeItem(STORAGE_SESSION_KEY);
             sessionStorage.removeItem(STORAGE_SESSION_KEY);
             return null;
           }
@@ -180,6 +180,7 @@ export const AuthProvider = ({ children }) => {
             delete restoredUser.password;
 
             setUser(restoredUser);
+            localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(restoredUser));
             sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(restoredUser));
 
             // Sync fresh auth token and company context to native Android bridge
@@ -470,9 +471,11 @@ export const AuthProvider = ({ children }) => {
     delete sessionData.password;
 
     try {
+      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionData));
       sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionData));
-      localStorage.removeItem(STORAGE_SESSION_KEY);
-      localStorage.removeItem(STORAGE_REMEMBER_KEY);
+      if (rememberMe) {
+        localStorage.setItem(STORAGE_REMEMBER_KEY, 'true');
+      }
     } catch (err) {
       console.error('Failed to save session:', err);
     }
