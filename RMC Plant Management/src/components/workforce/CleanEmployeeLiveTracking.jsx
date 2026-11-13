@@ -25,6 +25,20 @@ import { getEmployeeRouteDetails } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 /**
+ * Strict whitelist of authorized operational employee accounts for Employee Live GPS Locations.
+ * Only these 7 operational workforce roles are shown in this section.
+ */
+export const ALLOWED_LIVE_TRACKING_CANONICAL_IDS = new Set([
+  'DIS-001',
+  'ACC-001',
+  'DRV-001',
+  'OWN-001',
+  'PM-001',
+  'QC-001',
+  'SS-001',
+]);
+
+/**
  * Safely extracts cached workforce records from localStorage to ensure zero missing staff
  */
 function getCachedStaffFallback() {
@@ -49,7 +63,11 @@ function getCachedStaffFallback() {
       }
     }
   } catch {}
-  return list.filter((p) => !isDummyEmployee(p) && !isAdminPerson(p));
+  return list.filter((p) => {
+    if (!p || isDummyEmployee(p) || isAdminPerson(p)) return false;
+    const cid = resolveCanonicalEmployeeId(p.employeeId || p.id || '');
+    return ALLOWED_LIVE_TRACKING_CANONICAL_IDS.has(cid);
+  });
 }
 
 export default function CleanEmployeeLiveTracking() {
@@ -77,7 +95,7 @@ export default function CleanEmployeeLiveTracking() {
       const rawId = (person.employeeId || person.id || '').toString().trim().toUpperCase();
       if (!rawId) return;
       const canonicalKey = resolveCanonicalEmployeeId(rawId);
-      if (!canonicalKey) return;
+      if (!canonicalKey || !ALLOWED_LIVE_TRACKING_CANONICAL_IDS.has(canonicalKey)) return;
 
       const existing = map.get(canonicalKey);
       if (!existing) {
@@ -196,7 +214,11 @@ export default function CleanEmployeeLiveTracking() {
       return a.name.localeCompare(b.name);
     });
 
-    return staffArray;
+    // Strictly guarantee that ONLY the 7 authorized operational workforce accounts are shown
+    return staffArray.filter((e) => {
+      const cId = resolveCanonicalEmployeeId(e.employeeId || e.id);
+      return ALLOWED_LIVE_TRACKING_CANONICAL_IDS.has(cId);
+    });
   }, [employees, allUsers, user, attendance, trips, selectedDate, activeCompanyId]);
 
   // 4. Filtered dropdown list based on search
