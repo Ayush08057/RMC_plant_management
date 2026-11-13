@@ -229,7 +229,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
             const lastStop = stops[stops.length - 1];
             const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
 
-            if (distToLast > 80) {
+            if (distToLast > 25) {
               stops.push({
                 stopNo: stops.length + 1,
                 title: landmark.landmarkName || 'Live GPS Location',

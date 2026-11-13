@@ -14,6 +14,7 @@
 
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
+import { sanitizeForFirestore } from './firestoreService.js';
 
 // Default company scope
 const DEFAULT_COMPANY_SCOPE = 'sm-concretech';
@@ -385,11 +386,17 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
   // 2. Persist to partitioned plantSync_* first; fall back seamlessly to hrSettings_* if rules aren't updated yet
   const primaryRef = doc(db, getSyncCollectionName(), docKey);
   const legacyRef = doc(db, getLegacySyncCollectionName(), docKey);
+  const companyScope = resolveSyncScope();
   try {
     let finalPayload = await mergeWithDocRef(primaryRef, cleanData);
+    const cleanPayload = sanitizeForFirestore(finalPayload);
     await setDoc(primaryRef, {
-      items: finalPayload,
+      id: docKey,
+      nodeKey: docKey,
+      companyId: companyScope,
+      items: cleanPayload,
       updatedAt: Date.now(),
+      updatedAtIso: new Date().toISOString(),
       source: 'web_client_sync'
     }, { merge: true });
 
@@ -401,9 +408,14 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
   } catch (err) {
     try {
       const legacyPayload = await mergeWithDocRef(legacyRef, cleanData);
+      const cleanLegacyPayload = sanitizeForFirestore(legacyPayload);
       await setDoc(legacyRef, {
-        items: legacyPayload,
+        id: docKey,
+        nodeKey: docKey,
+        companyId: companyScope,
+        items: cleanLegacyPayload,
         updatedAt: Date.now(),
+        updatedAtIso: new Date().toISOString(),
         source: 'web_client_sync_fallback'
       }, { merge: true });
     } catch (fallbackErr) {

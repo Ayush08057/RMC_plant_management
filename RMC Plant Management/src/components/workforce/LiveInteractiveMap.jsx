@@ -116,6 +116,7 @@ export default function LiveInteractiveMap({
   const liveMarkerRef = useRef(null);
   const liveMarkerTargetIdRef = useRef(null);
   const wasConcludedRef = useRef(false);
+  const drawnPolylineCoordsRef = useRef([]);
   const [mapReady, setMapReady] = useState(false);
 
   // Leaflet API Key & Clean Tile Provider State Management
@@ -400,7 +401,7 @@ export default function LiveInteractiveMap({
       }
     }
 
-    // Build complete ordered path across Punch-In -> all intermediate GPS stops -> Punch-Out
+    // Build complete ordered path across Punch-In -> all intermediate GPS stops -> Punch-Out or Live GPS
     const rawLatLngs = [];
     const appendPointIfDistinct = (ptLat, ptLng) => {
       if (!Number.isFinite(ptLat) || !Number.isFinite(ptLng) || ptLat === 0 || ptLng === 0) return;
@@ -411,34 +412,130 @@ export default function LiveInteractiveMap({
     };
     if (hasPunchIn) appendPointIfDistinct(punchInLat, punchInLng);
     stops.forEach((s) => appendPointIfDistinct(Number(s?.lat), Number(s?.lng)));
-    if (hasPunchOut) appendPointIfDistinct(punchOutLat, punchOutLng);
+    if (hasPunchOut) {
+      appendPointIfDistinct(punchOutLat, punchOutLng);
+    } else if (hasLiveCoords) {
+      appendPointIfDistinct(displayLat, displayLng);
+    }
 
-    // 1. Draw the full travelled route line ONLY after Punch-Out
-    const shouldDrawTrail = isShiftConcluded && rawLatLngs.length > 1;
+    // 1. Draw the complete travelled route line whenever at least 2 distinct points exist
+    const shouldDrawTrail = rawLatLngs.length > 1;
     let drawnPolylineCoords = rawLatLngs;
     if (shouldDrawTrail) {
       const isRoadSnapped = Boolean(roadSnapEnabled && snappedRouteState && snappedRouteState.snapped && snappedRouteState.coords.length > 1);
       const activePolylineCoords = isRoadSnapped ? snappedRouteState.coords : rawLatLngs;
       drawnPolylineCoords = activePolylineCoords;
+      drawnPolylineCoordsRef.current = activePolylineCoords;
 
       if (activePolylineCoords.length > 1) {
         L.polyline(activePolylineCoords, {
           color: '#1e40af',
-          weight: 8,
-          opacity: 0.22,
+          weight: 7,
+          opacity: 0.28,
           lineCap: 'round',
           lineJoin: 'round',
         }).addTo(routeGroup);
 
-        L.polyline(activePolylineCoords, {
+        const routePoly = L.polyline(activePolylineCoords, {
           color: '#2563eb',
           weight: 4.5,
-          opacity: 0.96,
+          opacity: 0.95,
           lineCap: 'round',
           lineJoin: 'round',
         }).addTo(routeGroup);
+
+        routePoly.bindTooltip(`
+          <div class="p-1 font-sans text-xs">
+            <span class="font-bold text-slate-800">🛣️ Travelled Route:</span>
+            <span class="font-extrabold text-blue-700 ml-1">${totalKm > 0 ? `${totalKm} KM` : `${rawLatLngs.length} Points`}</span>
+          </div>
+        `, { sticky: true });
       }
+    } else {
+      drawnPolylineCoordsRef.current = rawLatLngs;
     }
+
+    // 2. Intermediate GPS Waypoints / Breadcrumbs along the route
+    const intermediateStops = stops.filter((s) => {
+      if (!s) return false;
+      const sLat = Number(s.lat);
+      const sLng = Number(s.lng);
+      if (!Number.isFinite(sLat) || !Number.isFinite(sLng) || sLat === 0 || sLng === 0) return false;
+      if (hasPunchIn && Math.abs(sLat - punchInLat) < 0.00015 && Math.abs(sLng - punchInLng) < 0.00015) return false;
+      if (hasPunchOut && Math.abs(sLat - punchOutLat) < 0.00015 && Math.abs(sLng - punchOutLng) < 0.00015) return false;
+      if (hasLiveCoords && Math.abs(sLat - displayLat) < 0.00015 && Math.abs(sLng - displayLng) < 0.00015) return false;
+      return true;
+    });
+
+    const visibleWaypoints = intermediateStops.length <= 25
+      ? intermediateStops
+      : intermediateStops.filter((s, idx) => {
+          const step = Math.ceil(intermediateStops.length / 20);
+          return idx === 0 || idx === intermediateStops.length - 1 || idx % step === 0 || (s.stayMinutes && s.stayMinutes > 0);
+        });
+
+    visibleWaypoints.forEach((wp, wIdx) => {
+      const wLat = Number(wp.lat);
+      const wLng = Number(wp.lng);
+      const wpNo = wp.stopNo || wIdx + 2;
+      const wpTitle = wp.title || wp.landmarkName || `Waypoint #${wpNo}`;
+      const wpAddress = wp.address || `${wLat.toFixed(5)}°N, ${wLng.toFixed(5)}°E`;
+      const wpTime = wp.time || (wp.timestamp ? new Date(wp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--');
+      const wpDist = wp.distanceKm != null ? `${wp.distanceKm} KM` : (wp.legKm ? `+${wp.legKm} km` : '');
+
+      const waypointIcon = L.divIcon({
+        className: 'bg-transparent border-0',
+        html: `
+          <div class="flex flex-col items-center cursor-pointer select-none group" title="${wpTitle} • ${wLat.toFixed(5)}, ${wLng.toFixed(5)}">
+            <div class="w-5 h-5 rounded-full bg-white border-2 border-blue-600 shadow-md flex items-center justify-center text-[10px] font-black font-mono text-blue-700 group-hover:scale-125 transition-transform">
+              ${wpNo}
+            </div>
+            <div class="w-1.5 h-1.5 bg-blue-600 rounded-full -mt-0.5 opacity-80"></div>
+          </div>
+        `,
+        iconSize: [24, 28],
+        iconAnchor: [12, 26],
+        popupAnchor: [0, -26],
+      });
+
+      L.marker([wLat, wLng], { icon: waypointIcon, zIndexOffset: 300 })
+        .bindPopup(`
+          <div class="p-2.5 text-xs font-sans min-w-[220px]">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 mb-2">
+              <span class="font-extrabold text-blue-900 flex items-center gap-1">
+                <span class="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-mono flex items-center justify-center">${wpNo}</span>
+                <span>Waypoint #${wpNo}</span>
+              </span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">${wpTime}</span>
+            </div>
+            <div class="space-y-1.5 text-[11px] text-slate-600">
+              <div class="font-bold text-slate-900">${wpTitle}</div>
+              <div>${wpAddress}</div>
+              <div class="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-200 font-mono text-[10px]">
+                <span class="text-slate-500 font-semibold">Coordinates:</span>
+                <span class="font-bold text-slate-800">${wLat.toFixed(5)}°N, ${wLng.toFixed(5)}°E</span>
+              </div>
+              ${wpDist ? `
+                <div class="flex items-center justify-between text-[11px] px-0.5">
+                  <span class="text-slate-500">Distance Travelled:</span>
+                  <span class="font-bold font-mono text-blue-700">${wpDist}</span>
+                </div>
+              ` : ''}
+              <div class="pt-1 flex justify-end">
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=${wLat},${wLng}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] inline-flex items-center gap-1"
+                >
+                  <span>Google Maps ↗</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        `)
+        .addTo(markersGroup);
+    });
 
     // 2. Clean Emerald Punch-In Anchor + subtle 25m zone halo
     if (hasPunchIn) {
@@ -615,7 +712,19 @@ export default function LiveInteractiveMap({
       if (!hasFittedRef.current || lastTargetIdRef.current !== currentTargetId) {
         hasFittedRef.current = true;
         lastTargetIdRef.current = currentTargetId;
-        map.setView([displayLat, displayLng], 16);
+        const fitPoints = drawnPolylineCoords.length > 1
+          ? drawnPolylineCoords
+          : (hasPunchIn ? [[punchInLat, punchInLng], [displayLat, displayLng]] : [[displayLat, displayLng]]);
+        if (fitPoints.length > 1) {
+          try {
+            const bounds = L.latLngBounds(fitPoints);
+            map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+          } catch {
+            map.setView([displayLat, displayLng], 15);
+          }
+        } else {
+          map.setView([displayLat, displayLng], 16);
+        }
       }
     }
 
@@ -625,31 +734,38 @@ export default function LiveInteractiveMap({
   const currentOdometer = Number((startOdometer + totalKm).toFixed(1));
   const legsCount = stops.length > 1 ? stops.length - 1 : 0;
 
-  // Center on Punch-In + Live pin while active, or fit full route (including all waypoints, Punch-In & Punch-Out) after Punch-Out
+  // Fit full route (including all waypoints, Punch-In & Punch-Out or Live GPS)
   const handleFitRoute = () => {
     if (!mapInstanceRef.current) return;
-    if (!isShiftConcluded && validTarget?.lat != null && validTarget?.lng != null) {
-      mapInstanceRef.current.setView([Number(validTarget.lat), Number(validTarget.lng)], 16);
-      return;
-    }
     const fitPts = [];
-    if (validTarget?.gpsLocation?.lat && validTarget?.gpsLocation?.lng) {
-      fitPts.push([Number(validTarget.gpsLocation.lat), Number(validTarget.gpsLocation.lng)]);
-    }
-    stops.forEach((s) => {
-      if (Number.isFinite(Number(s?.lat)) && Number.isFinite(Number(s?.lng))) {
-        fitPts.push([Number(s.lat), Number(s.lng)]);
+    if (drawnPolylineCoordsRef.current && drawnPolylineCoordsRef.current.length > 1) {
+      fitPts.push(...drawnPolylineCoordsRef.current);
+    } else {
+      if (validTarget?.gpsLocation?.lat && validTarget?.gpsLocation?.lng) {
+        fitPts.push([Number(validTarget.gpsLocation.lat), Number(validTarget.gpsLocation.lng)]);
       }
-    });
-    if (validTarget?.exitGpsLocation?.lat && validTarget?.exitGpsLocation?.lng) {
-      fitPts.push([Number(validTarget.exitGpsLocation.lat), Number(validTarget.exitGpsLocation.lng)]);
+      stops.forEach((s) => {
+        if (Number.isFinite(Number(s?.lat)) && Number.isFinite(Number(s?.lng))) {
+          fitPts.push([Number(s.lat), Number(s.lng)]);
+        }
+      });
+      if (validTarget?.exitGpsLocation?.lat && validTarget?.exitGpsLocation?.lng) {
+        fitPts.push([Number(validTarget.exitGpsLocation.lat), Number(validTarget.exitGpsLocation.lng)]);
+      } else if (validTarget?.lat != null && validTarget?.lng != null) {
+        fitPts.push([Number(validTarget.lat), Number(validTarget.lng)]);
+      }
     }
-    if (fitPts.length === 0) return;
-    try {
-      const bounds = L.latLngBounds(fitPts);
-      mapInstanceRef.current.fitBounds(bounds, { padding: [65, 65], maxZoom: 16 });
-    } catch {
-      mapInstanceRef.current.setView(fitPts[0], 15);
+    if (fitPts.length > 1) {
+      try {
+        const bounds = L.latLngBounds(fitPts);
+        mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+        return;
+      } catch (e) {
+        console.warn('fitBounds error', e);
+      }
+    }
+    if (validTarget?.lat != null && validTarget?.lng != null) {
+      mapInstanceRef.current.setView([Number(validTarget.lat), Number(validTarget.lng)], 15);
     }
   };
 
@@ -722,10 +838,10 @@ export default function LiveInteractiveMap({
             type="button"
             onClick={handleFitRoute}
             className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/40 flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 transition-all"
-            title="Center map on employee location"
+            title="Fit complete route and view all coordinates"
           >
             <Crosshair className="w-3.5 h-3.5 text-white" />
-            <span>{isShiftConcluded ? 'Fit Route' : 'Center Pin'}</span>
+            <span>Fit Route</span>
           </button>
 
           {activeRouteDetails?.googleMapsFullRouteUrl && (
@@ -845,8 +961,18 @@ export default function LiveInteractiveMap({
                 <span>Live Location</span>
               </span>
               <span className="text-slate-300">•</span>
-              <span className="font-mono text-[11px] text-slate-600 font-semibold">
-                Route visible after Punch-Out
+              <span className="flex items-center gap-1.5 font-mono text-[11px] text-blue-900 font-black">
+                <span className="w-3.5 h-1.5 bg-blue-600 rounded-full" />
+                <span>Travelled: {totalKm > 0 ? `${totalKm} KM` : 'Active'}</span>
+              </span>
+            </>
+          )}
+          {stops.length > 2 && (
+            <>
+              <span className="text-slate-300">•</span>
+              <span className="flex items-center gap-1.5 font-mono text-[11px] text-indigo-700 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full border-2 border-blue-600 bg-white shadow-xs" />
+                <span>Waypoints ({stops.length - 2})</span>
               </span>
             </>
           )}

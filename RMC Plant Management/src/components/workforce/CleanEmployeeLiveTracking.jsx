@@ -156,7 +156,7 @@ export default function CleanEmployeeLiveTracking() {
       const cleanId = resolveCanonicalEmployeeId(emp.employeeId);
       const cleanName = (emp.name || '').toLowerCase().trim();
 
-      const record = (attendance || []).find((a) => {
+      const matchingRecords = (attendance || []).filter((a) => {
         const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
         const aName = (a.employeeName || '').toString().trim().toLowerCase();
         const isDateMatch = aDate === selectedDate || (a.id && a.id.startsWith(`ATT-${compactDate}-`));
@@ -164,6 +164,18 @@ export default function CleanEmployeeLiveTracking() {
         if (attendanceMatchesEmployee(a, cleanId)) return true;
         return Boolean(!a.employeeId && aName && cleanName && aName === cleanName);
       });
+
+      const record = matchingRecords.sort((a, b) => {
+        const aHasOut = Boolean(a.punchOut);
+        const bHasOut = Boolean(b.punchOut);
+        if (aHasOut !== bHasOut) return bHasOut ? 1 : -1;
+        const aTrailLen = Array.isArray(a.routeTrail) ? a.routeTrail.length : 0;
+        const bTrailLen = Array.isArray(b.routeTrail) ? b.routeTrail.length : 0;
+        if (aTrailLen !== bTrailLen) return bTrailLen - aTrailLen;
+        const aUpd = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bUpd = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bUpd - aUpd;
+      })[0] || null;
 
       const hasGps = Boolean(record?.lastKnownLocation?.lat || record?.gpsLocation?.lat);
       const isPunchIn = Boolean(record?.punchIn);
@@ -269,7 +281,7 @@ export default function CleanEmployeeLiveTracking() {
     const cleanName = (activeEmployee.name || '').toLowerCase().trim();
     const compactDate = selectedDate.replace(/-/g, '');
 
-    return (attendance || []).find((a) => {
+    const matchingRecords = (attendance || []).filter((a) => {
       const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
       const aName = (a.employeeName || '').toString().trim().toLowerCase();
       const isDateMatch = aDate === selectedDate ||
@@ -277,7 +289,19 @@ export default function CleanEmployeeLiveTracking() {
       if (!isDateMatch) return false;
       if (attendanceMatchesEmployee(a, cleanId)) return true;
       return Boolean(!a.employeeId && aName && cleanName && aName === cleanName);
-    }) || null;
+    });
+
+    return matchingRecords.sort((a, b) => {
+      const aHasOut = Boolean(a.punchOut);
+      const bHasOut = Boolean(b.punchOut);
+      if (aHasOut !== bHasOut) return bHasOut ? 1 : -1;
+      const aTrailLen = Array.isArray(a.routeTrail) ? a.routeTrail.length : 0;
+      const bTrailLen = Array.isArray(b.routeTrail) ? b.routeTrail.length : 0;
+      if (aTrailLen !== bTrailLen) return bTrailLen - aTrailLen;
+      const aUpd = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bUpd = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return bUpd - aUpd;
+    })[0] || null;
   }, [attendance, activeEmployee, selectedDate]);
 
   // Tracking status evaluation
@@ -349,8 +373,8 @@ export default function CleanEmployeeLiveTracking() {
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
               {isPunchedOut
-                ? 'Shift concluded — displaying Punch-In, Punch-Out, and travelled route.'
-                : 'On duty — showing Punch-In point and real-time live position (route reveals after Punch-Out).'}
+                ? 'Shift concluded — displaying Punch-In, Punch-Out, waypoints, and travelled route with coordinates.'
+                : 'On duty — displaying Punch-In, live travelled route, waypoints, and real-time position.'}
             </p>
           </div>
 
@@ -362,10 +386,10 @@ export default function CleanEmployeeLiveTracking() {
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
                   : 'bg-emerald-50 text-emerald-700 border-emerald-200'
               }`}
-              title={isPunchedOut ? 'Completed shift route visible' : 'Route hidden until employee punches out'}
+              title={isPunchedOut ? 'Completed shift route visible' : 'Live shift route visible'}
             >
               <GitCommit className="w-3.5 h-3.5" />
-              <span>{isPunchedOut ? 'Shift Concluded • Clean Route' : 'Live Mode • Route After Punch-Out'}</span>
+              <span>{isPunchedOut ? 'Shift Concluded • Complete Route' : 'Live On Duty • Route Active'}</span>
             </span>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl">
               <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
@@ -524,7 +548,7 @@ export default function CleanEmployeeLiveTracking() {
                     ? 'bg-blue-50 text-blue-800 border-blue-200'
                     : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                 }`}>
-                  <span>{isPunchedOut ? '✓ Punch-In → Punch-Out Route' : '● Punch-In & Live Pin Only'}</span>
+                  <span>{isPunchedOut ? '✓ Complete Travelled Route' : '● Live Travelled Route Active'}</span>
                 </span>
               </div>
             </div>
@@ -571,7 +595,7 @@ export default function CleanEmployeeLiveTracking() {
               onSelectTarget={(emp) => setSelectedEmpId(emp.employeeId || emp.id)}
               mapSatellite={mapSatellite}
               onToggleSatellite={() => setMapSatellite((prev) => !prev)}
-              mapRouteMode={isPunchedOut}
+              mapRouteMode={true}
               isFullWidth={isFullWidth}
               onToggleFullWidth={() => setIsFullWidth((prev) => !prev)}
             />
