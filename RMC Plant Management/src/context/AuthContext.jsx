@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword, 
   signOut,
   onAuthStateChanged,
+  onIdTokenChanged,
   sendPasswordResetEmail,
   updatePassword,
   setPersistence,
@@ -147,14 +148,41 @@ export const AuthProvider = ({ children }) => {
           let profile = await fetchDocument(COLLECTIONS.USERS, firebaseUser.uid);
 
           if (!profile && firebaseUser.email) {
+            const targetEmail = firebaseUser.email.toLowerCase();
             const matchedOfficial = OFFICIAL_ROLE_ACCOUNTS.find(
-              (acc) => (acc.email || '').toLowerCase() === firebaseUser.email.toLowerCase()
+              (acc) => (acc.email || '').toLowerCase() === targetEmail
             );
-            if (matchedOfficial) {
-              const { password: _p, ...safeAcc } = matchedOfficial;
+            let fallbackMatch = matchedOfficial;
+            if (!fallbackMatch) {
+              try {
+                const cachedUsers = JSON.parse(localStorage.getItem(STORAGE_USERS_KEY) || '[]');
+                if (Array.isArray(cachedUsers)) {
+                  fallbackMatch = cachedUsers.find((u) => (u?.email || '').toLowerCase() === targetEmail);
+                }
+              } catch { /* ignore */ }
+            }
+            if (!fallbackMatch) {
+              try {
+                const wfRaw = JSON.parse(localStorage.getItem('rmc_workforce_data_v2') || '{}');
+                const wfEmps = Array.isArray(wfRaw?.employees) ? wfRaw.employees : [];
+                fallbackMatch = wfEmps.find((e) => (e?.email || '').toLowerCase() === targetEmail);
+              } catch { /* ignore */ }
+            }
+            if (!fallbackMatch) {
+              try {
+                const cachedSession = JSON.parse(localStorage.getItem(STORAGE_SESSION_KEY) || 'null');
+                if (cachedSession && (cachedSession.email || '').toLowerCase() === targetEmail) {
+                  fallbackMatch = cachedSession;
+                }
+              } catch { /* ignore */ }
+            }
+            if (fallbackMatch) {
+              const { password: _p, ...safeAcc } = fallbackMatch;
               profile = {
                 ...safeAcc,
                 uid: firebaseUser.uid,
+                companyId: normalizeCompanyId(safeAcc.companyId || localStorage.getItem('rmc_active_company_v1')),
+                status: safeAcc.status || EMPLOYEE_STATUS.ACTIVE,
               };
               saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, profile).catch(() => {});
             }
@@ -173,6 +201,7 @@ export const AuthProvider = ({ children }) => {
             const restoredUser = {
               ...profile,
               uid: firebaseUser.uid,
+              companyId: normalizeCompanyId(profile.companyId || localStorage.getItem('rmc_active_company_v1')),
               isMasterAdmin: isMaster,
               originalAdminUser: isMaster ? profile : null,
               lastRestoredAt: new Date().toISOString(),
@@ -183,11 +212,11 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(restoredUser));
             sessionStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(restoredUser));
 
-            // Sync fresh auth token and company context to native Android bridge
+            // Sync fresh auth token, refresh token, company context, and UID to native Android bridge
             try {
               const token = await firebaseUser.getIdToken();
               const company = normalizeCompanyId(restoredUser.companyId || localStorage.getItem('rmc_active_company_v1'));
-              nativeTracking.syncAuth(token, company);
+              nativeTracking.syncAuth(token, company, firebaseUser.refreshToken || '', firebaseUser.uid || '');
             } catch {
               // Ignore background sync errors
             }
@@ -197,7 +226,7 @@ export const AuthProvider = ({ children }) => {
         }
       } else {
         // Clear native bridge auth on signout
-        nativeTracking.syncAuth('', '');
+        nativeTracking.syncAuth('', '', '', '');
         if (typeof window !== 'undefined') {
           const stored = sessionStorage.getItem(STORAGE_SESSION_KEY);
           if (stored) {
@@ -215,8 +244,25 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
+    // Keep native background tracking authenticated across hourly Firebase ID token refreshes
+    const unsubscribeIdToken = typeof onIdTokenChanged === 'function'
+      ? onIdTokenChanged(auth, async (firebaseUser) => {
+          if (!firebaseUser) return;
+          try {
+            const token = await firebaseUser.getIdToken();
+            const storedRaw = localStorage.getItem(STORAGE_SESSION_KEY);
+            const stored = storedRaw ? JSON.parse(storedRaw) : null;
+            const company = normalizeCompanyId(stored?.companyId || localStorage.getItem('rmc_active_company_v1'));
+            nativeTracking.syncAuth(token, company, firebaseUser.refreshToken || '', firebaseUser.uid || '');
+          } catch {
+            // Ignore background token refresh sync errors
+          }
+        })
+      : null;
+
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubscribeIdToken === 'function') unsubscribeIdToken();
     };
   }, []);
 
@@ -498,10 +544,24 @@ export const AuthProvider = ({ children }) => {
     }
 
     // Save/update verified user profile in Cloud Firestore under UID (without password)
-    saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, {
-      ...sessionData,
-      syncedAt: new Date().toISOString(),
-    }).catch(() => {});
+    const isOfflineMockSession = String(firebaseUser.uid || '').startsWith('EMP-');
+    if (!isOfflineMockSession) {
+      await saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, {
+        ...sessionData,
+        syncedAt: new Date().toISOString(),
+      }).catch(() => {});
+
+      try {
+        if (typeof firebaseUser.getIdToken === 'function') {
+          const token = await firebaseUser.getIdToken();
+          nativeTracking.syncAuth(token, sessionData.companyId, firebaseUser.refreshToken || '', firebaseUser.uid || '');
+        }
+      } catch {
+        // Ignore bridge token sync errors
+      }
+    } else {
+      console.warn('[AUTH_WARNING] Running offline session without Firebase Auth token; cloud sync paused until re-authenticated.');
+    }
 
     setUser(sessionData);
     setLoading(false);

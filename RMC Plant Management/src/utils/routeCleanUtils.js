@@ -31,14 +31,64 @@ export function getHaversineDistanceMeters(p1, p2) {
 }
 
 /**
+ * 0. Filter extreme geographic outliers (e.g. fake default fallbacks or GPS teleport jumps > 50km from route cluster)
+ */
+export function filterGeographicOutliers(points, maxDistanceMeters = 50000) {
+  if (!Array.isArray(points) || points.length <= 1) return points || [];
+  
+  // Anchor on the verified start / punch-in location (first recorded waypoint)
+  const startPoint = points[0];
+  const startLat = Number(startPoint?.lat);
+  const startLng = Number(startPoint?.lng);
+
+  if (points.length === 2 && !isNaN(startLat) && !isNaN(startLng)) {
+    const dist = getHaversineDistanceMeters(startPoint, points[1]);
+    if (dist > maxDistanceMeters) {
+      // Point 1 is an extreme outlier (e.g. Pune/Mumbai gateway jump of 200km)
+      // Collapse point 1 to start point rather than keeping a fake 200km teleport
+      return [
+        startPoint,
+        {
+          ...points[1],
+          lat: startLat,
+          lng: startLng,
+          address: startPoint.address || `${startLat.toFixed(5)}°N, ${startLng.toFixed(5)}°E`,
+          title: points[1].title || 'Punch-Out Station',
+          distanceKm: 0.0
+        }
+      ];
+    }
+    return points;
+  }
+
+  const sortedLats = points.map(p => Number(p.lat)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+  const sortedLngs = points.map(p => Number(p.lng)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+  if (sortedLats.length === 0 || sortedLngs.length === 0) return points;
+
+  const medianLat = sortedLats[Math.floor(sortedLats.length / 2)];
+  const medianLng = sortedLngs[Math.floor(sortedLngs.length / 2)];
+  const center = { lat: medianLat, lng: medianLng };
+
+  const valid = points.filter(p => {
+    const dist = getHaversineDistanceMeters(center, p);
+    return dist <= maxDistanceMeters;
+  });
+
+  return valid.length > 0 ? valid : points;
+}
+
+/**
  * 1. Filter out GPS teleportation spikes / satellite acquisition jumps (> 130 km/h impossible jumps)
  */
 export function filterGpsSpikes(points, maxDistMeters = 120) {
   if (!Array.isArray(points) || points.length < 3) return points || [];
   const pts = [...points];
 
-  // Clean initial spike/jump (e.g. cached cell tower fix before GPS lock)
+  // Clean initial spike/jump (never strip verified Punch-In anchor)
   while (pts.length >= 3) {
+    if (pts[0]?.category === 'Punch-In Location' || pts[0]?.category === 'Punch In' || pts[0]?.status === 'Punch-In Station') {
+      break;
+    }
     const d01 = getHaversineDistanceMeters(pts[0], pts[1]);
     const d12 = getHaversineDistanceMeters(pts[1], pts[2]);
     const t0 = pts[0].ts || (pts[0].timestamp ? new Date(pts[0].timestamp).getTime() : 0);
@@ -53,9 +103,12 @@ export function filterGpsSpikes(points, maxDistMeters = 120) {
     }
   }
 
-  // Clean trailing spike
+  // Clean trailing spike (never strip verified Punch-Out endpoint)
   while (pts.length >= 3) {
     const n = pts.length;
+    if (pts[n - 1]?.category === 'Punch-Out Location' || pts[n - 1]?.status === 'Punch-Out Station') {
+      break;
+    }
     const dLast = getHaversineDistanceMeters(pts[n - 2], pts[n - 1]);
     const tPrev = pts[n - 2].ts || (pts[n - 2].timestamp ? new Date(pts[n - 2].timestamp).getTime() : 0);
     const tLast = pts[n - 1].ts || (pts[n - 1].timestamp ? new Date(pts[n - 1].timestamp).getTime() : 0);
@@ -198,8 +251,11 @@ export function calculateAccurateRouteDistanceKm(cleanedPoints) {
 export function cleanRawRoutePipeline(rawTrail) {
   if (!Array.isArray(rawTrail) || rawTrail.length < 2) return rawTrail || [];
 
+  // Step 0: Prune extreme geographic anomalies / fake fallback jumps (> 50 km from route cluster)
+  let step0 = filterGeographicOutliers(rawTrail, 50000);
+
   // Step 1: Remove impossible GPS teleports
-  let step1 = filterGpsSpikes(rawTrail, 120);
+  let step1 = filterGpsSpikes(step0, 120);
 
   // Step 2: Collapse 10-15+ minute stops into stationary centroids (NO SPIDERS)
   let step2 = filterStayPoints(step1, 25, 180000); // 25 meters radius, min 3 minutes

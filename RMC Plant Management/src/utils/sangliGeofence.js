@@ -158,18 +158,7 @@ export function resolveSangliLandmark(lat, lng) {
     }
   }
 
-  // Check Pune Urban Region (lat: 18.35 to 18.70, lng: 73.65 to 74.05)
-  // Set isKnownLandmark: false so real reverse-geocoding (Nominatim / BigDataCloud) resolves true street
-  if (numLat >= 18.35 && numLat <= 18.70 && numLng >= 73.65 && numLng <= 74.05) {
-    return {
-      landmarkName: `Pune (${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E)`,
-      shortName: 'Pune',
-      address: `Pune Metropolitan Region (${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E)`,
-      distanceMeters: null,
-      isKnownLandmark: false,
-      type: 'PUNE_URBAN',
-    };
-  }
+
 
   // Check Sangli District bounding box (lat: 16.70 to 16.98, lng: 74.40 to 74.80)
   if (numLat >= 16.70 && numLat <= 16.98 && numLng >= 74.40 && numLng <= 74.80) {

@@ -309,91 +309,9 @@ export default function AttendanceManagementView({
     return { workingHours, overtimeHours, status };
   };
 
-  // 1-Click Quick Punch In for staff members (with verified live selfie & real device GPS)
+  // Attendance Punch In is exclusively mobile-enabled (GPS + Facial Verification via SM Company App)
   const handleQuickPunchIn = (emp) => {
-    const executePunchIn = async (lat, lng, isReal = false) => {
-      try {
-        const photo = emp.selfieUrl || emp.avatarUrl || null;
-        const rec = await checkIn(emp.employeeId || emp.id, {
-          selfieUrl: photo,
-          remarks: `Facial clock-in verified for ${emp.name}`,
-          geofenceStatus: isReal ? `Live Device Location (${lat}, ${lng})` : 'Inside Plant Geofence (18m)',
-          gpsLocation: {
-            lat,
-            lng,
-            accuracy: isReal ? 8 : 15,
-            address: `Live GPS Location (${lat}° N, ${lng}° E)`,
-            isRealGps: isReal,
-            timestamp: new Date().toISOString(),
-          },
-        });
-        
-        let authToken = '';
-        try {
-          if (auth?.currentUser) {
-            authToken = await auth.currentUser.getIdToken();
-          }
-        } catch {
-          // Graceful fallback
-        }
-
-        nativeTracking.startForegroundTracking(emp.employeeId || emp.id, emp.name, {
-          companyId: user?.companyId || 'sm-concretech',
-          authToken,
-          attendanceDocId: rec?.id || '',
-        });
-        setToastMessage(`✓ Clocked IN: ${emp.name} at ${formatToIndian12Hr(rec.punchIn)} (🛰️ Live GPS: ${lat}, ${lng})`);
-      } catch (err) {
-        setToastMessage(err.message || 'Check-in failed');
-      }
-    };
-
-    const fallbackPunchIn = () => {
-      const isSup = (emp.role || '').toLowerCase().includes('supervisor') || (emp.employeeId || emp.id || '').toUpperCase().includes('SS');
-      const isDis = (emp.role || '').toLowerCase().includes('dispatch') || (emp.employeeId || emp.id || '').toUpperCase().includes('DIS');
-      const isQc = (emp.role || '').toLowerCase().includes('qc') || (emp.role || '').toLowerCase().includes('quality') || (emp.employeeId || emp.id || '').toUpperCase().includes('QC');
-      if (isSup) {
-        executePunchIn(16.8520, 74.5900, false);
-      } else if (isDis) {
-        executePunchIn(18.502390, 73.847872, false);
-      } else if (isQc) {
-        executePunchIn(16.8300, 74.6400, false);
-      } else {
-        executePunchIn(16.8450, 74.6200, false);
-      }
-    };
-
-    // If native tracking bridge has an active hardware fix, use it immediately!
-    const nativeFix = nativeTracking.getLatestNativeFix();
-    if (nativeFix && nativeFix.lat && nativeFix.lng) {
-      executePunchIn(Number(nativeFix.lat), Number(nativeFix.lng), true);
-      return;
-    }
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          let lat = Number(pos.coords.latitude.toFixed(5));
-          let lng = Number(pos.coords.longitude.toFixed(5));
-          const isQc = (emp.role || '').toLowerCase().includes('qc') || (emp.role || '').toLowerCase().includes('quality') || (emp.employeeId || emp.id || '').toUpperCase().includes('QC');
-          const isSup = (emp.role || '').toLowerCase().includes('supervisor') || (emp.employeeId || emp.id || '').toUpperCase().includes('SS');
-          // Reject coarse Kolhapur ISP coordinates (16.69) for Sangli operations
-          const isKolhapur = Math.abs(lat - 16.6941) < 0.05 && Math.abs(lng - 74.2366) < 0.05;
-          if (isKolhapur) {
-            if (isQc) { lat = 16.8300; lng = 74.6400; }
-            else if (isSup) { lat = 16.8520; lng = 74.5900; }
-            else { lat = 16.8450; lng = 74.6200; }
-          }
-          executePunchIn(lat, lng, true);
-        },
-        () => {
-          fallbackPunchIn();
-        },
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
-    } else {
-      fallbackPunchIn();
-    }
+    setToastMessage(`ℹ️ Attendance Punching is exclusively mobile-enabled. ${emp.name} must clock in via the SM Company Mobile App for real GPS & biometric verification.`);
   };
 
   // 1-Click Quick Punch Out for staff members (MANDATORY DEPARTMENT DAILY REPORT ENFORCED)
@@ -561,7 +479,7 @@ export default function AttendanceManagementView({
     setShowReportModal(true);
   };
 
-  const handleModalSubmitReport = (e, andClockOut = false) => {
+  const handleModalSubmitReport = async (e, andClockOut = false) => {
     if (e) e.preventDefault();
     if (!reportTargetStaff) return;
 
@@ -641,7 +559,7 @@ export default function AttendanceManagementView({
 
     if (andClockOut) {
       try {
-        const rec = checkOut(targetId, {
+        const rec = await checkOut(targetId, {
           remarks: `Shift completed for ${reportTargetStaff.name}. Daily Report submitted.`,
         });
         setToastMessage(`✓ Daily Report filed & ${reportTargetStaff.name} clocked OUT at ${formatToIndian12Hr(rec.punchOut)} (Duty: ${rec.workingHours}h)!`);
@@ -779,16 +697,8 @@ export default function AttendanceManagementView({
 
       // Dynamic Real-time Location Details
       const realLocation = record?.geofenceStatus || record?.gpsLocation?.landmarkName || record?.gpsLocation?.address;
-      let locationSummary = realLocation || (isOnline ? 'Stationary at Assigned Workstation' : 'Off-Duty (Awaiting Punch In)');
+      let locationSummary = realLocation || (isOnline ? 'Active on Duty' : 'Off-Duty (Awaiting Punch In)');
       let locationCoords = record?.gpsLocation || record?.lastKnownLocation || null;
-
-      const isAccountantRow = empId.includes('ACC') || empEmpId.includes('ACC') || (emp.role || '').toLowerCase().includes('account');
-      if (isAccountantRow) {
-        if (!realLocation || realLocation.toLowerCase().includes('chhindwara') || (locationCoords?.lat && (Number(locationCoords.lat) >= 17.5 || Number(locationCoords.lat) < 16.5))) {
-          locationSummary = isOnline ? 'Sangli Market Yard (APMC Commercial Hub)' : 'Off-Duty (Sangli Market Yard)';
-          locationCoords = { lat: 16.8584, lng: 74.5824 };
-        }
-      }
       let locationSpeed = 0;
 
       // Daily Work Report status: Strictly check if a real daily work report has been submitted
@@ -1875,14 +1785,10 @@ export default function AttendanceManagementView({
                     <div className="flex items-center gap-1.5">
 
                       {!staff.isOnline && !staff.isCompleted && (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickPunchIn(staff)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span>Clock In</span>
-                        </button>
+                        <div className="px-2.5 py-1 rounded-lg text-[10.5px] font-semibold bg-slate-100 text-slate-500 flex items-center gap-1 border border-slate-200/80">
+                          <Smartphone className="w-3 h-3 text-slate-400" />
+                          <span>Mobile App Only</span>
+                        </div>
                       )}
 
                       {staff.isOnline && (
@@ -3218,7 +3124,7 @@ export default function AttendanceManagementView({
                         <div className="text-[10px] text-slate-300 truncate mt-0.5 flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
                           <span className="truncate">
-                            {staff.locationSummary || 'Main Plant Unit #01, Pune'}
+                            {staff.locationSummary || staff.plant || 'Main Plant Hub'}
                           </span>
                         </div>
                       </div>
@@ -3376,47 +3282,58 @@ export default function AttendanceManagementView({
                     <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                        <span className="font-bold text-xs text-slate-800 truncate">Plant Location</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
-                          ✓ GPS Active
-                        </span>
+                        <span className="font-bold text-xs text-slate-800 truncate">Device Location</span>
+                        {staff.locationCoords?.lat && staff.locationCoords?.lng ? (
+                          <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                            ✓ GPS Fix
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0">
+                            No Fix
+                          </span>
+                        )}
                       </div>
-                      <a
-                        href={`https://maps.google.com/?q=${staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)},${staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[10px] flex items-center gap-1 shrink-0 transition-colors"
-                        title="View on Google Maps"
-                      >
-                        <span>Map</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      {staff.locationCoords?.lat && staff.locationCoords?.lng && (
+                        <a
+                          href={`https://maps.google.com/?q=${staff.locationCoords.lat},${staff.locationCoords.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[10px] flex items-center gap-1 shrink-0 transition-colors"
+                          title="View on Google Maps"
+                        >
+                          <span>Map</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
 
                     {/* Clean Map View */}
-                    <div className="relative w-full h-32 bg-slate-100 overflow-hidden">
-                      <iframe
-                        title="Staff Location Map"
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                        scrolling="no"
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${(staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)) - 0.006}%2C${(staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)) - 0.006}%2C${(staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)) + 0.006}%2C${(staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)) + 0.006}&layer=mapnik&marker=${staff.locationCoords?.lat || (staff.isSupervisor ? 16.8520 : 16.8450)}%2C${staff.locationCoords?.lng || (staff.isSupervisor ? 74.5900 : 74.6200)}`}
-                        className="w-full h-full opacity-90 contrast-105"
-                      />
+                    <div className="relative w-full h-32 bg-slate-100 overflow-hidden flex items-center justify-center">
+                      {staff.locationCoords?.lat && staff.locationCoords?.lng ? (
+                        <>
+                          <iframe
+                            title="Staff Location Map"
+                            width="100%"
+                            height="100%"
+                            frameBorder="0"
+                            scrolling="no"
+                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(staff.locationCoords.lng) - 0.006}%2C${Number(staff.locationCoords.lat) - 0.006}%2C${Number(staff.locationCoords.lng) + 0.006}%2C${Number(staff.locationCoords.lat) + 0.006}&layer=mapnik&marker=${staff.locationCoords.lat}%2C${staff.locationCoords.lng}`}
+                            className="w-full h-full opacity-90 contrast-105"
+                          />
 
-                      {/* Top Overlay */}
-                      <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-white/90 backdrop-blur-xs border border-slate-200 text-[10px] font-bold text-slate-800 shadow-xs flex items-center gap-1 pointer-events-none">
-                        <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                        <span>{staff.isSupervisor ? 'Godrej Green Acres Site, Sangli' : ((staff.role || '').toLowerCase().includes('dispatch') ? 'Logistics Hub, Pune' : 'SM Concrete Plant HQ, Sangli')}</span>
-                      </div>
-
-                      {/* Bottom Overlay */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/90 via-slate-900/60 to-transparent p-2 text-white pointer-events-none">
-                        <div className="font-bold text-[11px] text-white truncate">
-                          ✅ Inside Plant Premises
+                          {/* Top Overlay */}
+                          <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-white/90 backdrop-blur-xs border border-slate-200 text-[10px] font-bold text-slate-800 shadow-xs flex items-center gap-1 pointer-events-none">
+                            <MapPin className="w-3 h-3 text-red-500 shrink-0" />
+                            <span>{staff.locationSummary || `${Number(staff.locationCoords.lat).toFixed(4)}°N, ${Number(staff.locationCoords.lng).toFixed(4)}°E`}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center p-3 text-slate-400">
+                          <MapPin className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                          <p className="text-[11px] font-bold text-slate-500">No GPS Fix Recorded Today</p>
+                          <p className="text-[10px] text-slate-400">Awaiting employee punch-in from mobile</p>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3443,17 +3360,10 @@ export default function AttendanceManagementView({
                   </button>
 
                   {!staff.isOnline && !staff.isCompleted && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleQuickPunchIn(staff);
-                        setShowDetailModal(false);
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Clock In</span>
-                    </button>
+                    <div className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1.5">
+                      <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Clock In via Mobile App</span>
+                    </div>
                   )}
 
                   {staff.isOnline && (

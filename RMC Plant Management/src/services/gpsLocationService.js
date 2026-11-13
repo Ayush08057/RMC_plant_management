@@ -99,95 +99,32 @@ export async function resolveAccurateAddress(lat, lng) {
     }
   } catch {}
 
-  // 3. Fallback: Clean coordinates format without fake landmarks
-  const cityGuess = numLat < 17.5 ? 'Sangli' : 'Pune';
+  // 3. Fallback: Clean coordinates format without fake landmarks or guessed cities
   const coordRes = {
     landmarkName: `${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E`,
-    address: `Location: ${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E (${cityGuess})`,
+    address: `${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E`,
     shortName: `${numLat.toFixed(3)}°, ${numLng.toFixed(3)}°`,
-    city: 'Location Verified'
+    city: 'GPS Fix'
   };
   reverseGeocodeCache.set(cacheKey, coordRes);
   return coordRes;
 }
 
 /**
- * Fetch IP-based location fallback when GPS permission is denied or unavailable
- */
-async function fetchIpGeolocation() {
-  const providers = [
-    {
-      url: 'https://get.geojs.io/v1/ip/geo.json',
-      parse: (d) => ({
-        lat: Number(d.latitude),
-        lng: Number(d.longitude),
-        city: d.city || 'Pune',
-        accuracy: 1000
-      })
-    },
-    {
-      url: 'https://freeipapi.com/api/json',
-      parse: (d) => ({
-        lat: Number(d.latitude),
-        lng: Number(d.longitude),
-        city: d.cityName || 'Pune',
-        accuracy: 1500
-      })
-    }
-  ];
-
-  for (const prov of providers) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-      const res = await fetch(prov.url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const json = await res.json();
-        const parsed = prov.parse(json);
-        if (parsed.lat && parsed.lng && !isNaN(parsed.lat) && !isNaN(parsed.lng)) {
-          return parsed;
-        }
-      }
-    } catch {
-      // try next provider
-    }
-  }
-  return null;
-}
-
-/**
- * Multi-Tiered Geolocation Fetcher
- * Tier 1: Browser GPS with High Accuracy
- * Tier 2: Browser GPS with Low Accuracy (Instant Wi-Fi / Cell triangulation)
- * Tier 3: IP-Based Geolocation
- * Tier 4: Fallback
+ * High-Precision Device Geolocation Fetcher
+ * Tier 1: Flutter Native Hardware GPS Fix (mobile app bridge)
+ * Tier 2: Browser Hardware GPS with High Accuracy
+ * Tier 3: Browser Wi-Fi / Cell Triangulation
+ * Strictly zero hardcoded coordinates, zero IP geolocation estimates.
  */
 export async function getAccurateDeviceLocation(options = {}) {
-  const { forceFresh = false, defaultStation = null } = options;
+  const { forceFresh = false } = options;
 
-  // Step 0: Priority 1 - Native Flutter Hardware GPS Fix via Bridge (if running in mobile app)
+  // Step 0: Priority 1 - Native Flutter Hardware GPS Fix via Bridge (mobile app is authoritative)
   if (nativeTracking.isNativeApp()) {
     try {
-      const cached = nativeTracking.getLatestNativeFix();
-      if (cached && cached.lat && cached.lng && !forceFresh) {
-        const nLat = Number(Number(cached.lat).toFixed(6));
-        const nLng = Number(Number(cached.lng).toFixed(6));
-        const addrInfo = await resolveAccurateAddress(nLat, nLng);
-        return {
-          lat: nLat,
-          lng: nLng,
-          accuracy: Math.round(cached.accuracy || 10),
-          timestamp: cached.timestamp || new Date().toISOString(),
-          address: addrInfo.address,
-          landmarkName: addrInfo.landmarkName,
-          shortName: addrInfo.shortName,
-          source: 'NATIVE_HARDWARE_GPS',
-          isFallback: false
-        };
-      }
-
-      const nativeFix = await nativeTracking.requestImmediateFix(1200);
+      // 1. Request a fresh real GNSS satellite ping from the phone's GPS hardware (wait up to 4.5 seconds)
+      const nativeFix = await nativeTracking.requestImmediateFix(4500);
       if (nativeFix && nativeFix.lat && nativeFix.lng) {
         const nLat = Number(Number(nativeFix.lat).toFixed(6));
         const nLng = Number(Number(nativeFix.lng).toFixed(6));
@@ -204,7 +141,46 @@ export async function getAccurateDeviceLocation(options = {}) {
           isFallback: false
         };
       }
+
+      // 2. If immediate ping took longer, fallback to the latest real hardware fix recorded by foreground service
+      const cached = nativeTracking.getLatestNativeFix();
+      if (cached && cached.lat && cached.lng) {
+        const nLat = Number(Number(cached.lat).toFixed(6));
+        const nLng = Number(Number(cached.lng).toFixed(6));
+        const addrInfo = await resolveAccurateAddress(nLat, nLng);
+        return {
+          lat: nLat,
+          lng: nLng,
+          accuracy: Math.round(cached.accuracy || 15),
+          timestamp: cached.timestamp || new Date().toISOString(),
+          address: addrInfo.address,
+          landmarkName: addrInfo.landmarkName,
+          shortName: addrInfo.shortName,
+          source: 'NATIVE_HARDWARE_GPS_CACHED',
+          isFallback: false
+        };
+      }
     } catch (_) {}
+
+    // In native mobile app, NEVER fall back to browser network IP geolocation!
+    // Browser WebView geolocation resolves to ISP gateway in Pune/Mumbai rather than actual device location.
+    const lastResort = nativeTracking.getLatestNativeFix();
+    if (lastResort && lastResort.lat && lastResort.lng) {
+      const nLat = Number(Number(lastResort.lat).toFixed(6));
+      const nLng = Number(Number(lastResort.lng).toFixed(6));
+      const addrInfo = await resolveAccurateAddress(nLat, nLng);
+      return {
+        lat: nLat,
+        lng: nLng,
+        accuracy: Math.round(lastResort.accuracy || 20),
+        timestamp: lastResort.timestamp || new Date().toISOString(),
+        address: addrInfo.address,
+        landmarkName: addrInfo.landmarkName,
+        shortName: addrInfo.shortName,
+        source: 'NATIVE_HARDWARE_GPS_CACHED',
+        isFallback: false
+      };
+    }
   }
 
   // Step 1: Check Browser Geolocation
@@ -260,67 +236,25 @@ export async function getAccurateDeviceLocation(options = {}) {
       const lng = Number(pos.coords.longitude.toFixed(6));
       const accuracy = Math.round(pos.coords.accuracy || 45);
 
-      // If low-accuracy cell tower falls into Kolhapur (~16.69) but default station is Sangli, reject coarse ISP/cell tower
-      const isKolhapurIsp = Math.abs(lat - 16.6941) < 0.05 && Math.abs(lng - 74.2366) < 0.05;
-      if (!isKolhapurIsp || !defaultStation) {
-        const addrInfo = await resolveAccurateAddress(lat, lng);
+      const addrInfo = await resolveAccurateAddress(lat, lng);
 
-        return {
-          lat,
-          lng,
-          accuracy,
-          timestamp: new Date().toISOString(),
-          address: addrInfo.address,
-          landmarkName: addrInfo.landmarkName,
-          shortName: addrInfo.shortName,
-          source: 'WIFI_CELL_TRIANGULATION',
-          isFallback: false
-        };
-      }
+      return {
+        lat,
+        lng,
+        accuracy,
+        timestamp: new Date().toISOString(),
+        address: addrInfo.address,
+        landmarkName: addrInfo.landmarkName,
+        shortName: addrInfo.shortName,
+        source: 'WIFI_CELL_TRIANGULATION',
+        isFallback: false
+      };
     } catch (lowErr) {
-      console.warn('Network location acquisition notice, attempting IP fallback:', lowErr.message);
+      console.warn('Network location acquisition notice:', lowErr.message);
     }
   }
 
-  // Tier 3: Try IP Geolocation (Strictly reject if ISP gateway places user in Kolhapur / outside plant zone)
-  try {
-    const ipGeo = await fetchIpGeolocation();
-    if (ipGeo) {
-      const isKolhapurIsp = Math.abs(ipGeo.lat - 16.6941) < 0.05 && Math.abs(ipGeo.lng - 74.2366) < 0.05;
-      const isRegional = ipGeo.lat >= 15.5 && ipGeo.lat <= 20.2 && ipGeo.lng >= 72.5 && ipGeo.lng <= 80.5;
-      if (!isKolhapurIsp && (isRegional || !defaultStation)) {
-        const addrInfo = await resolveAccurateAddress(ipGeo.lat, ipGeo.lng);
-        return {
-          lat: Number(ipGeo.lat.toFixed(6)),
-          lng: Number(ipGeo.lng.toFixed(6)),
-          accuracy: ipGeo.accuracy || 1000,
-          timestamp: new Date().toISOString(),
-          address: addrInfo.address,
-          landmarkName: addrInfo.landmarkName,
-          shortName: addrInfo.shortName,
-          source: 'IP_GEOLOCATION',
-          isFallback: false
-        };
-      }
-    }
-  } catch (ipErr) {
-    console.warn('IP geolocation notice:', ipErr.message);
-  }
-
-  // Tier 4: Fallback to assigned station or plant HQ as safety net
-  const fallbackLat = defaultStation?.lat || 18.5204;
-  const fallbackLng = defaultStation?.lng || 73.8567;
-  const addrInfo = await resolveAccurateAddress(fallbackLat, fallbackLng);
-
-  return {
-    lat: fallbackLat,
-    lng: fallbackLng,
-    accuracy: 50,
-    timestamp: new Date().toISOString(),
-    address: defaultStation?.address || addrInfo.address || `Location (${fallbackLat.toFixed(4)}°N, ${fallbackLng.toFixed(4)}°E)`,
-    landmarkName: defaultStation?.stationName || addrInfo.landmarkName || `GPS (${fallbackLat.toFixed(4)}°N, ${fallbackLng.toFixed(4)}°E)`,
-    shortName: defaultStation?.shortZone || addrInfo.shortName || 'Location Verified',
-    source: 'DEFAULT_STATION_FALLBACK',
-    isFallback: true
-  };
+  // Strict: NEVER use IP Geolocation or hardcoded fallback coordinates!
+  // IP addresses resolve to ISP server hubs (e.g. Pune/Mumbai gateways) rather than actual device location.
+  throw new Error('Real GPS satellite fix could not be acquired. Please ensure Device Location (GPS) is turned ON and try again.');
 }

@@ -48,7 +48,6 @@ import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { 
   getEmployeeRouteDetails, 
   recordEmployeeBreadcrumb,
-  getAssignedEmployeeStation,
   deleteEmployeeRouteHistory,
   addEmployeeVisitedStop,
   removeEmployeeVisitedStop
@@ -320,14 +319,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       let lat = null;
       let lng = null;
       let accuracy = null;
-      let gpsFixSource = 'NO_FIX'; // 'LIVE_DEVICE' | 'ATTENDANCE_PUNCH' | 'ASSIGNED_STATION'
+      let gpsFixSource = 'NO_FIX'; // 'LIVE_TRACKING' | 'ATTENDANCE_PUNCH' | 'ASSIGNED_STATION'
 
-      if (isCurrentUser && realDeviceGps.active && realDeviceGps.lat) {
-        lat = realDeviceGps.lat;
-        lng = realDeviceGps.lng;
-        accuracy = realDeviceGps.accuracy;
-        gpsFixSource = 'LIVE_DEVICE';
-      } else if (todayRecord?.lastKnownLocation?.lat && todayRecord?.lastKnownLocation?.lng) {
+      // Highest priority: Genuine live mobile background telemetry from field device
+      if (todayRecord?.lastKnownLocation?.lat && todayRecord?.lastKnownLocation?.lng) {
         lat = Number(todayRecord.lastKnownLocation.lat);
         lng = Number(todayRecord.lastKnownLocation.lng);
         accuracy = todayRecord.lastKnownLocation.accuracy ? Math.round(todayRecord.lastKnownLocation.accuracy) : null;
@@ -337,63 +332,14 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lng = Number(todayRecord.gpsLocation.lng);
         accuracy = todayRecord.gpsLocation.accuracy ? Math.round(todayRecord.gpsLocation.accuracy) : null;
         gpsFixSource = 'ATTENDANCE_PUNCH';
+      } else if (isCurrentUser && realDeviceGps.active && realDeviceGps.lat) {
+        lat = realDeviceGps.lat;
+        lng = realDeviceGps.lng;
+        accuracy = realDeviceGps.accuracy;
+        gpsFixSource = 'LIVE_DEVICE';
       }
 
-      // Fallback to verified assigned station if no live mobile GNSS fix recorded for today
-      const assignedStation = getAssignedEmployeeStation(emp);
-      if (lat === null || lng === null) {
-        lat = assignedStation.lat;
-        lng = assignedStation.lng;
-        accuracy = 15;
-        gpsFixSource = 'ASSIGNED_STATION';
-      }
-
-      // Safeguard: Dispatcher is strictly stationed & punched in at Pune (18.502390, 73.847872)
-      const isDis = 
-        (emp.id || '').toUpperCase().includes('DIS') ||
-        (emp.employeeId || '').toUpperCase().includes('DIS') ||
-        (emp.role || '').toLowerCase().includes('dispatch') ||
-        (emp.name || '').toLowerCase().includes('dispatch');
-
-      const isAcc = 
-        (emp.id || '').toUpperCase().includes('ACC') ||
-        (emp.employeeId || '').toUpperCase().includes('ACC') ||
-        (emp.role || '').toLowerCase().includes('account') ||
-        (emp.name || '').toLowerCase().includes('accountant');
-
-      const isQc = 
-        (emp.id || '').toUpperCase().includes('QC') ||
-        (emp.employeeId || '').toUpperCase().includes('QC') ||
-        (emp.role || '').toLowerCase().includes('qc') ||
-        (emp.role || '').toLowerCase().includes('quality') ||
-        (emp.name || '').toLowerCase().includes('quality');
-
-      // PRESERVE ACTUAL MOBILE GPS: Only use assigned station fallback if device telemetry is completely null
-      if (lat === null || lat === undefined) {
-        if (isDis) {
-          lat = 18.502390;
-          lng = 73.847872;
-          accuracy = 15;
-          gpsFixSource = 'ASSIGNED_STATION';
-        } else if (isEmpSupervisor) {
-          lat = 16.852000;
-          lng = 74.590000;
-          accuracy = 15;
-          gpsFixSource = 'ASSIGNED_STATION';
-        } else if (isAcc) {
-          lat = 16.858400;
-          lng = 74.582400;
-          accuracy = 15;
-          gpsFixSource = 'ASSIGNED_STATION';
-        } else if (isQc) {
-          lat = 16.8300;
-          lng = 74.6400;
-          accuracy = 15;
-          gpsFixSource = 'ASSIGNED_STATION';
-        }
-      }
-
-      const hasGpsFix = true;
+      const hasGpsFix = Boolean(lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng));
 
       // Match real active or recent driver trip
       const isDriver = (emp.role || '').toLowerCase().includes('driver');
@@ -425,8 +371,13 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         googleRouteUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('SM Concrete Tech, Tanang, Sangli')}&destination=${encodeURIComponent((matchedTrip.siteName ? matchedTrip.siteName + ', ' : '') + (matchedTrip.clientName || 'Sangli'))}`,
       } : null;
 
-      const landmark = resolveSangliLandmark(lat, lng);
-      let geofenceLabel = assignedStation?.stationName || 'SM Plant HQ';
+      const landmark = (lat !== null && lng !== null) ? resolveSangliLandmark(lat, lng) : null;
+      let geofenceLabel = record?.geofenceStatus || 
+        (landmark && landmark.isKnownLandmark ? landmark.landmarkName : null) || 
+        (todayRecord?.lastKnownLocation?.address) || 
+        (todayRecord?.gpsLocation?.address) || 
+        (hasGpsFix ? `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E` : 'Awaiting GPS Fix');
+
       if (isDriver) {
         if (activeTrip?.status === 'Departed') {
           geofenceLabel = `Highway Transit (${activeTrip.routeLabel})`;
@@ -436,17 +387,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
           geofenceLabel = 'Returning to Plant HQ';
         } else if (isPunchedIn) {
           geofenceLabel = 'Plant Loading Bay';
-        } else {
-          geofenceLabel = assignedStation.stationName;
         }
-      } else if (record?.geofenceStatus && !record.geofenceStatus.includes('Plant Batching Geofence')) {
-        geofenceLabel = record.geofenceStatus;
-      } else if (landmark && landmark.isKnownLandmark) {
-        geofenceLabel = landmark.landmarkName;
-      } else if (isEmpSupervisor) {
-        geofenceLabel = record?.geofenceStatus || (isPunchedIn ? 'Godrej Green Acres Construction Site, Sangli' : assignedStation.stationName);
-      } else if (assignedStation?.stationName) {
-        geofenceLabel = assignedStation.stationName;
       }
 
       // Calculate elapsed active working duration
@@ -466,18 +407,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         return `${h}h ${m}m`;
       };
 
-      let finalGeofence = record?.geofenceStatus || geofenceLabel;
-      if (isEmpSupervisor) {
-        if (!finalGeofence || finalGeofence.toLowerCase().includes('dandekar') || finalGeofence.toLowerCase().includes('pune') || Number(lat) > 17.5) {
-          finalGeofence = landmark?.isKnownLandmark ? landmark.landmarkName : 'Godrej Green Acres Construction Site, Sangli';
-        }
-      } else if (isDis) {
-        if (!finalGeofence || finalGeofence.toLowerCase().includes('sangli') || finalGeofence.includes('Plant HQ') || Number(lat) > 18.0) {
-          finalGeofence = 'Narveer Tanaji Malusare Rd, Pune';
-        }
-      } else if (finalGeofence === 'Sangli Plant Operational Zone') {
-        finalGeofence = assignedStation.stationName || 'SM Plant HQ';
-      }
+      const finalGeofence = geofenceLabel;
 
       const isHalfDayOut = isPunchedOut && (todayRecord?.status === 'Half Day' || (todayRecord?.workingHours !== null && todayRecord?.workingHours !== undefined && Number(todayRecord.workingHours) < 8.5));
       const dutyStatus = isPunchedIn ? 'Punched In' : (isPunchedOut ? (isHalfDayOut ? 'Half Day' : 'Punched Out') : 'Not Checked In');
@@ -497,18 +427,18 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         lat,
         lng,
         accuracy,
-        hasGpsFix: true,
+        hasGpsFix,
         gpsFixSource,
-        stationName: assignedStation.stationName,
-        stationAddress: assignedStation.address,
+        stationName: geofenceLabel,
+        stationAddress: todayRecord?.lastKnownLocation?.address || todayRecord?.gpsLocation?.address || '',
         geofenceStatus: finalGeofence,
         speedKmh: null,
         batteryPct: null,
         network: gpsFixSource === 'LIVE_DEVICE' 
           ? 'Live Browser GNSS' 
-          : (gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Fix' : 'Assigned Station Fix'),
+          : (gpsFixSource === 'LIVE_TRACKING' ? 'Mobile Foreground GPS' : (gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Fix' : 'No GPS Fix')),
         selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || null,
-        remarks: record?.remarks || (gpsFixSource === 'ASSIGNED_STATION' ? assignedStation.stationName : 'Verified GPS Fix'),
+        remarks: record?.remarks || (hasGpsFix ? 'Verified GPS Fix' : 'Awaiting Punch-In GPS'),
         activeTrip,
         isDriver,
       };
@@ -567,22 +497,18 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     );
   }, [selectedTargetId, selectedEmployee, telemetryList]);
 
-  // Active visited route details for active target (strictly isolate client device GPS to current user only)
+  // Active visited route details for active target (strictly based on genuine shift telemetry)
   const activeRouteDetails = useMemo(() => {
     if (!activeTarget || isAdminPerson(activeTarget)) return null;
-    const gpsForTarget = activeTarget.isCurrentUser ? realDeviceGps : null;
-    return getEmployeeRouteDetails(activeTarget, gpsForTarget);
-  }, [activeTarget, realDeviceGps, routeRefreshKey]);
+    return getEmployeeRouteDetails(activeTarget, null);
+  }, [activeTarget, routeRefreshKey]);
 
   // Handler to manually record a new visited location after punch-in
   const handleSaveVisitedLocation = () => {
     if (!activeTarget || !newVisitedTitle.trim()) return;
-    const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
-                  String(activeTarget?.role || '').toLowerCase().includes('dispatch');
-    const defaultLat = isDis ? 18.4980 : 16.8520;
-    const defaultLng = isDis ? 73.8320 : 74.5900;
-    const finalLat = parseFloat(newVisitedLat) || defaultLat;
-    const finalLng = parseFloat(newVisitedLng) || defaultLng;
+    const finalLat = parseFloat(newVisitedLat) || (activeTarget?.lat ? Number(activeTarget.lat) : 0);
+    const finalLng = parseFloat(newVisitedLng) || (activeTarget?.lng ? Number(activeTarget.lng) : 0);
+    if (!finalLat || !finalLng) return;
 
     const stopData = {
       title: newVisitedTitle.trim(),
@@ -647,14 +573,6 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     }
     return list;
   }, [activeRouteDetails, activeTarget]);
-
-  // Record live GPS breadcrumb for authenticated staff (strictly non-admin)
-  useEffect(() => {
-    if (user && !isAdminPerson(user) && realDeviceGps.active && realDeviceGps.lat && realDeviceGps.lng) {
-      const uKey = user.employeeId || user.id || 'EMP-USER-01';
-      recordEmployeeBreadcrumb(uKey, realDeviceGps.lat, realDeviceGps.lng);
-    }
-  }, [user, realDeviceGps.active, realDeviceGps.lat, realDeviceGps.lng]);
 
   // Select employee on map and sync selection
   const handleSelectStaffOnMap = (emp, targetStop = null) => {
@@ -1119,14 +1037,9 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       emp.isDriver ? 'bg-cyan-400' : isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'
                     }`} />
                     <span className="whitespace-nowrap font-medium">{emp.name}</span>
-                    {emp.geofenceStatus && emp.geofenceStatus.includes('Market Yard') && (
-                      <span className="text-[9px] font-mono font-bold px-1 rounded bg-amber-200 text-amber-950">
-                        Market Yard
-                      </span>
-                    )}
-                    {((emp.id || '').toUpperCase().includes('DIS') || (emp.employeeId || '').toUpperCase().includes('DIS') || (emp.role || '').toLowerCase().includes('dispatch')) && (
-                      <span className="text-[9px] font-mono font-bold px-1 rounded bg-purple-100 text-purple-900 border border-purple-300">
-                        Pune
+                    {emp.geofenceStatus && (
+                      <span className="text-[9px] font-mono font-bold px-1 rounded bg-slate-100 text-slate-800 border border-slate-300 truncate max-w-[80px]">
+                        {emp.geofenceStatus}
                       </span>
                     )}
                     {emp.isDriver && emp.activeTrip && (
@@ -1709,21 +1622,11 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                       <button
                         type="button"
                         onClick={() => {
-                          const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
-                                        String(activeTarget?.role || '').toLowerCase().includes('dispatch');
-                          if (isDis) {
-                            setNewVisitedTitle('Sinhagad Road Logistics Hub, Pune');
-                            setNewVisitedCategory('Logistics Hub');
-                            setNewVisitedAddress('Sinhagad Road, Pune, Maharashtra');
-                            setNewVisitedLat('18.4980');
-                            setNewVisitedLng('73.8320');
-                          } else {
-                            setNewVisitedTitle('Godrej Green Acres Construction Site');
-                            setNewVisitedCategory('Site Pouring');
-                            setNewVisitedAddress('Near Government Colony, Sangli');
-                            setNewVisitedLat('16.8520');
-                            setNewVisitedLng('74.5900');
-                          }
+                          setNewVisitedTitle('');
+                          setNewVisitedCategory('Site Visit');
+                          setNewVisitedAddress(activeTarget?.geofenceStatus || '');
+                          setNewVisitedLat(activeTarget?.lat ? String(activeTarget.lat) : '');
+                          setNewVisitedLng(activeTarget?.lng ? String(activeTarget.lng) : '');
                           setNewVisitedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
                           setNewVisitedStay('45');
                           setNewVisitedNotes('Operational site visit after punch-in');
@@ -2351,49 +2254,12 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
             {/* Modal Body */}
             <div className="p-4 space-y-3.5 overflow-y-auto text-xs">
-              {/* Quick 1-Tap Site Presets */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Quick Site Presets (त्वरित ठिकाण निवडा)
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {(() => {
-                    const isDis = String(activeTarget?.employeeId || activeTarget?.id || '').toUpperCase().includes('DIS') ||
-                                  String(activeTarget?.role || '').toLowerCase().includes('dispatch');
-                    const presets = isDis ? [
-                      { title: 'Sinhagad Road Logistics Hub, Pune', address: 'Sinhagad Road, Pune, Maharashtra', lat: 18.4980, lng: 73.8320, cat: 'Logistics Hub', stay: 45 },
-                      { title: 'Swargate Regional Transit Desk, Pune', address: 'Swargate, Pune, Maharashtra', lat: 18.5010, lng: 73.8580, cat: 'Dispatch Desk', stay: 30 },
-                      { title: 'Kothrud Pouring Site, Pune', address: 'Kothrud, Pune, Maharashtra', lat: 18.5074, lng: 73.8077, cat: 'Site Pouring', stay: 60 },
-                      { title: 'Hadapsar RMC Batching Hub, Pune', address: 'Hadapsar Industrial Area, Pune', lat: 18.5089, lng: 73.9260, cat: 'Batching Plant', stay: 40 },
-                    ] : [
-                      { title: 'Godrej Green Acres Pier Site', address: 'Near Government Colony, Sangli', lat: 16.8520, lng: 74.5900, cat: 'Site Pouring', stay: 45 },
-                      { title: 'Kadam Nagar High-Rise Project', address: 'Kadam Nagar, Sangli', lat: 16.8550, lng: 74.5960, cat: 'Site Inspection', stay: 40 },
-                      { title: 'Miraj Highway Package B Quality Lab', address: 'Miraj Industrial Corridor, Sangli', lat: 16.8300, lng: 74.6400, cat: 'Quality Test', stay: 60 },
-                      { title: 'APMC Market Yard Commercial Desk', address: 'APMC Market Yard Area, Sangli', lat: 16.8584, lng: 74.5824, cat: 'Office Visit', stay: 45 },
-                      { title: 'Tanang Quarry & Silt Testing Bay', address: 'Tanang Quarry Zone, Sangli', lat: 16.8410, lng: 74.6320, cat: 'Material Testing', stay: 35 },
-                      { title: 'Sangli-Miraj Highway Transit Stop', address: 'NH-166 Highway Corridor, Sangli', lat: 16.8480, lng: 74.6020, cat: 'Highway Transit', stay: 15 },
-                    ];
-
-                    return presets.map((p) => (
-                      <button
-                        key={p.title}
-                        type="button"
-                        onClick={() => {
-                          setNewVisitedTitle(p.title);
-                          setNewVisitedAddress(p.address);
-                          setNewVisitedLat(String(p.lat));
-                          setNewVisitedLng(String(p.lng));
-                          setNewVisitedCategory(p.cat);
-                          setNewVisitedStay(String(p.stay));
-                        }}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-all cursor-pointer whitespace-nowrap"
-                      >
-                        📍 {p.title.split(' ')[0]} {p.title.split(' ')[1] || ''}
-                      </button>
-                    ));
-                  })()}
+              {activeTarget?.hasGpsFix && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-emerald-900">📍 Current Real GPS Coordinates:</span>
+                  <span className="font-mono font-black text-emerald-700">{Number(activeTarget.lat).toFixed(4)}°N, {Number(activeTarget.lng).toFixed(4)}°E</span>
                 </div>
-              </div>
+              )}
 
               {/* Form Fields */}
               <div className="space-y-2.5">

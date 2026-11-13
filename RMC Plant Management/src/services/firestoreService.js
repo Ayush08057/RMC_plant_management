@@ -10,7 +10,6 @@ import {
   getDoc, 
   setDoc, 
   addDoc, 
-  updateDoc, 
   deleteDoc, 
   onSnapshot, 
   query, 
@@ -38,6 +37,8 @@ export const COLLECTIONS = {
   DOCUMENTS: 'documents',
   AUDIT_LOGS: 'auditLogs',
   HR_SETTINGS: 'hrSettings',
+  LIVE_LOCATIONS: 'liveLocations',
+  PLANT_SYNC: 'plantSync',
 };
 
 /**
@@ -87,13 +88,35 @@ export async function queryDocuments(collectionName, fieldPath, opStr, value) {
 }
 
 /**
+ * Recursively strips undefined values so Firestore setDoc never throws
+ * "Unsupported field value: undefined"
+ */
+export function sanitizeForFirestore(obj) {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((v) => v !== undefined)
+      .map((v) => (typeof v === 'object' && v !== null ? sanitizeForFirestore(v) : v));
+  }
+  const clean = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      clean[key] = (typeof val === 'object' && val !== null) ? sanitizeForFirestore(val) : val;
+    }
+  }
+  return clean;
+}
+
+/**
  * Save or overwrite a document by custom ID (e.g. employeeId like EMP-101)
  */
 export async function saveDocumentWithId(collectionName, docId, data) {
   try {
     const docRef = doc(db, collectionName, String(docId));
-    await setDoc(docRef, data, { merge: true });
-    return { id: String(docId), ...data };
+    const cleanData = sanitizeForFirestore(data);
+    await setDoc(docRef, cleanData, { merge: true });
+    return { id: String(docId), ...cleanData };
   } catch (error) {
     console.error(`Error saving document ${docId} in ${collectionName}:`, error);
     throw error;
@@ -106,8 +129,9 @@ export async function saveDocumentWithId(collectionName, docId, data) {
 export async function createDocument(collectionName, data) {
   try {
     const colRef = collection(db, collectionName);
-    const docRef = await addDoc(colRef, data);
-    return { id: docRef.id, ...data };
+    const cleanData = sanitizeForFirestore(data);
+    const docRef = await addDoc(colRef, cleanData);
+    return { id: docRef.id, ...cleanData };
   } catch (error) {
     console.error(`Error creating document in ${collectionName}:`, error);
     throw error;
@@ -115,13 +139,17 @@ export async function createDocument(collectionName, data) {
 }
 
 /**
- * Update specific fields in an existing document
+ * Update specific fields, creating the document when an offline/realtime
+ * location event arrives before the initial attendance write has completed.
+ * `updateDoc` rejects that normal race with "No document to update"; merge
+ * writes preserve all fields already stored on the attendance record.
  */
 export async function updateDocument(collectionName, docId, fields) {
   try {
     const docRef = doc(db, collectionName, String(docId));
-    await updateDoc(docRef, fields);
-    return { id: String(docId), ...fields };
+    const cleanFields = sanitizeForFirestore(fields);
+    await setDoc(docRef, cleanFields, { merge: true });
+    return { id: String(docId), ...cleanFields };
   } catch (error) {
     console.error(`Error updating document ${docId} in ${collectionName}:`, error);
     throw error;

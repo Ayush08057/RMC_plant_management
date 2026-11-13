@@ -6,6 +6,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import AppRoutes from './routes/AppRoutes';
 import { sanitizeStoreItems } from './services/cloudSyncService';
+import { getLocalIstDateStr } from './utils/shiftUtils';
 
 export default function App() {
   // Purge any residual mock/dummy operational items across all local storage stores on boot
@@ -68,15 +69,15 @@ export default function App() {
         } catch {}
       }
 
-      // Day-to-Day Attendance Isolation: Close any unclosed past-day records and sanitize Supervisor location
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Day-to-Day Attendance Isolation: Close any unclosed past-day records without injecting fake GPS coordinates
+      const todayStr = getLocalIstDateStr();
       const sanitizeAttendanceList = (list) => {
         if (!Array.isArray(list)) return [];
         return list.map((a) => {
           if (!a) return a;
           const aDate = a.date || (a.createdAt ? a.createdAt.split('T')[0] : '');
           const isPastDate = aDate && aDate < todayStr;
-          let updated = { ...a };
+          const updated = { ...a };
 
           // If from past date and was left open (punchIn without punchOut), close it for that past date
           if (isPastDate && updated.punchIn && !updated.punchOut) {
@@ -84,38 +85,6 @@ export default function App() {
             updated.workingHours = 9.0;
             updated.status = 'Present';
             updated.completionStatus = 'Full Day';
-          }
-
-          // Preserve real mobile GPS from device; only provide station fallback if GPS is completely missing
-          const aId = (updated.employeeId || updated.id || '').toUpperCase();
-          if (!updated.gpsLocation || !updated.gpsLocation.lat) {
-            if (aId === 'SS-001' || aId.includes('SS') || (updated.role && updated.role.toLowerCase().includes('supervisor'))) {
-              updated.geofenceStatus = 'Godrej Green Acres Site, Sangli';
-              updated.landmarkName = 'Godrej Green Acres Construction Site, Sangli';
-              updated.address = 'Near Government Colony, Sangli, Maharashtra 416416';
-              updated.gpsLocation = {
-                lat: 16.852000,
-                lng: 74.590000,
-                accuracy: 15,
-                timestamp: new Date().toISOString(),
-                address: 'Near Government Colony, Sangli, Maharashtra 416416',
-                landmarkName: 'Godrej Green Acres Construction Site, Sangli',
-              };
-              updated.lastKnownLocation = { ...updated.gpsLocation };
-            } else if (aId === 'QC-001' || aId.includes('QC') || (updated.role && (updated.role.toLowerCase().includes('qc') || updated.role.toLowerCase().includes('quality')))) {
-              updated.geofenceStatus = 'Miraj Highway Package B Quality Lab, Sangli';
-              updated.landmarkName = 'Miraj Highway Package B Quality Lab, Sangli';
-              updated.address = 'Miraj Industrial Corridor, Sangli, Maharashtra 416410';
-              updated.gpsLocation = {
-                lat: 16.8300,
-                lng: 74.6400,
-                accuracy: 15,
-                timestamp: new Date().toISOString(),
-                address: 'Miraj Industrial Corridor, Sangli, Maharashtra 416410',
-                landmarkName: 'Miraj Highway Package B Quality Lab, Sangli',
-              };
-              updated.lastKnownLocation = { ...updated.gpsLocation };
-            }
           }
           return updated;
         });

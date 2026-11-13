@@ -193,4 +193,17 @@ export function convertTo24Hr(timeStr) {
   return `${String(h).padStart(2, '0')}:${m}`;
 }
 
+/**
+ * Returns YYYY-MM-DD in IST (Asia/Kolkata, UTC+05:30).
+ * Keeps midnight-05:30 IST aligned across browser, Node, and Android WebView.
+ * @param {Date|string|number} [dateInput=new Date()]
+ * @returns {string} e.g. "2026-11-12"
+ */
+export function getLocalIstDateStr(dateInput = new Date()) {
+  const base = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const valid = Number.isNaN(base.getTime()) ? new Date() : base;
+  const istMs = valid.getTime() + 5.5 * 60 * 60 * 1000;
+  return new Date(istMs).toISOString().split('T')[0];
+}
+
 

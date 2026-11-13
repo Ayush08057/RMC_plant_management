@@ -13,20 +13,51 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Minimize2
+  Minimize2,
+  X,
+  Radio
 } from 'lucide-react';
-import { useWorkforce } from '../../context/WorkforceContext';
+import { useWorkforce, resolveCanonicalEmployeeId, attendanceMatchesEmployee } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { isAdminPerson, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { getEmployeeRouteDetails } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
-export default function CleanEmployeeLiveTracking() {
-  const { user } = useAuth();
-  const { attendance, employees } = useWorkforce();
+/**
+ * Safely extracts cached workforce records from localStorage to ensure zero missing staff
+ */
+function getCachedStaffFallback() {
+  if (typeof window === 'undefined') return [];
+  const list = [];
+  try {
+    const rawUsers = localStorage.getItem('rmc_users_db_v2');
+    if (rawUsers) {
+      const parsed = JSON.parse(rawUsers);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('rmc_workforce_state_')) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed?.employees)) list.push(...parsed.employees);
+        }
+      }
+    }
+  } catch {}
+  return list;
+}
 
-  // 1. Date Filter (Defaults to today YYYY-MM-DD)
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+export default function CleanEmployeeLiveTracking() {
+  const { user, allUsers } = useAuth();
+  const { attendance, employees, trips, activeCompanyId } = useWorkforce();
+
+  // 1. Date Filter (Defaults to today YYYY-MM-DD in IST)
+  const [selectedDate, setSelectedDate] = useState(() => getLocalIstDateStr());
 
   // 2. Searchable Employee Dropdown State
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,7 +68,7 @@ export default function CleanEmployeeLiveTracking() {
   const [isFullWidth, setIsFullWidth] = useState(false);
   const [selectedStop, setSelectedStop] = useState(null);
 
-  // Build authorized workforce list (strictly non-admin operational personnel)
+  // Build authorized workforce list with live duty status & smart sorting
   const staffList = useMemo(() => {
     const map = new Map();
 
@@ -45,79 +76,185 @@ export default function CleanEmployeeLiveTracking() {
       if (!person || isAdminPerson(person)) return;
       const rawId = (person.employeeId || person.id || '').toString().trim().toUpperCase();
       if (!rawId) return;
-      // Canonical key (e.g. DIS-001, QC-001, SS-001, ACC-001, PM-001, DRV-001)
-      let canonicalKey = rawId.replace(/^USR-/, '');
-      if (canonicalKey.includes('DIS')) canonicalKey = 'DIS-001';
-      else if (canonicalKey.includes('QC')) canonicalKey = 'QC-001';
-      else if (canonicalKey.includes('SS')) canonicalKey = 'SS-001';
-      else if (canonicalKey.includes('ACC')) canonicalKey = 'ACC-001';
-      else if (canonicalKey.includes('PM')) canonicalKey = 'PM-001';
-      else if (canonicalKey.includes('DRV')) canonicalKey = 'DRV-001';
+      const canonicalKey = resolveCanonicalEmployeeId(rawId);
+      if (!canonicalKey) return;
 
-      if (!map.has(canonicalKey)) {
+      const existing = map.get(canonicalKey);
+      if (!existing) {
         map.set(canonicalKey, {
           id: canonicalKey,
           employeeId: canonicalKey,
-          name: person.name || 'Staff Member',
-          role: person.role || 'Staff',
-          department: person.department || 'Operations'
+          name: person.name || person.employeeName || person.displayName || 'Staff Member',
+          role: person.role || person.designation || 'Staff',
+          department: person.department || 'Operations',
+          phone: person.phone || person.registeredMobile || ''
         });
+      } else {
+        if ((!existing.name || existing.name === 'Staff Member') && (person.name || person.employeeName)) {
+          existing.name = person.name || person.employeeName;
+        }
+        if ((!existing.role || existing.role === 'Staff') && person.role) {
+          existing.role = person.role;
+        }
       }
     };
 
+    // 1. Employees from Workforce Context
     (employees || []).forEach(addPerson);
+    // 2. All Users from Auth Context
+    (allUsers || []).forEach(addPerson);
+    // 3. Current User if operational
+    if (user) addPerson(user);
+    // 4. Any personnel from attendance records
+    (attendance || []).forEach((att) => {
+      if (att && (att.employeeId || att.id)) {
+        addPerson({
+          employeeId: att.employeeId || att.id,
+          name: att.employeeName || att.name,
+          role: att.role,
+          department: att.department
+        });
+      }
+    });
+    // 5. Any drivers from active/completed trips
+    (trips || []).forEach((tr) => {
+      if (tr && tr.driverId) {
+        addPerson({
+          employeeId: tr.driverId,
+          name: tr.driverName || 'Driver',
+          role: 'Driver',
+          department: 'Fleet Operations'
+        });
+      }
+    });
+    // 6. LocalStorage fallback caches
+    getCachedStaffFallback().forEach(addPerson);
+    // 7. Official Role Accounts fallback
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach(addPerson);
 
-    return Array.from(map.values());
-  }, [employees]);
+    // Compute real-time duty status for selectedDate
+    const compactDate = selectedDate.replace(/-/g, '');
+    const staffArray = Array.from(map.values()).map((emp) => {
+      const cleanId = resolveCanonicalEmployeeId(emp.employeeId);
+      const cleanName = (emp.name || '').toLowerCase().trim();
 
-  // Auto-select first employee if none selected
-  useEffect(() => {
-    if (!selectedEmpId && staffList.length > 0) {
-      setSelectedEmpId(staffList[0].employeeId);
-    }
-  }, [selectedEmpId, staffList]);
+      const record = (attendance || []).find((a) => {
+        const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
+        const aName = (a.employeeName || '').toString().trim().toLowerCase();
+        const isDateMatch = aDate === selectedDate || (a.id && a.id.startsWith(`ATT-${compactDate}-`));
+        if (!isDateMatch) return false;
+        if (attendanceMatchesEmployee(a, cleanId)) return true;
+        return Boolean(!a.employeeId && aName && cleanName && aName === cleanName);
+      });
 
-  // Filtered dropdown list
+      const hasGps = Boolean(record?.lastKnownLocation?.lat || record?.gpsLocation?.lat);
+      const isPunchIn = Boolean(record?.punchIn);
+      const isPunchOut = Boolean(record?.punchOut);
+
+      let statusPriority = 4;
+      let statusText = 'Offline';
+      let statusEmoji = '⚪';
+      let isLiveOnDuty = false;
+
+      if (isPunchIn && !isPunchOut) {
+        isLiveOnDuty = true;
+        if (hasGps) {
+          statusPriority = 1;
+          statusText = 'On Duty • Live GPS';
+          statusEmoji = '🟢';
+        } else {
+          statusPriority = 2;
+          statusText = 'On Duty • Clocked In';
+          statusEmoji = '🟢';
+        }
+      } else if (isPunchIn && isPunchOut) {
+        statusPriority = 3;
+        statusText = 'Shift Concluded';
+        statusEmoji = '🏁';
+      }
+
+      return {
+        ...emp,
+        statusPriority,
+        statusText,
+        statusEmoji,
+        isLiveOnDuty,
+        hasAttendanceToday: Boolean(record),
+        recordToday: record || null
+      };
+    });
+
+    // Prioritized Sort:
+    // 1. Live GPS tracking
+    // 2. Clocked In
+    // 3. Shift Concluded
+    // 4. Offline (alphabetical by name)
+    staffArray.sort((a, b) => {
+      if (a.statusPriority !== b.statusPriority) {
+        return a.statusPriority - b.statusPriority;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return staffArray;
+  }, [employees, allUsers, user, attendance, trips, selectedDate, activeCompanyId]);
+
+  // 4. Filtered dropdown list based on search
   const filteredStaffList = useMemo(() => {
     if (!searchQuery.trim()) return staffList;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     return staffList.filter(
       (e) =>
         e.name.toLowerCase().includes(q) ||
         e.employeeId.toLowerCase().includes(q) ||
-        e.role.toLowerCase().includes(q)
+        e.role.toLowerCase().includes(q) ||
+        (e.department && e.department.toLowerCase().includes(q)) ||
+        (e.statusText && e.statusText.toLowerCase().includes(q))
     );
   }, [staffList, searchQuery]);
 
+  // 5. Effective Selected Employee ID (strictly prevents blank select box in all conditions)
+  const effectiveSelectedEmpId = useMemo(() => {
+    const list = filteredStaffList.length > 0 ? filteredStaffList : staffList;
+    if (selectedEmpId && list.some((e) => e.employeeId === selectedEmpId || e.id === selectedEmpId)) {
+      return selectedEmpId;
+    }
+    // If none explicitly selected or filtered out, pick first live on-duty staff, else the first staff member in list
+    const liveEmp = list.find((e) => e.isLiveOnDuty);
+    if (liveEmp) return liveEmp.employeeId;
+    return list[0]?.employeeId || '';
+  }, [selectedEmpId, filteredStaffList, staffList]);
+
+  // Auto-sync selectedEmpId once effectiveSelectedEmpId is resolved
+  useEffect(() => {
+    if (effectiveSelectedEmpId && selectedEmpId !== effectiveSelectedEmpId) {
+      setSelectedEmpId(effectiveSelectedEmpId);
+    }
+  }, [selectedEmpId, effectiveSelectedEmpId]);
+
   // Active selected employee object
   const activeEmployee = useMemo(() => {
-    return staffList.find((e) => e.employeeId === selectedEmpId || e.id === selectedEmpId) || staffList[0] || null;
-  }, [staffList, selectedEmpId]);
+    const targetId = effectiveSelectedEmpId;
+    return staffList.find((e) => e.employeeId === targetId || e.id === targetId) || staffList[0] || null;
+  }, [staffList, effectiveSelectedEmpId]);
 
-  // Attendance record for active employee on the selected date
+  // Attendance record for active employee on the selected date (strict ID matching, zero substring collision)
   const dayRecord = useMemo(() => {
     if (!activeEmployee) return null;
-    const cleanId = (activeEmployee.employeeId || activeEmployee.id || '').toString().trim().toUpperCase();
+    if (activeEmployee.recordToday) return activeEmployee.recordToday;
+
+    const cleanId = resolveCanonicalEmployeeId(activeEmployee.employeeId || activeEmployee.id || '');
     const cleanName = (activeEmployee.name || '').toLowerCase().trim();
+    const compactDate = selectedDate.replace(/-/g, '');
 
     return (attendance || []).find((a) => {
-      const aDate = a.date || (a.createdAt ? a.createdAt.split('T')[0] : '');
-      const aEmpId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
+      const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
       const aName = (a.employeeName || '').toString().trim().toLowerCase();
-      const isDateMatch = aDate === selectedDate || (a.createdAt && a.createdAt.startsWith(selectedDate)) || (a.id && a.id.includes(selectedDate.replace(/-/g, '')));
-      const isIdMatch = (
-        aEmpId === cleanId ||
-        aEmpId.includes(cleanId) ||
-        (cleanId.includes('DIS') && aEmpId.includes('DIS')) ||
-        (cleanId.includes('SS') && aEmpId.includes('SS')) ||
-        (cleanId.includes('PM') && aEmpId.includes('PM')) ||
-        (cleanId.includes('ACC') && aEmpId.includes('ACC')) ||
-        (cleanId.includes('QC') && aEmpId.includes('QC')) ||
-        (cleanId.includes('DRV') && (aEmpId.includes('DRV') || aEmpId.includes('DV'))) ||
-        (aName && cleanName && aName === cleanName)
-      );
-      return isDateMatch && isIdMatch;
+      const isDateMatch = aDate === selectedDate ||
+        (a.id && a.id.startsWith(`ATT-${compactDate}-`));
+      if (!isDateMatch) return false;
+      if (attendanceMatchesEmployee(a, cleanId)) return true;
+      return Boolean(!a.employeeId && aName && cleanName && aName === cleanName);
     }) || null;
   }, [attendance, activeEmployee, selectedDate]);
 
@@ -162,6 +299,8 @@ export default function CleanEmployeeLiveTracking() {
       workingHours: dayRecord?.workingHours || null,
       lat,
       lng,
+      gpsLocation: dayRecord?.gpsLocation || null,
+      exitGpsLocation: dayRecord?.exitGpsLocation || null,
       geofenceStatus: geofence,
       stationName: geofence,
       accuracy: dayRecord?.lastKnownLocation?.accuracy || dayRecord?.gpsLocation?.accuracy || 15,
@@ -187,12 +326,25 @@ export default function CleanEmployeeLiveTracking() {
               Employee Live Tracking
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-              Monitor employee locations and travelled routes.
+              {isPunchedOut
+                ? 'Shift concluded — displaying Punch-In, Punch-Out, and travelled route.'
+                : 'On duty — showing Punch-In point and real-time live position (route reveals after Punch-Out).'}
             </p>
           </div>
 
-          {/* SECTION E: Date Filter */}
-          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          {/* SECTION E: Shift Mode Indicator & Date Filter */}
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+            <span
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${
+                isPunchedOut
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}
+              title={isPunchedOut ? 'Completed shift route visible' : 'Route hidden until employee punches out'}
+            >
+              <GitCommit className="w-3.5 h-3.5" />
+              <span>{isPunchedOut ? 'Shift Concluded • Clean Route' : 'Live Mode • Route After Punch-Out'}</span>
+            </span>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl">
               <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
               <input
@@ -207,37 +359,92 @@ export default function CleanEmployeeLiveTracking() {
         </div>
 
         {/* SECTION B: Employee Selection Dropdown */}
-        <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3">
-          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-            <User className="w-4 h-4 text-blue-600" />
-            <span>Select Employee:</span>
-          </label>
+        <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+              <User className="w-4 h-4 text-blue-600" />
+              <span>Select Employee:</span>
+            </label>
 
-          <div className="relative flex-1 max-w-md">
-            <select
-              value={selectedEmpId || ''}
-              onChange={(e) => setSelectedEmpId(e.target.value)}
-              className="w-full px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-xs"
-            >
-              {staffList.map((emp) => (
-                <option key={emp.employeeId} value={emp.employeeId}>
-                  {emp.name} ({emp.employeeId}) — {emp.role}
-                </option>
-              ))}
-            </select>
+            <div className="relative flex-1 max-w-lg">
+              <select
+                value={effectiveSelectedEmpId || ''}
+                onChange={(e) => setSelectedEmpId(e.target.value)}
+                className="w-full px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-xs"
+              >
+                {staffList.length === 0 ? (
+                  <option value="" disabled>Loading workforce directory...</option>
+                ) : filteredStaffList.length === 0 ? (
+                  <option value="" disabled>No employees matching &ldquo;{searchQuery}&rdquo;</option>
+                ) : (
+                  <>
+                    <option value="" disabled>
+                      -- Select Employee ({filteredStaffList.length} Available) --
+                    </option>
+                    {filteredStaffList.map((emp) => (
+                      <option key={emp.employeeId} value={emp.employeeId}>
+                        {emp.statusEmoji} {emp.name} ({emp.employeeId}) — {emp.role} [{emp.statusText}]
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* Quick Search Filter */}
+            <div className="relative flex-1 max-w-xs">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, ID or role..."
+                className="w-full pl-8 pr-8 py-1.5 text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 transition-colors"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Quick Search Filter */}
-          <div className="relative flex-1 max-w-xs">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, ID or role..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
+          {/* Quick Select Row for Live On-Duty Personnel */}
+          {staffList.some((e) => e.isLiveOnDuty) && (
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
+                <span>Live On Duty:</span>
+              </span>
+              {staffList
+                .filter((e) => e.isLiveOnDuty)
+                .slice(0, 8)
+                .map((emp) => {
+                  const isSelected = (effectiveSelectedEmpId === emp.employeeId);
+                  return (
+                    <button
+                      key={emp.employeeId}
+                      type="button"
+                      onClick={() => setSelectedEmpId(emp.employeeId)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>{emp.name}</span>
+                      <span className="text-[10px] opacity-80">({emp.employeeId})</span>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -288,20 +495,23 @@ export default function CleanEmployeeLiveTracking() {
             </div>
 
             <div className="pt-2 border-t border-slate-100">
-              <span className="text-slate-400 font-medium block text-[11px]">Road Snap Mode</span>
+              <span className="text-slate-400 font-medium block text-[11px]">Route Display</span>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-cyan-50 text-cyan-800 border border-cyan-200">
-                  <span>🛣️</span>
-                  <span>OSRM Road Match: Active</span>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${
+                  isPunchedOut
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                }`}>
+                  <span>{isPunchedOut ? '✓ Punch-In → Punch-Out Route' : '● Punch-In & Live Pin Only'}</span>
                 </span>
               </div>
             </div>
 
             <div className="pt-2 border-t border-slate-100">
               <span className="text-slate-400 font-medium block text-[11px]">Last Updated</span>
-              <span className="text-xs font-semibold text-slate-800 mt-0.5 block truncate">
+              <span className="text-xs font-semibold font-mono text-slate-800 mt-0.5 block truncate">
                 {dayRecord?.updatedAt 
-                  ? new Date(dayRecord.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                  ? new Date(dayRecord.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
                   : (dayRecord?.punchIn || '--')}
               </span>
             </div>

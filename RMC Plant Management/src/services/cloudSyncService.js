@@ -18,19 +18,30 @@ import { db } from '../config/firebase.js';
 // Default company scope
 const DEFAULT_COMPANY_SCOPE = 'sm-concretech';
 
-/**
- * Returns the scoped collection path allowed by Firestore security rules
- */
-export function getSyncCollectionName() {
+function resolveSyncScope() {
   try {
     const activeCompanyId = localStorage.getItem('rmc_active_company_v1');
-    if (activeCompanyId && (activeCompanyId === 'sm-concretech-unit-2' || activeCompanyId === 'sm-infra-projects')) {
-      return `hrSettings_${activeCompanyId}`;
+    if (activeCompanyId && typeof activeCompanyId === 'string' && activeCompanyId.trim()) {
+      return activeCompanyId.trim();
     }
   } catch {
     // fallback
   }
-  return `hrSettings_${DEFAULT_COMPANY_SCOPE}`;
+  return DEFAULT_COMPANY_SCOPE;
+}
+
+/**
+ * Returns the clean partitioned plant-sync collection path (`plantSync_<companyId>`)
+ */
+export function getSyncCollectionName() {
+  return `plantSync_${resolveSyncScope()}`;
+}
+
+/**
+ * Legacy collection path used prior to separation from hrSettings
+ */
+export function getLegacySyncCollectionName() {
+  return `hrSettings_${resolveSyncScope()}`;
 }
 
 /**
@@ -99,21 +110,28 @@ export function sanitizeStoreItems(items) {
  * @param {function} onDataUpdated - callback invoked whenever cloud updates
  * @returns {function} unsubscribe function
  */
-export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpdated) {
-  const collectionName = getSyncCollectionName();
-  const docRef = doc(db, collectionName, docKey);
+export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], onDataUpdated = null) {
+  // Support 2-arg call signature: subscribeCloudStore(storageKey, callback)
+  const localKey = typeof localKeyOrCb === 'function' ? docKey : localKeyOrCb;
+  const resolvedDefault = typeof localKeyOrCb === 'function' ? [] : initialDefault;
+  const callback = typeof localKeyOrCb === 'function' ? localKeyOrCb : (onDataUpdated || (() => {}));
+
+  const primaryCollection = getSyncCollectionName();
+  const legacyCollection = getLegacySyncCollectionName();
+  const primaryRef = doc(db, primaryCollection, docKey);
+  const legacyRef = doc(db, legacyCollection, docKey);
 
   let isMounted = true;
 
   // 1. First load from local storage if available and sanitize immediately
   const deletedIds = getDeletedItemIds(localKey);
-  let localData = initialDefault;
+  let localData = resolvedDefault;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const rawLocal = localStorage.getItem(localKey);
       if (rawLocal) {
         const parsed = JSON.parse(rawLocal);
-        localData = Array.isArray(parsed) 
+        localData = Array.isArray(parsed)
           ? sanitizeStoreItems(parsed).filter((it) => !isItemDeleted(it, deletedIds))
           : parsed;
         if (Array.isArray(parsed) && localData.length !== parsed.length) {
@@ -125,86 +143,122 @@ export function subscribeCloudStore(docKey, localKey, initialDefault, onDataUpda
     }
   }
 
-  // 2. Fetch initial cloud data & purge dummy from cloud
-  getDoc(docRef)
+  const applyCloudPayload = (cloudPayload) => {
+    if (!cloudPayload || cloudPayload.items === undefined) return null;
+    const cleanItems = (Array.isArray(cloudPayload.items)
+      ? sanitizeStoreItems(cloudPayload.items)
+      : cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
+
+    let currentLocal = localData;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const raw = localStorage.getItem(localKey);
+        if (raw) currentLocal = JSON.parse(raw);
+      } catch {}
+    }
+    const merged = mergeCollectionItems(currentLocal, cleanItems).filter((it) => !isItemDeleted(it, deletedIds));
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        localStorage.setItem(localKey, JSON.stringify(merged));
+      } catch {}
+    }
+    callback(merged);
+    return merged;
+  };
+
+  // 2. Fetch from plantSync_* first; auto-migrate / fallback cleanly to legacy hrSettings_* if needed
+  getDoc(primaryRef)
     .then(async (snap) => {
       if (!isMounted) return;
-
-      if (snap.exists()) {
-        const cloudPayload = snap.data();
-        if (cloudPayload && cloudPayload.items !== undefined) {
-          const cleanItems = (Array.isArray(cloudPayload.items)
-            ? sanitizeStoreItems(cloudPayload.items)
-            : cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
-          
-          // Merge local cache with cloud items so local unsynced records are never discarded
-          const merged = mergeCollectionItems(localData, cleanItems).filter((it) => !isItemDeleted(it, deletedIds));
-          if (typeof window !== 'undefined' && window.localStorage) {
-            try {
-              localStorage.setItem(localKey, JSON.stringify(merged));
-            } catch {}
-          }
-          onDataUpdated(merged);
-          return;
-        }
+      if (snap.exists() && applyCloudPayload(snap.data()) !== null) {
+        return;
       }
 
-      // If cloud is empty and localData has only clean valid items, push clean localData
+      // Check legacy hrSettings_* collection for prior operational records and auto-migrate cleanly
+      try {
+        const legacySnap = await getDoc(legacyRef);
+        if (!isMounted) return;
+        if (legacySnap.exists()) {
+          const migrated = applyCloudPayload(legacySnap.data());
+          if (migrated !== null) {
+            setDoc(primaryRef, {
+              items: migrated,
+              updatedAt: Date.now(),
+              source: 'auto_migrated_from_hrSettings'
+            }, { merge: true }).catch(() => {});
+            return;
+          }
+        }
+      } catch {}
+
       if (Array.isArray(localData) && localData.length > 0) {
         const cleanLocal = sanitizeStoreItems(localData).filter((it) => !isItemDeleted(it, deletedIds));
         if (cleanLocal.length > 0) {
           try {
-            await setDoc(docRef, {
+            await setDoc(primaryRef, {
               items: cleanLocal,
               updatedAt: Date.now(),
               source: 'initial_device_seed'
             }, { merge: true });
-          } catch (uploadErr) {
-            console.warn(`[CloudSync] Seed error for ${docKey}:`, uploadErr.message);
+          } catch {
+            // Fall back to legacy collection if rules for plantSync_* have not been published yet
+            setDoc(legacyRef, {
+              items: cleanLocal,
+              updatedAt: Date.now(),
+              source: 'initial_device_seed_fallback'
+            }, { merge: true }).catch(() => {});
           }
         }
       }
     })
-    .catch((err) => {
-      console.warn(`[CloudSync] Initial fetch error for ${docKey}:`, err.message);
+    .catch(async () => {
+      // Fallback read when plantSync_* is not yet permitted by deployed rules
+      try {
+        const legacySnap = await getDoc(legacyRef);
+        if (isMounted && legacySnap.exists()) {
+          applyCloudPayload(legacySnap.data());
+        }
+      } catch (err) {
+        console.warn(`[CloudSync] Initial fetch error for ${docKey}:`, err.message);
+      }
     });
 
-  // 3. Real-time subscription to cloud changes from other devices
-  let unsub = () => {};
+  // 3. Real-time subscription with seamless fallback to legacy collection on permission-denied
+  let unsubPrimary = () => {};
+  let unsubLegacy = () => {};
   try {
-    unsub = onSnapshot(docRef, (docSnap) => {
-      if (!isMounted) return;
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && data.items !== undefined) {
-          const activeDeletedIds = getDeletedItemIds(localKey);
-          const cleanItems = (Array.isArray(data.items)
-            ? sanitizeStoreItems(data.items)
-            : data.items).filter((it) => !isItemDeleted(it, activeDeletedIds));
-          let currentLocal = [];
-          if (typeof window !== 'undefined' && window.localStorage) {
-            try {
-              const raw = localStorage.getItem(localKey);
-              if (raw) currentLocal = JSON.parse(raw);
-            } catch {}
-          }
-          const merged = mergeCollectionItems(currentLocal, cleanItems).filter((it) => !isItemDeleted(it, activeDeletedIds));
+    unsubPrimary = onSnapshot(
+      primaryRef,
+      (docSnap) => {
+        if (isMounted && docSnap.exists()) {
+          applyCloudPayload(docSnap.data());
+        }
+      },
+      (err) => {
+        console.warn(`[CloudSync] Primary listener notice for ${docKey}:`, err.message);
+        if (err?.code === 'permission-denied' || String(err?.message || '').toLowerCase().includes('permission')) {
           try {
-            localStorage.setItem(localKey, JSON.stringify(merged));
+            unsubLegacy = onSnapshot(
+              legacyRef,
+              (legacySnap) => {
+                if (isMounted && legacySnap.exists()) {
+                  applyCloudPayload(legacySnap.data());
+                }
+              },
+              () => {}
+            );
           } catch {}
-          onDataUpdated(merged);
         }
       }
-    }, (err) => {
-      console.warn(`[CloudSync] Real-time listener notice for ${docKey}:`, err.message);
-    });
+    );
   } catch (subErr) {
     console.warn(`[CloudSync] Subscription setup error for ${docKey}:`, subErr);
   }
 
   return () => {
     isMounted = false;
-    if (typeof unsub === 'function') unsub();
+    if (typeof unsubPrimary === 'function') unsubPrimary();
+    if (typeof unsubLegacy === 'function') unsubLegacy();
   };
 }
 
@@ -294,11 +348,15 @@ export function mergeCollectionItems(localItems, cloudItems) {
  * @param {string} localKey - localStorage key
  * @param {any} data - array or object to save
  */
-export async function pushCloudStore(docKey, localKey, data) {
+export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
+  // Support both 3-arg pushCloudStore(docKey, localKey, data) and 2-arg pushCloudStore(storageKey, data)
+  const localKey = dataArg === undefined ? docKey : localKeyOrData;
+  const rawData = dataArg === undefined ? localKeyOrData : dataArg;
+
   const deletedIds = getDeletedItemIds(localKey);
-  const cleanData = Array.isArray(data)
-    ? sanitizeStoreItems(data).filter((it) => !isItemDeleted(it, deletedIds))
-    : data;
+  const cleanData = Array.isArray(rawData)
+    ? sanitizeStoreItems(rawData).filter((it) => !isItemDeleted(it, deletedIds))
+    : rawData;
 
   // 1. Immediately update localStorage for zero latency
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -309,43 +367,47 @@ export async function pushCloudStore(docKey, localKey, data) {
     }
   }
 
-  // 2. Persist to Firestore with smart concurrency merge
-  try {
-    const collectionName = getSyncCollectionName();
-    const docRef = doc(db, collectionName, docKey);
-
-    let finalPayload = cleanData;
-
-    // Concurrency protection: fetch latest cloud snapshot before overwrite
-    if (Array.isArray(cleanData)) {
-      try {
-        const cloudSnap = await getDoc(docRef);
-        if (cloudSnap.exists()) {
-          const cloudPayload = cloudSnap.data();
-          if (cloudPayload && Array.isArray(cloudPayload.items)) {
-            const cleanCloud = sanitizeStoreItems(cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
-            // Merge to prevent overwriting records added concurrently by other users
-            finalPayload = mergeCollectionItems(cleanData, cleanCloud).filter((it) => !isItemDeleted(it, deletedIds));
-          }
+  const mergeWithDocRef = async (ref, dataToMerge) => {
+    if (!Array.isArray(dataToMerge)) return dataToMerge;
+    try {
+      const cloudSnap = await getDoc(ref);
+      if (cloudSnap.exists()) {
+        const cloudPayload = cloudSnap.data();
+        if (cloudPayload && Array.isArray(cloudPayload.items)) {
+          const cleanCloud = sanitizeStoreItems(cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
+          return mergeCollectionItems(dataToMerge, cleanCloud).filter((it) => !isItemDeleted(it, deletedIds));
         }
-      } catch (fetchErr) {
-        // Fall back to cleanData if getDoc encounters a network issue
       }
-    }
+    } catch {}
+    return dataToMerge;
+  };
 
-    await setDoc(docRef, {
+  // 2. Persist to partitioned plantSync_* first; fall back seamlessly to hrSettings_* if rules aren't updated yet
+  const primaryRef = doc(db, getSyncCollectionName(), docKey);
+  const legacyRef = doc(db, getLegacySyncCollectionName(), docKey);
+  try {
+    let finalPayload = await mergeWithDocRef(primaryRef, cleanData);
+    await setDoc(primaryRef, {
       items: finalPayload,
       updatedAt: Date.now(),
       source: 'web_client_sync'
     }, { merge: true });
 
-    // Update local cache if merged with new remote items
     if (Array.isArray(finalPayload) && typeof window !== 'undefined' && window.localStorage) {
       try {
         localStorage.setItem(localKey, JSON.stringify(finalPayload));
       } catch {}
     }
   } catch (err) {
-    console.warn(`[CloudSync] Cloud push error for ${docKey}:`, err.message);
+    try {
+      const legacyPayload = await mergeWithDocRef(legacyRef, cleanData);
+      await setDoc(legacyRef, {
+        items: legacyPayload,
+        updatedAt: Date.now(),
+        source: 'web_client_sync_fallback'
+      }, { merge: true });
+    } catch (fallbackErr) {
+      console.warn(`[CloudSync] Cloud push error for ${docKey}:`, err?.message || fallbackErr?.message);
+    }
   }
 }

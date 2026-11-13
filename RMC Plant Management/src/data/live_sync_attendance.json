@@ -1,21 +1,4 @@
 {
-  "attendance": [
-    {
-      "lastKnownLocation": {
-        "lng": 73.847872,
-        "landmarkName": "Dispatch Hub, Pune",
-        "lat": 18.50239,
-        "address": "Narveer Tanaji Malusare Rd, Pune"
-      },
-      "id": "ATT-20261031-DIS-001",
-      "geofenceStatus": "Narveer Tanaji Malusare Rd, Pune",
-      "punchIn": "10:30 AM",
-      "role": "Dispatcher",
-      "date": "2026-10-31",
-      "employeeName": "Dispatcher",
-      "status": "Present",
-      "employeeId": "DIS-001"
-    }
-  ],
+  "attendance": [],
   "liveLocations": {}
 }

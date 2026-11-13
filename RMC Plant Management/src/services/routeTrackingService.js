@@ -4,6 +4,7 @@
  */
 
 import { calculateDistanceMeters, resolveSangliLandmark } from '../utils/sangliGeofence';
+import { filterGeographicOutliers } from '../utils/routeCleanUtils';
 import { subscribeCloudStore, pushCloudStore } from './cloudSyncService';
 
 export const ROUTE_HISTORY_STORAGE_KEY = 'rmc_employee_route_history_v2';
@@ -18,101 +19,6 @@ export const DEFAULT_ROUTE_TRAILS = {
   manager: [],
   default: []
 };
-
-/**
- * Returns the verified operational station in Sangli for an employee based on role/ID
- */
-export function getAssignedEmployeeStation(emp) {
-  if (!emp) {
-    return {
-      lat: 16.8450,
-      lng: 74.6200,
-      stationName: 'SM Concrete Plant HQ, Tanang',
-      address: 'Tanang, Sangli-Miraj Road, Sangli',
-      shortZone: 'SM Plant HQ',
-      notes: 'Operational plant station',
-    };
-  }
-
-  const roleLower = String(emp.role || '').toLowerCase();
-  const idUpper = String(emp.employeeId || emp.id || '').toUpperCase();
-  const nameLower = String(emp.name || '').toLowerCase();
-
-  if (roleLower.includes('account') || idUpper.includes('ACC') || nameLower.includes('accountant')) {
-    return {
-      lat: 16.8584,
-      lng: 74.5824,
-      stationName: 'Sangli Market Yard (APMC Commercial Hub)',
-      address: 'APMC Market Yard Area, Sangli',
-      shortZone: 'Market Yard Hub',
-      notes: 'Commercial accounts & sales billing desk',
-    };
-  }
-
-  if (roleLower.includes('dispatch') || idUpper.includes('DIS') || nameLower.includes('dispatcher')) {
-    return {
-      lat: 18.5204,
-      lng: 73.8567,
-      stationName: 'Pune Dispatch Operations Hub',
-      address: 'Central Logistics Dispatch Hub, Pune',
-      shortZone: 'Pune Dispatch Hub',
-      notes: 'Central logistics dispatch & batching control',
-    };
-  }
-
-  if (roleLower.includes('supervisor') || idUpper.includes('SS') || nameLower.includes('supervisor')) {
-    return {
-      lat: 16.8520,
-      lng: 74.5900,
-      stationName: 'Godrej Green Acres Construction Site, Sangli',
-      address: 'Near Government Colony, Sangli, Maharashtra 416416',
-      shortZone: 'Godrej Project Site, Sangli',
-      notes: 'On-site concrete pouring & supervision at Godrej Green Acres',
-    };
-  }
-
-  if (roleLower.includes('quality') || roleLower.includes('qc') || idUpper.includes('QC') || nameLower.includes('quality')) {
-    return {
-      lat: 16.8300,
-      lng: 74.6400,
-      stationName: 'Miraj Highway Package B Quality Lab',
-      address: 'Miraj Industrial Corridor, Sangli',
-      shortZone: 'Highway QC Lab',
-      notes: 'Slump test & compressive cube strength testing',
-    };
-  }
-
-  if (roleLower.includes('driver') || idUpper.includes('DRV') || nameLower.includes('driver')) {
-    return {
-      lat: 16.8480,
-      lng: 74.6020,
-      stationName: 'Sangli-Miraj Highway NH-166 (Transit Mixer)',
-      address: 'Transit Mixer Corridor, Sangli',
-      shortZone: 'Highway Transit',
-      notes: 'Transit mixer delivering concrete to site',
-    };
-  }
-
-  if (roleLower.includes('manager') || idUpper.includes('PM') || nameLower.includes('manager')) {
-    return {
-      lat: 16.8450,
-      lng: 74.6200,
-      stationName: 'SM Concrete Plant HQ Central Control Room',
-      address: 'Tanang, Sangli-Miraj Road, Sangli',
-      shortZone: 'Plant Control Room',
-      notes: 'Operational administration & batching oversight',
-    };
-  }
-
-  return {
-    lat: 16.8450,
-    lng: 74.6200,
-    stationName: 'SM Concrete Plant HQ, Tanang',
-    address: 'Tanang, Sangli-Miraj Road, Sangli',
-    shortZone: 'SM Plant HQ',
-    notes: 'Operational plant station',
-  };
-}
 
 /**
  * Retrieves all stored route histories (purges any legacy simulated stops)
@@ -130,7 +36,7 @@ export function getAllRouteHistories() {
         const isAcc = k.toUpperCase().includes('ACC') || k.toUpperCase().includes('ACCOUNT');
         const list = parsed[k];
         if (Array.isArray(list)) {
-          const filtered = list.filter((s) => {
+          let filtered = list.filter((s) => {
             if (!s) return false;
             return (
               s.notes !== 'Formwork & reinforcement check' &&
@@ -143,6 +49,13 @@ export function getAllRouteHistories() {
           });
           if (filtered.length !== list.length) {
             hasLegacyMocks = true;
+          }
+          if (filtered.length > 1) {
+            const beforeOutlier = filtered.length;
+            filtered = filterGeographicOutliers(filtered, 40000);
+            if (filtered.length !== beforeOutlier) {
+              hasLegacyMocks = true;
+            }
           }
           if (filtered.length > 0) {
             cleaned[k] = filtered;
@@ -211,33 +124,6 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     stops = [...allHistories[empId]];
   }
 
-  // Purge any contaminated Sangli stops (< 17.5) for Dispatcher
-  if (isDis) {
-    stops = stops.filter((s) => s && Number(s.lat) >= 17.5);
-  }
-
-  // Purge any contaminated Pune / Dandekar stops (>= 17.5) for Site Supervisor (who is stationed in Sangli)
-  const isSup = empId.includes('SS') || empRole.includes('supervisor') || empName.includes('supervisor');
-  if (isSup) {
-    stops = stops.filter((s) => s && Number(s.lat) < 17.5);
-  }
-
-  // Purge any contaminated out-of-Sangli stops (>= 17.5 or < 16.5 or Chhindwara) for Accountant (stationed in Sangli Market Yard)
-  if (isAcc) {
-    stops = stops.filter((s) => s && Number(s.lat) < 17.5 && Number(s.lat) >= 16.5 && !s.title?.includes('Chhindwara') && !s.address?.includes('Chhindwara'));
-  }
-
-  // Purge any contaminated Kolhapur ISP / out-of-Sangli stops for QC Engineer
-  if (isQc) {
-    stops = stops.filter((s) => {
-      if (!s || !s.lat) return false;
-      const sLat = Number(s.lat);
-      const sLng = Number(s.lng);
-      const isKolhapur = Math.abs(sLat - 16.6941) < 0.05 && Math.abs(sLng - 74.2366) < 0.05;
-      return !isKolhapur && sLat < 17.5 && sLat >= 16.5;
-    });
-  }
-
   // 2. Identify punch-in coordinates
   const punchInGps = employee.gpsLocation || employee.record?.gpsLocation || null;
   // 2. Identify punch-in coordinates:
@@ -280,22 +166,6 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     // Keep first recorded stop from route history
     stops[0].title = stops[0].title || 'Punch-In Station';
     stops[0].status = 'Punch-In Station';
-  } else {
-    // Default fallback ONLY when no GPS or stop exists at all
-    const defaultStation = getAssignedEmployeeStation(employee);
-    stops.push({
-      stopNo: 1,
-      title: defaultStation.stationName,
-      category: 'Punch-In Location',
-      address: defaultStation.address,
-      time: punchInTime,
-      lat: defaultStation.lat,
-      lng: defaultStation.lng,
-      status: 'Punch-In Station',
-      distanceKm: 0.0,
-      stayMinutes: null,
-      notes: defaultStation.notes || 'Assigned operations station'
-    });
   }
 
   // 3. Identify exit / current coordinates
@@ -309,7 +179,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     const lastStop = stops[stops.length - 1];
     const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, eLat, eLng) : 999;
 
-    if (distToLast > 50 || stops.length === 1) {
+    if (distToLast > 10 || stops.length === 1) {
       stops.push({
         stopNo: stops.length + 1,
         title: exitGps.landmarkName || eLandmark.landmarkName || 'Punch-Out Station',
@@ -325,78 +195,85 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       });
     }
   } else {
-    // Current live / last known position
-    // Strictly isolate viewer device GPS: only use liveGps if target is the active device user
-    const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && liveGps?.lng);
-    const rawLat = useDeviceGps ? liveGps.lat : (employee.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat);
-    const rawLng = useDeviceGps ? liveGps.lng : (employee.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng);
+    // Current live / last known position — only add if employee is STILL punched in (no punchOut)
+    const isPunchedOut = Boolean(employee.punchOut || employee.record?.punchOut);
+    if (!isPunchedOut) {
+      // Strictly isolate viewer device GPS: only use liveGps if target is the active device user
+      const useDeviceGps = Boolean(employee.isCurrentUser && liveGps?.active && liveGps?.lat && liveGps?.lng);
+      const rawLat = useDeviceGps ? liveGps.lat : (employee.lat || employee.lastKnownLocation?.lat || employee.record?.lastKnownLocation?.lat);
+      const rawLng = useDeviceGps ? liveGps.lng : (employee.lng || employee.lastKnownLocation?.lng || employee.record?.lastKnownLocation?.lng);
 
-    const defaultStation = getAssignedEmployeeStation(employee);
-    const currentLat = rawLat !== null && rawLat !== undefined ? Number(rawLat) : defaultStation.lat;
-    const currentLng = rawLng !== null && rawLng !== undefined ? Number(rawLng) : defaultStation.lng;
+      // Only append a live stop if we have a REAL coordinate (not null/undefined)
+      if (rawLat !== null && rawLat !== undefined && rawLng !== null && rawLng !== undefined) {
+        const cLat = Number(rawLat);
+        const cLng = Number(rawLng);
+        if (!isNaN(cLat) && !isNaN(cLng) && cLat !== 0 && cLng !== 0) {
+          const landmark = resolveSangliLandmark(cLat, cLng);
+          const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    if (currentLat && currentLng) {
-      const cLat = Number(currentLat);
-      const cLng = Number(currentLng);
-      const landmark = resolveSangliLandmark(cLat, cLng);
-      const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          if (stops.length === 0) {
+            stops.push({
+              stopNo: 1,
+              title: landmark.landmarkName || 'Current Location',
+              category: 'Live Position',
+              address: landmark.address || `${cLat.toFixed(4)}°N, ${cLng.toFixed(4)}°E`,
+              time: timeNow,
+              lat: cLat,
+              lng: cLng,
+              status: 'Current Location',
+              distanceKm: 0.0,
+              stayMinutes: null,
+              notes: 'Real-time GPS coordinate fix'
+            });
+          } else {
+            const lastStop = stops[stops.length - 1];
+            const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
 
-      if (stops.length === 0) {
-        stops.push({
-          stopNo: 1,
-          title: landmark.landmarkName || 'Current Location',
-          category: 'Live Position',
-          address: landmark.address || `${cLat.toFixed(4)}°N, ${cLng.toFixed(4)}°E`,
-          time: timeNow,
-          lat: cLat,
-          lng: cLng,
-          status: 'Current Location',
-          distanceKm: 0.0,
-          stayMinutes: null,
-          notes: 'Real-time GPS coordinate fix'
-        });
-      } else {
-        const lastStop = stops[stops.length - 1];
-        const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
-
-        if (distToLast > 80 && (!isDis || distToLast < 10000) && (!isAcc || distToLast < 5000)) {
-          stops.push({
-            stopNo: stops.length + 1,
-            title: landmark.landmarkName || 'Live GPS Location',
-            category: 'Current Location',
-            address: landmark.address || `${cLat.toFixed(4)}°N, ${cLng.toFixed(4)}°E`,
-            time: timeNow,
-            lat: cLat,
-            lng: cLng,
-            status: 'Current Stop',
-            distanceKm: 0.0,
-            stayMinutes: null,
-            notes: 'Real-time GNSS coordinate fix'
-          });
+            if (distToLast > 80) {
+              stops.push({
+                stopNo: stops.length + 1,
+                title: landmark.landmarkName || 'Live GPS Location',
+                category: 'Current Location',
+                address: landmark.address || `${cLat.toFixed(4)}°N, ${cLng.toFixed(4)}°E`,
+                time: timeNow,
+                lat: cLat,
+                lng: cLng,
+                status: 'Current Stop',
+                distanceKm: 0.0,
+                stayMinutes: null,
+                notes: 'Real-time GNSS coordinate fix'
+              });
+            }
+          }
         }
       }
     }
   }
 
-  // Fallback: If stops is still empty, populate verified station
+  // Fallback: If stops is still empty AND employee has a real GPS coordinate, nothing to show.
+  // Do NOT insert a fake station-based stop — this was causing the 202 KM Pune route bug.
+  // Only insert a "No GPS" placeholder, not a fake geographic point.
   if (stops.length === 0) {
-    const station = getAssignedEmployeeStation(employee);
-    stops.push({
-      stopNo: 1,
-      title: station.stationName,
-      category: 'Assigned Station',
-      address: station.address,
-      time: employee.punchIn || '09:00 AM',
-      lat: station.lat,
-      lng: station.lng,
-      status: 'Current Location',
-      distanceKm: 0.0,
-      stayMinutes: null,
-      notes: station.notes || 'Assigned operations station'
-    });
+    // Return empty route — the admin panel will show "No location data" instead of a fake route
+    return {
+      employeeId: empId,
+      employeeName: employee.name,
+      role: employee.role,
+      stops: [],
+      polylineCoords: [],
+      totalDistanceKm: 0.0,
+      visitedStopsCount: 0,
+      currentLocation: null,
+      googleMapsFullRouteUrl: null,
+    };
   }
 
-  // 4. Calculate accurate cumulative kilometer distances across all stops
+  // 4. Filter any wild geographic outliers (e.g. accidental fallback coordinates > 40km away from real shift points)
+  if (stops.length > 1) {
+    stops = filterGeographicOutliers(stops, 40000);
+  }
+
+  // 5. Calculate accurate cumulative kilometer distances across all stops
   let cumulativeDist = 0.0;
   for (let i = 0; i < stops.length; i++) {
     stops[i].stopNo = i + 1;
@@ -414,7 +291,10 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   }
 
   const polylineCoords = stops.length >= 2 ? stops.map((s) => [Number(s.lat), Number(s.lng)]) : [];
-  const totalDistanceKm = Number(cumulativeDist.toFixed(1));
+  const recordedDistance = Number(employee.totalDistanceKm || employee.record?.totalDistanceKm);
+  const totalDistanceKm = (!isNaN(recordedDistance) && recordedDistance > 0)
+    ? Number(recordedDistance.toFixed(1))
+    : Number(cumulativeDist.toFixed(1));
   const visitedStopsCount = stops.filter((s) => s.status !== 'Current Stop' && s.status !== 'Current Location').length;
 
   return {
@@ -438,9 +318,6 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
 export function recordEmployeeBreadcrumb(empId, lat, lng, optionalTitle = null) {
   if (!empId || !lat || !lng) return;
   const key = empId.toUpperCase();
-  const isDis = key.includes('DIS') || key.includes('DISPATCH');
-  // Never pollute Dispatcher's Pune tracking with Sangli device breadcrumbs (< 17.5)
-  if (isDis && Number(lat) < 17.5) return;
   const allHistories = getAllRouteHistories();
   const existing = allHistories[key] || [];
 

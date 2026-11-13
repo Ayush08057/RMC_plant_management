@@ -148,6 +148,18 @@ service cloud.firestore {
       );
     }
 
+    function hasCompanyPartition(col) {
+      return col.matches('(employees|plants|orders|attendance|shifts|dailyWork|leaves|advances|loans|payrollRecords|documents|auditLogs|hrSettings|driverTrips|liveLocations|plantSync)_[A-Za-z0-9_-]+');
+    }
+
+    function isPartitionedBase(col, base) {
+      return col.matches(base + '_[A-Za-z0-9_-]+');
+    }
+
+    function partitionCompanyId(col) {
+      return col.replace('^[^_]+_', '');
+    }
+
     // =========================================================================
     // Core User Directory & Profiles (/users)
     // =========================================================================
@@ -477,6 +489,15 @@ service cloud.firestore {
       allow create, update: if isSameCompany('CMP-SM-001') && (isOperationalStaff() || isDriver());
       allow delete: if isSameCompany('CMP-SM-001') && (isAdmin() || isManager() || isDispatcher());
     }
+    match /liveLocations_CMP-SM-001/{empId} {
+      allow read: if isSameCompany('CMP-SM-001') && (isOperationalStaff() || isManager() || isHR() || isOwner(empId));
+      allow create, update: if isSameCompany('CMP-SM-001') && (isOperationalStaff() || isManager() || isDriver() || isSupervisor() || isOwner(empId) || isOwner(request.resource.data.employeeId) || request.auth.uid == request.resource.data.userId);
+      allow delete: if isAdmin();
+    }
+    match /plantSync_CMP-SM-001/{docId} {
+      allow read: if isSameCompany('CMP-SM-001');
+      allow write: if isSameCompany('CMP-SM-001') && isOperationalStaff();
+    }
 
     // --- sm-concretech Partition ---
     match /employees_sm-concretech/{empId} {
@@ -574,6 +595,15 @@ service cloud.firestore {
       allow read: if isSameCompany('sm-concretech');
       allow create, update: if isSameCompany('sm-concretech') && (isOperationalStaff() || isDriver());
       allow delete: if isSameCompany('sm-concretech') && (isAdmin() || isManager() || isDispatcher());
+    }
+    match /liveLocations_sm-concretech/{empId} {
+      allow read: if isSameCompany('sm-concretech') && (isOperationalStaff() || isManager() || isHR() || isOwner(empId));
+      allow create, update: if isSameCompany('sm-concretech') && (isOperationalStaff() || isManager() || isDriver() || isSupervisor() || isOwner(empId) || isOwner(request.resource.data.employeeId) || request.auth.uid == request.resource.data.userId);
+      allow delete: if isAdmin();
+    }
+    match /plantSync_sm-concretech/{docId} {
+      allow read: if isSameCompany('sm-concretech');
+      allow write: if isSameCompany('sm-concretech') && isOperationalStaff();
     }
 
     // --- sm-concretech-unit-2 Partition ---
@@ -673,6 +703,15 @@ service cloud.firestore {
       allow create, update: if isSameCompany('sm-concretech-unit-2') && (isOperationalStaff() || isDriver());
       allow delete: if isSameCompany('sm-concretech-unit-2') && (isAdmin() || isManager() || isDispatcher());
     }
+    match /liveLocations_sm-concretech-unit-2/{empId} {
+      allow read: if isSameCompany('sm-concretech-unit-2') && (isOperationalStaff() || isManager() || isHR() || isOwner(empId));
+      allow create, update: if isSameCompany('sm-concretech-unit-2') && (isOperationalStaff() || isManager() || isDriver() || isSupervisor() || isOwner(empId) || isOwner(request.resource.data.employeeId) || request.auth.uid == request.resource.data.userId);
+      allow delete: if isAdmin();
+    }
+    match /plantSync_sm-concretech-unit-2/{docId} {
+      allow read: if isSameCompany('sm-concretech-unit-2');
+      allow write: if isSameCompany('sm-concretech-unit-2') && isOperationalStaff();
+    }
 
     // --- sm-infra-projects Partition ---
     match /employees_sm-infra-projects/{empId} {
@@ -770,6 +809,171 @@ service cloud.firestore {
       allow read: if isSameCompany('sm-infra-projects');
       allow create, update: if isSameCompany('sm-infra-projects') && (isOperationalStaff() || isDriver());
       allow delete: if isSameCompany('sm-infra-projects') && (isAdmin() || isManager() || isDispatcher());
+    }
+    match /liveLocations_sm-infra-projects/{empId} {
+      allow read: if isSameCompany('sm-infra-projects') && (isOperationalStaff() || isManager() || isHR() || isOwner(empId));
+      allow create, update: if isSameCompany('sm-infra-projects') && (isOperationalStaff() || isManager() || isDriver() || isSupervisor() || isOwner(empId) || isOwner(request.resource.data.employeeId) || request.auth.uid == request.resource.data.userId);
+      allow delete: if isAdmin();
+    }
+    match /plantSync_sm-infra-projects/{docId} {
+      allow read: if isSameCompany('sm-infra-projects');
+      allow write: if isSameCompany('sm-infra-projects') && isOperationalStaff();
+    }
+
+    // =========================================================================
+    // Dynamic Multi-Company Partitioned Collections (Unlimited New Companies)
+    // Automatically supports any <collection>_<companyId> created/edited
+    // through the ERP Header / Company Manager without modifying rules again.
+    // =========================================================================
+    match /{partitionCol}/{docId} {
+      allow read: if hasCompanyPartition(partitionCol) && isSameCompany(partitionCompanyId(partitionCol)) && (
+        isPartitionedBase(partitionCol, 'employees') ||
+        isPartitionedBase(partitionCol, 'plants') ||
+        isPartitionedBase(partitionCol, 'orders') ||
+        isPartitionedBase(partitionCol, 'shifts') ||
+        isPartitionedBase(partitionCol, 'dailyWork') ||
+        isPartitionedBase(partitionCol, 'hrSettings') ||
+        isPartitionedBase(partitionCol, 'plantSync') ||
+        isPartitionedBase(partitionCol, 'driverTrips') ||
+        (isPartitionedBase(partitionCol, 'attendance') && (
+          isOperationalStaff() ||
+          isManager() ||
+          isHR() ||
+          isOwner(resource.data.employeeId) ||
+          isOwner(resource.data.userId)
+        )) ||
+        (isPartitionedBase(partitionCol, 'liveLocations') && (
+          isOperationalStaff() ||
+          isManager() ||
+          isHR() ||
+          isOwner(docId)
+        )) ||
+        (isPartitionedBase(partitionCol, 'leaves') && (
+          isManager() ||
+          isHR() ||
+          isOwner(resource.data.employeeId) ||
+          isOwner(resource.data.userId)
+        )) ||
+        ((isPartitionedBase(partitionCol, 'advances') || isPartitionedBase(partitionCol, 'loans')) && (
+          isAccountant() ||
+          isManager() ||
+          isHR() ||
+          isOwner(resource.data.employeeId) ||
+          isOwner(resource.data.userId)
+        )) ||
+        (isPartitionedBase(partitionCol, 'payrollRecords') && (
+          isAccountant() ||
+          isHR() ||
+          isOwner(resource.data.employeeId) ||
+          isOwner(resource.data.userId)
+        )) ||
+        (isPartitionedBase(partitionCol, 'documents') && (
+          isAdmin() ||
+          isHR() ||
+          isManager() ||
+          isOwner(resource.data.employeeId) ||
+          isOwner(resource.data.userId)
+        )) ||
+        (isPartitionedBase(partitionCol, 'auditLogs') && (
+          isManager() || isHR()
+        ))
+      );
+
+      allow create: if hasCompanyPartition(partitionCol) && isSameCompany(partitionCompanyId(partitionCol)) && (
+        (isPartitionedBase(partitionCol, 'employees') && (isManager() || isHR())) ||
+        (isPartitionedBase(partitionCol, 'plants') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'orders') && (isManager() || isDispatcher() || isAdmin())) ||
+        (isPartitionedBase(partitionCol, 'shifts') && (isManager() || isHR())) ||
+        isPartitionedBase(partitionCol, 'dailyWork') ||
+        (isPartitionedBase(partitionCol, 'hrSettings') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'driverTrips') && (isOperationalStaff() || isDriver())) ||
+        isPartitionedBase(partitionCol, 'auditLogs') ||
+        (isPartitionedBase(partitionCol, 'payrollRecords') && isAccountant()) ||
+        (isPartitionedBase(partitionCol, 'attendance') && (
+          isOperationalStaff() ||
+          isManager() ||
+          isHR() ||
+          isDriver() ||
+          isSupervisor() ||
+          isOwner(request.resource.data.employeeId) ||
+          isOwner(request.resource.data.userId) ||
+          request.auth.uid == request.resource.data.userId
+        )) ||
+        (isPartitionedBase(partitionCol, 'liveLocations') && (
+          isOperationalStaff() ||
+          isManager() ||
+          isDriver() ||
+          isSupervisor() ||
+          isOwner(docId) ||
+          isOwner(request.resource.data.employeeId) ||
+          request.auth.uid == request.resource.data.userId
+        )) ||
+        (isPartitionedBase(partitionCol, 'leaves') && (
+          isManager() || isHR() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId)
+        )) ||
+        ((isPartitionedBase(partitionCol, 'advances') || isPartitionedBase(partitionCol, 'loans')) && (
+          isAccountant() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId)
+        )) ||
+        (isPartitionedBase(partitionCol, 'documents') && (
+          isAdmin() || isHR() || isManager() || isOwner(request.resource.data.employeeId) || isOwner(request.resource.data.userId)
+        ))
+      );
+
+      allow update: if hasCompanyPartition(partitionCol) && isSameCompany(partitionCompanyId(partitionCol)) && (
+        (isPartitionedBase(partitionCol, 'employees') && (isManager() || isHR())) ||
+        (isPartitionedBase(partitionCol, 'plants') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'orders') && (isManager() || isDispatcher() || isAdmin())) ||
+        (isPartitionedBase(partitionCol, 'shifts') && (isManager() || isHR())) ||
+        (isPartitionedBase(partitionCol, 'dailyWork') && (isManager() || isOwner(resource.data.employeeId))) ||
+        (isPartitionedBase(partitionCol, 'hrSettings') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'driverTrips') && (isOperationalStaff() || isDriver())) ||
+        (isPartitionedBase(partitionCol, 'payrollRecords') && isAccountant()) ||
+        (isPartitionedBase(partitionCol, 'leaves') && (isManager() || isHR())) ||
+        ((isPartitionedBase(partitionCol, 'advances') || isPartitionedBase(partitionCol, 'loans')) && (isAccountant() || isManager())) ||
+        (isPartitionedBase(partitionCol, 'documents') && (isAdmin() || isHR())) ||
+        (isPartitionedBase(partitionCol, 'attendance') && (
+          isOperationalStaff() ||
+          isManager() ||
+          isHR() ||
+          isDriver() ||
+          isSupervisor() ||
+          isOwner(resource.data.employeeId) ||
+          isOwner(resource.data.userId) ||
+          isOwner(request.resource.data.employeeId) ||
+          isOwner(request.resource.data.userId) ||
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == request.resource.data.userId
+        )) ||
+        (isPartitionedBase(partitionCol, 'liveLocations') && (
+          isOperationalStaff() ||
+          isManager() ||
+          isDriver() ||
+          isSupervisor() ||
+          isOwner(docId) ||
+          isOwner(request.resource.data.employeeId) ||
+          request.auth.uid == request.resource.data.userId
+        ))
+      );
+
+      allow delete: if hasCompanyPartition(partitionCol) && isSameCompany(partitionCompanyId(partitionCol)) && (
+        (isPartitionedBase(partitionCol, 'employees') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'plants') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'attendance') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'liveLocations') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'auditLogs') && isAdmin()) ||
+        (isPartitionedBase(partitionCol, 'orders') && (isAdmin() || isManager())) ||
+        (isPartitionedBase(partitionCol, 'shifts') && (isManager() || isHR())) ||
+        (isPartitionedBase(partitionCol, 'dailyWork') && isManager()) ||
+        (isPartitionedBase(partitionCol, 'leaves') && (isManager() || isHR())) ||
+        ((isPartitionedBase(partitionCol, 'advances') || isPartitionedBase(partitionCol, 'loans')) && (isAccountant() || isManager())) ||
+        (isPartitionedBase(partitionCol, 'payrollRecords') && isAccountant()) ||
+        (isPartitionedBase(partitionCol, 'documents') && (isAdmin() || isHR())) ||
+        (isPartitionedBase(partitionCol, 'hrSettings') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'driverTrips') && (isAdmin() || isManager() || isDispatcher()))
+      );
     }
 
     // =========================================================================

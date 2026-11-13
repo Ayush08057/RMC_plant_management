@@ -80,13 +80,13 @@ export default function DataTable({
     if (isFullscreen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = '';
     }
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = '';
     };
   }, [isFullscreen]);
 

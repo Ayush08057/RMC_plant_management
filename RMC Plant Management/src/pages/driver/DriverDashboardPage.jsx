@@ -29,6 +29,7 @@ import {
 import { MOCK_DRIVER_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { formatToIndian12Hr } from '../../utils/shiftUtils';
+import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { useAuth } from '../../context/AuthContext';
 import { pushCloudStore } from '../../services/cloudSyncService';
 import { calculateTripDistance, STORAGE_KEYS } from '../../services/plantOperationsService';
@@ -177,25 +178,22 @@ export default function DriverDashboardPage() {
     setShowStepModal(true);
   };
 
-  const captureGpsForField = (field) => {
+  const captureGpsForField = async (field) => {
     setGpsStatus('Detecting device GPS coordinates...');
-    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords = `${pos.coords.latitude.toFixed(6)}° N, ${pos.coords.longitude.toFixed(6)}° E`;
-          setStepForm(prev => ({ ...prev, [field]: coords }));
-          setGpsStatus(`✓ GPS Locked: ${coords}`);
-        },
-        () => {
-          const unavailable = 'Location Unavailable (Permission Denied)';
-          setStepForm(prev => ({ ...prev, [field]: unavailable }));
-          setGpsStatus(`⚠️ ${unavailable}`);
-        },
-        { enableHighAccuracy: true, timeout: 6000 }
-      );
-    } else {
-      const unavailable = 'Location Unavailable (Device Unsupported)';
-      setStepForm(prev => ({ ...prev, [field]: unavailable }));
+    try {
+      const loc = await getAccurateDeviceLocation({ forceFresh: true });
+      if (loc && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng))) {
+        const coords = `${Number(loc.lat).toFixed(6)}° N, ${Number(loc.lng).toFixed(6)}° E`;
+        setStepForm((prev) => ({ ...prev, [field]: coords }));
+        setGpsStatus(`✓ GPS Locked: ${coords}`);
+        return;
+      }
+      const unavailable = 'Location Unavailable (GPS Timeout)';
+      setStepForm((prev) => ({ ...prev, [field]: unavailable }));
+      setGpsStatus(`⚠️ ${unavailable}`);
+    } catch (err) {
+      const unavailable = `Location Unavailable (${err?.message || 'Permission Denied'})`;
+      setStepForm((prev) => ({ ...prev, [field]: unavailable }));
       setGpsStatus(`⚠️ ${unavailable}`);
     }
   };

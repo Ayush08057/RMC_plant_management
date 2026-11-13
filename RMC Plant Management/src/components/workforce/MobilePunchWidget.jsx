@@ -19,11 +19,12 @@ import {
   X,
   History,
   Briefcase,
-  Radio
+  Radio,
+  ChevronRight
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatToIndian12Hr, getNowIndian12Hr, parseTimeToMinutes } from '../../utils/shiftUtils';
+import { formatToIndian12Hr, getNowIndian12Hr, parseTimeToMinutes, getLocalIstDateStr } from '../../utils/shiftUtils';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
@@ -58,6 +59,140 @@ export default function MobilePunchWidget({
   // Modal state for Daily Work Report (mandatory before Punch Out)
   const [showWorkReportModal, setShowWorkReportModal] = useState(false);
   const [workReportError, setWorkReportError] = useState(null);
+
+  // Mandatory High-Accuracy Shift Tracking Setup Modal states
+  const [showTrackingSetupModal, setShowTrackingSetupModal] = useState(false);
+  const [trackingPerms, setTrackingPerms] = useState({
+    hasLocationAlways: false,
+    hasLocationInUse: false,
+    hasPreciseLocation: false,
+    isIgnoringBattery: false,
+    hasNotification: false,
+    isGpsEnabled: true,
+    autostartCompleted: typeof window !== 'undefined' ? Boolean(localStorage.getItem('sm_tracking_autostart_confirmed') === 'true') : false,
+    checked: false,
+  });
+
+  const isTrackingPreflightComplete = (perms) => Boolean(
+    perms?.hasLocationAlways &&
+    perms?.hasPreciseLocation &&
+    perms?.isGpsEnabled &&
+    perms?.isIgnoringBattery &&
+    perms?.hasNotification &&
+    perms?.autostartCompleted
+  );
+
+  const verifyTrackingPermissions = async () => {
+    if (!nativeTracking.isNativeApp()) {
+      return true;
+    }
+    try {
+      const perms = await nativeTracking.checkPermissions();
+      const autostart = localStorage.getItem('sm_tracking_autostart_confirmed') === 'true';
+      const updated = {
+        ...perms,
+        autostartCompleted: autostart,
+        checked: true,
+      };
+      setTrackingPerms(updated);
+
+      return isTrackingPreflightComplete(updated);
+    } catch {
+      // Do not allow a punch-in when the native permission status cannot be
+      // read. Otherwise the foreground notification can start without GPS.
+      return false;
+    }
+  };
+
+  const handleFixLocationPermission = () => {
+    nativeTracking.openSetting('LOCATION_ALWAYS');
+  };
+
+  const handleFixBatteryOptimization = () => {
+    nativeTracking.openSetting('BATTERY_SAVER');
+  };
+
+  const handleFixGps = () => {
+    nativeTracking.openSetting('GPS_SETTINGS');
+  };
+
+  const handleFixNotification = () => {
+    nativeTracking.openSetting('NOTIFICATION');
+  };
+
+  // Android permissions must be requested by a user action. This guides the
+  // employee through exactly one missing requirement at a time.
+  const handleNextTrackingRequirement = async () => {
+    const stillReady = await verifyTrackingPermissions();
+    if (stillReady) return;
+    const perms = await nativeTracking.checkPermissions();
+    const autostart = localStorage.getItem('sm_tracking_autostart_confirmed') === 'true';
+    const current = { ...perms, autostartCompleted: autostart };
+    setTrackingPerms((previous) => ({ ...previous, ...current, checked: true }));
+
+    if (!current.hasLocationAlways || !current.hasPreciseLocation) {
+      handleFixLocationPermission();
+    } else if (!current.isGpsEnabled) {
+      handleFixGps();
+    } else if (!current.hasNotification) {
+      handleFixNotification();
+    } else if (!current.isIgnoringBattery) {
+      handleFixBatteryOptimization();
+    } else if (!current.autostartCompleted) {
+      handleFixAutostart();
+    }
+  };
+
+  const handleFixAutostart = () => {
+    nativeTracking.openSetting('APP_SETTINGS');
+  };
+
+  // Android does not expose a reliable API for vendor-specific auto-start
+  // switches. Require an explicit employee confirmation after opening settings.
+  const confirmAutostart = () => {
+    try {
+      localStorage.setItem('sm_tracking_autostart_confirmed', 'true');
+    } catch (_) {}
+    setTrackingPerms((prev) => ({ ...prev, autostartCompleted: true }));
+  };
+
+  const handleProceedAfterSetup = async () => {
+    const ok = await verifyTrackingPermissions();
+    if (ok) {
+      setShowTrackingSetupModal(false);
+      startCamera(facingMode);
+    }
+  };
+
+  const hasPunchedInRef = useRef(false);
+  const startedServiceKeyRef = useRef('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const unsubPerm = nativeTracking.onPermissionStatus((data) => {
+      if (data) {
+        const autostart = localStorage.getItem('sm_tracking_autostart_confirmed') === 'true';
+        setTrackingPerms((prev) => ({
+          ...prev,
+          ...data,
+          autostartCompleted: autostart,
+          checked: true,
+        }));
+      }
+    });
+    // Check permissions proactively when in native app
+    if (nativeTracking.isNativeApp()) {
+      verifyTrackingPermissions().then((ok) => {
+        if (!ok && !hasPunchedInRef.current) {
+          setShowTrackingSetupModal(true);
+        }
+      }).catch(() => {});
+    }
+    return () => {
+      if (typeof unsubPerm === 'function') unsubPerm();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
 
@@ -135,8 +270,8 @@ export default function MobilePunchWidget({
 
   const isDriver = (activeEmployee?.role || '').toLowerCase().includes('driver') || user?.role === 'Driver';
 
-  // Today's attendance record (Strictly scoped to the selected employee ID)
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Today's attendance record (Strictly scoped to the selected employee ID in IST)
+  const todayStr = getLocalIstDateStr();
   const userTodayRecord = useMemo(() => {
     const targetEmpId = (activeEmployee?.employeeId || activeEmployee?.id || selectedEmpId || '').toString().trim().toUpperCase();
     if (!targetEmpId) return null;
@@ -156,6 +291,7 @@ export default function MobilePunchWidget({
 
   const hasPunchedIn = Boolean(userTodayRecord?.punchIn);
   const hasPunchedOut = Boolean(userTodayRecord?.punchOut);
+  hasPunchedInRef.current = hasPunchedIn;
   const displayPhoto = capturedPhoto || (hasPunchedIn ? userTodayRecord?.selfieUrl : null);
 
   // Past attendance records for this employee (for Activity tab)
@@ -194,6 +330,49 @@ export default function MobilePunchWidget({
 
   useEffect(() => {
     acquireGpsLocation().catch(() => {});
+
+    const unsubNative = nativeTracking.onLocationPing((ping) => {
+      if (ping && Number.isFinite(Number(ping.lat)) && Number.isFinite(Number(ping.lng))) {
+        setGpsCoords((prev) => ({
+          ...(prev || {}),
+          lat: Number(ping.lat),
+          lng: Number(ping.lng),
+          accuracy: Math.round(ping.accuracy || 15),
+          timestamp: ping.timestamp || new Date().toISOString(),
+          source: ping.source || 'NATIVE_HARDWARE_GPS',
+        }));
+        setGpsStatus('LOCKED');
+      }
+    });
+
+    let watchId = null;
+    if (!nativeTracking.isNativeApp() && typeof navigator !== 'undefined' && navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords || {};
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          if (Number.isFinite(accuracy) && accuracy > 200) return;
+          setGpsCoords((prev) => ({
+            ...(prev || {}),
+            lat: Number(latitude.toFixed(6)),
+            lng: Number(longitude.toFixed(6)),
+            accuracy: Math.round(accuracy || 20),
+            timestamp: new Date().toISOString(),
+            source: 'BROWSER_HARDWARE_GPS',
+          }));
+          setGpsStatus('LOCKED');
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      );
+    }
+
+    return () => {
+      if (typeof unsubNative === 'function') unsubNative();
+      if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
   }, []);
 
   // Native device photo file capture handler (100% reliable fallback on all devices)
@@ -325,16 +504,51 @@ export default function MobilePunchWidget({
     return () => clearInterval(interval);
   }, [hasPunchedIn, hasPunchedOut, userTodayRecord?.punchIn]);
 
-  // Ensure native background foreground service stays active while on duty (even after app close/reopen)
+  // Ensure native background foreground service stays active while on duty (once per shift/session)
   useEffect(() => {
-    if (hasPunchedIn && !hasPunchedOut && activeEmployee) {
-      const targetId = activeEmployee.employeeId || activeEmployee.id;
-      nativeTracking.startForegroundTracking(targetId, activeEmployee.name || 'Employee', {
-        companyId: user?.companyId || 'sm-concretech',
-        attendanceDocId: userTodayRecord?.id || '',
-      });
+    if (!hasPunchedIn || hasPunchedOut || !activeEmployee || !userTodayRecord?.id) {
+      startedServiceKeyRef.current = '';
+      return;
     }
-  }, [hasPunchedIn, hasPunchedOut, activeEmployee, userTodayRecord?.id, user?.companyId]);
+    const targetId = activeEmployee.employeeId || activeEmployee.id;
+    const empName = activeEmployee.name || 'Employee';
+    const docId = userTodayRecord.id;
+    const companyId = user?.companyId || 'sm-concretech';
+    const sessionKey = `${targetId}:${docId}:${companyId}`;
+    if (startedServiceKeyRef.current === sessionKey) return;
+    startedServiceKeyRef.current = sessionKey;
+
+    let refreshToken = '';
+    const resolvedUserId = auth?.currentUser?.uid || user?.uid || '';
+    if (auth?.currentUser) {
+      try {
+        refreshToken = auth.currentUser.refreshToken || '';
+        auth.currentUser.getIdToken().then((t) => {
+          nativeTracking.startForegroundTracking(targetId, empName, {
+            companyId,
+            authToken: t || '',
+            refreshToken: refreshToken || '',
+            userId: resolvedUserId,
+            attendanceDocId: docId,
+          });
+        }).catch(() => {
+          nativeTracking.startForegroundTracking(targetId, empName, {
+            companyId,
+            authToken: '',
+            refreshToken: refreshToken || '',
+            userId: resolvedUserId,
+            attendanceDocId: docId,
+          });
+        });
+        return;
+      } catch (_) {}
+    }
+    nativeTracking.startForegroundTracking(targetId, empName, {
+      companyId,
+      userId: resolvedUserId,
+      attendanceDocId: docId,
+    });
+  }, [hasPunchedIn, hasPunchedOut, activeEmployee?.employeeId, activeEmployee?.id, activeEmployee?.name, userTodayRecord?.id, user?.companyId]);
 
   // Flip camera toggle
   const toggleCameraFacing = () => {
@@ -429,6 +643,16 @@ export default function MobilePunchWidget({
   const handlePunchIn = async () => {
     setError(null);
     setSuccessMsg(null);
+
+    // Verify mandatory tracking permissions before proceeding
+    if (nativeTracking.isNativeApp()) {
+      const ok = await verifyTrackingPermissions();
+      if (!ok) {
+        setShowTrackingSetupModal(true);
+        return;
+      }
+    }
+
     setLoading(true);
 
     // Use a mounted guard so state updates are safe even if component re-renders
@@ -443,59 +667,39 @@ export default function MobilePunchWidget({
       const targetId = activeEmployee?.employeeId || activeEmployee?.id;
       if (!targetId) throw new Error('No employee selected. Please select your profile first.');
 
-      // ── Step 2: GPS — use whatever is in memory RIGHT NOW (0ms) ──
-      // Never wait for GPS during punch — it blocks the UI.
-      // If native bridge has a fix, use it. Otherwise use gpsCoords state.
-      // GPS will update in the background after punch completes.
+      // ── Step 2: Acquire Genuine Device GPS (never use fake coordinates) ──
       let currentGps = null;
 
-      // Priority 1: In-memory GPS already acquired by background poller
-      if (gpsCoords && gpsCoords.lat) {
+      // Priority 1: Native hardware GPS fix from background tracker
+      try {
+        const nativeFix = nativeTracking.getLatestNativeFix();
+        if (nativeFix && nativeFix.lat && (!nativeFix.accuracy || nativeFix.accuracy <= 80)) {
+          currentGps = nativeFix;
+        }
+      } catch (_) {}
+
+      // Priority 2: In-memory GPS already acquired by background poller
+      if ((!currentGps || !currentGps.lat) && gpsCoords && gpsCoords.lat && gpsCoords.accuracy <= 80) {
         currentGps = gpsCoords;
       }
 
-      // Priority 2: Native Flutter hardware GPS bridge
+      // Priority 3: Active GPS hardware polling via bridge
       if (!currentGps || !currentGps.lat) {
         try {
-          currentGps = nativeTracking.getLatestNativeFix();
-          if (!currentGps || !currentGps.lat) {
-            currentGps = await nativeTracking.requestImmediateFix(1200);
-          }
+          currentGps = await nativeTracking.requestImmediateFix(2500);
         } catch (_) {}
       }
 
-      // Priority 3: Browser geolocation with 1.5s max timeout (non-blocking race)
+      // Priority 4: Browser geolocation if available
       if (!currentGps || !currentGps.lat) {
         try {
-          currentGps = await Promise.race([
-            new Promise((resolve) => {
-              navigator.geolocation?.getCurrentPosition(
-                (pos) => resolve({
-                  lat: Number(pos.coords.latitude.toFixed(6)),
-                  lng: Number(pos.coords.longitude.toFixed(6)),
-                  accuracy: Math.round(pos.coords.accuracy || 20),
-                  source: 'BROWSER_GPS',
-                }),
-                () => resolve(null),
-                { enableHighAccuracy: true, timeout: 1400, maximumAge: 60000 }
-              );
-            }),
-            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-          ]);
-        } catch (_) {
-          currentGps = null;
-        }
+          currentGps = await acquireGpsLocation(true);
+        } catch (_) {}
       }
 
+      // Strict enforcement: if GPS could not be resolved, reject fake coordinates
       if (!currentGps || !currentGps.lat) {
-        currentGps = {
-          lat: 16.8568,
-          lng: 74.5867,
-          accuracy: 50,
-          address: 'Location Awaiting GPS Signal',
-          landmarkName: 'Awaiting Hardware GPS',
-          source: 'GPS_STANDBY'
-        };
+        throw new Error('Real GPS satellite fix could not be acquired. Please ensure Device Location (GPS) is turned ON and try again.');
       }
 
       const landmarkName = currentGps.landmarkName || currentGps.shortName || currentGps.address || `${Number(currentGps.lat).toFixed(4)}°N, ${Number(currentGps.lng).toFixed(4)}°E`;
@@ -535,39 +739,45 @@ export default function MobilePunchWidget({
 
       _finished = true;
 
-      // ── Step 4: Non-blocking post-punch side-effects ──
-      // Broadcast live initial GPS position immediately to admin dashboard radar
-      try {
-        updateLiveEmployeeLocation(targetId, {
-          lat: Number(currentGps.lat),
-          lng: Number(currentGps.lng),
-          accuracy: currentGps.accuracy || 20,
-          timestamp: currentGps.timestamp || new Date().toISOString(),
-          address,
-          landmarkName,
-        });
-      } catch (_) {}
+      // ── Step 4: Live-location writes & background tracking ONLY after Firebase confirms attendance doc ──
+      if (rec && rec.id) {
+        // Broadcast live initial GPS position immediately to admin dashboard radar
+        try {
+          updateLiveEmployeeLocation(targetId, {
+            lat: Number(currentGps.lat),
+            lng: Number(currentGps.lng),
+            accuracy: currentGps.accuracy || 20,
+            timestamp: currentGps.timestamp || new Date().toISOString(),
+            address,
+            landmarkName,
+          });
+        } catch (_) {}
 
-      // Record breadcrumb for route trail
-      try { recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`); } catch (_) {}
+        // Record breadcrumb for route trail
+        try { recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`); } catch (_) {}
 
-      // Start foreground GPS tracking service (non-blocking)
-      try {
-        nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee', {
-          companyId: user?.companyId || 'sm-concretech',
-          authToken: '',
-          attendanceDocId: rec?.id || '',
-        });
-      } catch (_) {}
-
-      // Sync auth token to Flutter in background (never blocks punch)
-      try {
-        if (auth?.currentUser) {
-          auth.currentUser.getIdToken()
-            .then((token) => { if (token) nativeTracking.syncAuth(token, user?.companyId || 'sm-concretech'); })
-            .catch(() => {});
-        }
-      } catch (_) {}
+        // Start foreground GPS tracking service atomically clearing previous shift trail
+        try {
+          let freshToken = '';
+          let refreshToken = '';
+          const resolvedUserId = auth?.currentUser?.uid || user?.uid || '';
+          if (auth?.currentUser) {
+            try {
+              freshToken = await auth.currentUser.getIdToken();
+              refreshToken = auth.currentUser.refreshToken || '';
+            } catch (_) {}
+          }
+          startedServiceKeyRef.current = `${targetId}:${rec.id}:${user?.companyId || 'sm-concretech'}`;
+          nativeTracking.startForegroundTracking(targetId, activeEmployee?.name || 'Employee', {
+            companyId: user?.companyId || 'sm-concretech',
+            authToken: freshToken,
+            refreshToken: refreshToken,
+            userId: resolvedUserId,
+            attendanceDocId: rec.id,
+            clearTrail: true,
+          });
+        } catch (_) {}
+      }
 
       // ── Step 5: Show success ──
       const displayTime = (rec?.punchIn) ? formatToIndian12Hr(rec.punchIn) : nowTime;
@@ -652,10 +862,13 @@ export default function MobilePunchWidget({
         exitGps = gpsCoords;
       }
 
-      const exitAddress = exitGps?.address || `${Number(exitGps?.lat).toFixed(5)}°N, ${Number(exitGps?.lng).toFixed(5)}°E`;
+      const hasValidExitCoords = exitGps && Number.isFinite(Number(exitGps.lat)) && Number.isFinite(Number(exitGps.lng));
+      const exitAddress = exitGps?.address || (hasValidExitCoords
+        ? `${Number(exitGps.lat).toFixed(5)}°N, ${Number(exitGps.lng).toFixed(5)}°E`
+        : 'Punch-Out Coordinates Pending');
       const exitLandmark = exitGps?.landmarkName || exitGps?.shortName || 'Punch-Out Station';
 
-      const exitGpsData = exitGps && exitGps.lat ? {
+      const exitGpsData = hasValidExitCoords ? {
         lat: Number(exitGps.lat),
         lng: Number(exitGps.lng),
         accuracy: exitGps.accuracy || 20,
@@ -676,9 +889,6 @@ export default function MobilePunchWidget({
         localPoints = [];
       }
 
-      // Stop Android Foreground Tracking Service via native bridge & clear phone storage
-      nativeTracking.stopForegroundTracking();
-
       const rec = await checkOut(targetId, {
         exitGpsLocation: exitGpsData,
         rawTrailPoints: localPoints,
@@ -686,6 +896,11 @@ export default function MobilePunchWidget({
           ? `Mixer ${dailyReportData.vehicleNo} | ${dailyReportData.tripsCount} Trips (${dailyReportData.deliveredM3} m³)`
           : dailyReportData.workDescription,
       });
+
+      // Stop Android Foreground Tracking Service after checkout has committed the full route trail
+      try {
+        nativeTracking.stopForegroundTracking();
+      } catch (_) {}
 
       setShowWorkReportModal(false);
       setSuccessMsg(`Punch Out successful at ${formatToIndian12Hr(rec.punchOut)}! Duty logged: ${rec.workingHours || 8} hours.`);
@@ -1346,6 +1561,185 @@ export default function MobilePunchWidget({
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Mandatory High-Accuracy Shift Tracking Setup Modal */}
+      {showTrackingSetupModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-amber-500/30 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden p-6 text-white space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-white tracking-wide">
+                    ⚠️ High-Accuracy Shift Tracking Setup
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Please complete the following one-time settings:
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTrackingSetupModal(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Checklist Items */}
+            <div className="space-y-3">
+              
+              {/* Item 1: Background Location */}
+              <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between gap-3 hover:border-slate-600 transition-colors">
+                <div className="space-y-1 pr-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-200">1. 📍 Background Location</span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Set to <span className="text-amber-300 font-semibold">"Allow all the time"</span> & <span className="text-amber-300 font-semibold">"Precise"</span>
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {trackingPerms.hasLocationAlways && trackingPerms.hasPreciseLocation ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                      <Check className="w-3.5 h-3.5" /> Granted
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFixLocationPermission}
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-blue-900/40 flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <span>Allow all the time</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Item 2: System location must be switched on before a shift */}
+              <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between gap-3 hover:border-slate-600 transition-colors">
+                <div className="space-y-1 pr-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-200">2. 📡 Device Location (GPS)</span>
+                  </div>
+                  <p className="text-xs text-slate-400">Turn on Device Location and Google Location Accuracy</p>
+                </div>
+                <div className="shrink-0">
+                  {trackingPerms.isGpsEnabled ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                      <Check className="w-3.5 h-3.5" /> On
+                    </span>
+                  ) : (
+                    <button type="button" onClick={handleFixGps} className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-blue-900/40 flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap">
+                      <span>Turn on GPS</span><ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Item 3: Battery Saver */}
+              <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between gap-3 hover:border-slate-600 transition-colors">
+                <div className="space-y-1 pr-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-200">3. 🔋 Battery Saver</span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Prevents phone from killing GPS when screen is off
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {trackingPerms.isIgnoringBattery ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                      <Check className="w-3.5 h-3.5" /> Granted
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFixBatteryOptimization}
+                      className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-amber-900/40 flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <span>Set to "No Restrictions"</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Item 4: Notifications */}
+              <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between gap-3">
+                <div className="space-y-1 pr-2">
+                  <div className="flex items-center gap-2"><span className="font-bold text-sm text-slate-200">4. 🔔 Tracking Notification</span></div>
+                  <p className="text-xs text-slate-400">Required so Android keeps the duty service visible and active</p>
+                </div>
+                {trackingPerms.hasNotification ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30"><Check className="w-3.5 h-3.5" /> Allowed</span>
+                ) : (
+                  <button type="button" onClick={handleFixNotification} className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold whitespace-nowrap">Allow</button>
+                )}
+              </div>
+
+              {/* Item 5: Autostart & Background */}
+              <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between gap-3 hover:border-slate-600 transition-colors">
+                <div className="space-y-1 pr-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-200">5. 🚀 Autostart & Background</span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    For Xiaomi / Vivo / Oppo / Samsung devices
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {trackingPerms.autostartCompleted ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                      <Check className="w-3.5 h-3.5" /> Completed
+                    </span>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 items-end">
+                      <button type="button" onClick={handleFixAutostart} className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-indigo-900/40 flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap">
+                        <span>Open Settings</span><ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={confirmAutostart} className="text-[11px] text-indigo-300 hover:text-white underline">I enabled it</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Bottom Proceed Button */}
+            <div className="pt-2 border-t border-slate-800">
+              {!isTrackingPreflightComplete(trackingPerms) && (
+                <button type="button" onClick={handleNextTrackingRequirement} className="w-full mb-2 py-3 px-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer">
+                  <ChevronRight className="w-4 h-4" /> Complete Next Requirement
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleProceedAfterSetup}
+                disabled={!isTrackingPreflightComplete(trackingPerms)}
+                className={`w-full py-3.5 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg ${
+                  isTrackingPreflightComplete(trackingPerms)
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'
+                    : 'bg-slate-700 text-slate-400 cursor-not-allowed shadow-none'
+                }`}
+              >
+                <Check className="w-4 h-4" />
+                <span>✓ All Completed — Proceed to Punch In</span>
+              </button>
+              {!isTrackingPreflightComplete(trackingPerms) && (
+                <p className="mt-2 text-center text-xs text-amber-300">Complete every item above, return to the app, then tap this button.</p>
+              )}
+            </div>
 
           </div>
         </div>

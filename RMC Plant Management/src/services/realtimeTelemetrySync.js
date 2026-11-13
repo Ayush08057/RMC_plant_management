@@ -126,10 +126,12 @@ class RealtimeTelemetrySync {
     const cleanId = (record.employeeId || record.id || '').toString().trim().toUpperCase();
     if (!cleanId) return;
 
+    // Never broadcast Base64 selfie images over public MQTT broker
+    const { selfieUrl: _omitSelfie, ...mqttSafeRecord } = record;
     const topic = `smconcretech/attendance/${cleanId}`;
     const payload = JSON.stringify({
       type: 'ATTENDANCE_UPDATE',
-      record,
+      record: mqttSafeRecord,
       timestamp: Date.now(),
     });
 

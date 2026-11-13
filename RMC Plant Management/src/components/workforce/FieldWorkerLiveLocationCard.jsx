@@ -50,82 +50,85 @@ export default function FieldWorkerLiveLocationCard({
     return aId === effId && a.date === todayStr;
   });
 
-  // Base coords for Navi Mumbai / Pune RMC corridor
-  const BASE_PLANT_LAT = 19.0558;
-  const BASE_PLANT_LNG = 73.0163;
 
-  // Real-time GPS states
+
+  // Real-time GPS states anchored to employee's authoritative telemetry
+  const activeLocation = todayRecord?.lastKnownLocation || todayRecord?.gpsLocation || null;
+
   const [gpsCoords, setGpsCoords] = useState(() => {
-    if (todayRecord?.gpsLocation?.lat && todayRecord?.gpsLocation?.lng) {
+    if (activeLocation?.lat && activeLocation?.lng) {
       return {
-        lat: Number(todayRecord.gpsLocation.lat),
-        lng: Number(todayRecord.gpsLocation.lng),
-        accuracy: todayRecord.gpsLocation.accuracy || 10,
+        lat: Number(activeLocation.lat),
+        lng: Number(activeLocation.lng),
+        accuracy: activeLocation.accuracy || 10,
         altitude: 40,
-        speed: 0,
-        heading: 0,
+        speed: activeLocation.speed || 0,
+        heading: activeLocation.heading || 0,
       };
     }
     return null;
   });
 
   const [gpsStatus, setGpsStatus] = useState(() => {
-    return todayRecord?.gpsLocation ? 'PUNCH_IN_FIX' : 'SEARCHING';
-  }); // 'SEARCHING' | 'LIVE_GNSS_LOCKED' | 'PUNCH_IN_FIX' | 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'OFFLINE'
+    return activeLocation ? 'LIVE_GNSS_LOCKED' : 'SEARCHING';
+  });
 
   const [lastPingTime, setLastPingTime] = useState(() => {
-    return todayRecord?.gpsLocation?.timestamp 
-      ? new Date(todayRecord.gpsLocation.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) 
+    return activeLocation?.timestamp 
+      ? new Date(activeLocation.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) 
       : getNowIndian12Hr(true);
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
   const [alertSentMsg, setAlertSentMsg] = useState(null);
 
-  // 1. Hardware Geolocation acquisition if available in browser
+  // Synchronize live coordinates automatically as field worker moves
+  useEffect(() => {
+    const loc = todayRecord?.lastKnownLocation || todayRecord?.gpsLocation;
+    if (loc?.lat && loc?.lng) {
+      setGpsCoords({
+        lat: Number(loc.lat),
+        lng: Number(loc.lng),
+        accuracy: loc.accuracy || 10,
+        altitude: loc.altitude || 40,
+        speed: loc.speed || 0,
+        heading: loc.heading || 0,
+      });
+      setGpsStatus('LIVE_GNSS_LOCKED');
+      if (loc.timestamp) {
+        setLastPingTime(new Date(loc.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+      }
+    }
+  }, [todayRecord?.lastKnownLocation?.lat, todayRecord?.lastKnownLocation?.lng, todayRecord?.gpsLocation?.lat, todayRecord?.gpsLocation?.lng]);
+
+  // Telemetry refresh (authoritative employee device fix)
   const refreshLocationFix = () => {
     setIsRefreshing(true);
+    const loc = todayRecord?.lastKnownLocation || todayRecord?.gpsLocation;
+    if (loc?.lat && loc?.lng) {
+      setGpsCoords({
+        lat: Number(loc.lat),
+        lng: Number(loc.lng),
+        accuracy: loc.accuracy || 10,
+        altitude: loc.altitude || 40,
+        speed: loc.speed || 0,
+        heading: loc.heading || 0,
+      });
+      setGpsStatus('LIVE_GNSS_LOCKED');
+      if (loc.timestamp) {
+        setLastPingTime(new Date(loc.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+      }
+      setIsRefreshing(false);
+      return;
+    }
+
     if (typeof window !== 'undefined' && !navigator.onLine) {
       setGpsStatus('OFFLINE');
       setIsRefreshing(false);
       return;
     }
 
-    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGpsCoords({
-            lat: Number(pos.coords.latitude.toFixed(6)),
-            lng: Number(pos.coords.longitude.toFixed(6)),
-            accuracy: Math.round(pos.coords.accuracy || 8),
-            altitude: Math.round(pos.coords.altitude || 38),
-            speed: Math.round((pos.coords.speed || 0) * 3.6),
-            heading: Math.round(pos.coords.heading || 0),
-          });
-          setGpsStatus('LIVE_GNSS_LOCKED');
-          setLastPingTime(getNowIndian12Hr(true));
-          setIsRefreshing(false);
-        },
-        (err) => {
-          if (err.code === 1) {
-            setGpsStatus('PERMISSION_DENIED');
-          } else if (todayRecord?.gpsLocation?.lat) {
-            setGpsStatus('PUNCH_IN_FIX');
-          } else {
-            setGpsStatus('UNAVAILABLE');
-          }
-          setIsRefreshing(false);
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    } else {
-      if (todayRecord?.gpsLocation?.lat) {
-        setGpsStatus('PUNCH_IN_FIX');
-      } else {
-        setGpsStatus('UNAVAILABLE');
-      }
-      setIsRefreshing(false);
-    }
+    setIsRefreshing(false);
   };
 
   // Initial GPS lock
@@ -133,15 +136,17 @@ export default function FieldWorkerLiveLocationCard({
     refreshLocationFix();
   }, []);
 
-  // Distance from plant base calculation (Haversine formula approximation)
+  // Distance calculation from Punch-In Station (strictly real GPS coordinates)
   const calculateDistanceKm = () => {
-    if (!gpsCoords?.lat || !gpsCoords?.lng) return 'N/A';
+    if (!gpsCoords?.lat || !gpsCoords?.lng || !todayRecord?.gpsLocation?.lat || !todayRecord?.gpsLocation?.lng) return 'N/A';
+    const baseLat = Number(todayRecord.gpsLocation.lat);
+    const baseLng = Number(todayRecord.gpsLocation.lng);
     const R = 6371; // Earth's radius in km
-    const dLat = (gpsCoords.lat - BASE_PLANT_LAT) * (Math.PI / 180);
-    const dLon = (gpsCoords.lng - BASE_PLANT_LNG) * (Math.PI / 180);
+    const dLat = (gpsCoords.lat - baseLat) * (Math.PI / 180);
+    const dLon = (gpsCoords.lng - baseLng) * (Math.PI / 180);
     const a = 
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(BASE_PLANT_LAT * (Math.PI / 180)) * Math.cos(gpsCoords.lat * (Math.PI / 180)) * 
+      Math.cos(baseLat * (Math.PI / 180)) * Math.cos(gpsCoords.lat * (Math.PI / 180)) * 
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return (R * c).toFixed(2);
@@ -348,10 +353,10 @@ export default function FieldWorkerLiveLocationCard({
               <Zap className="w-3.5 h-3.5 text-amber-500" />
             </div>
             <div className="text-base sm:text-xl font-mono font-black text-slate-900">
-              {gpsCoords.speed} <span className="text-xs font-semibold text-slate-500">km/h</span>
+              {gpsCoords?.speed ?? 0} <span className="text-xs font-semibold text-slate-500">km/h</span>
             </div>
             <span className="text-[9px] text-emerald-600 font-semibold block mt-0.5">
-              {gpsCoords.speed > 0 ? 'Vehicle in Transit' : 'Stationary at Pour Point'}
+              {(gpsCoords?.speed ?? 0) > 0 ? 'Vehicle in Transit' : 'Stationary at Pour Point'}
             </span>
           </div>
 
@@ -374,7 +379,7 @@ export default function FieldWorkerLiveLocationCard({
               <Compass className="w-3.5 h-3.5 text-teal-600" />
             </div>
             <div className="text-base sm:text-xl font-mono font-black text-teal-800">
-              {gpsCoords.altitude} <span className="text-xs font-semibold text-slate-500">meters</span>
+              {gpsCoords?.altitude ?? '--'} <span className="text-xs font-semibold text-slate-500">meters</span>
             </div>
             <span className="text-[9px] text-teal-600 font-semibold block mt-0.5">
               Above sea level
@@ -393,8 +398,10 @@ export default function FieldWorkerLiveLocationCard({
                 {copiedCoords ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
-            <div className="text-[11px] sm:text-xs font-mono font-black text-slate-900 truncate" title={`${gpsCoords.lat}, ${gpsCoords.lng}`}>
-              {gpsCoords.lat.toFixed(4)}, {gpsCoords.lng.toFixed(4)}
+            <div className="text-[11px] sm:text-xs font-mono font-black text-slate-900 truncate" title={gpsCoords?.lat != null && gpsCoords?.lng != null ? `${gpsCoords.lat}, ${gpsCoords.lng}` : 'Waiting for GPS'}>
+              {gpsCoords?.lat != null && gpsCoords?.lng != null
+                ? `${Number(gpsCoords.lat).toFixed(4)}, ${Number(gpsCoords.lng).toFixed(4)}`
+                : 'Waiting for GPS...'}
             </div>
             <span className="text-[9px] text-emerald-700 font-semibold block mt-0.5">
               {copiedCoords ? 'Copied to clipboard!' : 'GNSS WGS-84 Format'}
