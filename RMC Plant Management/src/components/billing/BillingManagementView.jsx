@@ -79,7 +79,7 @@ const OTP_LOGS_STORAGE_KEY = 'rmc_billing_otp_audit_v3';
 
 // Owner Contact Information (From Cash Memo header & official accounts)
 export const OWNER_SECURITY_PROFILE = {
-  name: 'Sunil More / Shahesh D. Mane',
+  name: 'Shahesh D. Mane',
   role: 'Owner & Proprietor',
   phone: '+91 9421858683',
   altPhone: '+91 9373488061',
@@ -4020,7 +4020,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                         type="text"
                         value={paymentForm.receivedBy}
                         onChange={(e) => setPaymentForm({ ...paymentForm, receivedBy: e.target.value })}
-                        placeholder="e.g. Sunil More / Ramesh"
+                        placeholder="e.g. Shahesh D. Mane / Ramesh"
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:bg-white focus:border-emerald-600 transition-all"
                       />
                     </div>

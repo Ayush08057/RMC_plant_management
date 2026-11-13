@@ -20,7 +20,7 @@ import {
 import { useWorkforce, resolveCanonicalEmployeeId, attendanceMatchesEmployee } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { getLocalIstDateStr } from '../../utils/shiftUtils';
-import { isAdminPerson, ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../../data/mockUsers';
+import { isAdminPerson, OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../../data/mockUsers';
 import { getEmployeeRouteDetails } from '../../services/routeTrackingService';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
@@ -49,7 +49,7 @@ function getCachedStaffFallback() {
       }
     }
   } catch {}
-  return list;
+  return list.filter((p) => !isDummyEmployee(p) && !isAdminPerson(p));
 }
 
 export default function CleanEmployeeLiveTracking() {
@@ -73,7 +73,7 @@ export default function CleanEmployeeLiveTracking() {
     const map = new Map();
 
     const addPerson = (person) => {
-      if (!person || isAdminPerson(person) || isGenericRoleDummy(person)) return;
+      if (!person || isAdminPerson(person) || isDummyEmployee(person)) return;
       const rawId = (person.employeeId || person.id || '').toString().trim().toUpperCase();
       if (!rawId) return;
       const canonicalKey = resolveCanonicalEmployeeId(rawId);
@@ -127,8 +127,10 @@ export default function CleanEmployeeLiveTracking() {
         });
       }
     });
-    // 6. Original Company Personnel (genuine SM ConcreTech staff)
-    (ORIGINAL_COMPANY_EMPLOYEES || []).forEach(addPerson);
+    // 6. LocalStorage fallback caches
+    getCachedStaffFallback().forEach(addPerson);
+    // 7. Official Role Accounts fallback
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach(addPerson);
 
     // Compute real-time duty status for selectedDate
     const compactDate = selectedDate.replace(/-/g, '');

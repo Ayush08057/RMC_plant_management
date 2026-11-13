@@ -46,7 +46,7 @@ import {
   X
 } from 'lucide-react';
 import { MOCK_ADMIN_DATA } from '../../data/mockDashboardData';
-import { ROLES, ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../../data/mockUsers';
+import { ROLES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { useWorkforce, isDummyEmployee } from '../../context/WorkforceContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatToIndian12Hr } from '../../utils/shiftUtils';
@@ -299,18 +299,39 @@ export default function AdminDashboardPage() {
   });
 
 
-  // Master consolidated list of all workforce personnel (genuine original + registered staff)
+  // Master consolidated list of all workforce personnel (official operational accounts + registered staff)
   const allWorkforceList = useMemo(() => {
     const map = new Map();
 
-    const addEmp = (e) => {
-      if (!e) return;
-      if (isGenericRoleDummy(e)) return;
-      let id = (e.employeeId || e.id || '').toUpperCase();
+    // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
+      let id = (acc.employeeId || acc.id || '').toUpperCase();
       if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
-      const nameLower = (e.name || '').toLowerCase().trim();
-      if (nameLower === 'system administrator') return;
+      if (id === 'USR-SS-001') id = 'SS-001';
+      if (id === 'USR-DIS-001') id = 'DIS-001';
+      if (id === 'USR-PM-001') id = 'PM-001';
+      if (id === 'USR-ACC-001') id = 'ACC-001';
+      if (id === 'USR-QC-001') id = 'QC-001';
+      if (id === 'USR-DV-001') id = 'DRV-001';
 
+      map.set(id, {
+        id,
+        employeeId: id,
+        name: acc.name,
+        role: acc.role,
+        department: acc.department || 'Operations',
+        plant: acc.plantLocation || (plants && plants[0]?.name) || 'Main Plant HQ',
+        status: 'Active',
+        salary: acc.salary || 35000,
+        mobile: acc.phone || '+91 98200 00000',
+        email: acc.email || '',
+      });
+    });
+
+    // 2. Custom enterprise registered employees
+    (employees || []).forEach((e) => {
+      let id = (e.employeeId || e.id || '').toUpperCase();
+      if (!id || isDummyEmployee(e)) return;
       if (id === 'USR-SS-001') id = 'SS-001';
       if (id === 'USR-DIS-001') id = 'DIS-001';
       if (id === 'USR-PM-001') id = 'PM-001';
@@ -321,33 +342,35 @@ export default function AdminDashboardPage() {
       if (map.has(id)) {
         map.set(id, { ...map.get(id), ...e, id, employeeId: id });
       } else {
-        map.set(id, {
-          id,
-          employeeId: id,
-          name: e.name,
-          role: e.role,
-          department: e.department || 'Operations',
-          plant: e.plantLocation || e.plant || (plants && plants[0]?.name) || 'Main Plant HQ',
-          status: e.status || 'Active',
-          salary: e.salary || 35000,
-          mobile: e.mobile || e.phone || '+91 98200 00000',
-          email: e.email || '',
-          ...e,
-        });
+        map.set(id, { ...e, id, employeeId: id });
       }
-    };
-
-    // 1. Genuine custom / registered employees from state
-    (employees || []).forEach(addEmp);
-
-    // 2. Fallback to original company personnel if state has no registered employees
-    if (map.size === 0) {
-      (ORIGINAL_COMPANY_EMPLOYEES || []).forEach(addEmp);
-    }
+    });
 
     // 3. Fallback: Any staff present in today's attendance
     (todayAttendanceRecords || []).forEach((att) => {
-      addEmp(att);
+      let id = (att.employeeId || att.id || '').toUpperCase();
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      if (id === 'USR-SS-001') id = 'SS-001';
+      if (id === 'USR-DIS-001') id = 'DIS-001';
+      if (id === 'USR-PM-001') id = 'PM-001';
+      if (id === 'USR-ACC-001') id = 'ACC-001';
+      if (id === 'USR-QC-001') id = 'QC-001';
+      if (id === 'USR-DV-001') id = 'DRV-001';
+
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          employeeId: id,
+          name: att.employeeName || att.name || id,
+          role: att.role || 'Staff',
+          department: att.department || 'Operations',
+          plant: att.plant || (plants && plants[0]?.name) || 'Main Plant HQ',
+          status: 'Active',
+          salary: 35000,
+          mobile: att.mobile || '+91 98200 00000',
+          email: att.email || '',
+        });
+      }
     });
 
     return Array.from(map.values());

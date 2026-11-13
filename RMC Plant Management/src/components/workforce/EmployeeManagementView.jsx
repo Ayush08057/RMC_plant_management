@@ -30,7 +30,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { ROLES, ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../../data/mockUsers';
+import { ROLES, OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../../data/mockUsers';
 import { MOCK_PLANTS } from '../../data/mockDashboardData';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
@@ -123,41 +123,35 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
   const visibleEmployees = useMemo(() => {
     const map = new Map();
 
-    const addEmp = (e) => {
-      if (!e) return;
-      if (isGenericRoleDummy(e)) return;
-      const id = (e.employeeId || e.id || '').toUpperCase();
+    // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
+      const id = (acc.employeeId || acc.id || '').toUpperCase();
       if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
-      const nameLower = (e.name || '').toLowerCase().trim();
-      if (nameLower === 'system administrator') return;
+      map.set(id, {
+        id: acc.employeeId || acc.id,
+        employeeId: acc.employeeId || acc.id,
+        name: acc.name,
+        role: acc.role,
+        department: acc.department || 'Operations',
+        plant: acc.plantLocation || 'Main Plant HQ',
+        status: 'Active',
+        salary: acc.salary || 35000,
+        mobile: acc.phone || '+91 98200 00000',
+        email: acc.email || '',
+      });
+    });
+
+    // 2. Custom enterprise registered employees
+    (employees || []).forEach((e) => {
+      const id = (e.employeeId || e.id || '').toUpperCase();
+      if (!id || isDummyEmployee(e)) return;
 
       if (map.has(id)) {
         map.set(id, { ...map.get(id), ...e });
       } else {
-        map.set(id, {
-          id: e.employeeId || e.id,
-          employeeId: e.employeeId || e.id,
-          name: e.name,
-          role: e.role,
-          department: e.department || 'Operations',
-          plant: e.plantLocation || e.plant || 'Main Plant HQ',
-          status: e.status || 'Active',
-          salary: e.salary || 35000,
-          mobile: e.mobile || e.phone || '+91 98200 00000',
-          email: e.email || '',
-          joiningDate: e.joiningDate || '',
-          ...e,
-        });
+        map.set(id, e);
       }
-    };
-
-    // 1. Genuine custom / registered employees from state
-    (employees || []).forEach(addEmp);
-
-    // 2. If state has zero employees, fallback to original company employees
-    if (map.size === 0) {
-      (ORIGINAL_COMPANY_EMPLOYEES || []).forEach(addEmp);
-    }
+    });
 
     let list = Array.from(map.values());
 

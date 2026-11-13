@@ -22,7 +22,7 @@ import {
   updateDocument,
   syncRoleAccountsToFirestore
 } from '../services/firestoreService.js';
-import { INITIAL_MOCK_USERS, ROLES, ROLE_ROUTES, SYSTEM_ADMIN, SYSTEM_ROLE_PROFILES, OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
+import { INITIAL_MOCK_USERS, ROLES, ROLE_ROUTES, SYSTEM_ADMIN, SYSTEM_ROLE_PROFILES, OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../data/mockUsers.js';
 import { 
   EMPLOYEE_STATUS, 
   validateEmployeeForRegistration, 
@@ -60,10 +60,12 @@ export const AuthProvider = ({ children }) => {
 
   const sanitizeUsersList = (list) => {
     if (!Array.isArray(list)) return [];
-    return list.map((u) => {
-      const { password: _p, ...safe } = u;
-      return safe;
-    });
+    return list
+      .filter((u) => !isDummyEmployee(u))
+      .map((u) => {
+        const { password: _p, ...safe } = u;
+        return safe;
+      });
   };
 
   const [users, setUsers] = useState(() => {

@@ -45,6 +45,73 @@ export function isAdminPerson(u) {
   );
 }
 
+/**
+ * Validates whether an employee, user, or record is a test/dummy mock record.
+ * Strictly purges mock dummy names (e.g. Ayush Patil, Manoj Jadhav, Sunil More, Prithvi Jadhav, Prajakta Pawar, Mukta, Pranav)
+ * while preserving genuine operational role accounts (PM-001, DIS-001, QC-001, SS-001, DRV-001, ACC-001, OWN-001)
+ * and genuine real registered employees.
+ */
+export function isDummyEmployee(e) {
+  if (!e) return false;
+  if (e.isMock === true || e.isDummy === true) return true;
+
+  const nameLower = String(e.name || e.employeeName || e.displayName || '').toLowerCase().trim();
+  const emailLower = String(e.email || e.secondaryEmail || '').toLowerCase().trim();
+  const idUpper = String(e.id || e.employeeId || e.userId || '').toUpperCase().trim();
+
+  // Root System Administrator is the console IT account, not a workforce field employee
+  if (
+    nameLower === 'system administrator' ||
+    nameLower.includes('system admin') ||
+    idUpper === 'ADM-001' ||
+    idUpper === 'USR-ADMIN-001' ||
+    emailLower === 'smconcretech@gmail.com'
+  ) {
+    return true;
+  }
+
+  // Explicit dummy/mock person names to purge
+  const dummyNames = [
+    'ayush',
+    'aayush',
+    'manoj',
+    'jadhav',
+    'sunil more',
+    'prithvi',
+    'prajakta',
+    'mukta',
+    'pranav',
+    'dummy',
+    'test employee'
+  ];
+
+  if (dummyNames.some((t) => nameLower.includes(t))) {
+    return true;
+  }
+
+  // Explicit dummy emails to purge
+  const dummyEmails = [
+    'ayush',
+    'aayush',
+    'manoj',
+    'jadhav',
+    'sunil',
+    'prithvi',
+    'prajakta',
+    'mukta',
+    'pranav',
+    'abc@gmail.com',
+    'test@',
+    'dummy@'
+  ];
+
+  if (dummyEmails.some((t) => emailLower.includes(t))) {
+    return true;
+  }
+
+  return false;
+}
+
 export function getRoleRoute(role) {
   if (!role) return '/login';
   if (ROLE_ROUTES[role]) return ROLE_ROUTES[role];
@@ -216,170 +283,3 @@ export const SYSTEM_ROLE_PROFILES = OFFICIAL_ROLE_ACCOUNTS.map((acc) => ({
 
 // Initial users seeded with official role accounts
 export const INITIAL_MOCK_USERS = OFFICIAL_ROLE_ACCOUNTS;
-
-/**
- * Checks whether an employee or person object is a generic placeholder role account
- * (e.g. name is literally "Plant Manager", "Dispatcher", or ID is "DIS-001", "PM-001")
- */
-export function isGenericRoleDummy(person) {
-  if (!person) return false;
-  const name = String(person.name || person.employeeName || '').trim().toLowerCase();
-  const id = String(person.employeeId || person.id || '').trim().toUpperCase();
-  const genericNames = [
-    'plant manager',
-    'accountant',
-    'dispatcher',
-    'qc engineer',
-    'site supervisor',
-    'driver',
-    'owner / director',
-    'system administrator',
-  ];
-  const genericIds = [
-    'PM-001',
-    'ACC-001',
-    'DIS-001',
-    'QC-001',
-    'SS-001',
-    'DRV-001',
-    'OWN-001',
-    'ADM-001',
-    'USR-PM-001',
-    'USR-ACC-001',
-    'USR-DIS-001',
-    'USR-QC-001',
-    'USR-SS-001',
-    'USR-DV-001',
-    'USR-OD-001',
-    'USR-ADMIN-001',
-  ];
-  return genericNames.includes(name) || genericIds.includes(id);
-}
-
-/**
- * Original Registered Company Personnel of SM ConcreTech
- * Real employee directory records with genuine names, IDs, departments and contact details
- */
-export const ORIGINAL_COMPANY_EMPLOYEES = [
-  {
-    id: 'EMP-115',
-    employeeId: 'EMP-115',
-    name: 'Ayush Patil',
-    role: ROLES.PLANT_MANAGER,
-    email: 'ayush05@gmail.com',
-    mobile: '+91 9373488061',
-    phone: '+91 9373488061',
-    department: 'Plant Operations & Batching',
-    plant: 'Main Plant Unit #01',
-    plantLocation: 'Main Plant Unit #01',
-    salary: 45000,
-    status: 'Active',
-    joiningDate: '2026-10-01',
-  },
-  {
-    id: 'EMP-333',
-    employeeId: 'EMP-333',
-    name: 'Prajakta Pawar',
-    role: ROLES.DISPATCHER,
-    email: 'dispatcher@smconcretech.com',
-    mobile: '+91 9022705467',
-    phone: '+91 9022705467',
-    department: 'Transit Logistics & Fleet Dispatch',
-    plant: 'Central Dispatch Hub',
-    plantLocation: 'Central Dispatch Hub',
-    salary: 35000,
-    status: 'Active',
-    joiningDate: '2026-10-01',
-  },
-  {
-    id: 'EMP-909',
-    employeeId: 'EMP-909',
-    name: 'Snehalata Ligade',
-    role: ROLES.SITE_SUPERVISOR,
-    email: 'snehalataligade@gmail.com',
-    mobile: '+91 9372491672',
-    phone: '+91 9372491672',
-    department: 'Civil Site Execution',
-    plant: 'Highway Hub #03 (Panvel)',
-    plantLocation: 'Highway Hub #03 (Panvel)',
-    salary: 38000,
-    status: 'Active',
-    joiningDate: '2026-10-01',
-  },
-  {
-    id: 'EMP-DRI-001',
-    employeeId: 'EMP-DRI-001',
-    name: 'Ramesh Shinde',
-    role: ROLES.DRIVER,
-    email: 'driver@smconcretech.com',
-    mobile: '+91 9820000007',
-    phone: '+91 9820000007',
-    department: 'Transit Mixer Fleet',
-    plant: 'Main Plant Dispatch Yard',
-    plantLocation: 'Main Plant Dispatch Yard',
-    salary: 32000,
-    status: 'Active',
-    joiningDate: '2026-10-01',
-  },
-  {
-    id: 'EMP-OPR-001',
-    employeeId: 'EMP-OPR-001',
-    name: 'Manoj Jadhav',
-    role: ROLES.OPERATOR,
-    email: 'operator@smconcretech.com',
-    mobile: '+91 9820000009',
-    phone: '+91 9820000009',
-    department: 'Plant Automation & Batching',
-    plant: 'Main Plant Unit #01',
-    plantLocation: 'Main Plant Unit #01',
-    salary: 30000,
-    status: 'Active',
-    joiningDate: '2026-10-01',
-  },
-  {
-    id: 'EMP-OWN-001',
-    employeeId: 'EMP-OWN-001',
-    name: 'Sunil More',
-    role: ROLES.OWNER_DIRECTOR,
-    email: 'owner@smconcretech.com',
-    mobile: '+91 9820000008',
-    phone: '+91 9820000008',
-    department: 'Executive Board',
-    plant: 'Corporate HQ',
-    plantLocation: 'Corporate HQ',
-    salary: 95000,
-    status: 'Active',
-    joiningDate: '2026-10-01',
-  },
-  {
-    id: 'EMP-251',
-    employeeId: 'EMP-251',
-    name: 'Mukta',
-    role: ROLES.DRIVER,
-    email: 'mukta@gmail.com',
-    mobile: '+91 9579012787',
-    phone: '+91 9579012787',
-    department: 'Transit Mixer Fleet',
-    plant: 'Main Plant Unit #01',
-    plantLocation: 'Main Plant Unit #01',
-    salary: 32000,
-    status: 'Active',
-    joiningDate: '2026-10-09',
-  },
-  {
-    id: 'EMP-273',
-    employeeId: 'EMP-273',
-    name: 'Pranav',
-    role: ROLES.DRIVER,
-    email: 'abc@gmail.com',
-    mobile: '+91 8010597020',
-    phone: '+91 8010597020',
-    department: 'Transit Mixer Fleet',
-    plant: 'Main Plant Unit #01',
-    plantLocation: 'Main Plant Unit #01',
-    salary: 32000,
-    status: 'Active',
-    joiningDate: '2026-10-09',
-  },
-];
-

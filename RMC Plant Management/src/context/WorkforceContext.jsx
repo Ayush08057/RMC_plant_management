@@ -32,7 +32,7 @@ import {
   createEmployeeFirebaseAuth,
   saveEmployeeCredentials
 } from '../services/employeeAuthService.js';
-import { OFFICIAL_ROLE_ACCOUNTS, ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../data/mockUsers.js';
+import { OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../data/mockUsers.js';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr, getLocalIstDateStr } from '../utils/shiftUtils.js';
 import { deleteEmployeeDocumentFile } from '../services/storageService.js';
 import { calculateDistanceMeters } from '../utils/sangliGeofence.js';
@@ -79,20 +79,7 @@ function getInitialCompanies() {
   return DEFAULT_COMPANIES;
 }
 
-export const isDummyEmployee = (e) => {
-  if (!e) return true;
-  if (e.isMock === true || e.isDummy === true) return true;
-  const nameLower = (e.name || '').toLowerCase().trim();
-  const idUpper = (e.id || e.employeeId || '').toUpperCase().trim();
-  if (
-    nameLower === 'system administrator' ||
-    idUpper === 'ADM-001' ||
-    idUpper === 'USR-ADMIN-001'
-  ) {
-    return true;
-  }
-  return isGenericRoleDummy(e);
-};
+export { isDummyEmployee } from '../data/mockUsers.js';
 
 export const sanitizeEmployees = (empList) => {
   if (!Array.isArray(empList)) return [];
@@ -262,7 +249,7 @@ export const sanitizeAttendance = (attList) => {
   if (!Array.isArray(attList)) return [];
   const map = new Map();
   attList.forEach((rawItem) => {
-    if (!rawItem) return;
+    if (!rawItem || isDummyEmployee(rawItem)) return;
     const dateStr = rawItem.date || (rawItem.createdAt ? getLocalIstDateStr(rawItem.createdAt) : '');
     const empId = resolveCanonicalEmployeeId(rawItem.employeeId || rawItem.id || rawItem.userId || '');
     if (!empId) return;
@@ -282,7 +269,7 @@ export const sanitizeDailyWork = (list) => {
   if (!Array.isArray(list)) return [];
   const map = new Map();
   list.forEach((w) => {
-    if (!w) return;
+    if (!w || isDummyEmployee(w)) return;
     const empId = (w.employeeId || '').toString().trim().toUpperCase();
     const dateStr = w.date || '';
     const key = w.id || `${empId}_${dateStr}`;
@@ -299,7 +286,7 @@ export const sanitizeLeaves = (list) => {
   if (!Array.isArray(list)) return [];
   const map = new Map();
   list.forEach((l) => {
-    if (!l) return;
+    if (!l || isDummyEmployee(l)) return;
     const empId = (l.employeeId || '').toString().trim().toUpperCase();
     const key = l.id || `${empId}_${l.fromDate}_${l.toDate}`;
     if (!map.has(key)) {
@@ -315,7 +302,7 @@ export const sanitizeAdvances = (list) => {
   if (!Array.isArray(list)) return [];
   const map = new Map();
   list.forEach((a) => {
-    if (!a) return;
+    if (!a || isDummyEmployee(a)) return;
     const empId = (a.employeeId || '').toString().trim().toUpperCase();
     const dateStr = a.requestDate || a.date || '';
     const key = a.id || `${empId}_${dateStr}_${a.advanceAmount}`;
@@ -332,7 +319,7 @@ export const sanitizeLoans = (list) => {
   if (!Array.isArray(list)) return [];
   const map = new Map();
   list.forEach((l) => {
-    if (!l) return;
+    if (!l || isDummyEmployee(l)) return;
     const empId = (l.employeeId || '').toString().trim().toUpperCase();
     const key = l.id || `${empId}_${l.loanDate}_${l.loanAmount}`;
     if (!map.has(key)) {
@@ -346,7 +333,7 @@ export const sanitizeLoans = (list) => {
 
 function createEmptyCompanyData(companyId) {
   return {
-    employees: companyId === DEFAULT_COMPANY_ID ? ORIGINAL_COMPANY_EMPLOYEES : [],
+    employees: [],
     shifts: companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : [],
     plants: companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : [],
     attendance: [],
@@ -369,13 +356,12 @@ function loadCompanyData(companyId) {
     const saved = localStorage.getItem(`${STORAGE_WORKFORCE_KEY}_${companyId}`);
     if (saved) {
       const parsed = JSON.parse(saved);
-      const sanitizedEmps = Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [];
       return {
         ...createEmptyCompanyData(companyId),
         ...parsed,
         shifts: Array.isArray(parsed.shifts) ? parsed.shifts : (companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : []),
         plants: Array.isArray(parsed.plants) ? parsed.plants : (companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : []),
-        employees: sanitizedEmps.length > 0 ? sanitizedEmps : (companyId === DEFAULT_COMPANY_ID ? ORIGINAL_COMPANY_EMPLOYEES : []),
+        employees: Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [],
         attendance: Array.isArray(parsed.attendance) ? sanitizeAttendance(parsed.attendance) : [],
         leaves: Array.isArray(parsed.leaves) ? sanitizeLeaves(parsed.leaves) : [],
         advances: Array.isArray(parsed.advances) ? sanitizeAdvances(parsed.advances) : [],
@@ -464,7 +450,21 @@ export const WorkforceProvider = ({ children }) => {
 
   useEffect(() => {
     try {
-      // Purge any stored dummy employees across all localStorage keys on load
+      // 1. Scrub rmc_users_db_v2
+      const rawUsers = localStorage.getItem('rmc_users_db_v2');
+      if (rawUsers) {
+        try {
+          const parsedUsers = JSON.parse(rawUsers);
+          if (Array.isArray(parsedUsers)) {
+            const cleanedUsers = parsedUsers.filter((u) => !isDummyEmployee(u));
+            if (cleanedUsers.length !== parsedUsers.length) {
+              localStorage.setItem('rmc_users_db_v2', JSON.stringify(cleanedUsers));
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Purge any stored dummy employees/attendance across all workforce state localStorage keys on load
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('rmc_workforce_state_')) {
@@ -472,12 +472,37 @@ export const WorkforceProvider = ({ children }) => {
           if (raw) {
             try {
               const parsed = JSON.parse(raw);
+              let modified = false;
               if (parsed && Array.isArray(parsed.employees)) {
                 const cleaned = sanitizeEmployees(parsed.employees);
                 if (cleaned.length !== parsed.employees.length) {
                   parsed.employees = cleaned;
-                  localStorage.setItem(key, JSON.stringify(parsed));
+                  modified = true;
                 }
+              }
+              if (parsed && Array.isArray(parsed.attendance)) {
+                const cleanedAtt = sanitizeAttendance(parsed.attendance);
+                if (cleanedAtt.length !== parsed.attendance.length) {
+                  parsed.attendance = cleanedAtt;
+                  modified = true;
+                }
+              }
+              if (parsed && Array.isArray(parsed.dailyWork)) {
+                const cleanedDW = sanitizeDailyWork(parsed.dailyWork);
+                if (cleanedDW.length !== parsed.dailyWork.length) {
+                  parsed.dailyWork = cleanedDW;
+                  modified = true;
+                }
+              }
+              if (parsed && Array.isArray(parsed.leaves)) {
+                const cleanedL = sanitizeLeaves(parsed.leaves);
+                if (cleanedL.length !== parsed.leaves.length) {
+                  parsed.leaves = cleanedL;
+                  modified = true;
+                }
+              }
+              if (modified) {
+                localStorage.setItem(key, JSON.stringify(parsed));
               }
             } catch {}
           }
@@ -1788,18 +1813,27 @@ export const WorkforceProvider = ({ children }) => {
              e.employeeId?.toLowerCase() === targetId?.toLowerCase()
     );
 
-    // 2. Search in ORIGINAL_COMPANY_EMPLOYEES
+    // 2. Search in OFFICIAL_ROLE_ACCOUNTS
     if (!emp) {
-      const origEmp = ORIGINAL_COMPANY_EMPLOYEES.find(
+      const roleAcc = OFFICIAL_ROLE_ACCOUNTS.find(
         (r) => r.employeeId === targetId || 
                r.id === targetId || 
                r.employeeId?.toLowerCase() === targetId?.toLowerCase() ||
                r.email?.toLowerCase() === targetId?.toLowerCase()
       );
-      if (origEmp) {
+      if (roleAcc) {
         emp = {
-          ...origEmp,
-          joiningDate: origEmp.joiningDate || today,
+          id: roleAcc.employeeId || roleAcc.id,
+          employeeId: roleAcc.employeeId || roleAcc.id,
+          name: roleAcc.name,
+          role: roleAcc.role,
+          department: roleAcc.department || 'Operations',
+          plant: roleAcc.plantLocation || (data.plants && data.plants[0]?.name) || 'Main Plant HQ',
+          status: 'Active',
+          salary: 50000,
+          mobile: roleAcc.phone || '+91 98200 00000',
+          email: roleAcc.email,
+          joiningDate: today,
           shiftId: data.shifts[0]?.id || 'SFT-01',
         };
         setData((prev) => ({
@@ -2098,14 +2132,14 @@ export const WorkforceProvider = ({ children }) => {
              e.employeeId?.toLowerCase() === targetId?.toLowerCase()
     );
     if (!emp) {
-      const origEmp = ORIGINAL_COMPANY_EMPLOYEES.find(
+      const roleAcc = OFFICIAL_ROLE_ACCOUNTS.find(
         (r) => r.employeeId === targetId || 
                r.id === targetId || 
                r.employeeId?.toLowerCase() === targetId?.toLowerCase() ||
                r.email?.toLowerCase() === targetId?.toLowerCase()
       );
-      if (origEmp) {
-        emp = { id: origEmp.employeeId || origEmp.id, employeeId: origEmp.employeeId || origEmp.id, name: origEmp.name, role: origEmp.role, plant: origEmp.plantLocation || origEmp.plant };
+      if (roleAcc) {
+        emp = { id: roleAcc.employeeId || roleAcc.id, employeeId: roleAcc.employeeId || roleAcc.id, name: roleAcc.name, role: roleAcc.role, plant: roleAcc.plantLocation };
       }
     }
     if (!emp && user && (user.employeeId === targetId || user.id === targetId || !employeeId)) {
@@ -2301,7 +2335,7 @@ export const WorkforceProvider = ({ children }) => {
   const addAttendanceRecord = async (attData) => {
     const emp = data.employees.find(
       (e) => e.id === attData.employeeId || e.employeeId === attData.employeeId
-    ) || ORIGINAL_COMPANY_EMPLOYEES.find(
+    ) || OFFICIAL_ROLE_ACCOUNTS.find(
       (r) => r.employeeId === attData.employeeId || r.id === attData.employeeId
     );
 

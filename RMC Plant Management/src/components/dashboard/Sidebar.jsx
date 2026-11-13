@@ -175,7 +175,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             id: 'employees_group', 
             label: 'Employees', 
             icon: Users,
-            badge: (workforce?.employees && workforce.employees.length > 0) ? workforce.employees.length : null,
+            badge: 7,
             children: [
               { id: 'employees', label: 'Directory Records', icon: Users },
               { id: 'attendance', label: 'Attendance System', icon: Clock },
