@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../../data/mockUsers';
 import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
@@ -112,6 +112,7 @@ export default function AttendanceManagementView({
     const empMap = new Map();
 
     (employees || []).forEach((e) => {
+      if (!e || isGenericRoleDummy(e)) return;
       let key = (e.employeeId || e.id || '').toString().trim().toUpperCase();
       if (!key) return;
       if (key === 'USR-SS-001' || (e.role || '').toLowerCase().includes('supervisor')) key = 'SS-001';
@@ -119,11 +120,10 @@ export default function AttendanceManagementView({
       empMap.set(key, { ...e, id: key, employeeId: key });
     });
 
-    // Ensure official role accounts are available as fallback without duplicating existing profiles
-    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
+    // Ensure original company personnel are available as fallback without duplicating existing profiles
+    (ORIGINAL_COMPANY_EMPLOYEES || []).forEach((official) => {
+      if (!official || isGenericRoleDummy(official)) return;
       let offEmpId = (official.employeeId || official.id || '').toString().trim().toUpperCase();
-      if (offEmpId === 'USR-SS-001' || (official.role || '').toLowerCase().includes('supervisor')) offEmpId = 'SS-001';
-      if (offEmpId === 'USR-DIS-001' || (official.role || '').toLowerCase().includes('dispatch')) offEmpId = 'DIS-001';
       const offId = (official.id || '').toString().trim().toUpperCase();
       const offEmail = (official.email || '').toString().trim().toLowerCase();
       const offName = (official.name || '').toString().trim().toLowerCase();
@@ -155,7 +155,7 @@ export default function AttendanceManagementView({
           role: official.role,
           department: official.department,
           plant: official.plantLocation || defaultPlant || 'Main Plant Unit #01',
-          mobile: official.phone,
+          mobile: official.phone || official.mobile,
           email: official.email,
           status: 'Active',
           avatarUrl: null,

@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { OFFICIAL_ROLE_ACCOUNTS, isAdminPerson } from '../../data/mockUsers';
+import { ORIGINAL_COMPANY_EMPLOYEES, isAdminPerson, isGenericRoleDummy } from '../../data/mockUsers';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
@@ -203,6 +203,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         uKey = 'DIS-001';
       }
 
+      if (!data || isAdminPerson(data) || isGenericRoleDummy(data)) return;
+
       const prev = map.get(uKey) || {};
       map.set(uKey, {
         ...prev,
@@ -219,17 +221,19 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       });
     };
 
-    // 1. Official operational workforce accounts (Dispatcher, Accountant, Plant Manager, QC, Supervisor, Driver)
-    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
-      const key = acc.employeeId || acc.id;
-      addOrMerge(key, acc);
-    });
-
-    // 2. HR enrolled employees from workforce database
+    // 1. Genuine HR enrolled employees from workforce database
     (employees || []).forEach((e) => {
       const key = e.employeeId || e.id;
       addOrMerge(key, e);
     });
+
+    // 2. Original company personnel fallback
+    if (map.size === 0) {
+      (ORIGINAL_COMPANY_EMPLOYEES || []).forEach((acc) => {
+        const key = acc.employeeId || acc.id;
+        addOrMerge(key, acc);
+      });
+    }
 
     // 3. Current active user if non-admin operational
     if (user && !isAdminPerson(user)) {

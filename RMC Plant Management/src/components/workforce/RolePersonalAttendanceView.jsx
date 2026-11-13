@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { ORIGINAL_COMPANY_EMPLOYEES } from '../../data/mockUsers';
 import MobilePunchWidget from './MobilePunchWidget';
 
 export default function RolePersonalAttendanceView({
@@ -32,12 +32,12 @@ export default function RolePersonalAttendanceView({
   }, [user, defaultRole]);
 
   const officialProfile = useMemo(() => {
-    return (OFFICIAL_ROLE_ACCOUNTS || []).find(
-      (a) => (a.employeeId && a.employeeId.toUpperCase() === targetEmpId.toUpperCase()) ||
-             (a.role && a.role.toLowerCase() === targetRole.toLowerCase())
-    ) || (employees || []).find(
+    return (employees || []).find(
       (e) => (e.employeeId && e.employeeId.toUpperCase() === targetEmpId.toUpperCase()) ||
              (e.id && e.id.toUpperCase() === targetEmpId.toUpperCase())
+    ) || (ORIGINAL_COMPANY_EMPLOYEES || []).find(
+      (a) => (a.employeeId && a.employeeId.toUpperCase() === targetEmpId.toUpperCase()) ||
+             (a.role && a.role.toLowerCase() === targetRole.toLowerCase())
     ) || {
       name: user?.name || defaultRole,
       role: targetRole,

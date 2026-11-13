@@ -32,7 +32,7 @@ import {
   createEmployeeFirebaseAuth,
   saveEmployeeCredentials
 } from '../services/employeeAuthService.js';
-import { OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
+import { OFFICIAL_ROLE_ACCOUNTS, ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../data/mockUsers.js';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr, getLocalIstDateStr } from '../utils/shiftUtils.js';
 import { deleteEmployeeDocumentFile } from '../services/storageService.js';
 import { calculateDistanceMeters } from '../utils/sangliGeofence.js';
@@ -81,22 +81,17 @@ function getInitialCompanies() {
 
 export const isDummyEmployee = (e) => {
   if (!e) return true;
+  if (e.isMock === true || e.isDummy === true) return true;
   const nameLower = (e.name || '').toLowerCase().trim();
-  const emailLower = (e.email || '').toLowerCase().trim();
   const idUpper = (e.id || e.employeeId || '').toUpperCase().trim();
-  return (
-    nameLower.includes('mukta') ||
-    nameLower.includes('aayush') ||
-    nameLower.includes('ayush') ||
-    nameLower.includes('pranav') ||
+  if (
     nameLower === 'system administrator' ||
-    emailLower.includes('mukta@') ||
-    emailLower.includes('ayush@') ||
-    emailLower.includes('pranav@') ||
-    emailLower.includes('abc@gmail.com') ||
     idUpper === 'ADM-001' ||
     idUpper === 'USR-ADMIN-001'
-  );
+  ) {
+    return true;
+  }
+  return isGenericRoleDummy(e);
 };
 
 export const sanitizeEmployees = (empList) => {
@@ -351,7 +346,7 @@ export const sanitizeLoans = (list) => {
 
 function createEmptyCompanyData(companyId) {
   return {
-    employees: [],
+    employees: companyId === DEFAULT_COMPANY_ID ? ORIGINAL_COMPANY_EMPLOYEES : [],
     shifts: companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : [],
     plants: companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : [],
     attendance: [],
@@ -374,12 +369,13 @@ function loadCompanyData(companyId) {
     const saved = localStorage.getItem(`${STORAGE_WORKFORCE_KEY}_${companyId}`);
     if (saved) {
       const parsed = JSON.parse(saved);
+      const sanitizedEmps = Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [];
       return {
         ...createEmptyCompanyData(companyId),
         ...parsed,
         shifts: Array.isArray(parsed.shifts) ? parsed.shifts : (companyId === DEFAULT_COMPANY_ID ? INITIAL_SHIFTS : []),
         plants: Array.isArray(parsed.plants) ? parsed.plants : (companyId === DEFAULT_COMPANY_ID ? MOCK_PLANTS : []),
-        employees: Array.isArray(parsed.employees) ? sanitizeEmployees(parsed.employees) : [],
+        employees: sanitizedEmps.length > 0 ? sanitizedEmps : (companyId === DEFAULT_COMPANY_ID ? ORIGINAL_COMPANY_EMPLOYEES : []),
         attendance: Array.isArray(parsed.attendance) ? sanitizeAttendance(parsed.attendance) : [],
         leaves: Array.isArray(parsed.leaves) ? sanitizeLeaves(parsed.leaves) : [],
         advances: Array.isArray(parsed.advances) ? sanitizeAdvances(parsed.advances) : [],
@@ -1792,27 +1788,18 @@ export const WorkforceProvider = ({ children }) => {
              e.employeeId?.toLowerCase() === targetId?.toLowerCase()
     );
 
-    // 2. Search in OFFICIAL_ROLE_ACCOUNTS
+    // 2. Search in ORIGINAL_COMPANY_EMPLOYEES
     if (!emp) {
-      const roleAcc = OFFICIAL_ROLE_ACCOUNTS.find(
+      const origEmp = ORIGINAL_COMPANY_EMPLOYEES.find(
         (r) => r.employeeId === targetId || 
                r.id === targetId || 
                r.employeeId?.toLowerCase() === targetId?.toLowerCase() ||
                r.email?.toLowerCase() === targetId?.toLowerCase()
       );
-      if (roleAcc) {
+      if (origEmp) {
         emp = {
-          id: roleAcc.employeeId || roleAcc.id,
-          employeeId: roleAcc.employeeId || roleAcc.id,
-          name: roleAcc.name,
-          role: roleAcc.role,
-          department: roleAcc.department || 'Operations',
-          plant: roleAcc.plantLocation || (data.plants && data.plants[0]?.name) || 'Main Plant HQ',
-          status: 'Active',
-          salary: 50000,
-          mobile: roleAcc.phone || '+91 98200 00000',
-          email: roleAcc.email,
-          joiningDate: today,
+          ...origEmp,
+          joiningDate: origEmp.joiningDate || today,
           shiftId: data.shifts[0]?.id || 'SFT-01',
         };
         setData((prev) => ({
@@ -2111,14 +2098,14 @@ export const WorkforceProvider = ({ children }) => {
              e.employeeId?.toLowerCase() === targetId?.toLowerCase()
     );
     if (!emp) {
-      const roleAcc = OFFICIAL_ROLE_ACCOUNTS.find(
+      const origEmp = ORIGINAL_COMPANY_EMPLOYEES.find(
         (r) => r.employeeId === targetId || 
                r.id === targetId || 
                r.employeeId?.toLowerCase() === targetId?.toLowerCase() ||
                r.email?.toLowerCase() === targetId?.toLowerCase()
       );
-      if (roleAcc) {
-        emp = { id: roleAcc.employeeId || roleAcc.id, employeeId: roleAcc.employeeId || roleAcc.id, name: roleAcc.name, role: roleAcc.role, plant: roleAcc.plantLocation };
+      if (origEmp) {
+        emp = { id: origEmp.employeeId || origEmp.id, employeeId: origEmp.employeeId || origEmp.id, name: origEmp.name, role: origEmp.role, plant: origEmp.plantLocation || origEmp.plant };
       }
     }
     if (!emp && user && (user.employeeId === targetId || user.id === targetId || !employeeId)) {
@@ -2314,7 +2301,7 @@ export const WorkforceProvider = ({ children }) => {
   const addAttendanceRecord = async (attData) => {
     const emp = data.employees.find(
       (e) => e.id === attData.employeeId || e.employeeId === attData.employeeId
-    ) || OFFICIAL_ROLE_ACCOUNTS.find(
+    ) || ORIGINAL_COMPANY_EMPLOYEES.find(
       (r) => r.employeeId === attData.employeeId || r.id === attData.employeeId
     );
 

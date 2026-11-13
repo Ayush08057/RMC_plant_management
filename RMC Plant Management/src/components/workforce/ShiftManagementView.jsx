@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../../data/mockUsers';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
@@ -144,18 +144,10 @@ function EmployeeShiftDropdown({
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
 
-  // Guarantee workforce list is never empty by including official enterprise staff
+  // Guarantee workforce list is never empty by including genuine company staff
   const staffList = useMemo(() => {
-    if (employees && employees.length > 0) return employees;
-    return (OFFICIAL_ROLE_ACCOUNTS || []).map((acc) => ({
-      id: acc.employeeId || acc.id,
-      employeeId: acc.employeeId || acc.id,
-      name: acc.name,
-      role: acc.role,
-      department: acc.department,
-      plant: acc.plantLocation || 'Plant Unit #01',
-      shiftId: null,
-    }));
+    let list = employees && employees.length > 0 ? employees : ORIGINAL_COMPANY_EMPLOYEES;
+    return list.filter((e) => !isGenericRoleDummy(e));
   }, [employees]);
 
   useEffect(() => {
@@ -455,15 +447,8 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
 
   // Full enterprise staff list for shift assignment (scoped)
   const allAvailableEmployees = useMemo(() => {
-    let list = employees && employees.length > 0 ? employees : (OFFICIAL_ROLE_ACCOUNTS || []).map((acc) => ({
-      id: acc.employeeId || acc.id,
-      employeeId: acc.employeeId || acc.id,
-      name: acc.name,
-      role: acc.role,
-      department: acc.department,
-      plant: acc.plantLocation || 'Plant Unit #01',
-      shiftId: null,
-    }));
+    let list = employees && employees.length > 0 ? employees : ORIGINAL_COMPANY_EMPLOYEES;
+    list = list.filter((e) => !isGenericRoleDummy(e));
     if (!isAdmin) {
       list = list.filter((e) => {
         const empRole = (e.role || '').toLowerCase();
@@ -494,7 +479,7 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
   });
 
   const [assignForm, setAssignForm] = useState({
-    employeeId: employees[0]?.id || OFFICIAL_ROLE_ACCOUNTS[0]?.employeeId || '',
+    employeeId: employees[0]?.id || ORIGINAL_COMPANY_EMPLOYEES[0]?.employeeId || '',
     shiftId: shifts[0]?.id || '',
   });
 

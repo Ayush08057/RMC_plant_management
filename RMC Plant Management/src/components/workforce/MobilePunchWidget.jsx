@@ -25,7 +25,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, getNowIndian12Hr, parseTimeToMinutes, getLocalIstDateStr } from '../../utils/shiftUtils';
-import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { ORIGINAL_COMPANY_EMPLOYEES, isGenericRoleDummy } from '../../data/mockUsers';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
@@ -213,26 +213,12 @@ export default function MobilePunchWidget({
   // Master list of real workforce employees (excluding Admin)
   const allEmployeesList = useMemo(() => {
     let list = employees && employees.length > 0 ? [...employees] : [];
-    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
-      const id = (official.employeeId || official.id || '').toUpperCase();
-      const exists = list.some((e) => {
-        const eId = (e.employeeId || e.id || '').toUpperCase();
-        return eId === id;
-      });
-      if (!exists) {
-        list.push({
-          id: official.employeeId || official.id,
-          employeeId: official.employeeId || official.id,
-          name: official.name,
-          role: official.role,
-          department: official.department,
-          plant: official.plantLocation || 'Main Plant HQ',
-          mobile: official.phone,
-        });
-      }
-    });
+    if (list.length === 0) {
+      list = [...ORIGINAL_COMPANY_EMPLOYEES];
+    }
 
     return list.filter((e) => {
+      if (!e || isGenericRoleDummy(e)) return false;
       const empRole = (e.role || '').toLowerCase();
       const empId = (e.employeeId || e.id || '').toUpperCase();
       return empRole !== 'admin' && empId !== 'ADM-001' && empId !== 'USR-ADMIN-001';
