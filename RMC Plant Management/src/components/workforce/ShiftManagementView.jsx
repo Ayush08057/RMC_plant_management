@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee, isAdminPerson } from '../../data/mockUsers';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
@@ -147,15 +147,17 @@ function EmployeeShiftDropdown({
   // Guarantee workforce list is never empty by including official enterprise staff
   const staffList = useMemo(() => {
     if (employees && employees.length > 0) return employees;
-    return (OFFICIAL_ROLE_ACCOUNTS || []).map((acc) => ({
-      id: acc.employeeId || acc.id,
-      employeeId: acc.employeeId || acc.id,
-      name: acc.name,
-      role: acc.role,
-      department: acc.department,
-      plant: acc.plantLocation || 'Plant Unit #01',
-      shiftId: null,
-    }));
+    return (OFFICIAL_ROLE_ACCOUNTS || [])
+      .filter((acc) => !isAdminPerson(acc))
+      .map((acc) => ({
+        id: acc.employeeId || acc.id,
+        employeeId: acc.employeeId || acc.id,
+        name: acc.name,
+        role: acc.role,
+        department: acc.department,
+        plant: acc.plantLocation || 'Plant Unit #01',
+        shiftId: null,
+      }));
   }, [employees]);
 
   useEffect(() => {
@@ -446,33 +448,112 @@ function EmployeeShiftDropdown({
 }
 
 export default function ShiftManagementView({ employeeFilter = null, isEmployeeView = false }) {
-  const { user } = useAuth();
+  const { user, allUsers = [] } = useAuth();
   const { shifts = [], employees = [], createShift, updateShift, deleteShift, assignShift } = useWorkforce();
   const isAdmin = user?.role === 'Admin' || user?.role === 'Owner / Director';
   const isPlantManager = user?.role === 'Plant Manager' || user?.role === 'Plant Incharge';
   const effectiveEmployeeId = employeeFilter || (!isAdmin ? (user?.employeeId || user?.id) : null);
   const isPersonalView = isEmployeeView || Boolean(effectiveEmployeeId) || !isAdmin;
 
-  // Full enterprise staff list for shift assignment (scoped)
+  const [localShiftOverrides, setLocalShiftOverrides] = useState({});
+
+  const handleAssignShift = (empId, shiftId) => {
+    if (!empId) return;
+    setLocalShiftOverrides((prev) => ({ ...prev, [empId]: shiftId }));
+    assignShift(empId, shiftId);
+  };
+
+  // Full enterprise staff list for shift assignment and roster display
   const allAvailableEmployees = useMemo(() => {
-    let list = employees && employees.length > 0 ? employees : (OFFICIAL_ROLE_ACCOUNTS || []).map((acc) => ({
-      id: acc.employeeId || acc.id,
-      employeeId: acc.employeeId || acc.id,
-      name: acc.name,
-      role: acc.role,
-      department: acc.department,
-      plant: acc.plantLocation || 'Plant Unit #01',
-      shiftId: null,
-    }));
-    if (!isAdmin) {
+    const map = new Map();
+
+    // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
+      if (!acc || isAdminPerson(acc)) return;
+      const id = (acc.employeeId || acc.id || '').toString().trim().toUpperCase();
+      if (!id) return;
+      map.set(id, {
+        id: acc.employeeId || acc.id,
+        employeeId: acc.employeeId || acc.id,
+        name: acc.name,
+        role: acc.role,
+        department: acc.department || 'Operations',
+        plant: acc.plantLocation || 'Main Plant HQ',
+        status: 'Active',
+        shiftId: acc.shiftId || (shifts[0]?.id || 'SFT-MORN'),
+      });
+    });
+
+    // 2. All registered portal users from AuthContext (allUsers)
+    (allUsers || []).forEach((u) => {
+      if (!u || isAdminPerson(u) || isDummyEmployee(u)) return;
+      const id = (u.employeeId || u.id || '').toString().trim().toUpperCase();
+      if (!id) return;
+      const existing = map.get(id);
+      map.set(id, {
+        id: u.employeeId || u.id,
+        employeeId: u.employeeId || u.id,
+        name: u.name || existing?.name || 'Staff',
+        role: u.role || existing?.role || 'Staff',
+        department: u.department || existing?.department || 'Operations',
+        plant: u.plantLocation || u.plant || existing?.plant || 'Main Plant HQ',
+        status: u.status || existing?.status || 'Active',
+        shiftId: u.shiftId || existing?.shiftId || (shifts[0]?.id || 'SFT-MORN'),
+      });
+    });
+
+    // 3. Custom enterprise registered employees from WorkforceContext (employees)
+    (employees || []).forEach((e) => {
+      if (!e || isDummyEmployee(e) || isAdminPerson(e)) return;
+      const id = (e.employeeId || e.id || '').toString().trim().toUpperCase();
+      if (!id) return;
+      const existing = map.get(id);
+      map.set(id, {
+        ...existing,
+        ...e,
+        id: e.id || existing?.id || id,
+        employeeId: e.employeeId || existing?.employeeId || id,
+        name: e.name || existing?.name || 'Staff',
+        role: e.role || existing?.role || 'Staff',
+        department: e.department || existing?.department || 'Operations',
+        plant: e.plant || existing?.plant || 'Main Plant HQ',
+        shiftId: e.shiftId || existing?.shiftId || (shifts[0]?.id || 'SFT-MORN'),
+      });
+    });
+
+    // Apply local shift overrides if any
+    let list = Array.from(map.values()).map((emp) => {
+      const empId = emp.id || emp.employeeId;
+      if (localShiftOverrides[empId] !== undefined) {
+        return { ...emp, shiftId: localShiftOverrides[empId] };
+      }
+      return emp;
+    });
+
+    // Exclude executive accounts (Admin, Owner / Director) from shift assignment
+    list = list.filter((e) => !isAdminPerson(e));
+
+    // Scope for Plant Manager if viewing in manager mode
+    if (isPlantManager && !isAdmin) {
       list = list.filter((e) => {
         const empRole = (e.role || '').toLowerCase();
-        const empId = (e.employeeId || e.id || '').toUpperCase();
-        return empRole !== 'admin' && empId !== 'ADM-001' && empId !== 'USR-ADMIN-001';
+        return (
+          empRole.includes('plant') ||
+          empRole.includes('operator') ||
+          empRole.includes('driver') ||
+          empRole.includes('dispatcher') ||
+          empRole.includes('supervisor') ||
+          empRole.includes('qc') ||
+          empRole.includes('quality') ||
+          (e.plant && user?.plantLocation && e.plant === user.plantLocation) ||
+          e.employeeId === user?.employeeId ||
+          e.id === user?.employeeId
+        );
       });
     }
+
     return list;
-  }, [employees, isAdmin]);
+  }, [employees, allUsers, shifts, localShiftOverrides, isPlantManager, isAdmin, user]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -494,9 +575,18 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
   });
 
   const [assignForm, setAssignForm] = useState({
-    employeeId: employees[0]?.id || OFFICIAL_ROLE_ACCOUNTS[0]?.employeeId || '',
+    employeeId: '',
     shiftId: shifts[0]?.id || '',
   });
+
+  useEffect(() => {
+    if (!assignForm.employeeId && allAvailableEmployees.length > 0) {
+      setAssignForm((prev) => ({
+        ...prev,
+        employeeId: allAvailableEmployees[0]?.id || allAvailableEmployees[0]?.employeeId || '',
+      }));
+    }
+  }, [allAvailableEmployees, assignForm.employeeId]);
 
   const handleOpenCreate = () => {
     setShiftForm({
@@ -525,9 +615,9 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
       status: sft.status || 'Active',
       description: sft.description || '',
     });
-    const currentAssigned = employees
+    const currentAssigned = allAvailableEmployees
       .filter((e) => e.shiftId === sft.id)
-      .map((e) => e.id);
+      .map((e) => e.id || e.employeeId);
     setSelectedEmployeeIds(currentAssigned);
     setShowEditModal(true);
   };
@@ -549,7 +639,7 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
 
     if (newShift?.id && selectedEmployeeIds.length > 0) {
       selectedEmployeeIds.forEach((empId) => {
-        assignShift(empId, newShift.id);
+        handleAssignShift(empId, newShift.id);
       });
     }
 
@@ -579,17 +669,18 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
 
     // Assign newly added employees to this shift
     selectedEmployeeIds.forEach((empId) => {
-      const emp = employees.find((em) => em.id === empId);
+      const emp = allAvailableEmployees.find((em) => (em.id === empId || em.employeeId === empId));
       if (emp?.shiftId !== editingShift.id) {
-        assignShift(empId, editingShift.id);
+        handleAssignShift(empId, editingShift.id);
       }
     });
 
     // Unassign removed employees
-    const previouslyAssigned = employees.filter((em) => em.shiftId === editingShift.id);
+    const previouslyAssigned = allAvailableEmployees.filter((em) => em.shiftId === editingShift.id);
     previouslyAssigned.forEach((emp) => {
-      if (!selectedEmployeeIds.includes(emp.id)) {
-        assignShift(emp.id, '');
+      const empId = emp.id || emp.employeeId;
+      if (!selectedEmployeeIds.includes(empId)) {
+        handleAssignShift(empId, '');
       }
     });
 
@@ -615,9 +706,9 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
       alert('Please select both an employee and a shift.');
       return;
     }
-    assignShift(assignForm.employeeId, assignForm.shiftId);
+    handleAssignShift(assignForm.employeeId, assignForm.shiftId);
     setShowAssignModal(false);
-    const emp = employees.find((em) => em.id === assignForm.employeeId);
+    const emp = allAvailableEmployees.find((em) => (em.id === assignForm.employeeId || em.employeeId === assignForm.employeeId));
     const sft = shifts.find((s) => s.id === assignForm.shiftId);
     setToastMessage(`Reassigned ${emp?.name || assignForm.employeeId} to ${sft?.name || assignForm.shiftId}.`);
   };
@@ -730,8 +821,8 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
 
   // Filter employees for personal vs management view
   const displayEmployees = isPersonalView
-    ? employees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId).length > 0
-      ? employees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId)
+    ? allAvailableEmployees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId).length > 0
+      ? allAvailableEmployees.filter((e) => e.id === effectiveEmployeeId || e.employeeId === effectiveEmployeeId)
       : [{
         id: effectiveEmployeeId || 'EMP-505',
         employeeId: effectiveEmployeeId || 'EMP-505',
@@ -741,7 +832,7 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
         plant: user?.plantLocation || 'Main Plant Unit #01',
         shiftId: 'SFT-MORN',
       }]
-    : employees;
+    : allAvailableEmployees;
 
   const myShift = shifts.find((s) => s.id === displayEmployees[0]?.shiftId) || shifts[0] || {
     name: 'General Morning Shift',
@@ -811,7 +902,7 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {shifts.map((sft) => {
-              const assignedCount = employees.filter((e) => e.shiftId === sft.id).length;
+              const assignedCount = allAvailableEmployees.filter((e) => e.shiftId === sft.id).length;
               return (
                 <div
                   key={sft.id}
@@ -879,12 +970,12 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
         actions={
           !isPersonalView ? (
             <div className="flex items-center gap-2">
-              {employees.length > 0 && (
+              {allAvailableEmployees.length > 0 && (
                 <button
                   type="button"
                   onClick={() => {
                     setAssignForm({
-                      employeeId: employees[0]?.id || '',
+                      employeeId: allAvailableEmployees[0]?.id || allAvailableEmployees[0]?.employeeId || '',
                       shiftId: shifts[0]?.id || '',
                     });
                     setShowAssignModal(true);
@@ -1092,7 +1183,7 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
 
           {/* Employee Selection Dropdown */}
           <EmployeeShiftDropdown
-            employees={employees}
+            employees={allAvailableEmployees}
             shifts={shifts}
             selectedEmployeeIds={selectedEmployeeIds}
             onChange={setSelectedEmployeeIds}
@@ -1143,9 +1234,12 @@ export default function ShiftManagementView({ employeeFilter = null, isEmployeeV
               onChange={(e) => setAssignForm({ ...assignForm, employeeId: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
             >
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>{e.name} ({e.id} • {e.role})</option>
-              ))}
+              {allAvailableEmployees.map((e) => {
+                const empId = e.id || e.employeeId;
+                return (
+                  <option key={empId} value={empId}>{e.name} ({empId} • {e.role})</option>
+                );
+              })}
             </select>
           </div>
 
