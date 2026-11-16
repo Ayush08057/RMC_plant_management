@@ -370,6 +370,33 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // Atomic Sequence Counters (/counters)
+    // Enforces monotonic +1 sequential increments for invoices and challans
+    // =========================================================================
+    match /counters/{counterId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() && (
+        isAdmin() || isManager() || isAccountant() || isDispatcher()
+      ) &&
+        request.resource.data.companyId != null &&
+        request.resource.data.lastValue is number &&
+        request.resource.data.updatedBy == request.auth.uid;
+
+      allow update: if isAuthenticated() && (
+        isAdmin() || isManager() || isAccountant() || isDispatcher()
+      ) &&
+        request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        (
+          request.resource.data.lastValue == resource.data.lastValue + 1 ||
+          ('voidedNumbers' in request.resource.data)
+        );
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
     // System Audit Logs (/auditLogs)
     // Append-only; immutable; readable by management
     // =========================================================================
