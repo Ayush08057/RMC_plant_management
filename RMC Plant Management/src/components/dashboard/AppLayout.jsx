@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ShieldCheck, ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import MobileBottomNav from './MobileBottomNav';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { ROLES } from '../../data/mockUsers';
@@ -182,7 +183,7 @@ export default function AppLayout({
                 </div>
 
                 {actions && (
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="hidden md:flex items-center gap-1.5 shrink-0">
                     {actions}
                   </div>
                 )}
@@ -192,7 +193,7 @@ export default function AppLayout({
         })()}
 
         {/* Page Inner Content - Only this area scrolls vertically */}
-        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-5 py-2 sm:py-3 overflow-y-auto overflow-x-hidden flex flex-col text-slate-900">
+        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full px-3 sm:px-5 py-2 sm:py-3 pb-20 md:pb-3 overflow-y-auto overflow-x-hidden flex flex-col text-slate-900">
           {(() => {
             const isPlantOps = activeTab && (
               activeTab === 'plant-operations' ||
@@ -213,7 +214,7 @@ export default function AppLayout({
         </main>
 
         {/* Pinned Operational Footer - Display Active Logged In Session Below */}
-        <footer className="border-t border-white/70 py-2.5 px-4 sm:px-6 bg-white/60 backdrop-blur-xl text-center text-xs text-slate-500 w-full max-w-full shrink-0 shadow-2xs">
+        <footer className="hidden md:block border-t border-white/70 py-2.5 px-4 sm:px-6 bg-white/60 backdrop-blur-xl text-center text-xs text-slate-500 w-full max-w-full shrink-0 shadow-2xs">
           <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
@@ -242,6 +243,17 @@ export default function AppLayout({
             </div>
           </div>
         </footer>
+        {/* Mobile Bottom Navigation Bar - Android Application Primary Quick Buttons */}
+        <MobileBottomNav
+          activeTab={activeTab}
+          onSelectTab={(tabId) => {
+            if (onSelectTab) onSelectTab(tabId);
+            setSidebarOpen(false);
+          }}
+          user={user}
+          isSidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        />
       </div>
     </div>
   );

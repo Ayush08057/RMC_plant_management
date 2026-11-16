@@ -21,6 +21,7 @@ import {
   Download
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { useLanguage } from '../../context/LanguageContext';
 
 export const QC_CUBES_STORAGE_KEY = 'rmc_qc_cube_tests_v1';
 
@@ -70,6 +71,7 @@ function addDays(isoDate, days) {
 }
 
 export default function QcCubeTestingView() {
+  const { language, t } = useLanguage();
   const [cubes, setCubes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, DUE_TODAY, UPCOMING, COMPLETED
@@ -248,30 +250,36 @@ export default function QcCubeTestingView() {
 
     if (has7d && has28d) {
       const allPassed = cube.test7d.isPass && cube.test28d.isPass;
-      return { code: 'COMPLETED', label: allPassed ? 'Passed (उत्तीर्ण)' : 'Failed (अनुत्तीर्ण)', color: allPassed ? 'emerald' : 'rose' };
+      return {
+        code: 'COMPLETED',
+        label: allPassed
+          ? (language === 'mr' ? 'उत्तीर्ण (Passed)' : 'Passed')
+          : (language === 'mr' ? 'अनुत्तीर्ण (Failed)' : 'Failed'),
+        color: allPassed ? 'emerald' : 'rose'
+      };
     }
 
     // Check if 7d due
     if (!has7d) {
       if (cube.dueDate7d === today) {
-        return { code: 'DUE_TODAY_7D', label: '7-Day Due Today (आज चाचणी)', color: 'rose' };
+        return { code: 'DUE_TODAY_7D', label: language === 'mr' ? '७ दिवस - आज चाचणी' : '7-Day Due Today', color: 'rose' };
       }
       if (cube.dueDate7d < today) {
-        return { code: 'OVERDUE_7D', label: '7-Day Overdue (मुदत संपली)', color: 'amber' };
+        return { code: 'OVERDUE_7D', label: language === 'mr' ? '७ दिवस - मुदत संपली' : '7-Day Overdue', color: 'amber' };
       }
     }
 
     // Check if 28d due
     if (!has28d) {
       if (cube.dueDate28d === today) {
-        return { code: 'DUE_TODAY_28D', label: '28-Day Due Today (आज चाचणी)', color: 'rose' };
+        return { code: 'DUE_TODAY_28D', label: language === 'mr' ? '२८ दिवस - आज चाचणी' : '28-Day Due Today', color: 'rose' };
       }
       if (cube.dueDate28d < today) {
-        return { code: 'OVERDUE_28D', label: '28-Day Overdue (मुदत संपली)', color: 'amber' };
+        return { code: 'OVERDUE_28D', label: language === 'mr' ? '२८ दिवस - मुदत संपली' : '28-Day Overdue', color: 'amber' };
       }
     }
 
-    return { code: 'UPCOMING', label: 'In Curing Tank (क्युरिंग सुरू)', color: 'blue' };
+    return { code: 'UPCOMING', label: language === 'mr' ? 'क्युरिंग टँकमध्ये सुरू' : 'In Curing Tank', color: 'blue' };
   };
 
   // Quick statistics
@@ -335,10 +343,12 @@ export default function QcCubeTestingView() {
               <span>IS 516 / IS 456 Concrete Cube Strength Monitor</span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">
-              क्युब टेस्टिंग शेड्युल आणि ऑटो रिमाइंडर्स (7 & 28 Days Testing)
+              {language === 'mr' ? 'क्युब टेस्टिंग शेड्युल आणि ऑटो रिमाइंडर्स' : 'Cube Testing Schedule & Auto-Reminders'}
             </h2>
             <p className="text-xs text-blue-100/90 mt-0.5">
-              क्युरिंग टँक मधील क्युबचे वय तपासून चाचणीची तारीख आपोआप कळते आणि अधिकृत लॅब सर्टिफिकेट तयार होते.
+              {language === 'mr' 
+                ? 'क्युरिंग टँक मधील क्युबचे वय तपासून चाचणीची तारीख आपोआप कळते आणि अधिकृत लॅब सर्टिफिकेट तयार होते.' 
+                : 'Track curing age in tanks to automatically schedule 7 & 28-day compression tests and generate certificates.'}
             </p>
           </div>
 
@@ -348,7 +358,7 @@ export default function QcCubeTestingView() {
               className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Cast New Cubes</span>
+              <span>{t('Cast New Cubes')}</span>
             </button>
           </div>
         </div>
@@ -362,38 +372,38 @@ export default function QcCubeTestingView() {
             }`}
           >
             <div className="text-[10px] uppercase font-bold text-rose-300 flex items-center justify-between">
-              <span>Due Today / Overdue</span>
+              <span>{language === 'mr' ? 'आज चाचणी / मुदत संपली' : 'Due Today / Overdue'}</span>
               {stats.dueToday > 0 && <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />}
             </div>
             <div className="text-xl font-black text-white mt-0.5">{stats.dueToday + stats.overdue}</div>
-            <div className="text-[10px] text-slate-300">आज चाचणी आवश्यक</div>
+            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'आज चाचणी आवश्यक' : 'Testing Due Today'}</div>
           </div>
 
           <div 
             onClick={() => setStatusFilter(statusFilter === 'UPCOMING' ? 'ALL' : 'UPCOMING')}
             className="p-2 rounded-lg bg-blue-950/40 border border-blue-800/40 cursor-pointer hover:bg-blue-950/60 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-cyan-300">In Curing (Upcoming)</div>
+            <div className="text-[10px] uppercase font-bold text-cyan-300">{language === 'mr' ? 'क्युरिंग चालू' : 'In Curing (Upcoming)'}</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.upcoming}</div>
-            <div className="text-[10px] text-slate-300">क्युरिंग चालू असलेले</div>
+            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'क्युरिंग चालू असलेले' : 'Currently in Curing'}</div>
           </div>
 
           <div 
             onClick={() => setStatusFilter(statusFilter === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
             className="p-2 rounded-lg bg-blue-950/40 border border-blue-800/40 cursor-pointer hover:bg-blue-950/60 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-emerald-300">Tested & Certified</div>
+            <div className="text-[10px] uppercase font-bold text-emerald-300">{language === 'mr' ? 'चाचणी पूर्ण व प्रमाणित' : 'Tested & Certified'}</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.passed}</div>
-            <div className="text-[10px] text-slate-300">यशस्वी चाचण्या</div>
+            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'यशस्वी चाचण्या' : 'Passed Tests'}</div>
           </div>
 
           <div 
             onClick={() => setStatusFilter('ALL')}
             className="p-2 rounded-lg bg-blue-950/40 border border-blue-800/40 cursor-pointer hover:bg-blue-950/60 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-slate-300">Total Cube Lots</div>
+            <div className="text-[10px] uppercase font-bold text-slate-300">{language === 'mr' ? 'एकूण क्युब लॉट्स' : 'Total Cube Lots'}</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.total}</div>
-            <div className="text-[10px] text-slate-300">एकूण क्युब लॉट्स</div>
+            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'एकूण क्युब लॉट्स' : 'Total Cube Lots'}</div>
           </div>
         </div>
       </div>
@@ -439,7 +449,7 @@ export default function QcCubeTestingView() {
           <div className="p-8 text-center text-slate-400">
             <Layers className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-[1.5]" />
             <p className="text-sm font-semibold text-slate-600">No cube testing records found.</p>
-            <p className="text-xs text-slate-400 mt-0.5">Click '+ Cast New Cubes' to log a newly poured batch specimen.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Click 'Cast New Cubes' to log a newly poured batch specimen.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -584,9 +594,13 @@ export default function QcCubeTestingView() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <Plus className="w-4 h-4 text-emerald-600" />
-                  <span>Cast New Concrete Cube Lot (नवीन क्युब कास्टिंग)</span>
+                  <span>{language === 'mr' ? 'नवीन काँक्रीट क्युब लॉट कास्ट करा' : 'Cast New Concrete Cube Lot'}</span>
                 </h3>
-                <p className="text-[11px] text-slate-500">बॅच आणि मिक्स ग्रेड टाकल्यावर ७ व २८ दिवसांचे वेळापत्रक आपोआप तयार होईल.</p>
+                <p className="text-[11px] text-slate-500">
+                  {language === 'mr' 
+                    ? 'बॅच आणि मिक्स ग्रेड टाकल्यावर ७ व २८ दिवसांचे वेळापत्रक आपोआप तयार होईल.' 
+                    : 'Entering batch and mix grade automatically schedules 7-day and 28-day testing dates.'}
+                </p>
               </div>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />

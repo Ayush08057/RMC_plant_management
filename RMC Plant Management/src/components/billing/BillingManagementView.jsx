@@ -1444,7 +1444,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 title="Record Payment Received (Cash, Online UPI, Bank Transfer, Cheque)"
               >
                 <CreditCard className="w-4 h-4 shrink-0" />
-                <span>+ Payment Received</span>
+                <span>Payment Received</span>
               </button>
               <button
                 type="button"

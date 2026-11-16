@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { MOCK_QC_DATA } from '../../data/mockDashboardData';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import AttendanceManagementView from '../../components/workforce/AttendanceManagementView';
 import DailyWorkView from '../../components/workforce/DailyWorkView';
 import LeaveManagementView from '../../components/workforce/LeaveManagementView';
@@ -32,6 +33,7 @@ import QcCubeTestingView from '../../components/operations/QcCubeTestingView';
 
 export default function QcDashboardPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [activeTab, setActiveTabState] = useState(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -189,35 +191,6 @@ export default function QcDashboardPage() {
       badge="QC LAB #01"
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      actions={
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('attendance')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Mark or View Daily Attendance"
-          >
-            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Daily Attendance</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowTestModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add QC Test</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCertModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <FileText className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Mix Compliance</span>
-          </button>
-        </div>
-      }
     >
       {activeTab === 'attendance' && (
         <RolePersonalAttendanceView
@@ -246,7 +219,7 @@ export default function QcDashboardPage() {
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>क्युब चाचणी व ऑटो रिमाइंडर्स (Cube Testing & Schedule)</span>
+                <span>{t('Cube Testing & Schedule')}</span>
               </button>
               <button
                 type="button"
@@ -258,7 +231,7 @@ export default function QcDashboardPage() {
                 }`}
               >
                 <FlaskConical className="w-3.5 h-3.5" />
-                <span>स्लम व ऑन-साईट टेस्ट्स (Daily Slump Tests)</span>
+                <span>{t('Daily Slump Tests')}</span>
               </button>
             </div>
           </div>

@@ -66,8 +66,16 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   });
   const [plantFormError, setPlantFormError] = useState('');
 
-  // Enable company management and brand logo customization across workspaces
-  const canManageCompanies = true;
+  // Multi-company workspace switching & management restricted strictly to Admin / Owner master authority
+  const isAdminOrOwner = Boolean(
+    user?.role === 'Admin' ||
+    user?.role === 'Owner / Director' ||
+    user?.isMasterAdmin ||
+    user?.originalAdminUser?.role === 'Admin' ||
+    user?.originalAdminUser?.role === 'Owner / Director'
+  );
+
+  const canManageCompanies = isAdminOrOwner;
 
   const handleLogoFileChange = (file, onSuccess) => {
     if (!file) return;
@@ -242,47 +250,76 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             <Menu className="w-4 h-4 text-slate-700" />
           </button>
 
-          {/* Plant / Company Selector */}
+          {/* Plant / Company Display */}
           <div className="relative min-w-0" ref={companyDropdownRef}>
-            <button
-              type="button"
-              id="company-selector-button"
-              aria-expanded={showPlantPicker}
-              aria-haspopup="listbox"
-              aria-controls="company-dropdown-menu"
-              aria-label="Select company workspace"
-              onClick={() => {
-                setShowPlantPicker((prev) => !prev);
-                setShowNotifications(false);
-              }}
-              className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 transition-all cursor-pointer shadow-2xs min-w-0"
-              title={`Active: ${selectedCompany.name} • Click to switch, add, or delete company`}
-            >
-              <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
-                <img 
-                  src={selectedCompany?.logo || defaultLogo} 
-                  alt={selectedCompany.name} 
-                  className="w-full h-full object-cover scale-[1.04]" 
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = defaultLogo;
-                  }}
-                />
+            {isAdminOrOwner ? (
+              <button
+                type="button"
+                id="company-selector-button"
+                aria-expanded={showPlantPicker}
+                aria-haspopup="listbox"
+                aria-controls="company-dropdown-menu"
+                aria-label="Select company workspace"
+                onClick={() => {
+                  setShowPlantPicker((prev) => !prev);
+                  setShowNotifications(false);
+                }}
+                className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 transition-all cursor-pointer shadow-2xs min-w-0"
+                title={`Active: ${selectedCompany.name} • Click to switch, add, or delete company`}
+              >
+                <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                  <img 
+                    src={selectedCompany?.logo || defaultLogo} 
+                    alt={selectedCompany.name} 
+                    className="w-full h-full object-cover scale-[1.04]" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = defaultLogo;
+                    }}
+                  />
+                </div>
+                <div className="text-left min-w-0">
+                  <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
+                    {selectedCompany.name}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
+                    <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                    <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
+                  </span>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
+              </button>
+            ) : (
+              /* Operational employee view: Clean read-only company badge without dropdown */
+              <div 
+                className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 shadow-2xs min-w-0 select-none cursor-default"
+                title={`${selectedCompany.name} • Plant Workspace`}
+              >
+                <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                  <img 
+                    src={selectedCompany?.logo || defaultLogo} 
+                    alt={selectedCompany.name} 
+                    className="w-full h-full object-cover scale-[1.04]" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = defaultLogo;
+                    }}
+                  />
+                </div>
+                <div className="text-left min-w-0">
+                  <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
+                    {selectedCompany.name}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
+                    <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                    <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
+                  </span>
+                </div>
               </div>
-              <div className="text-left min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
-                  {selectedCompany.name}
-                </span>
-                <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
-                  <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
-                  <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
-                </span>
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
-            </button>
+            )}
 
-            {/* Plant Picker Dropdown */}
-            {showPlantPicker && (
+            {/* Plant Picker Dropdown - Restricted strictly to Admin / Owner */}
+            {isAdminOrOwner && showPlantPicker && (
               <div 
                 id="company-dropdown-menu"
                 role="listbox"

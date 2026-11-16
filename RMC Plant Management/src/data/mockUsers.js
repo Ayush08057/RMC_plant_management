@@ -26,7 +26,7 @@ export const ROLE_ROUTES = {
   [ROLES.QC_ENGINEER]: '/qc',
   [ROLES.SITE_SUPERVISOR]: '/site-supervisor',
   [ROLES.DRIVER]: '/driver',
-  [ROLES.OWNER_DIRECTOR]: '/owner',
+  [ROLES.OWNER_DIRECTOR]: '/admin',
 };
 
 export function isAdminPerson(u) {
@@ -36,12 +36,15 @@ export function isAdminPerson(u) {
   const idUpper = String(u.employeeId || u.id || '').trim().toUpperCase();
   return (
     roleLower === 'admin' ||
+    roleLower.includes('owner') ||
+    roleLower.includes('director') ||
     roleLower.includes('system admin') ||
     roleLower.includes('administrator') ||
     nameLower === 'system administrator' ||
     nameLower.includes('system admin') ||
     idUpper === 'ADM-001' ||
-    idUpper === 'USR-ADMIN-001'
+    idUpper === 'USR-ADMIN-001' ||
+    idUpper === 'OWN-001'
   );
 }
 

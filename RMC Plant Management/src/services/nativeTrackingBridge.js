@@ -330,6 +330,19 @@ class NativeTrackingService {
   }
 
   /**
+   * Open the full 5-step multi-brand Permission Wizard on native host
+   */
+  openPermissionWizard() {
+    if (typeof window === 'undefined') return;
+    const payload = JSON.stringify({
+      action: 'OPEN_PERMISSIONS_WIZARD',
+    });
+    if (window.NativeTrackingBridge && typeof window.NativeTrackingBridge.postMessage === 'function') {
+      window.NativeTrackingBridge.postMessage(payload);
+    }
+  }
+
+  /**
    * Subscribe to real-time pings pushed by native foreground service
    */
   onLocationPing(callback, { replayLast = false } = {}) {

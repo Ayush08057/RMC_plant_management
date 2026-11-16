@@ -96,27 +96,6 @@ export default function OwnerDashboardPage() {
       badge="OWNER / DIRECTOR"
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      actions={
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('attendance')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Mark or View Executive Attendance"
-          >
-            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Attendance</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('billing')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <Receipt className="w-3.5 h-3.5" />
-            <span>Sales Register</span>
-          </button>
-        </div>
-      }
     >
       {activeTab === 'employees' && <EmployeeManagementView />}
       {activeTab === 'attendance' && (

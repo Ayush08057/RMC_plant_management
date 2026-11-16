@@ -324,15 +324,32 @@ export default function CleanEmployeeLiveTracking() {
   const mapTarget = useMemo(() => {
     if (!activeEmployee) return null;
 
-    const lat = dayRecord?.lastKnownLocation?.lat 
-      ? Number(dayRecord.lastKnownLocation.lat) 
-      : (dayRecord?.gpsLocation?.lat ? Number(dayRecord.gpsLocation.lat) : null);
+    const trailLast = Array.isArray(dayRecord?.routeTrail) && dayRecord.routeTrail.length > 0
+      ? dayRecord.routeTrail[dayRecord.routeTrail.length - 1]
+      : null;
 
-    const lng = dayRecord?.lastKnownLocation?.lng 
-      ? Number(dayRecord.lastKnownLocation.lng) 
-      : (dayRecord?.gpsLocation?.lng ? Number(dayRecord.gpsLocation.lng) : null);
+    // After punch-out, prefer exit GPS location; otherwise live/last known location, gpsLocation, or last route waypoint
+    const lat = (isPunchedOut && dayRecord?.exitGpsLocation?.lat != null)
+      ? Number(dayRecord.exitGpsLocation.lat)
+      : (dayRecord?.lastKnownLocation?.lat != null
+        ? Number(dayRecord.lastKnownLocation.lat)
+        : (dayRecord?.exitGpsLocation?.lat != null
+          ? Number(dayRecord.exitGpsLocation.lat)
+          : (dayRecord?.gpsLocation?.lat != null
+            ? Number(dayRecord.gpsLocation.lat)
+            : (trailLast?.lat != null ? Number(trailLast.lat) : null))));
 
-    const geofence = dayRecord?.geofenceStatus || dayRecord?.lastKnownLocation?.landmarkName || dayRecord?.gpsLocation?.landmarkName || 'Base Location';
+    const lng = (isPunchedOut && dayRecord?.exitGpsLocation?.lng != null)
+      ? Number(dayRecord.exitGpsLocation.lng)
+      : (dayRecord?.lastKnownLocation?.lng != null
+        ? Number(dayRecord.lastKnownLocation.lng)
+        : (dayRecord?.exitGpsLocation?.lng != null
+          ? Number(dayRecord.exitGpsLocation.lng)
+          : (dayRecord?.gpsLocation?.lng != null
+            ? Number(dayRecord.gpsLocation.lng)
+            : (trailLast?.lng != null ? Number(trailLast.lng) : null))));
+
+    const geofence = dayRecord?.geofenceStatus || dayRecord?.lastKnownLocation?.landmarkName || dayRecord?.exitGpsLocation?.landmarkName || dayRecord?.gpsLocation?.landmarkName || 'Base Location';
 
     return {
       id: activeEmployee.employeeId || activeEmployee.id,
@@ -584,7 +601,7 @@ export default function CleanEmployeeLiveTracking() {
         </div>
 
         {/* SECTION C: Main Interactive Map */}
-        <div className="lg:col-span-8 xl:col-span-9 bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-xs">
+        <div className={`${isFullWidth ? "lg:col-span-12" : "lg:col-span-8 xl:col-span-9"} bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-xs`}>
           {hasTrackingData ? (
             <LiveInteractiveMap
               telemetryList={staffList}

@@ -2468,8 +2468,8 @@ export const WorkforceProvider = ({ children }) => {
 
     let newTrail = existingTrail;
     let trailChanged = false;
-    // Only append a new movement stop when moved >= 40m to filter indoor GPS drift
-    if (dist >= 40 || existingTrail.length === 0) {
+    // Only append a new movement stop when moved >= 25m to capture short 200m-400m movements while filtering GPS drift
+    if (dist >= 25 || existingTrail.length === 0) {
       const timeNow = getNowIndian12Hr(false);
       const prevKm = lastStop?.distanceKm || 0;
       const addKm = lastStop ? Number((dist / 1000).toFixed(2)) : 0;

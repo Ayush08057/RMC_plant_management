@@ -18,8 +18,10 @@ import {
   generatePurchasesTallyXml,
   downloadXmlFile
 } from '../../utils/tallyXmlGenerator';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function TallySyncView({ bills = [], purchases = [] }) {
+  const { language } = useLanguage();
   const [companyName, setCompanyName] = useState('SHIVKRUPA READY MIX CONCRETE PLANT');
   const [downloadSuccess, setDownloadSuccess] = useState(null);
 
@@ -106,17 +108,19 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
               <span>Tally Prime & ERP 9 Direct Synchronization</span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">
-              टॅली प्राइम XML एक्सपोर्ट (1-Click Tally XML Sync)
+              {language === 'mr' ? 'टॅली प्राइम XML एक्सपोर्ट' : '1-Click Tally XML Sync'}
             </h2>
             <p className="text-xs text-emerald-100/90 mt-0.5">
-              सॉफ्टवेअरमधील विक्री बिले, ग्राहकांकडून आलेली पेमेंट्स आणि कच्चा माल खरेदी १-क्लिकवर Tally XML मध्ये डाऊनलोड करा.
+              {language === 'mr'
+                ? 'सॉफ्टवेअरमधील विक्री बिले, ग्राहकांकडून आलेली पेमेंट्स आणि कच्चा माल खरेदी १-क्लिकवर Tally XML मध्ये डाऊनलोड करा.'
+                : 'Download sales invoices, customer receipt vouchers, and raw material purchases as ready-to-import Tally Prime XML.'}
             </p>
           </div>
 
           <div className="flex items-center gap-2 bg-emerald-900/50 p-2 rounded-lg border border-emerald-700/60">
             <Building2 className="w-4 h-4 text-emerald-300 shrink-0" />
             <div className="text-left">
-              <span className="text-[10px] text-emerald-300 block uppercase font-bold">Tally Company Name:</span>
+              <span className="text-[10px] text-emerald-300 block uppercase font-bold">{language === 'mr' ? 'टॅली कंपनीचे नाव:' : 'Tally Company Name:'}</span>
               <input
                 type="text"
                 value={companyName}
@@ -143,17 +147,17 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
               </span>
             </div>
             <h3 className="text-sm font-bold text-slate-900 mt-2.5">
-              विक्री बिले (Sales Invoices)
+              {language === 'mr' ? 'विक्री बिले' : 'Sales Invoices'}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              सर्व GST कॅश मेमो आणि विक्री बिले (Customer Ledgers & Taxes).
+              {language === 'mr' ? 'सर्व GST कॅश मेमो आणि विक्री बिले (Customer Ledgers & Taxes).' : 'All GST cash memos and sales invoices (Customer Ledgers & Taxes).'}
             </p>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-500">Total Vouchers:</span>
-              <span className="font-bold text-slate-900">{bills.length} Bills</span>
+              <span className="text-slate-500">{language === 'mr' ? 'एकूण बिले:' : 'Total Vouchers:'}</span>
+              <span className="font-bold text-slate-900">{bills.length} {language === 'mr' ? 'बिले' : 'Bills'}</span>
             </div>
             <div className="flex items-center justify-between text-xs font-mono mt-1">
-              <span className="text-slate-500">Gross Value:</span>
+              <span className="text-slate-500">{language === 'mr' ? 'एकूण रक्कम:' : 'Gross Value:'}</span>
               <span className="font-bold text-amber-700">₹{totalSalesAmount.toLocaleString('en-IN')}</span>
             </div>
           </div>
@@ -164,7 +168,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
             className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <Download className="w-4 h-4" />
-            <span>Download Sales XML</span>
+            <span>{language === 'mr' ? 'सेल्स XML डाऊनलोड करा' : 'Download Sales XML'}</span>
           </button>
         </div>
 
@@ -180,17 +184,17 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
               </span>
             </div>
             <h3 className="text-sm font-bold text-slate-900 mt-2.5">
-              पेमेंट पावत्या (Receipt Vouchers)
+              {language === 'mr' ? 'पेमेंट पावत्या' : 'Receipt Vouchers'}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              ग्राहकांकडून जमा झालेले पेमेंट्स (Cash, Bank, NEFT, Cheque).
+              {language === 'mr' ? 'ग्राहकांकडून जमा झालेले पेमेंट्स (Cash, Bank, NEFT, Cheque).' : 'Customer payments received (Cash, Bank, NEFT, Cheque).'}
             </p>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-500">Total Payments:</span>
-              <span className="font-bold text-slate-900">{totalReceiptsCount} Receipts</span>
+              <span className="text-slate-500">{language === 'mr' ? 'एकूण पावत्या:' : 'Total Payments:'}</span>
+              <span className="font-bold text-slate-900">{totalReceiptsCount} {language === 'mr' ? 'पावत्या' : 'Receipts'}</span>
             </div>
             <div className="flex items-center justify-between text-xs font-mono mt-1">
-              <span className="text-slate-500">Amount Collected:</span>
+              <span className="text-slate-500">{language === 'mr' ? 'जमा रक्कम:' : 'Amount Collected:'}</span>
               <span className="font-bold text-blue-700">₹{totalReceiptsAmount.toLocaleString('en-IN')}</span>
             </div>
           </div>
@@ -201,7 +205,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
             className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs shadow flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <Download className="w-4 h-4" />
-            <span>Download Receipts XML</span>
+            <span>{language === 'mr' ? 'पावत्या XML डाऊनलोड करा' : 'Download Receipts XML'}</span>
           </button>
         </div>
 
@@ -217,17 +221,17 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
               </span>
             </div>
             <h3 className="text-sm font-bold text-slate-900 mt-2.5">
-              कच्चा माल खरेदी (Material Purchases)
+              {language === 'mr' ? 'कच्चा माल खरेदी' : 'Material Purchases'}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              सिमेंट, खडी, वाळू आणि डिझेल सप्लायर्सची खरेदी बिले.
+              {language === 'mr' ? 'सिमेंट, खडी, वाळू आणि डिझेल सप्लायर्सची खरेदी बिले.' : 'Purchase bills for cement, aggregates, sand, and diesel suppliers.'}
             </p>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-500">Total Inward Bills:</span>
-              <span className="font-bold text-slate-900">{purchases.length} Bills</span>
+              <span className="text-slate-500">{language === 'mr' ? 'एकूण खरेदी बिले:' : 'Total Inward Bills:'}</span>
+              <span className="font-bold text-slate-900">{purchases.length} {language === 'mr' ? 'बिले' : 'Bills'}</span>
             </div>
             <div className="flex items-center justify-between text-xs font-mono mt-1">
-              <span className="text-slate-500">Total Purchase:</span>
+              <span className="text-slate-500">{language === 'mr' ? 'एकूण खरेदी:' : 'Total Purchase:'}</span>
               <span className="font-bold text-cyan-700">₹{totalPurchasesAmount.toLocaleString('en-IN')}</span>
             </div>
           </div>
@@ -238,7 +242,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
             className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs shadow flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <Download className="w-4 h-4" />
-            <span>Download Purchases XML</span>
+            <span>{language === 'mr' ? 'खरेदी XML डाऊनलोड करा' : 'Download Purchases XML'}</span>
           </button>
         </div>
       </div>
@@ -247,20 +251,30 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
       <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs">
         <h4 className="font-bold text-slate-900 flex items-center gap-1.5 mb-2">
           <HelpCircle className="w-4 h-4 text-emerald-700" />
-          <span>टॅली प्राइम मध्ये इम्पोर्ट कसे करावे? (3 Simple Steps in Tally Prime)</span>
+          <span>{language === 'mr' ? 'टॅली प्राइम मध्ये इम्पोर्ट कसे करावे? (३ सोप्या पायऱ्या)' : 'How to import into Tally Prime (3 Simple Steps)'}</span>
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
-            <span className="font-bold text-blue-700 font-mono text-[11px]">पाऊल १</span>
-            <p className="text-slate-700">वरील बटनावर क्लिक करून XML फाईल डाऊनलोड करा.</p>
+            <span className="font-bold text-blue-700 font-mono text-[11px]">{language === 'mr' ? 'पायरी १' : 'Step 1'}</span>
+            <p className="text-slate-700">
+              {language === 'mr' ? 'वरील बटनावर क्लिक करून XML फाईल डाऊनलोड करा.' : 'Click the button above to download the XML voucher file.'}
+            </p>
           </div>
           <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
-            <span className="font-bold text-blue-700 font-mono text-[11px]">पाऊल २</span>
-            <p className="text-slate-700">Tally Prime उघडा आणि वरून <strong className="font-mono">Import (Alt + O)</strong> निवडा.</p>
+            <span className="font-bold text-blue-700 font-mono text-[11px]">{language === 'mr' ? 'पायरी २' : 'Step 2'}</span>
+            <p className="text-slate-700">
+              {language === 'mr' 
+                ? <>Tally Prime उघडा आणि वरून <strong className="font-mono">Import (Alt + O)</strong> निवडा.</>
+                : <>Open Tally Prime and select <strong className="font-mono">Import (Alt + O)</strong> from top bar.</>}
+            </p>
           </div>
           <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
-            <span className="font-bold text-blue-700 font-mono text-[11px]">पाऊल ३</span>
-            <p className="text-slate-700"><strong className="font-mono">Transactions</strong> निवडून डाऊनलोड केलेली XML फाईल सिलेक्ट करा — सर्व नोंदी आपोआप जमा होतील!</p>
+            <span className="font-bold text-blue-700 font-mono text-[11px]">{language === 'mr' ? 'पायरी ३' : 'Step 3'}</span>
+            <p className="text-slate-700">
+              {language === 'mr'
+                ? <><strong className="font-mono">Transactions</strong> निवडून डाऊनलोड केलेली XML फाईल सिलेक्ट करा — सर्व नोंदी आपोआप जमा होतील!</>
+                : <>Select <strong className="font-mono">Transactions</strong> and choose the downloaded XML file — all vouchers are instantly posted!</>}
+            </p>
           </div>
         </div>
       </div>

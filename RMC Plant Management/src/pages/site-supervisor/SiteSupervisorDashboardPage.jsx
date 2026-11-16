@@ -166,39 +166,6 @@ export default function SiteSupervisorDashboardPage() {
       badge={currentSite ? currentSite.name.toUpperCase() : "ACTIVE SITE"}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      actions={
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('attendance')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer ${
-              isSupervisorClockedIn && !isSupervisorShiftEnded
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
-            }`}
-            title="Mark or View Daily Attendance"
-          >
-            <Clock className={`w-3.5 h-3.5 ${isSupervisorClockedIn && !isSupervisorShiftEnded ? 'text-emerald-600' : 'text-[#1D5FA7]'}`} />
-            <span>{isSupervisorClockedIn && !isSupervisorShiftEnded ? 'On Duty (End Shift)' : 'Daily Attendance'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowConfirmModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Confirm Delivery</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowIssueModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Report Issue</span>
-          </button>
-        </div>
-      }
     >
       {activeTab === 'attendance' && (
         <RolePersonalAttendanceView

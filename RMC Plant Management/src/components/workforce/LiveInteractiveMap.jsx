@@ -91,6 +91,91 @@ export function getTileConfig(isSatellite, apiKey = '', provider = 'google') {
   };
 }
 
+
+/**
+ * Calculates forward bearing angle (0 - 360 degrees, 0 = North, 90 = East, 180 = South, 270 = West)
+ */
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const toDeg = (r) => (r * 180) / Math.PI;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const deltaLambda = toRad(lon2 - lon1);
+  const y = Math.sin(deltaLambda) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+  const theta = Math.atan2(y, x);
+  return (toDeg(theta) + 360) % 360;
+}
+
+/**
+ * Returns compass cardinal direction string (N, NE, E, SE, S, SW, W, NW)
+ */
+function getCardinalDirection(bearing) {
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const index = Math.round(bearing / 45) % 8;
+  return directions[index];
+}
+
+/**
+ * Finds the local heading of a polyline at a given coordinate
+ */
+function getRouteBearingAtPoint(coords, targetLat, targetLng) {
+  if (!coords || coords.length < 2) return 0;
+
+  let closestIdx = 0;
+  let minDistanceSq = Infinity;
+  for (let i = 0; i < coords.length; i++) {
+    const dLat = coords[i][0] - targetLat;
+    const dLng = coords[i][1] - targetLng;
+    const distSq = dLat * dLat + dLng * dLng;
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq;
+      closestIdx = i;
+    }
+  }
+
+  // Look ahead along coords for next distinct coordinate (at least ~3-5m away)
+  for (let i = closestIdx + 1; i < coords.length; i++) {
+    const nextLat = coords[i][0];
+    const nextLng = coords[i][1];
+    const dLat = Math.abs(nextLat - targetLat);
+    const dLng = Math.abs(nextLng - targetLng);
+    if (dLat > 0.00003 || dLng > 0.00003) {
+      return calculateBearing(targetLat, targetLng, nextLat, nextLng);
+    }
+  }
+
+  // If at the end, look backwards
+  for (let i = closestIdx - 1; i >= 0; i--) {
+    const prevLat = coords[i][0];
+    const prevLng = coords[i][1];
+    const dLat = Math.abs(targetLat - prevLat);
+    const dLng = Math.abs(targetLng - prevLng);
+    if (dLat > 0.00003 || dLng > 0.00003) {
+      return calculateBearing(prevLat, prevLng, targetLat, targetLng);
+    }
+  }
+
+  return 0;
+}
+
+
+/**
+ * Calculates geodesic distance in meters between two lat/lng coordinates
+ */
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function LiveInteractiveMap({
   telemetryList = [],
   activeTarget = null,
@@ -107,7 +192,8 @@ export default function LiveInteractiveMap({
   onToggleFullWidth = () => {},
 }) {
   const { t } = useLanguage();
-  const mapContainerRef = useRef(null);
+    const mapContainerRef = useRef(null);
+  const mapFrameRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const tileLayerRef = useRef(null);
   const routeLayerGroupRef = useRef(null);
@@ -118,6 +204,7 @@ export default function LiveInteractiveMap({
   const wasConcludedRef = useRef(false);
   const drawnPolylineCoordsRef = useRef([]);
   const [mapReady, setMapReady] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Leaflet API Key & Clean Tile Provider State Management
   const [leafletApiKey, setLeafletApiKey] = useState(() => {
@@ -142,7 +229,9 @@ export default function LiveInteractiveMap({
   const [inputApiKey, setInputApiKey] = useState(leafletApiKey);
   const [keySavedToast, setKeySavedToast] = useState(false);
   // Default false so true hardware GPS path renders cleanly without artificial OSRM street loops
-  const [roadSnapEnabled, setRoadSnapEnabled] = useState(false);
+  const [roadSnapEnabled, setRoadSnapEnabled] = useState(true);
+  const lastFetchedStopsKeyRef = useRef('');
+  const requestSeqRef = useRef(0);
   const [snappedRouteState, setSnappedRouteState] = useState(null);
   const [snappedLiveGps, setSnappedLiveGps] = useState(null);
   const hasFittedRef = useRef(false);
@@ -249,14 +338,97 @@ export default function LiveInteractiveMap({
     tileLayerRef.current.setUrl(config.url);
   }, [mapSatellite, leafletApiKey, tileProvider]);
 
-  // Invalidate map size on full width toggle
+    // Fullscreen management: seamless HTML5 Fullscreen API with graceful fixed CSS fallback
+  const toggleFullscreen = () => {
+    const el = mapFrameRef.current;
+    if (!isFullscreen) {
+      if (el) {
+        if (el.requestFullscreen) {
+          el.requestFullscreen().catch(() => {});
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        } else if (el.msRequestFullscreen) {
+          el.msRequestFullscreen();
+        }
+      }
+      setIsFullscreen(true);
+    } else {
+      if (
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      ) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      }
+      setIsFullscreen(false);
+    }
+    if (typeof onToggleFullWidth === 'function') {
+      try {
+        onToggleFullWidth();
+      } catch (err) {
+        console.warn('onToggleFullWidth error', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      const isFs = Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(isFs);
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        if (
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.mozFullScreenElement ||
+          document.msFullscreenElement
+        ) {
+          if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        }
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
+    document.addEventListener('MSFullscreenChange', handleFsChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
+      document.removeEventListener('MSFullscreenChange', handleFsChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen]);
+
+  // Invalidate map size on full width or fullscreen toggle
   useEffect(() => {
     if (!mapInstanceRef.current) return;
-    const timer = setTimeout(() => {
-      mapInstanceRef.current.invalidateSize();
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [isFullWidth]);
+    const timers = [
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 50),
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150),
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 300),
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 500)
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [isFullWidth, isFullscreen]);
 
   // Asynchronously resolve optional road-snapped geometry ONLY when shift is concluded and Road Snap is enabled
   useEffect(() => {
@@ -455,58 +627,90 @@ export default function LiveInteractiveMap({
       drawnPolylineCoordsRef.current = rawLatLngs;
     }
 
-    // 2. Intermediate GPS Waypoints / Breadcrumbs along the route
+        // 2. Intermediate GPS Waypoints with Clean Green Directed Arrow Marks (no circle, uncluttered)
     const intermediateStops = stops.filter((s) => {
       if (!s) return false;
       const sLat = Number(s.lat);
       const sLng = Number(s.lng);
       if (!Number.isFinite(sLat) || !Number.isFinite(sLng) || sLat === 0 || sLng === 0) return false;
-      if (hasPunchIn && Math.abs(sLat - punchInLat) < 0.00015 && Math.abs(sLng - punchInLng) < 0.00015) return false;
-      if (hasPunchOut && Math.abs(sLat - punchOutLat) < 0.00015 && Math.abs(sLng - punchOutLng) < 0.00015) return false;
-      if (hasLiveCoords && Math.abs(sLat - displayLat) < 0.00015 && Math.abs(sLng - displayLng) < 0.00015) return false;
+      if (hasPunchIn && getDistanceMeters(sLat, sLng, punchInLat, punchInLng) < 150) return false;
+      if (hasPunchOut && getDistanceMeters(sLat, sLng, punchOutLat, punchOutLng) < 150) return false;
+      if (hasLiveCoords && getDistanceMeters(sLat, sLng, displayLat, displayLng) < 150) return false;
       return true;
     });
 
-    const visibleWaypoints = intermediateStops.length <= 25
-      ? intermediateStops
-      : intermediateStops.filter((s, idx) => {
-          const step = Math.ceil(intermediateStops.length / 20);
-          return idx === 0 || idx === intermediateStops.length - 1 || idx % step === 0 || (s.stayMinutes && s.stayMinutes > 0);
-        });
+    // Intelligent spacing to prevent clustering: at least 350m-600m apart depending on trip length
+    const minSpacingMeters = totalKm > 10 ? 600 : totalKm > 3 ? 350 : 200;
+    const waypointsToRender = [];
+    let lastArrowPoint = null;
 
-    visibleWaypoints.forEach((wp, wIdx) => {
+    if (intermediateStops.length > 0) {
+      for (const s of intermediateStops) {
+        const sLat = Number(s.lat);
+        const sLng = Number(s.lng);
+        if (!lastArrowPoint || getDistanceMeters(lastArrowPoint[0], lastArrowPoint[1], sLat, sLng) >= minSpacingMeters) {
+          waypointsToRender.push(s);
+          lastArrowPoint = [sLat, sLng];
+        }
+      }
+    } else if (drawnPolylineCoords.length >= 4) {
+      // Fallback: place evenly spaced arrows along the polyline path
+      const totalPoints = drawnPolylineCoords.length;
+      const step = Math.max(1, Math.floor(totalPoints / 8));
+      for (let i = step; i < totalPoints - 1; i += step) {
+        const pt = drawnPolylineCoords[i];
+        if (!lastArrowPoint || getDistanceMeters(lastArrowPoint[0], lastArrowPoint[1], pt[0], pt[1]) >= minSpacingMeters) {
+          waypointsToRender.push({
+            lat: pt[0],
+            lng: pt[1],
+            title: 'Route Direction',
+            time: '--'
+          });
+          lastArrowPoint = [pt[0], pt[1]];
+        }
+      }
+    }
+
+    waypointsToRender.forEach((wp) => {
       const wLat = Number(wp.lat);
       const wLng = Number(wp.lng);
-      const wpNo = wp.stopNo || wIdx + 2;
-      const wpTitle = wp.title || wp.landmarkName || `Waypoint #${wpNo}`;
+      const wpTitle = wp.title || wp.landmarkName || 'Route Waypoint';
       const wpAddress = wp.address || `${wLat.toFixed(5)}°N, ${wLng.toFixed(5)}°E`;
       const wpTime = wp.time || (wp.timestamp ? new Date(wp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--');
       const wpDist = wp.distanceKm != null ? `${wp.distanceKm} KM` : (wp.legKm ? `+${wp.legKm} km` : '');
 
+      const bearing = Number.isFinite(wp.heading) && wp.heading >= 0
+        ? wp.heading
+        : getRouteBearingAtPoint(drawnPolylineCoords, wLat, wLng);
+      const roundedBearing = Math.round(bearing || 0);
+      const cardinal = getCardinalDirection(roundedBearing);
+
+      // Clean Green Directed Arrow - NO CIRCLE around it, sits directly on route line
       const waypointIcon = L.divIcon({
         className: 'bg-transparent border-0',
         html: `
-          <div class="flex flex-col items-center cursor-pointer select-none group" title="${wpTitle} • ${wLat.toFixed(5)}, ${wLng.toFixed(5)}">
-            <div class="w-5 h-5 rounded-full bg-white border-2 border-blue-600 shadow-md flex items-center justify-center text-[10px] font-black font-mono text-blue-700 group-hover:scale-125 transition-transform">
-              ${wpNo}
-            </div>
-            <div class="w-1.5 h-1.5 bg-blue-600 rounded-full -mt-0.5 opacity-80"></div>
+          <div class="cursor-pointer select-none group flex items-center justify-center" title="${wpTitle} • Heading ${roundedBearing}° ${cardinal}">
+            <svg viewBox="0 0 24 24" class="w-5 h-5 group-hover:scale-135 transition-transform pointer-events-none" style="transform: rotate(${roundedBearing}deg); transform-origin: 50% 50%; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));">
+              <path d="M12 2L3.5 21l8.5-4.5 8.5 4.5z" fill="#10b981" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+            </svg>
           </div>
         `,
-        iconSize: [24, 28],
-        iconAnchor: [12, 26],
-        popupAnchor: [0, -26],
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+        popupAnchor: [0, -11],
       });
 
       L.marker([wLat, wLng], { icon: waypointIcon, zIndexOffset: 300 })
         .bindPopup(`
           <div class="p-2.5 text-xs font-sans min-w-[220px]">
             <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 mb-2">
-              <span class="font-extrabold text-blue-900 flex items-center gap-1">
-                <span class="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-mono flex items-center justify-center">${wpNo}</span>
-                <span>Waypoint #${wpNo}</span>
+              <span class="font-extrabold text-emerald-900 flex items-center gap-1.5">
+                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" style="transform: rotate(${roundedBearing}deg); transform-origin: 50% 50%;">
+                  <path d="M12 2L3.5 21l8.5-4.5 8.5 4.5z" fill="#10b981" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+                </svg>
+                <span>Route Direction • ${roundedBearing}° ${cardinal}</span>
               </span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">${wpTime}</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">${wpTime}</span>
             </div>
             <div class="space-y-1.5 text-[11px] text-slate-600">
               <div class="font-bold text-slate-900">${wpTitle}</div>
@@ -518,7 +722,7 @@ export default function LiveInteractiveMap({
               ${wpDist ? `
                 <div class="flex items-center justify-between text-[11px] px-0.5">
                   <span class="text-slate-500">Distance Travelled:</span>
-                  <span class="font-bold font-mono text-blue-700">${wpDist}</span>
+                  <span class="font-bold font-mono text-emerald-700">${wpDist}</span>
                 </div>
               ` : ''}
               <div class="pt-1 flex justify-end">
@@ -526,7 +730,7 @@ export default function LiveInteractiveMap({
                   href="https://www.google.com/maps/search/?api=1&query=${wLat},${wLng}"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] inline-flex items-center gap-1"
+                  class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] inline-flex items-center gap-1"
                 >
                   <span>Google Maps ↗</span>
                 </a>
@@ -818,21 +1022,19 @@ export default function LiveInteractiveMap({
 
         {/* Right: Clean Key Controls */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          {isShiftConcluded && (
-            <button
-              type="button"
-              onClick={() => setRoadSnapEnabled((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                roadSnapEnabled 
-                  ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400/50 shadow-xs' 
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-              }`}
-              title="Toggle optional OSRM road snapping on completed route"
-            >
-              <GitCommit className={`w-3.5 h-3.5 ${roadSnapEnabled ? 'text-cyan-200' : 'text-slate-400'}`} />
-              <span>{roadSnapEnabled ? 'Road Snap: ON' : 'Actual GPS Path'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setRoadSnapEnabled((prev) => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+              roadSnapEnabled 
+                ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400/50 shadow-xs' 
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+            }`}
+            title="Toggle road-following route (OSRM real road geometry)"
+          >
+            <GitCommit className={`w-3.5 h-3.5 ${roadSnapEnabled ? 'text-cyan-200' : 'text-slate-400'}`} />
+            <span>{roadSnapEnabled ? 'Road Route: ON' : 'GPS Path'}</span>
+          </button>
 
           <button
             type="button"
@@ -859,14 +1061,63 @@ export default function LiveInteractiveMap({
         </div>
       </div>
 
-      {/* Map Canvas Frame */}
-      <div className={`relative w-full rounded-2xl overflow-hidden border border-slate-300 shadow-md bg-slate-900 transition-all duration-300 ${
-        isFullWidth ? 'h-[580px]' : 'h-[440px] sm:h-[480px] xl:h-[500px]'
-      }`}>
+      {/* Map Canvas Frame - Seamless Fullscreen & Inline */}
+      <div
+        ref={mapFrameRef}
+        className={`w-full overflow-hidden transition-all duration-300 ${
+          isFullscreen
+            ? 'fixed inset-0 z-[999999] w-screen h-screen rounded-none border-0 shadow-2xl bg-slate-900 m-0 p-0'
+            : isFullWidth
+            ? 'relative rounded-2xl border border-slate-300 shadow-md bg-slate-900 h-[580px]'
+            : 'relative rounded-2xl border border-slate-300 shadow-md bg-slate-900 h-[440px] sm:h-[480px] xl:h-[500px]'
+        }`}
+        style={isFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', zIndex: 999999 } : undefined}
+      >
         {/* Leaflet Map DOM Canvas */}
-        <div ref={mapContainerRef} className="w-full h-full z-0" style={{ minHeight: '100%' }} />
+        <div ref={mapContainerRef} className="w-full h-full z-0" style={{ minHeight: '100%', height: '100%', width: '100%' }} />
 
-        {/* Floating Utility Controls on Bottom-Right */}
+        {/* Fullscreen Floating Header Bar */}
+        {isFullscreen && (
+          <div className="absolute top-4 left-4 z-[400] flex items-center gap-3 bg-slate-950/90 backdrop-blur-md border border-slate-700/80 px-4 py-2.5 rounded-2xl shadow-2xl text-white max-w-[calc(100vw-32px)]">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 border border-blue-400 flex items-center justify-center font-bold text-xs shrink-0 text-white shadow-xs">
+              {validTarget ? (validTarget.name || 'ST').substring(0, 2).toUpperCase() : 'HQ'}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-sm tracking-tight truncate">
+                  {validTarget?.name || 'Staff Member'}
+                </span>
+                <span className="text-xs text-slate-300 font-medium truncate">
+                  • {validTarget?.role || 'Operations'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-900/80 text-sky-300 border border-blue-700/80">
+                  {validTarget?.employeeId || validTarget?.id}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  validTarget?.status === 'Punched In' ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {validTarget?.status || 'Active'}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-300 flex items-center gap-2 truncate mt-0.5 font-mono">
+                <span className="text-emerald-400">📍 {validTarget?.geofenceStatus || validTarget?.stationName || 'Location Verified'}</span>
+                {totalKm > 0 && <span className="text-cyan-300 font-bold">• {totalKm} KM Traveled</span>}
+              </div>
+            </div>
+            <div className="h-6 w-px bg-slate-700 mx-1 shrink-0" />
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 shadow-md text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 active:scale-95"
+              title="Exit Full Screen (Esc)"
+            >
+              <Minimize2 className="w-4 h-4 text-slate-200" />
+              <span className="hidden sm:inline">Exit Full Screen</span>
+            </button>
+          </div>
+        )}
+
+        {/* Floating Utility Controls on Bottom-Right (Key icon removed as requested) */}
         <div className="absolute bottom-3 right-3 z-[400] flex flex-col items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-300 shadow-xl">
           <button
             type="button"
@@ -877,21 +1128,6 @@ export default function LiveInteractiveMap({
             title={mapSatellite ? 'Switch to Street Map' : 'Switch to Satellite View'}
           >
             <Layers className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setInputApiKey(leafletApiKey);
-              setShowKeyModal(true);
-            }}
-            className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors relative"
-            title="Configure Leaflet API Key & Clean Tile Layers"
-          >
-            <Key className="w-4 h-4 text-amber-600" />
-            {leafletApiKey && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-            )}
           </button>
 
           <button
@@ -927,11 +1163,13 @@ export default function LiveInteractiveMap({
 
           <button
             type="button"
-            onClick={onToggleFullWidth}
-            className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-            title={isFullWidth ? 'Standard View' : 'Full Width View'}
+            onClick={toggleFullscreen}
+            className={`p-2 rounded-lg cursor-pointer transition-colors ${
+              isFullscreen ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+            }`}
+            title={isFullscreen ? 'Exit Full Screen (Esc)' : 'Totally Full Screen'}
           >
-            {isFullWidth ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
 
@@ -981,7 +1219,7 @@ export default function LiveInteractiveMap({
 
       {/* Leaflet API Key & Clean Map Tile Provider Configuration Modal */}
       {showKeyModal && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100000] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 max-w-lg w-full overflow-hidden animate-in fade-in duration-200">
             {/* Modal Header */}
             <div className="p-4 bg-slate-900 text-white flex items-center justify-between">

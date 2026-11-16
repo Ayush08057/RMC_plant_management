@@ -1209,6 +1209,46 @@ export default function MobilePunchWidget({
 
             {/* Bottom Action Button (matches Image 2 exact big button style) */}
             <div className="w-full pt-4 pb-2">
+              {nativeTracking.isNativeApp() && !isTrackingPreflightComplete(trackingPerms) && (
+                <div className="mb-3 p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/15 to-purple-500/10 border border-amber-500/30 text-white space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚠️</span>
+                      <span className="font-bold text-xs sm:text-sm text-amber-300">
+                        Phone Setup Required For Road Route Tracking
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    To record accurate road turns and highway routes with the screen locked on Oppo, Samsung, Redmi, Vivo:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => nativeTracking.openPermissionWizard()}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-purple-900/30 transition-all cursor-pointer"
+                  >
+                    <span>⚙️  Configure Oppo / Samsung / Redmi / Vivo Tracking (1 Tap)</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {nativeTracking.isNativeApp() && isTrackingPreflightComplete(trackingPerms) && (
+                <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between text-xs text-emerald-400">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-semibold text-[11px]">Continuous Road Tracking Protected (Screen-Off Ready)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => nativeTracking.openPermissionWizard()}
+                    className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
+                  >
+                    Settings
+                  </button>
+                </div>
+              )}
+
               {!hasPunchedIn ? (
                 /* State 1: Punch In Button */
                 <button
@@ -1594,6 +1634,22 @@ export default function MobilePunchWidget({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* 1-Tap Phone Setup Wizard Button (Native) */}
+            {nativeTracking.isNativeApp() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTrackingSetupModal(false);
+                  nativeTracking.openPermissionWizard();
+                }}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-purple-900/40 cursor-pointer border border-purple-400/30 transition-all"
+              >
+                <span className="text-base">📱</span>
+                <span>Open Multi-Brand Setup Wizard (Oppo / Samsung / Redmi)</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Checklist Items */}
             <div className="space-y-3">

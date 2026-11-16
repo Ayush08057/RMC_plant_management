@@ -131,7 +131,6 @@ const PORTAL_LINKS = [
   { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
   { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervisor', path: '/site-supervisor', icon: HardHat, colorClass: 'bg-[#0d9488]' },
   { role: ROLES.DRIVER, label: 'Driver Portal', path: '/driver', icon: Truck, colorClass: 'bg-[#f43f5e]' },
-  { role: ROLES.OWNER_DIRECTOR, label: 'Owner / Director', path: '/owner', icon: Building2, colorClass: 'bg-[#be123c]' },
 ];
 
 export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle, activeTab, onSelectTab }) {

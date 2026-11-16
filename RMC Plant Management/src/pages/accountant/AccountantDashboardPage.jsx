@@ -161,52 +161,6 @@ export default function AccountantDashboardPage() {
       badge={activeTab === 'dashboard' ? 'ACCOUNTS' : null}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      actions={
-        activeTab === 'dashboard' ? (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('attendance')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
-                isAccountantClockedIn && !isAccountantShiftEnded
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                  : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
-              }`}
-              title="Mark or View Daily Attendance"
-            >
-              <Clock className={`w-3.5 h-3.5 ${isAccountantClockedIn && !isAccountantShiftEnded ? 'text-emerald-600' : 'text-[#1D5FA7]'}`} />
-              <span>{isAccountantClockedIn && !isAccountantShiftEnded ? 'On Duty' : 'Daily Attendance'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('tally_sync')}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Tally Prime & ERP 9 XML Sync"
-            >
-              <FileCode className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Tally Sync</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('billing')}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Navigate to Cash Memo & Billing Desk"
-            >
-              <ReceiptText className="w-3.5 h-3.5 text-[#1D5FA7]" />
-              <span>Cash Memo / Billing</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPaymentModal(true)}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Record Client Payment Receipt"
-            >
-              <CreditCard className="w-3.5 h-3.5 text-[#1D5FA7]" />
-              <span>Record Payment</span>
-            </button>
-          </div>
-        ) : null
-      }
     >
       {activeTab === 'attendance' && (
         <RolePersonalAttendanceView

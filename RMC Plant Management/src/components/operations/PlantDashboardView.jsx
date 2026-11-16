@@ -177,21 +177,21 @@ export default function PlantDashboardView({ onNavigateTab }) {
             className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
           >
             <Layers className="w-3 h-3" />
-            <span>+ Batching Sheet</span>
+            <span>Batching Sheet</span>
           </button>
           <button
             onClick={() => onNavigateTab && onNavigateTab('delivery-challans')}
             className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
           >
             <FileText className="w-3 h-3" />
-            <span>+ Challan</span>
+            <span>Challan</span>
           </button>
           <button
             onClick={() => onNavigateTab && onNavigateTab('material-inward')}
             className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] font-bold rounded-lg border border-amber-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
           >
             <PackageCheck className="w-3 h-3" />
-            <span>+ Inward</span>
+            <span>Inward</span>
           </button>
         </div>
       </div>

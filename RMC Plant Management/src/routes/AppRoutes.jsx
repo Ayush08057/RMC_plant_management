@@ -29,8 +29,16 @@ import OwnerDashboardPage from '../pages/owner/OwnerDashboardPage';
  */
 function RootRedirect() {
   const { user, isAuthenticated, loading } = useAuth();
+  const [timedOut, setTimedOut] = React.useState(false);
 
-  if (loading) {
+  React.useEffect(() => {
+    if (loading && !user) {
+      const timer = setTimeout(() => setTimedOut(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, user]);
+
+  if (loading && !user && !timedOut) {
     return (
       <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center text-amber-400">
         <div className="w-8 h-8 border-3 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
@@ -130,11 +138,7 @@ export default function AppRoutes() {
 
       <Route
         path="/owner"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.OWNER_DIRECTOR]}>
-            <OwnerDashboardPage />
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/admin" replace />}
       />
 
 

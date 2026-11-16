@@ -169,7 +169,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   }
 
   // 3. Identify exit / current coordinates
-  const exitGps = employee.exitGpsLocation || employee.record?.exitGpsLocation || null;
+  const exitGps = employee.exitGpsLocation || employee.record?.exitGpsLocation || (employee.punchOut && employee.lat && employee.lng ? { lat: employee.lat, lng: employee.lng, landmarkName: employee.geofenceStatus } : null);
   const punchOutTime = employee.punchOut || employee.record?.punchOut || null;
 
   if (exitGps && exitGps.lat && exitGps.lng) {

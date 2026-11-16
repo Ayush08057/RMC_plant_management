@@ -306,39 +306,10 @@ export default function DispatcherDashboardPage() {
 
   return (
     <AppLayout
-      title="Fleet Dispatch & Logistics"
-      badge="DISPATCH"
+      title={activeTab === 'dashboard' ? '' : 'Fleet Dispatch & Logistics'}
+      badge={activeTab === 'dashboard' ? '' : 'DISPATCH'}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      actions={
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('attendance')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Mark or View Daily Attendance"
-          >
-            <Clock className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Daily Attendance</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Dispatch</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAssignModal(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Truck className="w-3.5 h-3.5 text-[#1D5FA7]" />
-            <span>Assign Vehicle</span>
-          </button>
-        </div>
-      }
     >
       {activeTab === 'attendance' && (
         <RolePersonalAttendanceView

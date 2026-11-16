@@ -43,6 +43,7 @@ import { useAuth } from '../../context/AuthContext';
 import { OFFICIAL_ROLE_ACCOUNTS, isAdminPerson, isDummyEmployee } from '../../data/mockUsers';
 import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
+import { useLanguage } from '../../context/LanguageContext';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { 
@@ -55,6 +56,7 @@ import {
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
+  const { language, t } = useLanguage();
   const { user } = useAuth();
   const { attendance, employees, plants, deleteEmployee, recordVisitedLocation } = useWorkforce();
   const [searchQuery, setSearchQuery] = useState('');
@@ -1636,7 +1638,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                         title="Record a visited location/checkpoint after punch-in"
                       >
                         <Plus className="w-3.5 h-3.5 text-white" />
-                        <span>+ Add Visited Location</span>
+                        <span>Add Visited Location</span>
                       </button>
 
                       <a
@@ -1678,56 +1680,56 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                     {/* Card 1: Total Distance */}
                     <div className="bg-white p-3 rounded-xl border-2 border-blue-200 shadow-2xs flex flex-col justify-between">
                       <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-900">Total Run (एकूण अंतर)</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-900">{language === 'mr' ? 'एकूण प्रवास अंतर' : 'Total Run'}</span>
                         <Route className="w-4 h-4 text-blue-600" />
                       </div>
                       <div className="text-xl sm:text-2xl font-black font-mono text-blue-700 leading-tight">
                         {totalKm} <span className="text-xs font-bold text-slate-500">KM</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        GPS Verified from Punch-In
+                        {language === 'mr' ? 'पंच-इन पासूनचे GPS अंतर' : 'GPS Verified from Punch-In'}
                       </div>
                     </div>
 
                     {/* Card 2: Vehicle Odometer */}
                     <div className="bg-white p-3 rounded-xl border-2 border-amber-200 shadow-2xs flex flex-col justify-between">
                       <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-900">Odometer (गाडी मीटर)</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-900">{language === 'mr' ? 'गाडी मीटर' : 'Odometer'}</span>
                         <Gauge className="w-4 h-4 text-amber-600" />
                       </div>
                       <div className="text-base sm:text-lg font-black font-mono text-slate-900 leading-tight">
                         {startOdo.toLocaleString()} ➔ <span className="text-amber-600">{finalOdo.toLocaleString()}</span>
                       </div>
                       <div className="text-[10px] text-emerald-700 font-bold mt-1 truncate flex items-center gap-1">
-                        <span>{totalKm > 0 ? `✓ Diff: +${totalKm} KM logged` : 'Stationary at Hub (0 km)'}</span>
+                        <span>{totalKm > 0 ? (language === 'mr' ? `✓ फरक: +${totalKm} किमी` : `✓ Diff: +${totalKm} KM logged`) : (language === 'mr' ? 'प्लॅन्टमध्ये उभी आहे (० किमी)' : 'Stationary at Hub (0 km)')}</span>
                       </div>
                     </div>
 
                     {/* Card 3: Shift Runtime */}
                     <div className="bg-white p-3 rounded-xl border-2 border-slate-200 shadow-2xs flex flex-col justify-between">
                       <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">Shift Runtime (ड्यूटी वेळ)</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">{language === 'mr' ? 'ड्यूटी वेळ' : 'Shift Runtime'}</span>
                         <Zap className="w-4 h-4 text-amber-500" />
                       </div>
                       <div className="text-xl sm:text-2xl font-black font-mono text-slate-800 leading-tight">
-                        {activeTarget?.elapsedDisplay || (activeTarget?.status === 'Punched In' ? 'Active Duty' : 'Off-Duty')}
+                        {activeTarget?.elapsedDisplay || (activeTarget?.status === 'Punched In' ? (language === 'mr' ? 'सक्रिय सेवेत' : 'Active Duty') : (language === 'mr' ? 'ऑफ-ड्यूटी' : 'Off-Duty'))}
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        {activeTarget?.status === 'Punched In' ? '🟢 Clocked In & Tracking' : 'Shift Not Active'}
+                        {activeTarget?.status === 'Punched In' ? (language === 'mr' ? '🟢 हजर व ट्रॅकिंग चालू' : '🟢 Clocked In & Tracking') : (language === 'mr' ? 'शिफ्ट सुरू नाही' : 'Shift Not Active')}
                       </div>
                     </div>
 
                     {/* Card 4: Route Legs & Stops */}
                     <div className="bg-white p-3 rounded-xl border-2 border-emerald-200 shadow-2xs flex flex-col justify-between">
                       <div className="flex items-center justify-between text-slate-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">Visited Places (भेट दिलेली ठिकाणे)</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">{language === 'mr' ? 'भेट दिलेली ठिकाणे' : 'Visited Places'}</span>
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       </div>
                       <div className="text-xl sm:text-2xl font-black font-mono text-emerald-700 leading-tight">
-                        {activeRouteDetails.stops.length > 1 ? activeRouteDetails.stops.length - 1 : 0} <span className="text-xs font-bold text-slate-500">Visited</span> • {activeRouteDetails.stops.length} <span className="text-xs font-bold text-slate-500">Total</span>
+                        {activeRouteDetails.stops.length > 1 ? activeRouteDetails.stops.length - 1 : 0} <span className="text-xs font-bold text-slate-500">{language === 'mr' ? 'झालेले' : 'Visited'}</span> • {activeRouteDetails.stops.length} <span className="text-xs font-bold text-slate-500">{language === 'mr' ? 'एकूण' : 'Total'}</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
-                        {totalKm > 0 ? `Latest: ${lastStop?.title || 'Active'}` : 'Stationary at Punch-In Hub'}
+                        {totalKm > 0 ? `${language === 'mr' ? 'शेवटचे:' : 'Latest:'} ${lastStop?.title || (language === 'mr' ? 'सक्रिय' : 'Active')}` : (language === 'mr' ? 'पंच-इन हबवर उपस्थित' : 'Stationary at Punch-In Hub')}
                       </div>
                     </div>
                   </div>
@@ -1737,10 +1739,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Visited Locations Timeline (पंच-इन नंतर भेट दिलेली ठिकाणे)</span>
+                        <span>{language === 'mr' ? 'भेट दिलेल्या ठिकाणांची टाइमलाइन' : 'Visited Locations Timeline'}</span>
                       </span>
                       <span className="text-[10px] font-mono font-bold text-slate-400">
-                        {activeRouteDetails.stops.length} Total Checkpoints • Click any stop to view on map
+                        {activeRouteDetails.stops.length} {language === 'mr' ? 'एकूण चेकपॉईंट्स' : 'Total Checkpoints'}
                       </span>
                     </div>
 
@@ -1807,13 +1809,13 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                         <thead>
                           <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider">
                             <th className="py-2.5 px-3"># Stop</th>
-                            <th className="py-2.5 px-3">Visited Place & Activity (भेट दिलेले ठिकाण)</th>
-                            <th className="py-2.5 px-3 text-center">Leg Distance (टप्प्याचे अंतर)</th>
-                            <th className="py-2.5 px-3 text-center">Total Run (एकूण अंतर)</th>
-                            <th className="py-2.5 px-3">Vehicle Odometer (गाडी मीटर)</th>
-                            <th className="py-2.5 px-3">Time & Halt (वेळ)</th>
-                            <th className="py-2.5 px-3">Purpose & Activity</th>
-                            <th className="py-2.5 px-3 text-right">Actions</th>
+                            <th className="py-2.5 px-3">{language === 'mr' ? 'भेट दिलेले ठिकाण व कृती' : 'Visited Place & Activity'}</th>
+                            <th className="py-2.5 px-3 text-center">{language === 'mr' ? 'टप्प्याचे अंतर' : 'Leg Distance'}</th>
+                            <th className="py-2.5 px-3 text-center">{language === 'mr' ? 'एकूण अंतर' : 'Total Run'}</th>
+                            <th className="py-2.5 px-3">{language === 'mr' ? 'गाडी मीटर' : 'Vehicle Odometer'}</th>
+                            <th className="py-2.5 px-3">{language === 'mr' ? 'वेळ व मुक्काम' : 'Time & Halt'}</th>
+                            <th className="py-2.5 px-3">{language === 'mr' ? 'उद्देश व काम' : 'Purpose & Activity'}</th>
+                            <th className="py-2.5 px-3 text-right">{language === 'mr' ? 'कृती' : 'Actions'}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white">
@@ -1824,7 +1826,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                                   <Route className="w-6 h-6 text-slate-400 stroke-[1.5]" />
                                   <span className="font-semibold text-slate-700 text-xs">No Route Travel Legs Recorded Yet</span>
                                   <span className="text-[11px] text-slate-400 max-w-md">
-                                    Staff is currently at base location with 0.0 KM traveled. Click "+ Add Visited Location" above to record a site checkpoint.
+                                    Staff is currently at base location with 0.0 KM traveled. Click "Add Visited Location" above to record a site checkpoint.
                                   </span>
                                 </div>
                               </td>
@@ -2236,10 +2238,10 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 </div>
                 <div>
                   <h3 className="font-extrabold text-white text-sm">
-                    Record Visited Location (नवीन भेट दिलेले ठिकाण)
+                    {language === 'mr' ? 'नवीन भेट दिलेले ठिकाण नोंदवा' : 'Record Visited Location'}
                   </h3>
                   <p className="text-[11px] text-slate-300">
-                    Staff: <strong className="text-emerald-400">{activeTarget.name}</strong> ({activeTarget.employeeId || activeTarget.id})
+                    {language === 'mr' ? 'कर्मचारी:' : 'Staff:'} <strong className="text-emerald-400">{activeTarget.name}</strong> ({activeTarget.employeeId || activeTarget.id})
                   </p>
                 </div>
               </div>
@@ -2256,7 +2258,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
             <div className="p-4 space-y-3.5 overflow-y-auto text-xs">
               {activeTarget?.hasGpsFix && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-emerald-900">📍 Current Real GPS Coordinates:</span>
+                  <span className="font-bold text-emerald-900">{language === 'mr' ? '📍 सध्याचे अचूक GPS स्थान:' : '📍 Current Real GPS Coordinates:'}</span>
                   <span className="font-mono font-black text-emerald-700">{Number(activeTarget.lat).toFixed(4)}°N, {Number(activeTarget.lng).toFixed(4)}°E</span>
                 </div>
               )}
@@ -2265,13 +2267,13 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
               <div className="space-y-2.5">
                 <div>
                   <label className="block font-bold text-slate-800 text-[11px] mb-1">
-                    Visited Place Name (ठिकाणाचे नाव) *
+                    {language === 'mr' ? 'ठिकाणाचे नाव *' : 'Visited Place Name *'}
                   </label>
                   <input
                     type="text"
                     value={newVisitedTitle}
                     onChange={(e) => setNewVisitedTitle(e.target.value)}
-                    placeholder="e.g. Godrej Green Acres Pier #4 / Client Site"
+                    placeholder={language === 'mr' ? 'उदा. गोदरेज ग्रीन एकर्स / ग्राहक साइट' : 'e.g. Godrej Green Acres Pier #4 / Client Site'}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-blue-500 bg-white"
                   />
                 </div>
@@ -2279,27 +2281,27 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block font-bold text-slate-800 text-[11px] mb-1">
-                      Activity Category (प्रकार)
+                      {language === 'mr' ? 'कामाचा प्रकार' : 'Activity Category'}
                     </label>
                     <select
                       value={newVisitedCategory}
                       onChange={(e) => setNewVisitedCategory(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
                     >
-                      <option value="Site Pouring">Site Pouring (काँक्रीट ओतणे)</option>
-                      <option value="Site Inspection">Site Inspection (साइट तपासणी)</option>
-                      <option value="Quality Test">Quality Lab Test (लॅब चाचणी)</option>
-                      <option value="Delivery Checkpoint">Delivery Checkpoint (डिलिव्हरी पॉईंट)</option>
-                      <option value="Material Testing">Material Testing (मटेरिअल टेस्ट)</option>
-                      <option value="Highway Transit">Highway Transit (हायवे प्रवास)</option>
-                      <option value="Client Office">Client Office (क्लायंट ऑफिस)</option>
-                      <option value="Logistics Hub">Logistics Hub (लॉजिस्टिक्स हब)</option>
+                      <option value="Site Pouring">{language === 'mr' ? 'काँक्रीट ओतणे (Site Pouring)' : 'Site Pouring'}</option>
+                      <option value="Site Inspection">{language === 'mr' ? 'साइट तपासणी (Site Inspection)' : 'Site Inspection'}</option>
+                      <option value="Quality Test">{language === 'mr' ? 'लॅब / क्युब चाचणी' : 'Quality Lab Test'}</option>
+                      <option value="Delivery Checkpoint">{language === 'mr' ? 'डिलिव्हरी चेकपॉईंट' : 'Delivery Checkpoint'}</option>
+                      <option value="Material Testing">{language === 'mr' ? 'मटेरिअल टेस्ट' : 'Material Testing'}</option>
+                      <option value="Highway Transit">{language === 'mr' ? 'हायवे प्रवास' : 'Highway Transit'}</option>
+                      <option value="Client Office">{language === 'mr' ? 'क्लायंट ऑफिस' : 'Client Office'}</option>
+                      <option value="Logistics Hub">{language === 'mr' ? 'लॉजिस्टिक्स हब' : 'Logistics Hub'}</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block font-bold text-slate-800 text-[11px] mb-1">
-                      Time Visited (वेळ)
+                      {language === 'mr' ? 'भेट देण्याची वेळ' : 'Time Visited'}
                     </label>
                     <input
                       type="text"
@@ -2314,7 +2316,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block font-bold text-slate-800 text-[11px] mb-1">
-                      Stay / Halt Duration (थांबलेले मिनिटे)
+                      {language === 'mr' ? 'थांबलेला वेळ (मिनिटे)' : 'Stay / Halt Duration (Minutes)'}
                     </label>
                     <input
                       type="number"
@@ -2350,26 +2352,26 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
 
                 <div>
                   <label className="block font-bold text-slate-800 text-[11px] mb-1">
-                    Address / Landmark (पत्ता)
+                    {language === 'mr' ? 'पत्ता / लँडमार्क' : 'Address / Landmark'}
                   </label>
                   <input
                     type="text"
                     value={newVisitedAddress}
                     onChange={(e) => setNewVisitedAddress(e.target.value)}
-                    placeholder="Detailed site address / landmark..."
+                    placeholder={language === 'mr' ? 'साइटचा पत्ता किंवा लँडमार्क...' : 'Detailed site address / landmark...'}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-blue-500 bg-white"
                   />
                 </div>
 
                 <div>
                   <label className="block font-bold text-slate-800 text-[11px] mb-1">
-                    Work Conducted & Activity Notes (कामाचा तपशील)
+                    {language === 'mr' ? 'कामाचा तपशील व नोंदी' : 'Work Conducted & Activity Notes'}
                   </label>
                   <textarea
                     rows={2}
                     value={newVisitedNotes}
                     onChange={(e) => setNewVisitedNotes(e.target.value)}
-                    placeholder="Details about work done, concrete volume poured, cube samples taken, or challans signed..."
+                    placeholder={language === 'mr' ? 'केलेल्या कामाचा तपशील, ओतलेले काँक्रीट, घेतलेले क्युब सॅम्पल किंवा स्वाक्षरी केलेले चालान...' : 'Details about work done, concrete volume poured, cube samples taken, or challans signed...'}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-blue-500 bg-white"
                   />
                 </div>

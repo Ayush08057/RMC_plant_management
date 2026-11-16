@@ -403,18 +403,6 @@ export default function DriverDashboardPage() {
       badge={`ID: ${currentDriverId}`}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      actions={
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setToastMessage('Connecting to Plant Dispatcher Hotline...')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1D5FA7] hover:bg-[#123B6D] text-white shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <PhoneCall className="w-3.5 h-3.5 text-white" />
-            <span className="hidden xs:inline">Call Dispatch</span>
-          </button>
-        </div>
-      }
     >
       {activeTab === 'attendance' && (
         <div className="space-y-6">
