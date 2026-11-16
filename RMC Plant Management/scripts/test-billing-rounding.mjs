@@ -13,18 +13,25 @@ console.log('🧪 Running Item 8: Currency Rounding & Precision Tests...\n');
 // 1. Float drift case: 14250.000000000002
 assert(roundCurrency(14250.000000000002) === 14250, '14250.000000000002 rounds to 14250');
 
-// 2. Half-up rounding case: 1.005 -> 1.01
+// 2. Specific half-cent & edge cases requested in Phase 1.5
+assert(roundCurrency(1234567.005) === 1234567.01, '1234567.005 half-up rounds to 1234567.01');
+assert(roundCurrency(99999999.995) === 100000000.00, '99999999.995 rounds up to 100,000,000');
+assert(roundCurrency(0.015) === 0.02, '0.015 half-up rounds to 0.02');
+assert(roundCurrency(2.675) === 2.68, '2.675 half-up rounds to 2.68');
 assert(roundCurrency(1.005) === 1.01, '1.005 half-up rounds to 1.01');
 assert(roundCurrency(1.004) === 1.00, '1.004 rounds down to 1.00');
 
-// 3. Large sums
-assert(roundCurrency(99999999.994) === 99999999.99, 'Large sum rounds 2 decimals correctly');
-assert(roundCurrency(99999999.995) === 100000000.00, 'Large sum rounds up to 100,000,000');
+// 3. Negative values
+assert(roundCurrency(-1234567.005) === -1234567.01, '-1234567.005 rounds to -1234567.01');
+assert(roundCurrency(-0.015) === -0.02, '-0.015 rounds to -0.02');
+assert(roundCurrency(-2.675) === -2.68, '-2.675 rounds to -2.68');
+assert(roundCurrency(-14250.000000000002) === -14250, '-14250.000000000002 rounds to -14250');
 
 // 4. Zero balance and micro-remainders
 assert(roundCurrency(0) === 0, 'Zero returns 0');
 assert(roundCurrency(0.00000000000001) === 0, 'Micro epsilon 1e-14 rounds to 0');
 assert(roundCurrency(-0.00000000000001) === 0, 'Negative micro epsilon rounds to 0');
+assert(roundCurrency(0.004) === 0, '0.004 rounds to 0');
 
 // 5. normalizeBill integration tests with floating subtractions
 const bill1 = normalizeBill({

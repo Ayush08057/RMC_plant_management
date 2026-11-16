@@ -6,17 +6,18 @@
 
 /**
  * Safe currency helper that rounds to 2 decimal places avoiding IEEE-754 floating drift.
- * Handles half-up rounding accurately (e.g., 1.005 -> 1.01).
- * Supports large sums and returns exactly rounded 2-decimal numbers.
+ * Uses exact string-exponent decimal shifting to eliminate floating multiplication artifacts (no Number.EPSILON).
+ * Handles half-up rounding accurately (e.g., 1.005 -> 1.01, 1234567.005 -> 1234567.01, 0.015 -> 0.02, 2.675 -> 2.68).
+ * Supports large sums, negative values, and zero balances.
  */
 export const roundCurrency = (val) => {
   if (val === null || val === undefined) return 0;
   const num = Number(val);
   if (!isFinite(num)) return 0;
-  if (Math.abs(num) < 1e-9) return 0;
+  if (Math.abs(num) < 0.005) return 0;
   const sign = num < 0 ? -1 : 1;
   const abs = Math.abs(num);
-  const rounded = Math.round((abs + Number.EPSILON) * 100) / 100;
+  const rounded = Number(Math.round(Number(abs + 'e2')) + 'e-2');
   return sign * rounded;
 };
 

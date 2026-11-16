@@ -18,6 +18,7 @@ import {
   generatePurchasesTallyXml,
   downloadXmlFile
 } from '../../utils/tallyXmlGenerator';
+import { roundCurrency } from '../../utils/billingPayments';
 import { useLanguage } from '../../context/LanguageContext';
 
 export default function TallySyncView({ bills = [], purchases = [] }) {
@@ -26,7 +27,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
   const [downloadSuccess, setDownloadSuccess] = useState(null);
 
   // Calculate totals
-  const totalSalesAmount = bills.reduce((sum, b) => sum + (parseFloat(b.total) || 0), 0);
+  const totalSalesAmount = roundCurrency(bills.reduce((sum, b) => sum + (parseFloat(b.total) || 0), 0));
   
   let totalReceiptsCount = 0;
   let totalReceiptsAmount = 0;
@@ -34,18 +35,18 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
     if (Array.isArray(b.paymentHistory) && b.paymentHistory.length > 0) {
       totalReceiptsCount += b.paymentHistory.length;
       b.paymentHistory.forEach(p => {
-        totalReceiptsAmount += (parseFloat(p.amount) || 0);
+        totalReceiptsAmount = roundCurrency(totalReceiptsAmount + (parseFloat(p.amount) || 0));
       });
     } else if (parseFloat(b.paidAmount || 0) > 0) {
       totalReceiptsCount += 1;
-      totalReceiptsAmount += parseFloat(b.paidAmount || 0);
+      totalReceiptsAmount = roundCurrency(totalReceiptsAmount + parseFloat(b.paidAmount || 0));
     }
   });
 
-  const totalPurchasesAmount = purchases.reduce(
+  const totalPurchasesAmount = roundCurrency(purchases.reduce(
     (sum, p) => sum + (parseFloat(p.netTotal || p.total || p.amount) || 0),
     0
-  );
+  ));
 
   // Handlers
   const handleExportSales = () => {
