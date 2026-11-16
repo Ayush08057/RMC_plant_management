@@ -9,6 +9,7 @@ import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 // Web app's Firebase configuration
 const firebaseConfig = {
@@ -46,6 +47,25 @@ if (typeof window !== "undefined") {
   }).catch((err) => {
     console.warn("Firebase Analytics initialization skipped:", err);
   });
+}
+
+// Initialize Firebase App Check in MONITOR mode (un-enforced, with development debug token)
+export let appCheck = null;
+if (typeof window !== "undefined") {
+  try {
+    // Enable debug token in development environment for emulator and local testing
+    if (import.meta.env?.DEV) {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APPCHECK_DEBUG_TOKEN || true;
+    }
+    const recaptchaSiteKey = import.meta.env?.VITE_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    // Monitor mode: never block application startup if App Check initialization is delayed or unsupported
+    console.warn("Firebase App Check monitor mode notice:", err?.message || err);
+  }
 }
 
 export default app;
