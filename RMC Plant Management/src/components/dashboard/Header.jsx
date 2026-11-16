@@ -66,16 +66,24 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   });
   const [plantFormError, setPlantFormError] = useState('');
 
-  // Multi-company workspace switching & management restricted strictly to Admin / Owner master authority
-  const isAdminOrOwner = Boolean(
-    user?.role === 'Admin' ||
-    user?.role === 'Owner / Director' ||
-    user?.isMasterAdmin ||
-    user?.originalAdminUser?.role === 'Admin' ||
-    user?.originalAdminUser?.role === 'Owner / Director'
+  // Only the active System Administrator has the authority to add, register, or delete company workspaces
+  const isAdmin = Boolean(
+    user &&
+    (user.role === 'Admin' || (user.role || '').toLowerCase() === 'admin' || (user.role || '').toLowerCase() === 'administrator') &&
+    user.role !== 'Owner / Director' &&
+    (user.role || '').toLowerCase() !== 'owner / director'
   );
 
-  const canManageCompanies = isAdminOrOwner;
+  const isOwner = Boolean(
+    user &&
+    (user.role === 'Owner / Director' || (user.role || '').toLowerCase().includes('owner') || (user.role || '').toLowerCase().includes('director'))
+  );
+
+  // Switching between existing company workspaces is allowed for Admin and Owner / Director
+  const canSwitchCompany = isAdmin || isOwner;
+
+  // Adding, registering, or permanently deleting company workspaces is strictly restricted to Admin only
+  const canManageCompanies = isAdmin;
 
   const handleLogoFileChange = (file, onSuccess) => {
     if (!file) return;
@@ -91,6 +99,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   };
 
   const handleConfirmDeletePlant = async (companyId) => {
+    if (!canManageCompanies) {
+      alert('Unauthorized: Only System Administrator has the authority to delete a company.');
+      return;
+    }
     if (!companyId) return;
     try {
       await removeCompany(companyId);
@@ -149,6 +161,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   const unreadCount = (notifications || []).filter((n) => !n.read).length;
 
   const openAddPlantModal = () => {
+    if (!canManageCompanies) return;
     setPlantForm({
       kind: 'company',
       name: '',
@@ -166,6 +179,10 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
   const handleAddPlant = (event) => {
     event.preventDefault();
+    if (!canManageCompanies) {
+      setPlantFormError('Unauthorized: Only System Administrator has the authority to add a new company workspace.');
+      return;
+    }
     const name = plantForm.name.trim();
     const requestedCode = plantForm.code.trim().toUpperCase();
 
@@ -252,7 +269,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
           {/* Plant / Company Display */}
           <div className="relative min-w-0" ref={companyDropdownRef}>
-            {isAdminOrOwner ? (
+            {canSwitchCompany ? (
               <button
                 type="button"
                 id="company-selector-button"
@@ -265,7 +282,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
                   setShowNotifications(false);
                 }}
                 className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 transition-all cursor-pointer shadow-2xs min-w-0"
-                title={`Active: ${selectedCompany.name} • Click to switch, add, or delete company`}
+                title={canManageCompanies ? `Active: ${selectedCompany.name} • Click to switch, add, or delete company` : `Active: ${selectedCompany.name} • Click to switch workspace`}
               >
                 <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
                   <img 
@@ -319,7 +336,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             )}
 
             {/* Plant Picker Dropdown - Restricted strictly to Admin / Owner */}
-            {isAdminOrOwner && showPlantPicker && (
+            {canSwitchCompany && showPlantPicker && (
               <div 
                 id="company-dropdown-menu"
                 role="listbox"
@@ -578,14 +595,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
         </div>
       </header>
 
-      {/* Modal: Register New Company */}
-      <Modal
-        isOpen={showAddPlantModal}
-        onClose={() => setShowAddPlantModal(false)}
-        title={t('Register New Company Workspace')}
-        subtitle={t('Create an independent enterprise company entity with its own branding, plants, and workforce.')}
-        icon={Building2}
-      >
+      {/* Modal: Register New Company (Admin Authority Only) */}
+      {canManageCompanies && (
+        <Modal
+          isOpen={showAddPlantModal}
+          onClose={() => setShowAddPlantModal(false)}
+          title={t('Register New Company Workspace')}
+          subtitle={t('Create an independent enterprise company entity with its own branding, plants, and workforce.')}
+          icon={Building2}
+        >
         <form onSubmit={handleAddPlant} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
           {plantFormError && (
             <p role="alert" className="rounded-lg border border-[#D4E4F7] bg-[#EAF3FF] px-3 py-2 font-bold text-black">
@@ -713,15 +731,17 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </form>
       </Modal>
+      )}
 
-      {/* Modal: Edit Company & Change Logo (Admin Authority) */}
-      <Modal
-        isOpen={Boolean(companyToEdit)}
-        onClose={() => setCompanyToEdit(null)}
-        title={`${t('Company Settings')} • ${companyToEdit?.name || t('Company')}`}
-        subtitle={t('Manage company profile and brand logo icon')}
-        icon={Building2}
-      >
+      {/* Modal: Edit Company & Change Logo (Admin Authority Only) */}
+      {canManageCompanies && (
+        <Modal
+          isOpen={Boolean(companyToEdit)}
+          onClose={() => setCompanyToEdit(null)}
+          title={`${t('Company Settings')} • ${companyToEdit?.name || t('Company')}`}
+          subtitle={t('Manage company profile and brand logo icon')}
+          icon={Building2}
+        >
         <form onSubmit={handleSaveEditCompany} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
           {editCompanyError && (
             <p role="alert" className="rounded-lg border border-[#D4E4F7] bg-[#EAF3FF] px-3 py-2 font-bold text-black">
@@ -822,16 +842,18 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </form>
       </Modal>
+      )}
 
-      {/* Confirmation Modal: Delete Company */}
-      <Modal
-        isOpen={Boolean(plantToDelete)}
-        onClose={() => setPlantToDelete(null)}
-        title={t('Confirm Company Deletion')}
-        subtitle={t('Permanent workspace removal')}
-        maxWidth="max-w-md"
-        icon={AlertTriangle}
-      >
+      {/* Confirmation Modal: Delete Company (Admin Authority Only) */}
+      {canManageCompanies && (
+        <Modal
+          isOpen={Boolean(plantToDelete)}
+          onClose={() => setPlantToDelete(null)}
+          title={t('Confirm Company Deletion')}
+          subtitle={t('Permanent workspace removal')}
+          maxWidth="max-w-md"
+          icon={AlertTriangle}
+        >
         <div className="space-y-3.5 text-xs">
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-black">
             <p className="font-bold text-sm text-red-900 mb-1">
@@ -881,6 +903,7 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </div>
       </Modal>
+      )}
     </>
   );
 }
