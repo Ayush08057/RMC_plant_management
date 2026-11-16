@@ -21,6 +21,7 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { useWorkforce } from '../../../context/WorkforceContext';
 import { subscribeCloudStore, pushCloudStore } from '../../../services/cloudSyncService';
+import { allocateNextSequenceNumber, recordVoidedSequenceNumber } from '../../../services/sequenceCounterService';
 import HelpModal from './HelpModal';
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
@@ -227,8 +228,22 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
     setValidationError('');
   };
 
-  const handleConfirmAndSave = (shouldPrint = false) => {
-    const challanNumber = `DC-25-26/${Date.now().toString().slice(-4)}`;
+  const handleConfirmAndSave = async (shouldPrint = false) => {
+    let allocatedSequence = null;
+    let challanNumber = null;
+
+    try {
+      allocatedSequence = await allocateNextSequenceNumber({
+        type: 'delivery_challans',
+        companyId: 'sm-concretech',
+        prefix: 'DC',
+      });
+      challanNumber = allocatedSequence.sequenceNumber;
+    } catch (counterErr) {
+      alert(`⚠️ Cannot allocate Delivery Challan number: ${counterErr.message || 'Counter server unavailable'}\n\nPlease check your internet connection before issuing delivery challans.`);
+      return;
+    }
+
     const departureTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const todayDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -257,6 +272,15 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
       pushCloudStore('cloud_delivery_challans', CHALLAN_STORAGE_KEY, updatedChallans);
     } catch (e) {
       console.warn('Error saving challan:', e);
+      if (allocatedSequence) {
+        recordVoidedSequenceNumber({
+          companyId: 'sm-concretech',
+          type: 'delivery_challans',
+          sequenceNumber: allocatedSequence.sequenceNumber,
+          financialYear: allocatedSequence.financialYear,
+          reason: `SendVehicleWizard challan save error: ${e.message}`,
+        });
+      }
     }
 
     // Save into rmc_driver_trips_v2

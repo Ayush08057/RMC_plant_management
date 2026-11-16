@@ -21,6 +21,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { allocateNextSequenceNumber, recordVoidedSequenceNumber } from '../../services/sequenceCounterService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import SendVehicleWizard from './guided/SendVehicleWizard';
@@ -180,12 +181,10 @@ export default function DeliveryChallansView() {
       if (rawPrefill) {
         const p = JSON.parse(rawPrefill);
         if (p && (Date.now() - (p.timestamp || 0) < 60000)) {
-          const nextNumber = challans.length + 1421;
           const isNb = p.billingType === 'Non-Bill';
-          const prefix = isNb ? 'NBC' : 'DC';
           setForm(prev => ({
             ...prev,
-            challanNo: `${prefix}-25-26/${nextNumber}`,
+            challanNo: '(Assigned on save)',
             customerName: p.customerName || prev.customerName,
             site: p.site || prev.site,
             vehicleNo: p.vehicleNo || prev.vehicleNo,
@@ -206,22 +205,19 @@ export default function DeliveryChallansView() {
 
   const handleBillingTypeChange = (newType) => {
     const isNb = newType === 'Non-Bill';
-    const nextNumber = challans.length + 1421;
-    const prefix = isNb ? 'NBC' : 'DC';
     setForm(prev => ({
       ...prev,
       billingType: newType,
       isNonBill: isNb,
-      challanNo: `${prefix}-25-26/${nextNumber}`
+      challanNo: '(Assigned on save)'
     }));
   };
 
   const openNewChallanModal = () => {
-    const nextNumber = challans.length + 1421;
     const now = new Date();
     const currentFleet = getFleetVehicles();
     setForm({
-      challanNo: `DC-25-26/${nextNumber}`,
+      challanNo: '(Assigned on save)',
       date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       departureTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       customerName: '',
@@ -263,7 +259,7 @@ export default function DeliveryChallansView() {
     }
   };
 
-  const handleSave = (e, autoPrint = false) => {
+  const handleSave = async (e, autoPrint = false) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!form.customerName.trim()) {
       setValidationError('Please select or enter a Customer / Project Name.');
@@ -272,10 +268,26 @@ export default function DeliveryChallansView() {
     setValidationError('');
 
     const isNonBill = form.billingType === 'Non-Bill';
+    const prefix = isNonBill ? 'NBC' : 'DC';
+    let allocatedSequence = null;
+    let finalChallanNo = null;
+
+    try {
+      allocatedSequence = await allocateNextSequenceNumber({
+        type: isNonBill ? 'nonbill_challans' : 'delivery_challans',
+        companyId: 'sm-concretech',
+        prefix,
+      });
+      finalChallanNo = allocatedSequence.sequenceNumber;
+    } catch (counterErr) {
+      alert(`⚠️ Cannot allocate Delivery Challan number: ${counterErr.message || 'Counter server unavailable'}\n\nPlease check your internet connection before issuing delivery challans.`);
+      return;
+    }
 
     const newChallan = {
       id: `DC-${Date.now()}`,
       ...form,
+      challanNo: finalChallanNo,
       customerName: form.customerName.trim(),
       site: form.site.trim() || 'Site Location Not Specified',
       driverName: form.driverName.trim() || 'Driver Assumed',
@@ -316,6 +328,15 @@ export default function DeliveryChallansView() {
       }
     } catch (err) {
       console.warn('Trip sync from challan notice:', err);
+      if (allocatedSequence) {
+        recordVoidedSequenceNumber({
+          companyId: 'sm-concretech',
+          type: isNonBill ? 'nonbill_challans' : 'delivery_challans',
+          sequenceNumber: allocatedSequence.sequenceNumber,
+          financialYear: allocatedSequence.financialYear,
+          reason: `DeliveryChallansView trip sync error: ${err.message}`,
+        });
+      }
     }
 
     if (autoPrint) {
