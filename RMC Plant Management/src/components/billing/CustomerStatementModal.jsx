@@ -13,6 +13,7 @@ import {
 import { STAMP_IMAGE_BASE64, COMMON_SEAL_IMAGE_BASE64 } from './billingAssets';
 import {
   normalizeBill,
+  roundCurrency,
   parseToDateOnly,
   formatDisplayDate,
   formatCurrency,
@@ -92,16 +93,16 @@ export default function CustomerStatementModal({
   });
 
   // Financial aggregates for filtered statement records
-  const totalFilteredBilled = filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
-  const totalFilteredPaid = filteredBills.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0);
-  const totalFilteredBalance = totalFilteredBilled - totalFilteredPaid;
+  const totalFilteredBilled = roundCurrency(filteredBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0));
+  const totalFilteredPaid = roundCurrency(filteredBills.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0));
+  const totalFilteredBalance = roundCurrency(totalFilteredBilled - totalFilteredPaid);
 
   // Running balance calculation for statement ledger rows
   let cumulativeRunningBalance = 0;
   const statementRows = filteredBills.map((b) => {
     const billAmt = Number(b.finalAmount) || 0;
     const paidAmt = Number(b.paidAmount) || 0;
-    cumulativeRunningBalance += (billAmt - paidAmt);
+    cumulativeRunningBalance = roundCurrency(cumulativeRunningBalance + (billAmt - paidAmt));
     return {
       ...b,
       paymentCredited: paidAmt,

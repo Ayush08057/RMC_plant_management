@@ -64,6 +64,7 @@ import { useWorkforce } from '../../context/WorkforceContext';
 import { sendOwnerOtpApi, verifyOwnerOtpApi } from '../../services/otpService';
 import {
   normalizeBill,
+  roundCurrency,
   parseToDateOnly,
   formatDisplayDate,
   formatCurrency,
@@ -849,9 +850,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         })
       : [{ sn: 1, material: 'M25 Concrete', qty: 6, unit: 'm³', rate: 4200, total: 25200 }];
 
-    const totalAmount = validItems.reduce((s, it) => s + (Number(it.total) || 0), 0);
-    const trans = Number(billForm.transportation) || 0;
-    const finalAmount = totalAmount + trans;
+    const totalAmount = roundCurrency(validItems.reduce((s, it) => s + (Number(it.total) || 0), 0));
+    const trans = roundCurrency(Number(billForm.transportation) || 0);
+    const finalAmount = roundCurrency(totalAmount + trans);
     const amountInWords = numberToIndianWords(finalAmount);
 
     let billNumber = editingBill ? editingBill.billNo : null;
@@ -1050,9 +1051,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       return;
     }
 
-    const total = Number(purchaseForm.qty) * Number(purchaseForm.rate);
-    const tax = total * ((Number(purchaseForm.taxPercent) || 18) / 100);
-    const finalAmount = total + tax;
+    const total = roundCurrency(Number(purchaseForm.qty) * Number(purchaseForm.rate));
+    const tax = roundCurrency(total * ((Number(purchaseForm.taxPercent) || 18) / 100));
+    const finalAmount = roundCurrency(total + tax);
 
     if (editingPurchase) {
       const updatedList = purchases.map((p) => {
@@ -1144,6 +1145,16 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     if (type === 'bill') {
       const billId = item.id;
       const billNo = item.billNo;
+      const userRole = (user?.role || '').trim();
+      const isPrivileged = ['Admin', 'Plant Manager', 'Accountant', 'Owner / Director'].includes(userRole) || user?.email === 'smconcretech@gmail.com' || user?.email === 'admin@smconcretech.com';
+      if (!isPrivileged) {
+        alert('Permission Denied: Only Admin, Plant Manager, or Accountant can cancel an issued Cash Memo.');
+        return;
+      }
+      if (Number(item.paidAmount || 0) > 0 || (Array.isArray(item.payments) && item.payments.length > 0)) {
+        alert('Cannot cancel bill: Payments have already been credited against this memo. Please reverse/delete recorded payments first.');
+        return;
+      }
       const reason = (cancellationReason || '').trim();
       if (!reason) {
         alert('Please enter a cancellation reason for audit compliance.');
@@ -1274,11 +1285,12 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const handleOpenPaymentModal = (bill = null) => {
     let target = bill;
     if (!target) {
-      if (bills.length === 0) {
+      const activeList = bills.filter((b) => !b.isDeleted && b.status !== 'Cancelled');
+      if (activeList.length === 0) {
         showToast('⚠️ Please generate a Cash Memo first before recording payments.');
         return;
       }
-      target = bills.find((b) => Number(b.balanceAmount || 0) > 0) || bills[0];
+      target = activeList.find((b) => Number(b.balanceAmount || 0) > 0) || activeList[0];
     }
     const norm = normalizeBill(target);
     setPaymentModalBill(norm);
@@ -1539,10 +1551,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               ? activeBills
               : activeBills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === selectedCustomer.trim().toLowerCase());
 
-            const totalInvoiced = customerBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
-            const totalCash = customerBills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0);
-            const totalOnline = customerBills.reduce((s, b) => s + (Number(b.onlinePaidAmount) || 0), 0);
-            const totalBalance = customerBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0);
+            const totalInvoiced = roundCurrency(customerBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0));
+            const totalCash = roundCurrency(customerBills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0));
+            const totalOnline = roundCurrency(customerBills.reduce((s, b) => s + (Number(b.onlinePaidAmount) || 0), 0));
+            const totalBalance = roundCurrency(customerBills.reduce((s, b) => s + (Number(b.balanceAmount) || 0), 0));
             const paidBillsCount = customerBills.filter((b) => b.paymentStatus === 'Paid').length;
             const pendingBillsCount = customerBills.filter((b) => b.paymentStatus !== 'Paid').length;
 
@@ -2715,7 +2727,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       )}
 
       {activeSection === 'tally_sync' && (
-        <TallySyncView bills={bills} purchases={purchases} />
+        <TallySyncView bills={activeBills} purchases={purchases} />
       )}
 
       {/* ========================================================
@@ -3911,8 +3923,8 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             {/* Modal Body: Scrollable */}
             <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-slate-50/50">
               
-              {/* Bill Selector (Allows choosing any bill when opening from top Payment Received button) */}
-              {bills.length > 1 && (
+              {/* Bill Selector (Allows choosing any active bill when opening from top Payment Received button) */}
+              {bills.filter((b) => !b.isDeleted && b.status !== 'Cancelled').length > 1 && (
                 <div className="bg-white rounded-2xl border border-slate-200/90 p-3 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2 text-slate-800 font-bold text-xs shrink-0">
                     <ReceiptText className="w-4 h-4 text-emerald-600" />
@@ -3921,12 +3933,12 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                   <select
                     value={paymentModalBill.id}
                     onChange={(e) => {
-                      const found = bills.find((b) => b.id === e.target.value);
+                      const found = bills.find((b) => b.id === e.target.value && !b.isDeleted && b.status !== 'Cancelled');
                       if (found) handleOpenPaymentModal(found);
                     }}
                     className="flex-1 min-w-[240px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 font-bold text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-emerald-600 cursor-pointer"
                   >
-                    {bills.map((b) => (
+                    {bills.filter((b) => !b.isDeleted && b.status !== 'Cancelled').map((b) => (
                       <option key={b.id} value={b.id}>
                         Bill #{b.billNo} — {b.customerName || 'Cash Customer'} • Balance Due: ₹{Number(b.balanceAmount || 0).toLocaleString('en-IN')} {Number(b.balanceAmount || 0) <= 0 ? '(Paid ✓)' : ''}
                       </option>
