@@ -38,7 +38,8 @@ const VOLUME_PRESETS = [3.0, 4.5, 6.0, 7.0, 8.0];
 
 export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
   const { language, t } = useLanguage();
-  const { employees } = useWorkforce();
+  const { employees, activeCompanyId } = useWorkforce();
+  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const [step, setStep] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -235,12 +236,25 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
     try {
       allocatedSequence = await allocateNextSequenceNumber({
         type: 'delivery_challans',
-        companyId: 'sm-concretech',
+        companyId: resolvedCompanyId,
         prefix: 'DC',
       });
       challanNumber = allocatedSequence.sequenceNumber;
     } catch (counterErr) {
-      alert(`⚠️ Cannot allocate Delivery Challan number: ${counterErr.message || 'Counter server unavailable'}\n\nPlease check your internet connection before issuing delivery challans.`);
+      console.error('[SendVehicleWizard] Failed to allocate Delivery Challan number:', counterErr);
+      const isNetworkErr =
+        (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        counterErr?.code === 'unavailable' ||
+        counterErr?.code === 'COUNTER_UNAVAILABLE' ||
+        String(counterErr?.message || '').toLowerCase().includes('offline') ||
+        String(counterErr?.message || '').toLowerCase().includes('network') ||
+        String(counterErr?.message || '').toLowerCase().includes('internet');
+
+      if (isNetworkErr) {
+        alert(`⚠️ Cannot allocate Delivery Challan number: Network / Server unreachable.\n\nPlease check your internet connection before issuing delivery challans.`);
+      } else {
+        alert(`⚠️ Cannot allocate Delivery Challan number:\n${counterErr?.message || 'Unexpected system error'}\n\nPlease check the browser console or contact administrator.`);
+      }
       return;
     }
 

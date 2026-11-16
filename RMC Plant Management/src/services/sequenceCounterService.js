@@ -148,13 +148,37 @@ export async function allocateNextSequenceNumber({
     return allocated;
   } catch (err) {
     console.error(`[SequenceCounter] Atomic counter failed for ${counterDocId}:`, err);
-    const counterError = new Error(
-      `COUNTER_UNAVAILABLE: Unable to connect to central counter server (${err.message}). ` +
-      `Internet connection is required to allocate official sequential numbering.`
+    const isOffline =
+      (typeof navigator !== 'undefined' && !navigator.onLine) ||
+      err?.code === 'unavailable' ||
+      String(err?.message || '').toLowerCase().includes('offline') ||
+      String(err?.message || '').toLowerCase().includes('network') ||
+      String(err?.message || '').toLowerCase().includes('failed to get document because the client is offline');
+
+    if (isOffline) {
+      const counterError = new Error(
+        `Unable to reach central counter server (${err.message || 'offline'}). Internet connection is required to allocate official sequential numbering.`
+      );
+      counterError.code = 'COUNTER_UNAVAILABLE';
+      counterError.originalError = err;
+      throw counterError;
+    }
+
+    if (err?.code === 'permission-denied' || String(err?.message || '').toLowerCase().includes('permission')) {
+      const permError = new Error(
+        `Permission Denied: Your account role does not have authorization to allocate official sequence numbers for ${type}. (${err.message})`
+      );
+      permError.code = 'PERMISSION_DENIED';
+      permError.originalError = err;
+      throw permError;
+    }
+
+    const genericError = new Error(
+      `Counter Allocation Failed: ${err?.message || 'Unexpected server error'}`
     );
-    counterError.code = 'COUNTER_UNAVAILABLE';
-    counterError.originalError = err;
-    throw counterError;
+    genericError.code = err?.code || 'COUNTER_ERROR';
+    genericError.originalError = err;
+    throw genericError;
   }
 }
 

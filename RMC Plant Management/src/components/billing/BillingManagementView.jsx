@@ -190,7 +190,8 @@ const INITIAL_OTP_LOGS = [];
 
 export default function BillingManagementView({ defaultSection = 'cash_memos' }) {
   const { user } = useAuth();
-  const { addAuditLog } = useWorkforce();
+  const { addAuditLog, activeCompanyId } = useWorkforce();
+  const resolvedCompanyId = activeCompanyId || user?.companyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
 
   // Active sub-tab: 'cash_memos' | 'purchases' | 'otp_audit'
   const [activeSection, setActiveSection] = useState(defaultSection);
@@ -220,6 +221,9 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     }
     return INITIAL_BILLS;
   });
+
+  // Authoritative active bills filtered for cancellations and soft-deletes
+  const activeBills = useMemo(() => (bills || []).filter(b => !b.isDeleted && b.status !== 'Cancelled'), [bills]);
 
   // Persistent Purchases State
   const [purchases, setPurchases] = useState(() => {
@@ -862,11 +866,24 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       try {
         allocatedSequence = await allocateNextSequenceNumber({
           type: 'cash_memos',
-          companyId: activeCompanyId || user?.companyId || 'sm-concretech',
+          companyId: resolvedCompanyId,
         });
         billNumber = allocatedSequence.sequenceNumber;
       } catch (counterErr) {
-        alert(`⚠️ Cannot allocate Cash Memo number: ${counterErr.message || 'Counter server unavailable'}\n\nPlease check your internet connection before generating an official Cash Memo.`);
+        console.error('[BillingManagementView] Failed to allocate Cash Memo number:', counterErr);
+        const isNetworkErr =
+          (typeof navigator !== 'undefined' && !navigator.onLine) ||
+          counterErr?.code === 'unavailable' ||
+          counterErr?.code === 'COUNTER_UNAVAILABLE' ||
+          String(counterErr?.message || '').toLowerCase().includes('offline') ||
+          String(counterErr?.message || '').toLowerCase().includes('network') ||
+          String(counterErr?.message || '').toLowerCase().includes('internet');
+
+        if (isNetworkErr) {
+          alert(`⚠️ Cannot allocate Cash Memo number: Network / Server unreachable.\n\nPlease check your internet connection before generating an official Cash Memo.`);
+        } else {
+          alert(`⚠️ Cannot allocate Cash Memo number:\n${counterErr?.message || 'Unexpected system error'}\n\nPlease check the browser console or contact administrator.`);
+        }
         return;
       }
     }
@@ -917,7 +934,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         console.error('Storage error:', err);
         if (allocatedSequence) {
           recordVoidedSequenceNumber({
-            companyId: activeCompanyId || user?.companyId || 'sm-concretech',
+            companyId: resolvedCompanyId,
             type: 'cash_memos',
             sequenceNumber: allocatedSequence.sequenceNumber,
             financialYear: allocatedSequence.financialYear,
@@ -1011,7 +1028,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         console.error('Storage error:', err);
         if (allocatedSequence) {
           recordVoidedSequenceNumber({
-            companyId: activeCompanyId || user?.companyId || 'sm-concretech',
+            companyId: resolvedCompanyId,
             type: 'cash_memos',
             sequenceNumber: allocatedSequence.sequenceNumber,
             financialYear: allocatedSequence.financialYear,
@@ -1546,10 +1563,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {activeSection === 'cash_memos' && (
         <div className="w-full space-y-3.5">
           {(() => {
-            const activeBills = bills.filter(b => showCancelledBills ? true : (!b.isDeleted && b.status !== 'Cancelled'));
+            const tabActiveBills = showCancelledBills ? bills : activeBills;
             const customerBills = selectedCustomer === 'ALL'
-              ? activeBills
-              : activeBills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === selectedCustomer.trim().toLowerCase());
+              ? tabActiveBills
+              : tabActiveBills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === selectedCustomer.trim().toLowerCase());
 
             const totalInvoiced = roundCurrency(customerBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0));
             const totalCash = roundCurrency(customerBills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0));
