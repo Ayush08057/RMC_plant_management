@@ -62,9 +62,10 @@ export default function CustomerStatementModal({
     .map(normalizeBill)
     .filter(
       (b) =>
-        isAll ||
+        (!b.isDeleted && b.status !== 'Cancelled') &&
+        (isAll ||
         (b.customerName || 'Cash Customer').trim().toLowerCase() ===
-        (selectedCust || '').trim().toLowerCase()
+        (selectedCust || '').trim().toLowerCase())
     );
 
   // Sort chronologically (oldest first for statement ledger)

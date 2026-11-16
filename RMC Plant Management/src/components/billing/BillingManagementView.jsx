@@ -70,6 +70,7 @@ import {
   getBillDescription,
 } from '../../utils/billingPayments';
 import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { allocateNextSequenceNumber, recordVoidedSequenceNumber } from '../../services/sequenceCounterService';
 
 export { normalizeBill };
 
@@ -369,12 +370,18 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     type: 'bill', // 'bill' | 'purchase' | 'payment'
   });
 
+  const [showCancelledBills, setShowCancelledBills] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+
   useExclusiveModal(otpModalOpen, () => setOtpModalOpen(false));
   useExclusiveModal(showBillFormModal, () => setShowBillFormModal(false));
   useExclusiveModal(showPurchaseFormModal, () => setShowPurchaseFormModal(false));
   useExclusiveModal(isTableFullScreen, () => setIsTableFullScreen(false));
   useExclusiveModal(!!paymentModalBill, () => setPaymentModalBill(null));
-  useExclusiveModal(deleteConfirmModal.isOpen, () => setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' }));
+  useExclusiveModal(deleteConfirmModal.isOpen, () => {
+    setCancellationReason('');
+    setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' });
+  });
 
   const showToast = (msg) => {
     setNotification(msg);
@@ -407,7 +414,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
   // Bill Form State
   const [billForm, setBillForm] = useState({
-    billNo: `25-26/${bills.length + 115}`,
+    billNo: '(Assigned on save)',
     date: getTodayFormatted(),
     constructionDate: getTodayFormatted(),
     vehicle: 'MH-10-CR-1212',
@@ -492,7 +499,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setBillMobileError(null);
     setBillFormErrors({});
     setBillForm({
-      billNo: `25-26/${bills.length + 115}`,
+      billNo: '(Assigned on save)',
       date: getTodayFormatted(),
       constructionDate: getTodayFormatted(),
       vehicle: '',
@@ -807,7 +814,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   };
 
   // Save / Update Bill
-  const handleSaveBill = (e) => {
+  const handleSaveBill = async (e) => {
     if (e) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       if (typeof e.stopPropagation === 'function') e.stopPropagation();
@@ -847,7 +854,22 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     const finalAmount = totalAmount + trans;
     const amountInWords = numberToIndianWords(finalAmount);
 
-    const billNumber = (billForm.billNo || '').trim() || `25-26/${bills.length + 115}`;
+    let billNumber = editingBill ? editingBill.billNo : null;
+    let allocatedSequence = null;
+
+    if (!billNumber) {
+      try {
+        allocatedSequence = await allocateNextSequenceNumber({
+          type: 'cash_memos',
+          companyId: activeCompanyId || user?.companyId || 'sm-concretech',
+        });
+        billNumber = allocatedSequence.sequenceNumber;
+      } catch (counterErr) {
+        alert(`⚠️ Cannot allocate Cash Memo number: ${counterErr.message || 'Counter server unavailable'}\n\nPlease check your internet connection before generating an official Cash Memo.`);
+        return;
+      }
+    }
+
     const billDate = (billForm.date || '').trim() || getTodayFormatted();
     const billConstructionDate = (billForm.constructionDate || '').trim() || billDate;
     const billVehicle = formatVehicleNumber((billForm.vehicle || '').trim()) || 'MH-10-CR-1212';
@@ -892,6 +914,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedList));
       } catch (err) {
         console.error('Storage error:', err);
+        if (allocatedSequence) {
+          recordVoidedSequenceNumber({
+            companyId: activeCompanyId || user?.companyId || 'sm-concretech',
+            type: 'cash_memos',
+            sequenceNumber: allocatedSequence.sequenceNumber,
+            financialYear: allocatedSequence.financialYear,
+            reason: `Storage save failure: ${err.message}`,
+          });
+        }
       }
       showToast(`✓ Bill #${billNumber} updated successfully!`);
       const updatedItem = updatedList.find((b) => b.id === editingBill.id);
@@ -977,6 +1008,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedList));
       } catch (err) {
         console.error('Storage error:', err);
+        if (allocatedSequence) {
+          recordVoidedSequenceNumber({
+            companyId: activeCompanyId || user?.companyId || 'sm-concretech',
+            type: 'cash_memos',
+            sequenceNumber: allocatedSequence.sequenceNumber,
+            financialYear: allocatedSequence.financialYear,
+            reason: `Storage save failure: ${err.message}`,
+          });
+        }
       }
 
       if (initialPaid > 0 && addAuditLog) {
@@ -1104,15 +1144,30 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     if (type === 'bill') {
       const billId = item.id;
       const billNo = item.billNo;
-
-      // 1. Mark in tombstone set so sync never resurrects it
-      markItemAsDeleted(BILLING_STORAGE_KEY, billId);
-      if (billNo) {
-        markItemAsDeleted(BILLING_STORAGE_KEY, billNo);
+      const reason = (cancellationReason || '').trim();
+      if (!reason) {
+        alert('Please enter a cancellation reason for audit compliance.');
+        return;
       }
 
-      // 2. Remove from state immediately
-      const nextBills = bills.filter((b) => b.id !== billId && (!billNo || b.billNo !== billNo));
+      const cancelledAt = new Date().toISOString();
+      const cancelledBy = user?.name || user?.email || 'Authorized Staff';
+
+      // Soft delete: preserve the bill record, mark isDeleted: true & status: 'Cancelled'
+      const nextBills = bills.map((b) => {
+        if (b.id === billId || (billNo && b.billNo === billNo)) {
+          return {
+            ...b,
+            isDeleted: true,
+            status: 'Cancelled',
+            paymentStatus: 'Cancelled',
+            cancelledAt,
+            cancelledBy,
+            cancellationReason: reason,
+          };
+        }
+        return b;
+      });
       setBills(nextBills);
 
       // 3. Update localStorage
@@ -1122,7 +1177,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         console.error('Storage error:', e);
       }
 
-      // 4. Concurrently push to Firestore cloud
+      // 4. Concurrently push to Firestore cloud (preserves bill in cloud_billing_bills)
       pushCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, nextBills);
 
       // 5. Close related active views if open
@@ -1135,13 +1190,16 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
       if (addAuditLog) {
         addAuditLog(
-          `Cash Memo Deleted (#${billNo})`,
+          `Cash Memo Cancelled (#${billNo})`,
           'Billing',
-          `Cash Memo #${billNo} (${item.customerName || 'Cash Customer'}, ₹${Number(item.finalAmount || 0).toLocaleString('en-IN')}) permanently deleted`
+          `Cash Memo #${billNo} (${item.customerName || 'Cash Customer'}, ₹${Number(item.finalAmount || 0).toLocaleString('en-IN')}) cancelled. Reason: ${reason}`
         );
       }
 
-      showToast(`✓ Cash Memo #${billNo} deleted successfully.`);
+      showToast(`✓ Cash Memo #${billNo} cancelled (record preserved for compliance).`);
+      setCancellationReason('');
+      setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' });
+      return;
     } else if (type === 'purchase') {
       const voucherNo = item.voucherNo;
       const purchaseId = item.id;
@@ -1476,9 +1534,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {activeSection === 'cash_memos' && (
         <div className="w-full space-y-3.5">
           {(() => {
+            const activeBills = bills.filter(b => showCancelledBills ? true : (!b.isDeleted && b.status !== 'Cancelled'));
             const customerBills = selectedCustomer === 'ALL'
-              ? bills
-              : bills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === selectedCustomer.trim().toLowerCase());
+              ? activeBills
+              : activeBills.filter((b) => (b.customerName || 'Cash Customer').trim().toLowerCase() === selectedCustomer.trim().toLowerCase());
 
             const totalInvoiced = customerBills.reduce((s, b) => s + (Number(b.finalAmount) || 0), 0);
             const totalCash = customerBills.reduce((s, b) => s + (Number(b.cashPaidAmount) || 0), 0);
@@ -1672,6 +1731,22 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
                       <span className="hidden sm:inline">Export Excel</span>
                       <span className="sm:hidden">Excel</span>
+                    </button>
+
+                    {/* Toggle Cancelled Bills */}
+                    <button
+                      type="button"
+                      onClick={() => setShowCancelledBills(!showCancelledBills)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
+                        showCancelledBills
+                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 ring-1 ring-rose-200'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-300'
+                      }`}
+                      title={showCancelledBills ? 'Hide Cancelled Bills' : 'Show Cancelled Bills'}
+                    >
+                      <RotateCcw className={`w-3.5 h-3.5 ${showCancelledBills ? 'text-rose-600' : 'text-slate-500'}`} />
+                      <span className="hidden sm:inline">{showCancelledBills ? 'Hide Cancelled' : 'Show Cancelled'}</span>
+                      <span className="sm:hidden">{showCancelledBills ? 'Hide' : 'Cancelled'}</span>
                     </button>
 
                     {/* 1-Click Payment Received Quick Button */}
@@ -1959,6 +2034,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                                 {/* 2. Bill No. */}
                                 <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200/80 text-xs">
                                   <span>#{bill.billNo}</span>
+                                  {(bill.isDeleted || bill.status === 'Cancelled') && (
+                                    <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200 uppercase tracking-wider">
+                                      Cancelled
+                                    </span>
+                                  )}
                                 </td>
 
                                 {/* 3. Bill Amount */}
@@ -2129,7 +2209,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                               </div>
 
                               <div className="shrink-0 flex items-center gap-1.5">
-                                {bill.paymentStatus === 'Paid' ? (
+                                {(bill.isDeleted || bill.status === 'Cancelled') ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-bold uppercase tracking-wider">
+                                    Cancelled
+                                  </span>
+                                ) : bill.paymentStatus === 'Paid' ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
                                     <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
                                     <span>Paid</span>
@@ -2893,9 +2977,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                       <Hash className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
-                        value={billForm.billNo}
-                        onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50/70 border border-slate-300 font-mono font-bold text-slate-900 focus:bg-white focus:border-[#136dec] focus:ring-2 focus:ring-[#136dec]/15 transition-all text-xs"
+                        readOnly={!editingBill}
+                        value={editingBill ? billForm.billNo : '(Assigned on save)'}
+                        disabled={!editingBill}
+                        title={editingBill ? 'Existing Bill Number' : 'Sequential number will be allocated atomically from central counter upon saving'}
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-100 border border-slate-300 font-mono font-bold text-slate-700 text-xs cursor-not-allowed select-none"
                       />
                     </div>
                   </div>
@@ -4182,12 +4268,12 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
                 <Trash2 className="w-7 h-7" />
               </div>
               <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                {deleteConfirmModal.type === 'bill' && 'Confirm Delete Cash Memo'}
+                {deleteConfirmModal.type === 'bill' && 'Cancel Cash Memo (Soft Delete & Compliance)'}
                 {deleteConfirmModal.type === 'purchase' && 'Confirm Delete Purchase Voucher'}
                 {deleteConfirmModal.type === 'payment' && 'Confirm Void Payment Entry'}
               </h3>
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                {deleteConfirmModal.type === 'bill' && `Are you sure you want to permanently delete Cash Memo #${deleteConfirmModal.item.billNo}?`}
+                {deleteConfirmModal.type === 'bill' && `Cash Memo #${deleteConfirmModal.item.billNo} will be preserved as Cancelled. Its sequential number remains reserved.`}
                 {deleteConfirmModal.type === 'purchase' && `Are you sure you want to permanently delete Purchase Voucher #${deleteConfirmModal.item.voucherNo}?`}
                 {deleteConfirmModal.type === 'payment' && `Are you sure you want to void this payment record? The bill balance will be restored.`}
               </p>
@@ -4196,26 +4282,41 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             {/* Details Summary */}
             <div className="p-5 space-y-3 bg-white">
               {deleteConfirmModal.type === 'bill' && (
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold text-slate-400">Cash Memo #:</span>
-                    <span className="font-mono font-bold text-slate-900">#{deleteConfirmModal.item.billNo}</span>
+                <>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span className="font-semibold text-slate-400">Cash Memo #:</span>
+                      <span className="font-mono font-bold text-slate-900">#{deleteConfirmModal.item.billNo}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span className="font-semibold text-slate-400">Customer / Party:</span>
+                      <span className="font-bold text-slate-900">{deleteConfirmModal.item.customerName || 'Cash Customer'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span className="font-semibold text-slate-400">Date:</span>
+                      <span className="font-medium text-slate-700">{deleteConfirmModal.item.date}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-slate-800">
+                      <span className="font-bold">Total Bill Amount:</span>
+                      <span className="font-black text-sm text-slate-950 font-mono">
+                        ₹{Number(deleteConfirmModal.item.finalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold text-slate-400">Customer / Party:</span>
-                    <span className="font-bold text-slate-900">{deleteConfirmModal.item.customerName || 'Cash Customer'}</span>
+
+                  <div className="space-y-1 pt-1">
+                    <label className="text-[11px] font-bold text-slate-700 block">
+                      Cancellation Reason <span className="text-rose-500">*</span>:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={cancellationReason}
+                      onChange={(e) => setCancellationReason(e.target.value)}
+                      placeholder="e.g. Order cancelled by customer, mix revised, duplicated entry..."
+                      className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-slate-900 bg-white"
+                    />
                   </div>
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold text-slate-400">Date:</span>
-                    <span className="font-medium text-slate-700">{deleteConfirmModal.item.date}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-slate-800">
-                    <span className="font-bold">Total Bill Amount:</span>
-                    <span className="font-black text-sm text-slate-950 font-mono">
-                      ₹{Number(deleteConfirmModal.item.finalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
+                </>
               )}
 
               {deleteConfirmModal.type === 'purchase' && (
@@ -4258,7 +4359,11 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
               <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px]">
                 <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
-                <span>This record will be permanently deleted from local cache and cloud sync.</span>
+                <span>
+                  {deleteConfirmModal.type === 'bill'
+                    ? 'This Cash Memo will be soft-deleted. The record and sequence number are retained in compliance archives.'
+                    : 'This record will be permanently deleted from local cache and cloud sync.'}
+                </span>
               </div>
             </div>
 
@@ -4266,7 +4371,10 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
               <button
                 type="button"
-                onClick={() => setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' })}
+                onClick={() => {
+                  setCancellationReason('');
+                  setDeleteConfirmModal({ isOpen: false, item: null, extra: null, type: 'bill' });
+                }}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
               >
                 Cancel
@@ -4274,10 +4382,15 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               <button
                 type="button"
                 onClick={handleConfirmDeleteAction}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
+                disabled={deleteConfirmModal.type === 'bill' && !cancellationReason.trim()}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all shadow-md ${
+                  deleteConfirmModal.type === 'bill' && !cancellationReason.trim()
+                    ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                    : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20 active:scale-95 cursor-pointer'
+                }`}
               >
                 <Trash2 className="w-4 h-4" />
-                <span>Yes, Delete Record</span>
+                <span>{deleteConfirmModal.type === 'bill' ? 'Confirm Cancel Memo' : 'Yes, Delete Record'}</span>
               </button>
             </div>
           </div>
@@ -4291,7 +4404,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
       {customerStatementModal && (
         <CustomerStatementModal
           customerName={customerStatementModal}
-          allBills={bills}
+          allBills={bills.filter(b => !b.isDeleted && b.status !== 'Cancelled')}
           uniqueCustomers={uniqueCustomers}
           onSelectCustomer={(cust) => {
             setSelectedCustomer(cust);
