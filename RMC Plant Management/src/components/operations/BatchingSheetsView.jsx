@@ -24,6 +24,9 @@ import {
   Calendar
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { adjustSiloStock, resolveMaterialKey } from '../../services/siloStockService';
+import { useAuth } from '../../context/AuthContext';
+import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import MakeConcreteWizard from './guided/MakeConcreteWizard';
 import { useLanguage } from '../../context/LanguageContext';
@@ -44,6 +47,9 @@ const INITIAL_BATCH_SHEETS = [];
 
 export default function BatchingSheetsView() {
   const { language } = useLanguage();
+  const { user } = useAuth();
+  const { activeCompanyId } = useWorkforce();
+  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const [helpOpen, setHelpOpen] = useState(false);
   const [guidedWizardOpen, setGuidedWizardOpen] = useState(false);
 
@@ -224,97 +230,36 @@ export default function BatchingSheetsView() {
     error: ''
   });
 
-  const handleFinalizeProduction = (sheet, supervisorApproval = null) => {
+  const handleFinalizeProduction = async (sheet, supervisorApproval = null) => {
     if (!sheet) return;
     if (sheet.stockDeducted) {
       showToast(`Stock already deducted for batch #${sheet.sheetNo}.`);
       return;
     }
 
+    const deductionItems = (sheet.materials || []).map((m) => {
+      const act = Number(m.actual) || Number(m.target) || 0;
+      const tons = act / 1000;
+      const nameLower = (m.name || '').toLowerCase();
+      const isChemical = nameLower.includes('admixture') || nameLower.includes('retarder') || (m.unit || '').toLowerCase().includes('l');
+      return {
+        rawName: m.name,
+        materialKey: resolveMaterialKey(m.name),
+        delta: isChemical ? act : tons,
+        unit: isChemical ? 'Litres' : 'Tons',
+      };
+    });
+
     try {
-      const siloKey = 'rmc_silo_inventory_v2';
-      const rawSilo = localStorage.getItem(siloKey);
-      const siloData = rawSilo ? JSON.parse(rawSilo) : null;
-
-      // 1. Strict Stock Availability Validation before deduction
-      if (!supervisorApproval && siloData) {
-        const shortfalls = [];
-        (sheet.materials || []).forEach((m) => {
-          const act = Number(m.actual) || Number(m.target) || 0;
-          const tons = act / 1000;
-          const nameLower = (m.name || '').toLowerCase();
-
-          let available = 0;
-          let unit = m.unit || 'kg';
-          let required = act;
-
-          if (nameLower.includes('cement') && siloData.cement) {
-            available = Number(siloData.cement.stockTons || 0);
-            required = tons;
-            unit = 'MT';
-          } else if (nameLower.includes('fly ash') && siloData.flyash) {
-            available = Number(siloData.flyash.stockTons || 0);
-            required = tons;
-            unit = 'MT';
-          } else if (nameLower.includes('20mm') && siloData.agg20) {
-            available = Number(siloData.agg20.stockTons || 0);
-            required = tons;
-            unit = 'MT';
-          } else if (nameLower.includes('10mm') && siloData.agg10) {
-            available = Number(siloData.agg10.stockTons || 0);
-            required = tons;
-            unit = 'MT';
-          } else if (nameLower.includes('sand') && siloData.sand) {
-            available = Number(siloData.sand.stockTons || 0);
-            required = tons;
-            unit = 'MT';
-          } else if (nameLower.includes('admixture') && siloData.admixturePce) {
-            available = Number(siloData.admixturePce.stockLiters || 0);
-            required = act;
-            unit = 'Litres';
-          }
-
-          if (required > available) {
-            shortfalls.push({
-              material: m.name,
-              required: Number(required.toFixed(2)),
-              available: Number(available.toFixed(2)),
-              deficit: Number((required - available).toFixed(2)),
-              unit
-            });
-          }
-        });
-
-        if (shortfalls.length > 0) {
-          // Block finalization and display shortfall authorization workflow
-          setShortfallModal({ sheet, shortfalls });
-          return;
-        }
-      }
-
-      // 2. Perform safe deductions
-      if (siloData) {
-        (sheet.materials || []).forEach((m) => {
-          const act = Number(m.actual) || Number(m.target) || 0;
-          const tons = act / 1000;
-          const nameLower = (m.name || '').toLowerCase();
-          if (nameLower.includes('cement') && siloData.cement) {
-            siloData.cement.stockTons = Math.max(0, Number((Number(siloData.cement.stockTons || 0) - tons).toFixed(2)));
-          } else if (nameLower.includes('fly ash') && siloData.flyash) {
-            siloData.flyash.stockTons = Math.max(0, Number((Number(siloData.flyash.stockTons || 0) - tons).toFixed(2)));
-          } else if (nameLower.includes('20mm') && siloData.agg20) {
-            siloData.agg20.stockTons = Math.max(0, Number((Number(siloData.agg20.stockTons || 0) - tons).toFixed(2)));
-          } else if (nameLower.includes('10mm') && siloData.agg10) {
-            siloData.agg10.stockTons = Math.max(0, Number((Number(siloData.agg10.stockTons || 0) - tons).toFixed(2)));
-          } else if (nameLower.includes('sand') && siloData.sand) {
-            siloData.sand.stockTons = Math.max(0, Number((Number(siloData.sand.stockTons || 0) - tons).toFixed(2)));
-          } else if (nameLower.includes('admixture') && siloData.admixturePce) {
-            siloData.admixturePce.stockLiters = Math.max(0, Number((Number(siloData.admixturePce.stockLiters || 0) - act).toFixed(1)));
-          }
-        });
-        localStorage.setItem(siloKey, JSON.stringify(siloData));
-        pushCloudStore('cloud_silo_inventory', siloKey, siloData);
-      }
+      await adjustSiloStock({
+        companyId: resolvedCompanyId,
+        operation: 'deduct',
+        referenceId: sheet.sheetNo || sheet.id,
+        items: deductionItems,
+        allowNegative: Boolean(supervisorApproval),
+        overrideReason: supervisorApproval ? (supervisorApproval.reason || 'Physical silo unrecorded bulk delivery') : '',
+        user,
+      });
 
       const updated = sheets.map(s => s.id === sheet.id ? {
         ...s,
@@ -349,7 +294,12 @@ export default function BatchingSheetsView() {
       setShortfallModal(null);
       showToast(`✓ Production for Sheet #${sheet.sheetNo} finalized! Raw materials deducted from Silo inventory.`);
     } catch (err) {
-      console.warn('Production stock deduction notice:', err.message);
+      if (err.code === 'INSUFFICIENT_STOCK' && err.shortfalls) {
+        setShortfallModal({ sheet, shortfalls: err.shortfalls });
+      } else {
+        console.warn('Production stock deduction notice:', err.message);
+        alert(`⚠️ Stock deduction error:\n${err.message}`);
+      }
     }
   };
 

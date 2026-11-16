@@ -86,6 +86,23 @@ service cloud.firestore {
       );
     }
 
+    function isInventoryWriter() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        isManager() ||
+        isDispatcher() ||
+        getUserRole() in [
+          'Plant Manager',
+          'Plant Incharge',
+          'Operator',
+          'Weighbridge Operator',
+          'Dispatcher',
+          'Site Supervisor',
+          'Supervisor'
+        ]
+      );
+    }
+
     function isOperationalStaff() {
       return isAuthenticated() && (
         isAdmin() ||
@@ -417,6 +434,36 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // Silo & Plant Storage Inventory (/silo_inventory)
+    // =========================================================================
+    match /silo_inventory/{companyId} {
+      allow read: if isAuthenticated() && isSameCompany(companyId);
+      allow create, update: if isAuthenticated() &&
+        isSameCompany(companyId) &&
+        isInventoryWriter() &&
+        request.resource.data.companyId == companyId &&
+        request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // Silo Stock Adjustment Audit Logs (/silo_logs)
+    // Immutable append-only audit ledger of every deduction, inward, and reversal
+    // =========================================================================
+    match /silo_logs/{logId} {
+      allow read: if isAuthenticated() && (
+        isOperationalStaff() ||
+        (hasCompanyPartition(resource.data.companyId) && isSameCompany(resource.data.companyId))
+      );
+      allow create: if isAuthenticated() &&
+        isInventoryWriter() &&
+        isSameCompany(request.resource.data.companyId) &&
+        request.resource.data.logId == logId &&
+        request.resource.data.updatedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
     // System Audit Logs (/auditLogs)
     // Append-only; immutable; readable by management
     // =========================================================================
@@ -543,7 +590,7 @@ service cloud.firestore {
     }
     match /plantSync_CMP-SM-001/{docId} {
       allow read: if isSameCompany('CMP-SM-001');
-      allow write: if isSameCompany('CMP-SM-001') && isOperationalStaff();
+      allow write: if isSameCompany('CMP-SM-001') && isOperationalStaff() && docId != 'cloud_silo_inventory';
     }
 
     // --- sm-concretech Partition ---
@@ -650,7 +697,7 @@ service cloud.firestore {
     }
     match /plantSync_sm-concretech/{docId} {
       allow read: if isSameCompany('sm-concretech');
-      allow write: if isSameCompany('sm-concretech') && isOperationalStaff();
+      allow write: if isSameCompany('sm-concretech') && isOperationalStaff() && docId != 'cloud_silo_inventory';
     }
 
     // --- sm-concretech-unit-2 Partition ---
@@ -757,7 +804,7 @@ service cloud.firestore {
     }
     match /plantSync_sm-concretech-unit-2/{docId} {
       allow read: if isSameCompany('sm-concretech-unit-2');
-      allow write: if isSameCompany('sm-concretech-unit-2') && isOperationalStaff();
+      allow write: if isSameCompany('sm-concretech-unit-2') && isOperationalStaff() && docId != 'cloud_silo_inventory';
     }
 
     // --- sm-infra-projects Partition ---
@@ -864,7 +911,7 @@ service cloud.firestore {
     }
     match /plantSync_sm-infra-projects/{docId} {
       allow read: if isSameCompany('sm-infra-projects');
-      allow write: if isSameCompany('sm-infra-projects') && isOperationalStaff();
+      allow write: if isSameCompany('sm-infra-projects') && isOperationalStaff() && docId != 'cloud_silo_inventory';
     }
 
     // =========================================================================
@@ -933,7 +980,7 @@ service cloud.firestore {
         (isPartitionedBase(partitionCol, 'shifts') && (isManager() || isHR())) ||
         isPartitionedBase(partitionCol, 'dailyWork') ||
         (isPartitionedBase(partitionCol, 'hrSettings') && isOperationalStaff()) ||
-        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff() && docId != 'cloud_silo_inventory') ||
         (isPartitionedBase(partitionCol, 'driverTrips') && (isOperationalStaff() || isDriver())) ||
         isPartitionedBase(partitionCol, 'auditLogs') ||
         (isPartitionedBase(partitionCol, 'payrollRecords') && isAccountant()) ||
@@ -974,7 +1021,7 @@ service cloud.firestore {
         (isPartitionedBase(partitionCol, 'shifts') && (isManager() || isHR())) ||
         (isPartitionedBase(partitionCol, 'dailyWork') && (isManager() || isOwner(resource.data.employeeId))) ||
         (isPartitionedBase(partitionCol, 'hrSettings') && isOperationalStaff()) ||
-        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff() && docId != 'cloud_silo_inventory') ||
         (isPartitionedBase(partitionCol, 'driverTrips') && (isOperationalStaff() || isDriver())) ||
         (isPartitionedBase(partitionCol, 'payrollRecords') && isAccountant()) ||
         (isPartitionedBase(partitionCol, 'leaves') && (isManager() || isHR())) ||
@@ -1018,7 +1065,7 @@ service cloud.firestore {
         (isPartitionedBase(partitionCol, 'payrollRecords') && isAccountant()) ||
         (isPartitionedBase(partitionCol, 'documents') && (isAdmin() || isHR())) ||
         (isPartitionedBase(partitionCol, 'hrSettings') && isOperationalStaff()) ||
-        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff()) ||
+        (isPartitionedBase(partitionCol, 'plantSync') && isOperationalStaff() && docId != 'cloud_silo_inventory') ||
         (isPartitionedBase(partitionCol, 'driverTrips') && (isAdmin() || isManager() || isDispatcher()))
       );
     }

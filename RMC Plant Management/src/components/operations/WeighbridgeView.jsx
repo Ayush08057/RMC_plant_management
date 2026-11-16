@@ -26,6 +26,9 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { adjustSiloStock, subscribeSiloStock } from '../../services/siloStockService';
+import { useAuth } from '../../context/AuthContext';
+import { useWorkforce } from '../../context/WorkforceContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../services/plantOperationsService';
 
@@ -68,6 +71,9 @@ const COMMON_PARTIES = [
 
 export default function WeighbridgeView() {
   const { language } = useLanguage();
+  const { user } = useAuth();
+  const { activeCompanyId } = useWorkforce();
+  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const isMarathi = language === 'mr';
 
   const [slips, setSlips] = useState(() => {
@@ -116,11 +122,11 @@ export default function WeighbridgeView() {
   });
 
   useEffect(() => {
-    const unsubSilo = subscribeCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, INITIAL_SILO_STOCK, (data) => {
+    const unsubSilo = subscribeSiloStock(resolvedCompanyId, (data) => {
       if (data && typeof data === 'object') setSiloStock(data);
     });
     return () => unsubSilo();
-  }, []);
+  }, [resolvedCompanyId]);
 
   // 2nd Tare Weight entry state
   const [secondTareKg, setSecondTareKg] = useState('');
@@ -236,23 +242,26 @@ export default function WeighbridgeView() {
     setIsNewModalOpen(true);
   };
 
-  // Helper to sync Weighbridge inward weighments with Silo Inventory
+  // Helper to sync Weighbridge inward weighments with Silo Inventory via atomic adjustSiloStock
   const updateSiloInventoryForWeighment = (materialName, netKg, slipNo, vehNo, party, isReversal = false) => {
     try {
-      const factor = isReversal ? -1 : 1;
       const matLower = (materialName || '').toLowerCase();
-
-      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
-      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
 
       // Handle Chemical Admixtures (in Litres)
       if (matLower.includes('chemical') || matLower.includes('admixture') || matLower.includes('pce') || matLower.includes('retarder')) {
         const liters = Number(netKg) || 0;
-        const curL = Number(siloData.admixturePce?.stockLiters) || 3200;
-        siloData.admixturePce.stockLiters = Math.max(0, curL + factor * liters);
-        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
-        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
-        setSiloStock({ ...siloData });
+        adjustSiloStock({
+          companyId: resolvedCompanyId,
+          operation: isReversal ? 'reversal' : 'weighment',
+          referenceId: slipNo,
+          items: [{
+            rawName: materialName,
+            materialKey: 'admixturePce',
+            delta: liters,
+            unit: 'Litres',
+          }],
+          user,
+        }).catch((err) => console.warn('[WeighbridgeView] Silo chemical weighment notice:', err.message));
 
         const rawChem = localStorage.getItem(STORAGE_KEYS.CHEMICAL_BARRELS);
         let chemData = rawChem ? JSON.parse(rawChem) : [];
@@ -294,13 +303,18 @@ export default function WeighbridgeView() {
       else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
       else if (matLower.includes('river sand')) targetKey = 'riverSand';
 
-      if (siloData[targetKey]) {
-        const cur = Number(siloData[targetKey].stockTons) || 0;
-        siloData[targetKey].stockTons = Math.max(0, Number((cur + factor * netTons).toFixed(2)));
-        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
-        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
-        setSiloStock({ ...siloData });
-      }
+      adjustSiloStock({
+        companyId: resolvedCompanyId,
+        operation: isReversal ? 'reversal' : 'weighment',
+        referenceId: slipNo,
+        items: [{
+          rawName: materialName,
+          materialKey: targetKey,
+          delta: netTons,
+          unit: 'Tons',
+        }],
+        user,
+      }).catch((err) => console.warn('[WeighbridgeView] Silo weighment notice:', err.message));
 
       // Sync with Inward slips
       const rawInward = localStorage.getItem(STORAGE_KEYS.INWARD);
@@ -319,7 +333,7 @@ export default function WeighbridgeView() {
           netTons,
           unit: 'Tons',
           status: 'Finalized',
-          targetSilo: siloData[targetKey]?.siloName || 'Storage Silo',
+          targetSilo: siloStock[targetKey]?.siloName || INITIAL_SILO_STOCK[targetKey]?.siloName || 'Storage Silo',
           createdAt: new Date().toISOString(),
         };
         inwardData = [newInward, ...inwardData];

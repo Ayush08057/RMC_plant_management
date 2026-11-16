@@ -9,6 +9,7 @@ import {
   FileText
 } from 'lucide-react';
 import { sanitizeStoreItems } from '../../services/cloudSyncService';
+import { subscribeSiloStock, getLocalSiloStock } from '../../services/siloStockService';
 
 export default function PlantDashboardView({ onNavigateTab }) {
   // Live operational data from plant records (clean empty default)
@@ -39,20 +40,14 @@ export default function PlantDashboardView({ onNavigateTab }) {
     }
   });
 
-  const [siloInventory] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem('rmc_silo_inventory_v2');
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return [
-      { id: 'silo-1', name: 'Cement Silo 1 (OPC 53)', current: 65, capacity: 100, unit: 'MT' },
-      { id: 'silo-2', name: 'Fly Ash Silo 2 (Dirk Pozzocrete)', current: 42, capacity: 80, unit: 'MT' },
-      { id: 'bin-1', name: '20mm Aggregates (Bin A)', current: 140, capacity: 200, unit: 'MT' },
-      { id: 'bin-2', name: 'Crush Sand (Bin C)', current: 185, capacity: 250, unit: 'MT' }
-    ];
-  });
+  const [siloInventory, setSiloInventory] = React.useState(() => getLocalSiloStock());
+
+  React.useEffect(() => {
+    const unsub = subscribeSiloStock('sm-concretech', (data) => {
+      if (data && typeof data === 'object') setSiloInventory(data);
+    });
+    return () => unsub();
+  }, []);
 
   // Safe normalization layer supporting both Keyed Object ({ cement: {...} }) and Array formats
   const normalizedSilo = React.useMemo(() => {
