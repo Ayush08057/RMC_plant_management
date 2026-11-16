@@ -373,6 +373,9 @@ service cloud.firestore {
     // Atomic Sequence Counters (/counters)
     // Enforces monotonic +1 sequential increments for invoices and challans
     // =========================================================================
+    // Atomic Sequence Counters (/counters)
+    // Sequential +1 monotonic counters for Cash Memos and Delivery Challans
+    // =========================================================================
     match /counters/{counterId} {
       allow read: if isAuthenticated();
 
@@ -381,20 +384,34 @@ service cloud.firestore {
       ) &&
         request.resource.data.companyId != null &&
         request.resource.data.updatedBy == request.auth.uid &&
-        (
-          (request.resource.data.lastValue is number) ||
-          ('voidedNumbers' in request.resource.data)
-        );
+        request.resource.data.lastValue is number &&
+        !('voidedNumbers' in request.resource.data);
 
       allow update: if isAuthenticated() && (
         isAdmin() || isManager() || isAccountant() || isDispatcher()
       ) &&
         request.resource.data.companyId == resource.data.companyId &&
         request.resource.data.updatedBy == request.auth.uid &&
-        (
-          ('lastValue' in request.resource.data && request.resource.data.lastValue == resource.data.lastValue + 1) ||
-          ('voidedNumbers' in request.resource.data)
-        );
+        request.resource.data.lastValue == resource.data.lastValue + 1 &&
+        !('voidedNumbers' in request.resource.data);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // Voided Sequence Audit Records (/counters_voided)
+    // Audit log of voided/abandoned numbers; immutable sequences, no lastValue tampering
+    // =========================================================================
+    match /counters_voided/{voidedId} {
+      allow read: if isAuthenticated();
+
+      allow create, update: if isAuthenticated() && (
+        isAdmin() || isManager() || isAccountant() || isDispatcher()
+      ) &&
+        request.resource.data.companyId != null &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        ('voidedNumbers' in request.resource.data) &&
+        !('lastValue' in request.resource.data);
 
       allow delete: if false;
     }

@@ -28,7 +28,7 @@ const firebaseConfig = {
 
 const isExecute = process.argv.includes('--execute');
 const defaultCompanyId = 'sm-concretech';
-const defaultFinancialYear = '25-26';
+const defaultFinancialYear = '26-27';
 const FIRESTORE_DOC_LIMIT_BYTES = 1048576; // 1 MiB
 
 console.log(`\n======================================================================`);
@@ -52,7 +52,7 @@ async function seed() {
   // 1. Inspect existing cash memos
   console.log(`🔍 1. Inspecting Cash Memos: ${syncCol}/cloud_billing_bills ...`);
   const billsRef = doc(db, syncCol, 'cloud_billing_bills');
-  let maxBillNum = 115; // baseline starting value
+  let maxBillNum = 0; // baseline starting value for fresh 26-27 FY (first allocation will be 1)
   const billNoMap = new Map();
   const flaggedWizardBills = [];
   let billsBlobBytes = 0;
@@ -119,8 +119,8 @@ async function seed() {
   // 2. Inspect existing delivery challans
   console.log(`\n🔍 2. Inspecting Delivery Challans: ${syncCol}/cloud_delivery_challans ...`);
   const challanRef = doc(db, syncCol, 'cloud_delivery_challans');
-  let maxChallanDc = 1421;
-  let maxChallanNbc = 101;
+  let maxChallanDc = 0; // baseline starting value for fresh 26-27 FY
+  let maxChallanNbc = 0;
   const challanNoMap = new Map();
   const flaggedWizardChallans = [];
   let challansBlobBytes = 0;

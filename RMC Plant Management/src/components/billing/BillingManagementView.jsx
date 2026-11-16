@@ -208,7 +208,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   // Persistent Bills State with payment tracking normalization
   const [bills, setBills] = useState(() => {
     try {
-      const saved = localStorage.getItem(BILLING_STORAGE_KEY);
+      const saved = localStorage.getItem(BILLING_STORAGE_KEY) || localStorage.getItem('rmc_cash_memos_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {

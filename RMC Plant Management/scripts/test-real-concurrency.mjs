@@ -64,7 +64,7 @@ async function main() {
 
   assert(dcResults.length === 10, 'All 10 parallel requests resolved');
   assert(dcUnique.size === 10, 'ZERO duplicates detected across 10 parallel transactions (10 unique numbers)');
-  assert(dcSequences[0] === 2000 && dcSequences[9] === 2009, 'Strict monotonicity verified: DC-25-26/2000 to DC-25-26/2009');
+  assert(dcSequences[0] === 2000 && dcSequences[9] === 2009, 'Strict monotonicity verified: DC-26-27/2000 to DC-26-27/2009');
 
   console.log('\n======================================================');
   console.log('🎉 REAL CONCURRENCY TEST COMPLETED WITH 0 DUPLICATES!');

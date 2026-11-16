@@ -16,16 +16,16 @@ export const COUNTER_CONFIG_KEYS = {
   STARTING_CHALLAN_NBC: 'rmc_config_starting_challan_nbc',
 };
 
-// Default Fallback Starting Values (preserves current numbering baseline without collisions)
+// Default Fallback Starting Values for Fresh FY (starts at 1)
 export const DEFAULT_COUNTER_STARTING = {
-  CASH_MEMO: 115,
-  CHALLAN_DC: 1421,
-  CHALLAN_NBC: 101,
+  CASH_MEMO: 1,
+  CHALLAN_DC: 1,
+  CHALLAN_NBC: 1,
 };
 
 /**
- * Returns active Financial Year in Indian format (YY-(YY+1), e.g. '25-26')
- * Config-driven first; falls back to current calendar FY if not explicitly configured.
+ * Returns active Financial Year in Indian format (YY-(YY+1), e.g. '26-27')
+ * Dynamically computed from date (April 1 to March 31); config-driven override supported.
  */
 export function getActiveFinancialYear(date = new Date()) {
   try {
@@ -37,18 +37,17 @@ export function getActiveFinancialYear(date = new Date()) {
     }
   } catch {}
 
-  // Default to 25-26 until CA confirms transition to 26-27 series
-  // If dynamic calculation desired when config unset:
   const d = date instanceof Date ? date : new Date(date);
   const month = d.getMonth(); // 0-indexed: 0 = Jan, 3 = Apr
   const fullYear = d.getFullYear();
-  
-  // By default, preserve 25-26 if explicitly before April 2027 or if configured
-  if (fullYear === 2025 || (fullYear === 2026 && month < 3)) {
-    return '24-25';
-  }
-  // Standard 25-26 series
-  return '25-26';
+
+  // Indian Financial Year: April 1 to March 31
+  const startYear = month >= 3 ? fullYear : fullYear - 1;
+  const endYear = startYear + 1;
+  const startStr = String(startYear).slice(-2);
+  const endStr = String(endYear).slice(-2);
+
+  return `${startStr}-${endStr}`;
 }
 
 /**
@@ -173,7 +172,7 @@ export async function recordVoidedSequenceNumber({
   if (!sequenceNumber) return;
   const fy = financialYear || getActiveFinancialYear();
   const cleanCompany = (companyId || 'sm-concretech').trim().replace(/[^a-zA-Z0-9_-]/g, '-');
-  const voidDocRef = doc(db, 'counters', `${cleanCompany}_voided_${fy}`);
+  const voidDocRef = doc(db, 'counters_voided', `${cleanCompany}_${fy}`);
 
   try {
     const currentUid = auth.currentUser?.uid || 'system';

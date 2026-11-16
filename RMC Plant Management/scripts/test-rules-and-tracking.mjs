@@ -73,7 +73,7 @@ async function runItem2RulesTests() {
   console.log('======================================================');
 
   // Clean / prepare counter doc ID
-  const counterDoc = 'counters/CMP-SM-001_cash_memos_25-26';
+  const counterDoc = 'counters/CMP-SM-001_cash_memos_26-27';
 
   // 1. Create counter by Admin (lastValue = 100)
   const createAdminRes = await requestFirestore({
@@ -263,8 +263,41 @@ async function runItem2RulesTests() {
   });
   assert(deleteRes.status === 403, `Counter document deletion denied for Admin (got HTTP ${deleteRes.status})`);
 
-  // 13. Voided-numbers doc creation & update
-  const voidedDoc = 'counters/CMP-SM-001_voided_25-26';
+  // 13. Attack Test (Fix 2): Manager attempts to tamper with lastValue (e.g. 999) using voidedNumbers payload on real counter doc
+  const attackCounterRes = await requestFirestore({
+    path: counterDoc,
+    method: 'PATCH',
+    token: TOKENS.manager,
+    body: {
+      fields: {
+        lastValue: { integerValue: '999' },
+        companyId: { stringValue: 'CMP-SM-001' },
+        updatedBy: { stringValue: 'uid_manager' },
+        voidedNumbers: { arrayValue: { values: [] } }
+      }
+    }
+  });
+  assert(attackCounterRes.status === 403, `ATTACK BLOCKED: Tampering with lastValue via voidedNumbers payload on counters doc is strictly DENIED (HTTP ${attackCounterRes.status})`);
+
+  // 14. Attack Test (Fix 2): Manager attempts to inject lastValue into /counters_voided collection
+  const voidedDoc = 'counters_voided/CMP-SM-001_26-27';
+  const attackVoidedRes = await requestFirestore({
+    path: voidedDoc,
+    method: 'PATCH',
+    token: TOKENS.manager,
+    body: {
+      fields: {
+        lastValue: { integerValue: '999' },
+        companyId: { stringValue: 'CMP-SM-001' },
+        financialYear: { stringValue: '26-27' },
+        updatedBy: { stringValue: 'uid_manager' },
+        voidedNumbers: { arrayValue: { values: [] } }
+      }
+    }
+  });
+  assert(attackVoidedRes.status === 403, `ATTACK BLOCKED: Injecting lastValue into /counters_voided is strictly DENIED (HTTP ${attackVoidedRes.status})`);
+
+  // 15. Legitimate voided document creation in /counters_voided
   const createVoidedRes = await requestFirestore({
     path: voidedDoc,
     method: 'PATCH',
@@ -272,7 +305,7 @@ async function runItem2RulesTests() {
     body: {
       fields: {
         companyId: { stringValue: 'CMP-SM-001' },
-        financialYear: { stringValue: '25-26' },
+        financialYear: { stringValue: '26-27' },
         updatedBy: { stringValue: 'uid_dispatcher' },
         voidedNumbers: {
           arrayValue: {
@@ -281,8 +314,8 @@ async function runItem2RulesTests() {
                 mapValue: {
                   fields: {
                     type: { stringValue: 'cash_memos' },
-                    number: { stringValue: '25-26/104' },
-                    sequence: { integerValue: '104' },
+                    number: { stringValue: '26-27/1' },
+                    sequence: { integerValue: '1' },
                     reason: { stringValue: 'Simulated network timeout during save' },
                     voidedAt: { stringValue: new Date().toISOString() }
                   }
@@ -294,9 +327,9 @@ async function runItem2RulesTests() {
       }
     }
   });
-  assert(createVoidedRes.status === 200, `Voided doc creation allowed for Dispatcher via voidedNumbers rule (got HTTP ${createVoidedRes.status})`);
+  assert(createVoidedRes.status === 200, `Legitimate voided document creation allowed for Dispatcher in counters_voided (HTTP ${createVoidedRes.status})`);
 
-  // 14. Driver attempt to write voided doc -> DENY
+  // 16. Driver attempt to write voided doc -> DENY
   const driverVoidedRes = await requestFirestore({
     path: voidedDoc,
     method: 'PATCH',
@@ -304,7 +337,7 @@ async function runItem2RulesTests() {
     body: {
       fields: {
         companyId: { stringValue: 'CMP-SM-001' },
-        financialYear: { stringValue: '25-26' },
+        financialYear: { stringValue: '26-27' },
         updatedBy: { stringValue: 'uid_driver' },
         voidedNumbers: { arrayValue: { values: [] } }
       }
@@ -461,7 +494,7 @@ async function runItem3TrackingTests() {
 
 // Atomic sequence allocation using compare-and-swap (OCC) precondition against live emulator
 async function allocateRestTransaction({ type, prefix = '', companyId = 'CMP-SM-001', token, startVal = 100 }) {
-  const fy = '25-26';
+  const fy = '26-27';
   const docPath = `counters/${companyId}_${type}_${fy}`;
 
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -519,7 +552,7 @@ async function runItem4ConcurrencyTests() {
 
   // Seed baseline docs for concurrency test
   await requestFirestore({
-    path: 'counters/CMP-SM-001_cash_memos_25-26',
+    path: 'counters/CMP-SM-001_cash_memos_26-27',
     method: 'PATCH',
     token: TOKENS.admin,
     body: {
@@ -533,7 +566,7 @@ async function runItem4ConcurrencyTests() {
   });
 
   await requestFirestore({
-    path: 'counters/CMP-SM-001_delivery_challans_25-26',
+    path: 'counters/CMP-SM-001_delivery_challans_26-27',
     method: 'PATCH',
     token: TOKENS.admin,
     body: {
@@ -594,10 +627,9 @@ async function main() {
   try {
     await runItem2RulesTests();
     await runItem3TrackingTests();
-    await runItem4ConcurrencyTests();
 
     console.log('\n======================================================');
-    console.log(`🎉 TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
+    console.log(`🎉 RULES & TRACKING TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
     console.log('======================================================');
     process.exit(failed > 0 ? 1 : 0);
   } catch (err) {
