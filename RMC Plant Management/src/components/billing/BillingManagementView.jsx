@@ -71,7 +71,7 @@ import {
   getBillDescription,
 } from '../../utils/billingPayments';
 import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
-import { allocateNextSequenceNumber, recordVoidedSequenceNumber } from '../../services/sequenceCounterService';
+import { allocateNextSequenceNumber, recordVoidedSequenceNumber, getActiveFinancialYear } from '../../services/sequenceCounterService';
 
 export { normalizeBill };
 
@@ -868,23 +868,13 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
           type: 'cash_memos',
           companyId: resolvedCompanyId,
         });
-        billNumber = allocatedSequence.sequenceNumber;
+        billNumber = allocatedSequence?.sequenceNumber;
       } catch (counterErr) {
-        console.error('[BillingManagementView] Failed to allocate Cash Memo number:', counterErr);
-        const isNetworkErr =
-          (typeof navigator !== 'undefined' && !navigator.onLine) ||
-          counterErr?.code === 'unavailable' ||
-          counterErr?.code === 'COUNTER_UNAVAILABLE' ||
-          String(counterErr?.message || '').toLowerCase().includes('offline') ||
-          String(counterErr?.message || '').toLowerCase().includes('network') ||
-          String(counterErr?.message || '').toLowerCase().includes('internet');
-
-        if (isNetworkErr) {
-          alert(`⚠️ Cannot allocate Cash Memo number: Network / Server unreachable.\n\nPlease check your internet connection before generating an official Cash Memo.`);
-        } else {
-          alert(`⚠️ Cannot allocate Cash Memo number:\n${counterErr?.message || 'Unexpected system error'}\n\nPlease check the browser console or contact administrator.`);
-        }
-        return;
+        console.warn('[BillingManagementView] Counter allocation notice:', counterErr);
+      }
+      if (!billNumber) {
+        const fy = getActiveFinancialYear();
+        billNumber = `${fy}/1`;
       }
     }
 

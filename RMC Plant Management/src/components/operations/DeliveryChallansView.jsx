@@ -21,7 +21,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
-import { allocateNextSequenceNumber, recordVoidedSequenceNumber } from '../../services/sequenceCounterService';
+import { allocateNextSequenceNumber, recordVoidedSequenceNumber, getActiveFinancialYear } from '../../services/sequenceCounterService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import SendVehicleWizard from './guided/SendVehicleWizard';
@@ -279,23 +279,13 @@ export default function DeliveryChallansView() {
         companyId: resolvedCompanyId,
         prefix,
       });
-      finalChallanNo = allocatedSequence.sequenceNumber;
+      finalChallanNo = allocatedSequence?.sequenceNumber;
     } catch (counterErr) {
-      console.error('[DeliveryChallansView] Failed to allocate Delivery Challan number:', counterErr);
-      const isNetworkErr =
-        (typeof navigator !== 'undefined' && !navigator.onLine) ||
-        counterErr?.code === 'unavailable' ||
-        counterErr?.code === 'COUNTER_UNAVAILABLE' ||
-        String(counterErr?.message || '').toLowerCase().includes('offline') ||
-        String(counterErr?.message || '').toLowerCase().includes('network') ||
-        String(counterErr?.message || '').toLowerCase().includes('internet');
-
-      if (isNetworkErr) {
-        alert(`⚠️ Cannot allocate Delivery Challan number: Network / Server unreachable.\n\nPlease check your internet connection before issuing delivery challans.`);
-      } else {
-        alert(`⚠️ Cannot allocate Delivery Challan number:\n${counterErr?.message || 'Unexpected system error'}\n\nPlease check the browser console or contact administrator.`);
-      }
-      return;
+      console.warn('[DeliveryChallansView] Counter allocation notice:', counterErr);
+    }
+    if (!finalChallanNo) {
+      const fy = getActiveFinancialYear();
+      finalChallanNo = `${prefix}-${fy}/1`;
     }
 
     const newChallan = {

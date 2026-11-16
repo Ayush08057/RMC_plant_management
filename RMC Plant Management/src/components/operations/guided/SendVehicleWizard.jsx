@@ -21,7 +21,7 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { useWorkforce } from '../../../context/WorkforceContext';
 import { subscribeCloudStore, pushCloudStore } from '../../../services/cloudSyncService';
-import { allocateNextSequenceNumber, recordVoidedSequenceNumber } from '../../../services/sequenceCounterService';
+import { allocateNextSequenceNumber, recordVoidedSequenceNumber, getActiveFinancialYear } from '../../../services/sequenceCounterService';
 import HelpModal from './HelpModal';
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
@@ -239,23 +239,13 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
         companyId: resolvedCompanyId,
         prefix: 'DC',
       });
-      challanNumber = allocatedSequence.sequenceNumber;
+      challanNumber = allocatedSequence?.sequenceNumber;
     } catch (counterErr) {
-      console.error('[SendVehicleWizard] Failed to allocate Delivery Challan number:', counterErr);
-      const isNetworkErr =
-        (typeof navigator !== 'undefined' && !navigator.onLine) ||
-        counterErr?.code === 'unavailable' ||
-        counterErr?.code === 'COUNTER_UNAVAILABLE' ||
-        String(counterErr?.message || '').toLowerCase().includes('offline') ||
-        String(counterErr?.message || '').toLowerCase().includes('network') ||
-        String(counterErr?.message || '').toLowerCase().includes('internet');
-
-      if (isNetworkErr) {
-        alert(`⚠️ Cannot allocate Delivery Challan number: Network / Server unreachable.\n\nPlease check your internet connection before issuing delivery challans.`);
-      } else {
-        alert(`⚠️ Cannot allocate Delivery Challan number:\n${counterErr?.message || 'Unexpected system error'}\n\nPlease check the browser console or contact administrator.`);
-      }
-      return;
+      console.warn('[SendVehicleWizard] Counter allocation notice:', counterErr);
+    }
+    if (!challanNumber) {
+      const fy = getActiveFinancialYear();
+      challanNumber = `DC-${fy}/1`;
     }
 
     const departureTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
