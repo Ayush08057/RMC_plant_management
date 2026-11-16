@@ -1,0 +1,12 @@
+{
+  "_instructions": "Enter verified physical stock counts below. Numbers must be greater than or equal to 0. Remove '_templateNotice' when filled.",
+  "_templateNotice": "DO NOT RUN WITH THIS TEMPLATE UNFILLED",
+  "cement": { "stockTons": null, "capacityTons": 100, "siloName": "Cement Silo #01" },
+  "flyash": { "stockTons": null, "capacityTons": 60, "siloName": "Fly Ash Silo #02" },
+  "agg20": { "stockTons": null, "capacityTons": 200, "siloName": "20mm Agg Bin #01" },
+  "agg10": { "stockTons": null, "capacityTons": 150, "siloName": "10mm Agg Bin #02" },
+  "sand": { "stockTons": null, "capacityTons": 200, "siloName": "Crushed M-Sand Bin" },
+  "riverSand": { "stockTons": null, "capacityTons": 120, "siloName": "Natural Sand Yard" },
+  "admixturePce": { "stockLiters": null, "capacityLiters": 5000, "siloName": "Admixture Tank #01" },
+  "retarder": { "stockLiters": null, "capacityLiters": 3000, "siloName": "Chemical Barrel Yard" }
+}

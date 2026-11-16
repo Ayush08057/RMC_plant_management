@@ -10,8 +10,12 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, connectFirestoreEmulator } from 'firebase/firestore';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const firebaseConfig = {
   projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'smconcretech-2149c',
@@ -55,7 +59,7 @@ async function run() {
   const fileArg = args.find(a => !a.startsWith('--'));
   const filePath = fileArg
     ? path.resolve(process.cwd(), fileArg)
-    : path.resolve(process.cwd(), 'scripts/opening-silo-stock.sample.json');
+    : path.resolve(__dirname, 'opening-silo-stock.template.json');
 
   console.log('\n======================================================');
   console.log('   SILO INVENTORY OPENING BALANCE SEEDER');
@@ -76,6 +80,32 @@ async function run() {
     inputBalances = JSON.parse(rawJson);
   } catch (err) {
     console.error(`Error parsing JSON: ${err.message}`);
+    process.exit(1);
+  }
+
+  // Safety guard: refuse to run if template notice or sample numbers are detected
+  if (
+    inputBalances._templateNotice ||
+    (inputBalances.cement?.stockTons === 85.4 && inputBalances.flyash?.stockTons === 42.0)
+  ) {
+    console.error('❌ FATAL: Refusing to seed using sample/template values!');
+    console.error('Please populate scripts/opening-silo-stock.template.json with verified physical plant counts.');
+    process.exit(1);
+  }
+
+  // Verify that all required materials have a valid numeric stock count
+  const missingMaterials = [];
+  for (const key of Object.keys(BASELINE_METADATA)) {
+    const entry = inputBalances[key];
+    const val = key.includes('admixture') || key === 'retarder' ? entry?.stockLiters : entry?.stockTons;
+    if (val === null || val === undefined || typeof val !== 'number' || isNaN(val) || val < 0) {
+      missingMaterials.push(key);
+    }
+  }
+
+  if (missingMaterials.length > 0) {
+    console.error(`❌ FATAL: The following materials have missing or null physical stock counts: ${missingMaterials.join(', ')}`);
+    console.error('Every material must have a valid non-negative number before seeding opening stock.');
     process.exit(1);
   }
 

@@ -4,9 +4,9 @@
  */
 
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
-import { getAuth } from "firebase/auth";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
@@ -33,6 +33,18 @@ export const rtdb = getDatabase(app);
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
+
+// Connect to local Firebase Emulator if explicitly enabled in environment
+if (typeof window !== "undefined" && (import.meta.env?.VITE_USE_FIREBASE_EMULATOR === 'true' || window.__USE_EMULATOR__)) {
+  try {
+    const emuHost = import.meta.env?.VITE_EMULATOR_HOST || '127.0.0.1';
+    connectFirestoreEmulator(db, emuHost, 8080);
+    connectAuthEmulator(auth, `http://${emuHost}:9099`, { disableWarnings: true });
+    console.info('[Firebase] Connected to local Firestore & Auth Emulator Suite.');
+  } catch (err) {
+    console.warn('[Firebase] Emulator connection skipped or already initialized:', err.message);
+  }
+}
 
 // Initialize Firebase Cloud Storage (Documents, photos, payslips)
 export const storage = getStorage(app);

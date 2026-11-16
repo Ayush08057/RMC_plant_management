@@ -38,11 +38,26 @@ async function main() {
     await waitForEmulator();
     console.log('Emulator is UP on port 8080. Running test suite...\n');
 
-    const testProc = spawn('node', ['E:/SM/RMC Plant Management/RMC Plant Management/scripts/test-phase3-security.mjs'], { stdio: 'inherit' });
-    const exitCode = await new Promise((resolve) => testProc.on('exit', resolve));
+    const testScripts = process.argv[2]
+      ? [process.argv[2]]
+      : [
+          'E:/SM/RMC Plant Management/RMC Plant Management/scripts/test-point1-e2e.mjs',
+          'E:/SM/RMC Plant Management/RMC Plant Management/scripts/test-phase3-security.mjs'
+        ];
+
+    let finalExitCode = 0;
+    for (const script of testScripts) {
+      console.log(`\n>>> Running test: ${script}`);
+      const testProc = spawn('node', [script], { stdio: 'inherit' });
+      const exitCode = await new Promise((resolve) => testProc.on('exit', resolve));
+      if (exitCode !== 0) {
+        finalExitCode = exitCode;
+        throw new Error(`Test failed: ${script} with exit code ${exitCode}`);
+      }
+    }
 
     emu.kill('SIGINT');
-    process.exit(exitCode || 0);
+    process.exit(finalExitCode);
   } catch (err) {
     console.error('Test execution failed:', err.message);
     emu.kill('SIGKILL');
