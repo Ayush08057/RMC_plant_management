@@ -13,7 +13,7 @@
  */
 
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../config/firebase.js';
+import { db, auth } from '../config/firebase.js';
 import { sanitizeForFirestore } from './firestoreService.js';
 
 // Default company scope
@@ -185,6 +185,7 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
             setDoc(primaryRef, {
               items: migrated,
               updatedAt: Date.now(),
+              lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
               source: 'auto_migrated_from_hrSettings'
             }, { merge: true }).catch(() => {});
             return;
@@ -199,6 +200,7 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
             await setDoc(primaryRef, {
               items: cleanLocal,
               updatedAt: Date.now(),
+              lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
               source: 'initial_device_seed'
             }, { merge: true });
           } catch {
@@ -206,6 +208,7 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
             setDoc(legacyRef, {
               items: cleanLocal,
               updatedAt: Date.now(),
+              lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
               source: 'initial_device_seed_fallback'
             }, { merge: true }).catch(() => {});
           }
@@ -397,6 +400,7 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
       items: cleanPayload,
       updatedAt: Date.now(),
       updatedAtIso: new Date().toISOString(),
+      lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
       source: 'web_client_sync'
     }, { merge: true });
 
@@ -416,6 +420,7 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
         items: cleanLegacyPayload,
         updatedAt: Date.now(),
         updatedAtIso: new Date().toISOString(),
+        lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
         source: 'web_client_sync_fallback'
       }, { merge: true });
     } catch (fallbackErr) {
