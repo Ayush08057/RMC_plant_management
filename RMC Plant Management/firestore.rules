@@ -18,6 +18,7 @@ service cloud.firestore {
     }
 
     // Role resolution: checks custom claims first, falls back to Firestore user profile
+    // TODO: Remove Firestore document lookup fallback after claims migration (Target: 2027-04-01)
     function getUserRole() {
       return ('role' in request.auth.token)
         ? request.auth.token.role
@@ -25,12 +26,15 @@ service cloud.firestore {
     }
 
     // Company resolution: checks custom claims first, falls back to Firestore user profile
+    // TODO: Remove Firestore document lookup fallback after claims migration (Target: 2027-04-01)
     function getUserCompanyId() {
       return ('companyId' in request.auth.token)
         ? request.auth.token.companyId
         : (hasUserDoc() && ('companyId' in getUserDoc()) && getUserDoc().companyId != null ? getUserDoc().companyId : 'sm-concretech');
     }
 
+    // Admin resolution: checks custom claims or user doc first, with temporary hardcoded email list fallback
+    // TODO: Remove hardcoded email check fallback once custom claims migration is complete (Target: 2027-04-01)
     function isAdmin() {
       return isAuthenticated() && (
         getUserRole() == 'Admin' ||
@@ -184,21 +188,25 @@ service cloud.firestore {
       // Directory listing accessible to authenticated staff
       allow read: if isAuthenticated();
 
-      // Admins can create any user. Self-registering users can create own unapproved record with non-privileged role
+      // Admins can create any user profile.
+      // Self-registering users can ONLY create their own unapproved record with non-privileged role and NO permissions.
       allow create: if isAuthenticated() && (
         isAdmin() ||
         (request.auth.uid == userId &&
-         request.resource.data.role != 'Admin')
+         request.resource.data.role in ['Pending', 'Staff', 'Unassigned'] &&
+         request.resource.data.isApproved == false &&
+         (!('permissions' in request.resource.data) || request.resource.data.permissions.size() == 0))
       );
 
-      // Prevent privilege escalation: users updating their own profile CANNOT change role, companyId, isApproved, or status
+      // Prevent privilege escalation: users updating their own profile CANNOT change role, companyId, isApproved, status, or permissions
       allow update: if isAuthenticated() && (
         isAdmin() ||
         (request.auth.uid == userId &&
          request.resource.data.role == resource.data.role &&
          request.resource.data.companyId == resource.data.companyId &&
          request.resource.data.isApproved == resource.data.isApproved &&
-         request.resource.data.status == resource.data.status)
+         request.resource.data.status == resource.data.status &&
+         (!('permissions' in request.resource.data) || ('permissions' in resource.data && request.resource.data.permissions == resource.data.permissions)))
       );
 
       // Deletions strictly restricted to Admins
