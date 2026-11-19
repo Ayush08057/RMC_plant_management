@@ -25,7 +25,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 import { adjustSiloStock, subscribeSiloStock } from '../../services/siloStockService';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
@@ -483,6 +483,8 @@ export default function WeighbridgeView() {
           true
         );
       }
+      if (id) markItemAsDeleted(WEIGHBRIDGE_STORAGE_KEY, id);
+      if (slipNo) markItemAsDeleted(WEIGHBRIDGE_STORAGE_KEY, slipNo);
       const updated = slips.filter((s) => s.id !== id);
       saveSlips(updated);
       showToast(`Slip #${slipNo} deleted and inventory adjusted.`);

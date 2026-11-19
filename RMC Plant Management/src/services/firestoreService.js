@@ -140,7 +140,11 @@ export async function saveDocumentWithId(collectionName, docId, data) {
       id: String(docId),
       updatedAt: data.updatedAt || new Date().toISOString(),
     });
-    await setDoc(docRef, cleanData, { merge: true });
+    const setPromise = setDoc(docRef, cleanData, { merge: true });
+    await Promise.race([
+      setPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore write timeout for ${collectionName}/${docId}`)), 3500))
+    ]);
     return { id: String(docId), ...cleanData };
   } catch (error) {
     console.error(`Error saving document ${docId} in ${collectionName}:`, error);

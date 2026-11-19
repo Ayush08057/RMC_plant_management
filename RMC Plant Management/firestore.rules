@@ -45,8 +45,8 @@ service cloud.firestore {
     function isManager() {
       return isAuthenticated() && (
         isAdmin() ||
-        request.auth.token.email in ['manager@smconcretech.com', 'owner@smconcretech.com'] ||
-        getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Owner / Director', 'Site Supervisor', 'Supervisor']
+        request.auth.token.email in ['manager@smconcretech.com'] ||
+        getUserRole() in ['Plant Manager', 'Plant Incharge', 'Operator', 'Site Supervisor', 'Supervisor']
       );
     }
 
@@ -70,7 +70,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         isAdmin() ||
         request.auth.token.email == 'accountant@smconcretech.com' ||
-        getUserRole() in ['Accountant', 'Owner / Director']
+        getUserRole() in ['Accountant']
       );
     }
 
@@ -125,7 +125,6 @@ service cloud.firestore {
           'dispatcher@smconcretech.com',
           'qc@smconcretech.com',
           'driver@smconcretech.com',
-          'owner@smconcretech.com',
           'supervisor@smconcretech.com'
         ]
       );
@@ -159,7 +158,6 @@ service cloud.firestore {
           'dispatcher@smconcretech.com',
           'qc@smconcretech.com',
           'driver@smconcretech.com',
-          'owner@smconcretech.com',
           'supervisor@smconcretech.com'
         ] ||
         getUserRole() in ['Site Supervisor', 'Supervisor', 'Site Incharge'] ||

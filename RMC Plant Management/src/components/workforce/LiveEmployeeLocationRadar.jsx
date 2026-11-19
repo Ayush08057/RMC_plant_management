@@ -53,6 +53,7 @@ import {
   addEmployeeVisitedStop,
   removeEmployeeVisitedStop
 } from '../../services/routeTrackingService';
+import { resolvePunchInPhoto } from '../../utils/attendancePhotoUtils';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' }) {
@@ -439,7 +440,7 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
         network: gpsFixSource === 'LIVE_DEVICE' 
           ? 'Live Browser GNSS' 
           : (gpsFixSource === 'LIVE_TRACKING' ? 'Mobile Foreground GPS' : (gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Fix' : 'No GPS Fix')),
-        selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || null,
+        selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || resolvePunchInPhoto(record || emp, employees) || null,
         remarks: record?.remarks || (hasGpsFix ? 'Verified GPS Fix' : 'Awaiting Punch-In GPS'),
         activeTrip,
         isDriver,

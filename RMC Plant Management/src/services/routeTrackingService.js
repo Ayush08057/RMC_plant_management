@@ -4,7 +4,7 @@
  */
 
 import { calculateDistanceMeters, resolveSangliLandmark } from '../utils/sangliGeofence';
-import { filterGeographicOutliers } from '../utils/routeCleanUtils';
+import { filterGeographicOutliers, cleanRawRoutePipeline, calculateAccurateRouteDistanceKm } from '../utils/routeCleanUtils';
 import { subscribeCloudStore, pushCloudStore } from './cloudSyncService';
 
 export const ROUTE_HISTORY_STORAGE_KEY = 'rmc_employee_route_history_v2';
@@ -85,17 +85,33 @@ export function saveAllRouteHistories(data) {
   }
 }
 
+const CANONICAL_ALIASES = {
+  'USR-SS-001': 'SS-001',
+  'USR-DIS-001': 'DIS-001',
+  'USR-DV-001': 'DRV-001',
+  'USR-DRV-001': 'DRV-001',
+  'USR-PM-001': 'PM-001',
+  'USR-ACC-001': 'ACC-001',
+  'USR-QC-001': 'QC-001',
+  'USR-BO-001': 'BO-001',
+};
+
+function cleanCanonicalId(id) {
+  const u = (id || '').toString().trim().toUpperCase();
+  return CANONICAL_ALIASES[u] || u;
+}
+
 /**
  * Deletes all recorded route history for a given employee
  */
 export function deleteEmployeeRouteHistory(empId) {
   if (!empId) return;
-  const key = empId.toUpperCase();
+  const key = cleanCanonicalId(empId);
+  const rawKey = empId.toString().trim().toUpperCase();
   const allHistories = getAllRouteHistories();
-  if (allHistories[key]) {
-    delete allHistories[key];
-    saveAllRouteHistories(allHistories);
-  }
+  delete allHistories[key];
+  if (rawKey !== key) delete allHistories[rawKey];
+  saveAllRouteHistories(allHistories);
 }
 
 /**
@@ -106,38 +122,97 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   if (!employee) return null;
 
   const empId = (employee.employeeId || employee.id || 'EMP-01').toUpperCase();
+  const canonicalId = cleanCanonicalId(empId);
   const empRole = (employee.role || '').toLowerCase();
   const empName = (employee.name || '').toLowerCase();
   const isDis = empId.includes('DIS') || empRole.includes('dispatch') || empName.includes('dispatch');
   const isAcc = empId.includes('ACC') || empRole.includes('account') || empName.includes('accountant');
   const isQc = empId.includes('QC') || empRole.includes('qc') || empRole.includes('quality') || empName.includes('quality');
 
-  const allHistories = getAllRouteHistories();
-
   let stops = [];
 
-  // 1. If employee has recorded routeTrail in attendance record
-  const attTrail = employee.routeTrail || employee.record?.routeTrail || [];
-  if (Array.isArray(attTrail) && attTrail.length > 0) {
-    stops = attTrail.map((s, idx) => ({ ...s, stopNo: idx + 1 }));
-  } else if (allHistories[empId] && Array.isArray(allHistories[empId]) && allHistories[empId].length > 0) {
-    stops = [...allHistories[empId]];
-  }
-
-  // 2. Identify punch-in coordinates
+  // 1. Identify punch-in coordinates (Strict Anchor #1)
   const punchInGps = employee.gpsLocation || employee.record?.gpsLocation || null;
-  // 2. Identify punch-in coordinates:
-  // HIGHEST PRIORITY: If employee has actual punch-in GPS coordinates, ALWAYS use them!
-  const hasRealPunchIn = punchInGps && punchInGps.lat && punchInGps.lng;
+  const hasRealPunchIn = punchInGps && Number.isFinite(Number(punchInGps.lat)) && Number.isFinite(Number(punchInGps.lng));
   const punchInTime = employee.punchIn || employee.record?.punchIn || '09:00 AM';
 
-  if (hasRealPunchIn) {
-    const pLat = Number(punchInGps.lat);
-    const pLng = Number(punchInGps.lng);
-    const landmark = resolveSangliLandmark(pLat, pLng);
-    const resolvedTitle = punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station';
-    const resolvedAddress = punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`;
+  let pLat = null;
+  let pLng = null;
+  let resolvedTitle = 'Punch-In Station';
+  let resolvedAddress = '';
 
+  if (hasRealPunchIn) {
+    pLat = Number(punchInGps.lat);
+    pLng = Number(punchInGps.lng);
+    const landmark = resolveSangliLandmark(pLat, pLng);
+    resolvedTitle = punchInGps.landmarkName || landmark.landmarkName || 'Punch-In Station';
+    resolvedAddress = punchInGps.address || landmark.address || `${pLat.toFixed(4)}°N, ${pLng.toFixed(4)}°E`;
+  }
+
+  // 2. Extract recorded routeTrail strictly from the attendance record of THIS shift
+  const attTrail = employee.routeTrail || employee.record?.routeTrail || [];
+  if (Array.isArray(attTrail) && attTrail.length > 0) {
+    // Clean and collapse stationary dwell clusters and GPS noise so parked workers do not accumulate false mileage
+    const cleanedTrail = cleanRawRoutePipeline(attTrail);
+    const trailToUse = (cleanedTrail && cleanedTrail.length > 0) ? cleanedTrail : attTrail;
+
+    const rawStops = trailToUse
+      .filter((s) => s && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)))
+      .map((s, idx) => {
+        const sLat = Number(s.lat);
+        const sLng = Number(s.lng);
+        const landmark = resolveSangliLandmark(sLat, sLng);
+        const timeStr = s.time || (s.timestamp ? new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--');
+        return {
+          ...s,
+          stopNo: idx + 1,
+          lat: sLat,
+          lng: sLng,
+          title: s.title || landmark.landmarkName || (idx === 0 ? 'Punch-In Station' : `Waypoint #${idx + 1}`),
+          address: s.address || landmark.address || `${sLat.toFixed(4)}°N, ${sLng.toFixed(4)}°E`,
+          time: timeStr,
+          status: s.status || (idx === 0 ? 'Punch-In Station' : 'En Route'),
+        };
+      });
+
+    if (hasRealPunchIn && rawStops.length > 0) {
+      // Trail must start within 1500m of punch-in GPS — otherwise it's from a different session
+      const firstStopDist = calculateDistanceMeters(pLat, pLng, rawStops[0].lat, rawStops[0].lng);
+      if (firstStopDist > 3000) {
+        // Stale trail from different date/location — discard entirely
+        stops = [];
+      } else {
+        // Continuity check: allow up to 80 km between highway waypoints/gaps
+        stops = [rawStops[0]];
+        for (let i = 1; i < rawStops.length; i++) {
+          const prev = stops[stops.length - 1];
+          const curr = rawStops[i];
+          const legDist = calculateDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+          if (legDist <= 80000) {
+            stops.push(curr);
+          }
+        }
+      }
+    } else if (!hasRealPunchIn && rawStops.length > 0) {
+      // No verified punch-in GPS → allow continuous trail up to 80 km jumps
+      const firstRaw = rawStops[0];
+      const contiguous = [firstRaw];
+      for (let i = 1; i < rawStops.length; i++) {
+        const prev = contiguous[contiguous.length - 1];
+        const curr = rawStops[i];
+        const legDist = calculateDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+        if (legDist <= 80000) {
+          contiguous.push(curr);
+        }
+      }
+      stops = contiguous;
+    } else {
+      stops = [];
+    }
+  }
+
+  // 3. Ensure Punch-In Anchor is strictly the first stop
+  if (hasRealPunchIn) {
     if (stops.length === 0) {
       stops.push({
         stopNo: 1,
@@ -163,7 +238,6 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       };
     }
   } else if (stops.length > 0 && stops[0].lat && stops[0].lng) {
-    // Keep first recorded stop from route history
     stops[0].title = stops[0].title || 'Punch-In Station';
     stops[0].status = 'Punch-In Station';
   }
@@ -229,7 +303,8 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
             const lastStop = stops[stops.length - 1];
             const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
 
-            if (distToLast > 25) {
+            // Only append continuous realistic live movement (between 15 meters and 25 km from last verified fix)
+            if (distToLast >= 15 && distToLast <= 25000) {
               stops.push({
                 stopNo: stops.length + 1,
                 title: landmark.landmarkName || 'Live GPS Location',
@@ -268,9 +343,9 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     };
   }
 
-  // 4. Filter any wild geographic outliers (e.g. accidental fallback coordinates > 40km away from real shift points)
+  // 4. Filter any wild geographic outliers (> 120km away from real shift points)
   if (stops.length > 1) {
-    stops = filterGeographicOutliers(stops, 40000);
+    stops = filterGeographicOutliers(stops, 120000);
   }
 
   // 5. Calculate accurate cumulative kilometer distances across all stops
@@ -291,9 +366,9 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
   }
 
   const polylineCoords = stops.length >= 2 ? stops.map((s) => [Number(s.lat), Number(s.lng)]) : [];
-  const recordedDistance = Number(employee.totalDistanceKm || employee.record?.totalDistanceKm);
-  const totalDistanceKm = (!isNaN(recordedDistance) && recordedDistance > 0)
-    ? Number(recordedDistance.toFixed(1))
+  // Calculate authoritative trip distance over the raw attendance trail with dwell drift suppression
+  const totalDistanceKm = (Array.isArray(attTrail) && attTrail.length > 1)
+    ? calculateAccurateRouteDistanceKm(attTrail)
     : Number(cumulativeDist.toFixed(1));
   const visitedStopsCount = stops.filter((s) => s.status !== 'Current Stop' && s.status !== 'Current Location').length;
 
@@ -304,6 +379,7 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     stops,
     polylineCoords,
     totalDistanceKm,
+    total_distance: totalDistanceKm,
     visitedStopsCount,
     currentLocation: stops[stops.length - 1] || null,
     googleMapsFullRouteUrl: polylineCoords.length > 1
@@ -317,9 +393,10 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
  */
 export function recordEmployeeBreadcrumb(empId, lat, lng, optionalTitle = null) {
   if (!empId || !lat || !lng) return;
-  const key = empId.toUpperCase();
+  const canonicalKey = cleanCanonicalId(empId);
+  const rawKey = empId.toString().trim().toUpperCase();
   const allHistories = getAllRouteHistories();
-  const existing = allHistories[key] || [];
+  const existing = allHistories[canonicalKey] || allHistories[rawKey] || [];
 
   const last = existing[existing.length - 1];
   if (last) {
@@ -349,7 +426,10 @@ export function recordEmployeeBreadcrumb(empId, lat, lng, optionalTitle = null) 
     notes: 'GPS telemetry verified'
   };
 
-  allHistories[key] = [...existing, newStop];
+  allHistories[canonicalKey] = [...existing, newStop];
+  if (rawKey !== canonicalKey) {
+    allHistories[rawKey] = allHistories[canonicalKey];
+  }
   saveAllRouteHistories(allHistories);
 }
 
@@ -358,9 +438,10 @@ export function recordEmployeeBreadcrumb(empId, lat, lng, optionalTitle = null) 
  */
 export function addEmployeeVisitedStop(empId, stopData) {
   if (!empId || !stopData) return null;
-  const key = empId.toUpperCase();
+  const canonicalKey = cleanCanonicalId(empId);
+  const rawKey = empId.toString().trim().toUpperCase();
   const allHistories = getAllRouteHistories();
-  const existing = allHistories[key] || [];
+  const existing = allHistories[canonicalKey] || allHistories[rawKey] || [];
 
   const timeNow = stopData.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const lat = Number(stopData.lat);
@@ -388,7 +469,10 @@ export function addEmployeeVisitedStop(empId, stopData) {
     notes: stopData.notes || 'Verified site visit after punch-in'
   };
 
-  allHistories[key] = [...existing, newStop];
+  allHistories[canonicalKey] = [...existing, newStop];
+  if (rawKey !== canonicalKey) {
+    allHistories[rawKey] = allHistories[canonicalKey];
+  }
   saveAllRouteHistories(allHistories);
   return newStop;
 }

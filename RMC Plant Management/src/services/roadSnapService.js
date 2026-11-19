@@ -286,6 +286,16 @@ export async function fetchRoadSnappedRoute(stops) {
     }
 
     if (allLeafletCoords.length > 1) {
+      // Ensure the route connects to the exact first and last stops
+      const firstStop = significantStops[0];
+      const lastStop = significantStops[significantStops.length - 1];
+      if (firstStop && haversineMeters(firstStop, { lat: allLeafletCoords[0][0], lng: allLeafletCoords[0][1] }) > 20) {
+        allLeafletCoords.unshift([Number(firstStop.lat), Number(firstStop.lng)]);
+      }
+      if (lastStop && haversineMeters(lastStop, { lat: allLeafletCoords[allLeafletCoords.length - 1][0], lng: allLeafletCoords[allLeafletCoords.length - 1][1] }) > 20) {
+        allLeafletCoords.push([Number(lastStop.lat), Number(lastStop.lng)]);
+      }
+
       let roadDistMeters = 0;
       for (let i = 0; i < allLeafletCoords.length - 1; i++) {
         roadDistMeters += haversineMeters(
@@ -310,7 +320,7 @@ export async function fetchRoadSnappedRoute(stops) {
     // Offline fallback
   }
 
-  // Graceful fallback to raw straight-line coords without caching failure
+  // Graceful fallback to real consecutive Haversine path without caching failure
   return {
     coords: validStops.map((s) => [Number(s.lat), Number(s.lng)]),
     distanceKm: Number((rawPathMeters / 1000).toFixed(1)),

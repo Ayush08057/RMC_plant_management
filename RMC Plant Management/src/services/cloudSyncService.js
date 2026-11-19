@@ -92,7 +92,19 @@ export function isItemDeleted(item, deletedIds) {
   const id = item.id ? String(item.id).trim().toLowerCase() : '';
   const billNo = item.billNo ? String(item.billNo).trim().toLowerCase() : '';
   const voucherNo = item.voucherNo ? String(item.voucherNo).trim().toLowerCase() : '';
-  return (id && deletedIds.has(id)) || (billNo && deletedIds.has(billNo)) || (voucherNo && deletedIds.has(voucherNo));
+  const sheetNo = item.sheetNo ? String(item.sheetNo).trim().toLowerCase() : '';
+  const challanNo = item.challanNo ? String(item.challanNo).trim().toLowerCase() : '';
+  const slipNo = item.slipNo ? String(item.slipNo).trim().toLowerCase() : '';
+  const tripId = item.tripId ? String(item.tripId).trim().toLowerCase() : '';
+  return Boolean(
+    (id && deletedIds.has(id)) ||
+    (billNo && deletedIds.has(billNo)) ||
+    (voucherNo && deletedIds.has(voucherNo)) ||
+    (sheetNo && deletedIds.has(sheetNo)) ||
+    (challanNo && deletedIds.has(challanNo)) ||
+    (slipNo && deletedIds.has(slipNo)) ||
+    (tripId && deletedIds.has(tripId))
+  );
 }
 
 /**

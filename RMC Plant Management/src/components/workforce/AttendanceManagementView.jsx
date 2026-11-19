@@ -44,10 +44,11 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../../data/mockUsers';
+import { OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee, isAdminPerson } from '../../data/mockUsers';
 import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
+import { resolvePunchInPhoto } from '../../utils/attendancePhotoUtils';
 import { nativeTracking } from '../../services/nativeTrackingBridge';
 import { auth } from '../../config/firebase';
 import KPICard from '../dashboard/KPICard';
@@ -122,6 +123,7 @@ export default function AttendanceManagementView({
 
     // Ensure official role accounts are available as fallback without duplicating existing profiles
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((official) => {
+      if (isAdminPerson(official)) return;
       let offEmpId = (official.employeeId || official.id || '').toString().trim().toUpperCase();
       if (offEmpId === 'USR-SS-001' || (official.role || '').toLowerCase().includes('supervisor')) offEmpId = 'SS-001';
       if (offEmpId === 'USR-DIS-001' || (official.role || '').toLowerCase().includes('dispatch')) offEmpId = 'DIS-001';
@@ -176,19 +178,8 @@ export default function AttendanceManagementView({
     });
     list = Array.from(uniquePersons.values());
 
-    // System Admin is an executive root account and is excluded from employee attendance tracking
-    list = list.filter((e) => {
-      const empRole = (e.role || '').toLowerCase();
-      const empId = (e.employeeId || e.id || '').toUpperCase();
-      const empName = (e.name || '').toLowerCase();
-      const isSysAdmin =
-        empRole === 'admin' ||
-        empRole.includes('executive administration') ||
-        empId === 'ADM-001' ||
-        empId === 'USR-ADMIN-001' ||
-        empName.includes('system admin');
-      return !isSysAdmin;
-    });
+    // Executive accounts (System Admin, Owner / Director) are excluded from employee attendance tracking
+    list = list.filter((e) => !isAdminPerson(e));
 
     // 2. PLANT MANAGER SCOPE: The plant manager should only be visible the related information of the plant manager only and his role only!
     if (isPlantManager) {
@@ -265,6 +256,7 @@ export default function AttendanceManagementView({
   // Employee Photo & Particular Details Modal
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailStaff, setSelectedDetailStaff] = useState(null);
+  const [quickPhotoModal, setQuickPhotoModal] = useState(null);
 
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -283,7 +275,36 @@ export default function AttendanceManagementView({
     if (staff?.selfieUrl) return staff.selfieUrl;
     if (staff?.avatarUrl) return staff.avatarUrl;
     if (staff?.photoUrl) return staff.photoUrl;
+    const resolved = resolvePunchInPhoto(staff?.record || staff, employees);
+    if (resolved) return resolved;
     return null;
+  };
+
+  const handleOpenStaffDetail = (rowOrStaff) => {
+    if (!rowOrStaff) return;
+    if (rowOrStaff.record || rowOrStaff.shiftTime) {
+      setSelectedDetailStaff(rowOrStaff);
+      setShowDetailModal(true);
+      return;
+    }
+    const matchedEmp = (employees || []).find(e => (e.id && e.id === rowOrStaff.employeeId) || (e.employeeId && e.employeeId === rowOrStaff.employeeId)) || {};
+    const normalizedStaff = {
+      ...matchedEmp,
+      ...rowOrStaff,
+      name: rowOrStaff.employeeName || matchedEmp.name || 'Staff',
+      employeeId: rowOrStaff.employeeId || matchedEmp.employeeId || matchedEmp.id,
+      role: rowOrStaff.role || matchedEmp.role || 'Staff',
+      department: rowOrStaff.department || matchedEmp.department || 'Operations',
+      plant: rowOrStaff.plant || matchedEmp.plant || 'Main Plant Unit #01',
+      punchIn: rowOrStaff.punchIn,
+      punchOut: rowOrStaff.punchOut,
+      selfieUrl: rowOrStaff.selfieUrl || matchedEmp.selfieUrl || matchedEmp.photoUrl,
+      record: rowOrStaff,
+      isOnline: Boolean(rowOrStaff.punchIn && !rowOrStaff.punchOut),
+      isCompleted: Boolean(rowOrStaff.punchIn && rowOrStaff.punchOut),
+    };
+    setSelectedDetailStaff(normalizedStaff);
+    setShowDetailModal(true);
   };
 
 
@@ -334,10 +355,13 @@ export default function AttendanceManagementView({
     }
 
     try {
-      nativeTracking.stopForegroundTracking();
-      const rec = await checkOut(targetId, {
-        remarks: `Shift completed for ${emp.name}. Daily Report filed.`,
-      });
+      try { nativeTracking.stopForegroundTracking(); } catch (_) {}
+      const rec = await Promise.race([
+        checkOut(targetId, {
+          remarks: `Shift completed for ${emp.name}. Daily Report filed.`,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Checkout operation timed out')), 4000))
+      ]);
       setToastMessage(`✓ Clocked OUT: ${emp.name} at ${formatToIndian12Hr(rec.punchOut)} (Duty: ${rec.workingHours}h)`);
     } catch (err) {
       setToastMessage(err.message || 'Check-out failed');
@@ -560,9 +584,12 @@ export default function AttendanceManagementView({
 
     if (andClockOut) {
       try {
-        const rec = await checkOut(targetId, {
-          remarks: `Shift completed for ${reportTargetStaff.name}. Daily Report submitted.`,
-        });
+        const rec = await Promise.race([
+          checkOut(targetId, {
+            remarks: `Shift completed for ${reportTargetStaff.name}. Daily Report submitted.`,
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Checkout operation timed out')), 4000))
+        ]);
         setToastMessage(`✓ Daily Report filed & ${reportTargetStaff.name} clocked OUT at ${formatToIndian12Hr(rec.punchOut)} (Duty: ${rec.workingHours}h)!`);
       } catch (err) {
         setToastMessage(`✓ Daily Report filed! (${err.message})`);
@@ -581,12 +608,7 @@ export default function AttendanceManagementView({
   const dateRecords = useMemo(() => {
     const map = new Map();
     (attendance || []).forEach((a) => {
-      const isSysAdmin = 
-        (a.role || '').toLowerCase() === 'admin' ||
-        a.employeeId === 'ADM-001' ||
-        a.employeeId === 'USR-ADMIN-001' ||
-        (a.employeeName || '').toLowerCase().includes('system admin');
-      if (isSysAdmin) return;
+      if (isAdminPerson(a)) return;
 
       const matchesDate = a.date === selectedDate;
       const matchesPlant = selectedPlant === 'All Plants' || a.plant === selectedPlant;
@@ -971,20 +993,67 @@ export default function AttendanceManagementView({
       width: '14%',
       minWidth: '130px',
       render: (row) => (
-        <div className="flex items-center gap-2 min-w-0">
+        <div 
+          onClick={() => handleOpenStaffDetail(row)}
+          className="flex items-center gap-2 min-w-0 cursor-pointer group"
+          title="Click to view Punch-In Photo and Details"
+        >
           {row.selfieUrl ? (
-            <img src={row.selfieUrl} alt={row.employeeName} className="w-8 h-8 rounded-full object-cover border-2 border-emerald-400 shrink-0 shadow-2xs" />
+            <img src={row.selfieUrl} alt={row.employeeName} className="w-8 h-8 rounded-full object-cover border-2 border-emerald-400 shrink-0 shadow-2xs group-hover:ring-2 group-hover:ring-blue-400 transition-all" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
               {(row.employeeName || 'EM').substring(0, 2).toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
-            <span className="font-bold text-slate-900 text-xs block whitespace-nowrap">{row.employeeName}</span>
+            <span className="font-bold text-slate-900 text-xs block whitespace-nowrap group-hover:text-blue-600 transition-colors">{row.employeeName}</span>
             <span className="text-[10px] text-slate-500 font-medium block truncate">{row.role}</span>
           </div>
         </div>
       ),
+    },
+    {
+      header: 'Punch-In Photo',
+      accessor: 'selfieUrl',
+      width: '13%',
+      minWidth: '135px',
+      render: (row) => {
+        const photo = row.selfieUrl || row.photoUrl || (employees.find(e => e.employeeId === row.employeeId || e.id === row.employeeId)?.selfieUrl) || (employees.find(e => e.employeeId === row.employeeId || e.id === row.employeeId)?.photoUrl);
+        return (
+          <div className="flex items-center">
+            {photo ? (
+              <button
+                type="button"
+                onClick={() => setQuickPhotoModal({
+                  url: photo,
+                  name: row.employeeName || row.name || 'Staff',
+                  id: row.employeeId || row.id,
+                  time: row.punchIn,
+                  plant: row.plant,
+                  date: row.date || selectedDate
+                })}
+                className="group flex items-center gap-2 p-1 pr-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                title="Click to view full Punch-In Biometric Photo"
+              >
+                <img
+                  src={photo}
+                  alt={row.employeeName}
+                  className="w-10 h-10 rounded-lg object-cover border-2 border-emerald-500 group-hover:scale-105 transition-transform shadow-2xs shrink-0"
+                />
+                <div className="text-left leading-tight min-w-0">
+                  <span className="block text-[11px] font-black text-emerald-800 whitespace-nowrap">📷 View Photo</span>
+                  <span className="block text-[9.5px] font-bold text-emerald-600 whitespace-nowrap">✓ Biometric</span>
+                </div>
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+                <Camera className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>No Photo</span>
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: 'Plant Location',
@@ -1622,26 +1691,42 @@ export default function AttendanceManagementView({
                     {/* Card Header: Profile Photo, Name, Role & Status */}
                     <div className="flex items-start justify-between gap-2 mb-3 pt-1">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="relative shrink-0">
-                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs ${isDriver ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                        <div 
+                          onClick={() => handleOpenStaffDetail(staff)}
+                          className="relative shrink-0 cursor-pointer group"
+                          title="Click to view Punch-In Photo and Details"
+                        >
+                          {photoUrl ? (
+                            <img
+                              src={photoUrl}
+                              alt={staff.name}
+                              className="w-11 h-11 rounded-xl object-cover border-2 border-emerald-400 shadow-2xs group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs ${isDriver ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                               isSupervisor ? 'bg-orange-100 text-orange-800 border border-orange-300' :
                                 isAccountant ? 'bg-cyan-100 text-cyan-800 border border-cyan-300' :
                                   isIncharge ? 'bg-teal-100 text-teal-800 border border-teal-300' :
                                     'bg-indigo-100 text-indigo-800 border border-indigo-300'
                             }`}>
-                            {isDriver && <Truck className="w-5 h-5" />}
-                            {isSupervisor && <HardHat className="w-5 h-5" />}
-                            {isAccountant && <Briefcase className="w-5 h-5" />}
-                            {isIncharge && <Building2 className="w-5 h-5" />}
-                            {isOperator && <Zap className="w-5 h-5" />}
-                          </div>
+                              {isDriver && <Truck className="w-5 h-5" />}
+                              {isSupervisor && <HardHat className="w-5 h-5" />}
+                              {isAccountant && <Briefcase className="w-5 h-5" />}
+                              {isIncharge && <Building2 className="w-5 h-5" />}
+                              {isOperator && <Zap className="w-5 h-5" />}
+                            </div>
+                          )}
                           <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${staff.isOnline ? 'bg-emerald-500 animate-pulse' :
                               staff.isCompleted ? 'bg-blue-500' : 'bg-slate-400'
                             }`} />
                         </div>
 
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-bold text-slate-900 truncate">
+                        <div 
+                          onClick={() => handleOpenStaffDetail(staff)}
+                          className="min-w-0 cursor-pointer group"
+                          title="Click to view Punch-In Photo and Details"
+                        >
+                          <h4 className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
                             {staff.name}
                           </h4>
                           <div className="flex items-center gap-1.5 text-[11px] text-slate-500 flex-wrap">
@@ -1674,6 +1759,23 @@ export default function AttendanceManagementView({
                       </span>
                     </div>
 
+                    {photoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setQuickPhotoModal({
+                          url: photoUrl,
+                          name: staff.name,
+                          id: staff.employeeId || staff.id,
+                          time: staff.punchIn,
+                          plant: staff.plant,
+                          date: selectedDate
+                        })}
+                        className="w-full mb-2.5 py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 flex items-center justify-center gap-2 text-xs font-bold text-emerald-800 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>📷 View Biometric Punch-In Photo</span>
+                      </button>
+                    )}
                     {/* Shift Timings & Working Hours Strip */}
                     <div className="grid grid-cols-3 gap-1.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center text-xs mb-3">
                       <div>
@@ -3011,7 +3113,7 @@ export default function AttendanceManagementView({
           EMPLOYEE PHOTO & PARTICULAR DETAILS MODAL (100% SINGLE WINDOW - NO SCROLL)
           ======================================================== */}
       <Modal
-        isOpen={false}
+        isOpen={showDetailModal}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailStaff(null);
@@ -3387,6 +3489,85 @@ export default function AttendanceManagementView({
           );
         })()}
       </Modal>
+
+      {/* Quick Crystal-Clear Punch-In Photo Preview Modal */}
+      {quickPhotoModal && (
+        <div 
+          onClick={() => setQuickPhotoModal(null)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200"
+          >
+            {/* Header */}
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">Punch-In Biometric Photo</h3>
+                  <p className="text-[11px] text-emerald-400 font-bold">✓ Verified Live Camera Capture</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setQuickPhotoModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer text-sm font-bold"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* High-Resolution Photo */}
+            <div className="p-4 bg-slate-50 flex flex-col items-center">
+              <div className="relative w-full aspect-square max-h-80 rounded-2xl overflow-hidden border-2 border-emerald-400 shadow-md bg-slate-900 flex items-center justify-center">
+                <img 
+                  src={quickPhotoModal.url} 
+                  alt={quickPhotoModal.name} 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-2 left-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white px-3 py-1.5 rounded-xl border border-white/10 flex items-center justify-between text-xs font-bold">
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-mono">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>In: {quickPhotoModal.time ? formatToIndian12Hr(quickPhotoModal.time) : '09:00 AM'}</span>
+                  </span>
+                  <span className="text-[11px] text-slate-300 truncate max-w-[150px]">
+                    📍 {quickPhotoModal.plant || 'Plant'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Employee Summary Card */}
+              <div className="mt-3.5 w-full bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-extrabold text-slate-900">{quickPhotoModal.name}</span>
+                  <span className="px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 font-mono font-bold text-blue-700 text-[11px]">
+                    {quickPhotoModal.id}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                  <span>Shift Date: <b className="text-slate-800">{quickPhotoModal.date || selectedDate}</b></span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                    Biometric Matched
+                  </span>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setQuickPhotoModal(null)}
+                className="mt-3 w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </div>

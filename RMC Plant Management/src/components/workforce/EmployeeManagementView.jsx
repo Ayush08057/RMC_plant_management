@@ -30,7 +30,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { ROLES, OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../../data/mockUsers';
+import { ROLES, OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee, isAdminPerson } from '../../data/mockUsers';
 import { MOCK_PLANTS } from '../../data/mockDashboardData';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
@@ -126,7 +126,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
     // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
       const id = (acc.employeeId || acc.id || '').toUpperCase();
-      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001' || id === 'OWN-001' || id === 'USR-OD-001' || isAdminPerson(acc)) return;
       map.set(id, {
         id: acc.employeeId || acc.id,
         employeeId: acc.employeeId || acc.id,
@@ -155,20 +155,8 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
 
     let list = Array.from(map.values());
 
-    if (!isSuperAdmin) {
-      list = list.filter((e) => {
-        const empRole = (e.role || '').toLowerCase();
-        const empId = (e.employeeId || e.id || '').toUpperCase();
-        const empName = (e.name || '').toLowerCase();
-        const isSysAdmin =
-          empRole === 'admin' ||
-          empRole.includes('executive administration') ||
-          empId === 'ADM-001' ||
-          empId === 'USR-ADMIN-001' ||
-          empName.includes('system admin');
-        return !isSysAdmin;
-      });
-    }
+    // Always exclude executive accounts (Admin, Owner / Director) from employee management roster
+    list = list.filter((e) => !isAdminPerson(e));
     if (isPlantManager) {
       list = list.filter((e) => {
         const empRole = (e.role || '').toLowerCase();
@@ -662,7 +650,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 title={t('Filter by Role')}
               >
                 <option value="All">{t('All Roles')}</option>
-                {Object.values(ROLES).map((r) => (
+                {Object.values(ROLES).filter((r) => r !== ROLES.ADMIN && r !== ROLES.OWNER_DIRECTOR).map((r) => (
                   <option key={r} value={r}>{t(r)}</option>
                 ))}
               </select>
@@ -844,7 +832,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
-                {Object.values(ROLES).map((r) => (
+                {Object.values(ROLES).filter((r) => r !== ROLES.ADMIN && r !== ROLES.OWNER_DIRECTOR).map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>

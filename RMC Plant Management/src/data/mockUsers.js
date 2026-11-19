@@ -62,13 +62,18 @@ export function isDummyEmployee(e) {
   const emailLower = String(e.email || e.secondaryEmail || '').toLowerCase().trim();
   const idUpper = String(e.id || e.employeeId || e.userId || '').toUpperCase().trim();
 
-  // Root System Administrator is the console IT account, not a workforce field employee
+  // Executive accounts (Root Admin, Owner / Director) are console accounts, not workforce field employees
   if (
     nameLower === 'system administrator' ||
     nameLower.includes('system admin') ||
+    nameLower.includes('owner') ||
+    nameLower.includes('director') ||
     idUpper === 'ADM-001' ||
     idUpper === 'USR-ADMIN-001' ||
-    emailLower === 'smconcretech@gmail.com'
+    idUpper === 'OWN-001' ||
+    idUpper === 'USR-OD-001' ||
+    emailLower === 'smconcretech@gmail.com' ||
+    emailLower === 'owner@smconcretech.com'
   ) {
     return true;
   }
@@ -189,6 +194,8 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Operations Management',
     badge: 'OPS',
     avatar: 'PM',
+    photoUrl: '/assets/employees/pm_manager.jpg',
+    selfieUrl: '/assets/employees/pm_manager.jpg',
     portalRoute: '/plant-manager',
     phone: '+91 9820000002',
   }),
@@ -202,6 +209,8 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Finance',
     badge: 'FIN',
     avatar: 'ACC',
+    photoUrl: '/assets/employees/acc_accountant.jpg',
+    selfieUrl: '/assets/employees/acc_accountant.jpg',
     portalRoute: '/accountant',
     phone: '+91 9820000003',
   }),
@@ -215,6 +224,8 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Logistics',
     badge: 'LOG',
     avatar: 'DIS',
+    photoUrl: '/assets/employees/dis_dispatcher.jpg',
+    selfieUrl: '/assets/employees/dis_dispatcher.jpg',
     portalRoute: '/dispatcher',
     phone: '+91 9820000004',
   }),
@@ -228,6 +239,8 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Quality Control',
     badge: 'LAB',
     avatar: 'QC',
+    photoUrl: '/assets/employees/qc_engineer.jpg',
+    selfieUrl: '/assets/employees/qc_engineer.jpg',
     portalRoute: '/qc',
     phone: '+91 9820000005',
   }),
@@ -241,6 +254,8 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Site Operations',
     badge: 'SITE',
     avatar: 'SS',
+    photoUrl: null,
+    selfieUrl: null,
     portalRoute: '/site-supervisor',
     phone: '+91 9820000006',
   }),
@@ -254,21 +269,10 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     department: 'Fleet Operations',
     badge: 'FLEET',
     avatar: 'DRV',
+    photoUrl: '/assets/employees/drv_driver.jpg',
+    selfieUrl: '/assets/employees/drv_driver.jpg',
     portalRoute: '/driver',
     phone: '+91 9820000007',
-  }),
-  buildOfficialAccount({
-    id: 'USR-OD-001',
-    name: 'Owner / Director',
-    email: 'owner@smconcretech.com',
-    employeeId: 'OWN-001',
-    password: 'Director@123',
-    role: ROLES.OWNER_DIRECTOR,
-    department: 'Executive Leadership',
-    badge: 'EXEC',
-    avatar: 'OD',
-    portalRoute: '/owner',
-    phone: '+91 9820000008',
   }),
 ];
 

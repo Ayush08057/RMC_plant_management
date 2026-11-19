@@ -20,7 +20,7 @@ import {
   Layers,
   ArrowRight
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 import { allocateNextSequenceNumber, recordVoidedSequenceNumber, getActiveFinancialYear } from '../../services/sequenceCounterService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
@@ -359,7 +359,12 @@ export default function DeliveryChallansView() {
 
   const handleDelete = (id) => {
     if (window.confirm('Are you sure you want to delete this delivery challan?')) {
-      setChallans(prev => prev.filter(c => c.id !== id));
+      const target = challans.find(c => c.id === id);
+      if (id) markItemAsDeleted(CHALLAN_STORAGE_KEY, id);
+      if (target?.challanNo) markItemAsDeleted(CHALLAN_STORAGE_KEY, target.challanNo);
+      const updated = challans.filter(c => c.id !== id);
+      setChallans(updated);
+      pushCloudStore('cloud_delivery_challans', CHALLAN_STORAGE_KEY, updated);
     }
   };
 
@@ -1113,17 +1118,17 @@ export default function DeliveryChallansView() {
                 {/* Official Company Header */}
                 <div className="border-b-2 border-emerald-800 pb-3 flex justify-between items-start">
                   <div>
-                    <h1 className="text-xl font-black text-emerald-950 tracking-wider">SM CONCRETE TECH</h1>
-                    <p className="text-xs text-slate-600 font-medium">Ready Mix Concrete Manufacturing & Pumping Solutions</p>
-                    <p className="text-[11px] text-slate-600">A/P Tanang, Tal. Miraj, Dist. Sangli, Maharashtra - 416410</p>
-                    <p className="text-[11px] text-slate-600">Email: smconcretetech@gmail.com | Helpline: +91 9421858683</p>
+                    <h1 className="text-xl font-black text-black tracking-wider">SM CONCRETE TECH</h1>
+                    <p className="text-xs text-black font-semibold">Ready Mix Concrete Manufacturing & Pumping Solutions</p>
+                    <p className="text-[11px] text-black font-medium">A/P Tanang, Tal. Miraj, Dist. Sangli, Maharashtra - 416410</p>
+                    <p className="text-[11px] text-black font-medium">Email: smconcretetech@gmail.com | Helpline: +91 9421858683</p>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono font-bold text-xs bg-slate-100 px-2 py-1 rounded border border-slate-300 inline-block mb-1">
+                    <div className="font-mono font-black text-xs bg-slate-200 text-black px-2 py-1 rounded border border-black inline-block mb-1">
                       GSTIN: 27AAFFS1234F1Z5
                     </div>
-                    <div className="text-[10px] text-slate-500 font-mono">State Code: 27 (Maharashtra)</div>
-                    <div className="text-[10px] text-slate-500 font-mono">PAN: AAFFS1234F</div>
+                    <div className="text-[10px] text-black font-mono font-semibold">State Code: 27 (Maharashtra)</div>
+                    <div className="text-[10px] text-black font-mono font-semibold">PAN: AAFFS1234F</div>
                   </div>
                 </div>
 
@@ -1145,85 +1150,85 @@ export default function DeliveryChallansView() {
                 )}
 
                 {/* Metadata Grid */}
-                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-300 text-xs text-black">
                   <div className="space-y-1">
-                    <div><span className="text-slate-500">Customer / Client: </span><strong className="text-slate-900 font-bold">{printingChallan.customerName}</strong></div>
-                    <div><span className="text-slate-500">Unloading Site: </span><strong className="text-slate-800">{printingChallan.site}</strong></div>
-                    <div><span className="text-slate-500">Site Receiver Contact: </span><span>{printingChallan.receiverName || 'Site Engineer / Incharge'}</span></div>
+                    <div><span className="text-black font-semibold">Customer / Client: </span><strong className="text-black font-black">{printingChallan.customerName}</strong></div>
+                    <div><span className="text-black font-semibold">Unloading Site: </span><strong className="text-black font-black">{printingChallan.site}</strong></div>
+                    <div><span className="text-black font-semibold">Site Receiver Contact: </span><strong className="text-black font-medium">{printingChallan.receiverName || 'Site Engineer / Incharge'}</strong></div>
                   </div>
                   <div className="space-y-1">
-                    <div><span className="text-slate-500">Dispatch Date & Time: </span><strong>{printingChallan.date} at {printingChallan.departureTime}</strong></div>
-                    <div><span className="text-slate-500">Transit Mixer Reg #: </span><strong className="font-mono text-indigo-900">{printingChallan.vehicleNo}</strong></div>
-                    <div><span className="text-slate-500">Designated Driver: </span><strong>{printingChallan.driverName}</strong></div>
+                    <div><span className="text-black font-semibold">Dispatch Date & Time: </span><strong className="text-black font-black">{printingChallan.date} at {printingChallan.departureTime}</strong></div>
+                    <div><span className="text-black font-semibold">Transit Mixer Reg #: </span><strong className="font-mono text-black font-black">{printingChallan.vehicleNo}</strong></div>
+                    <div><span className="text-black font-semibold">Designated Driver: </span><strong className="text-black font-black">{printingChallan.driverName}</strong></div>
                   </div>
                 </div>
 
                 {/* Dispatched Material Details Table */}
-                <table className="w-full border-collapse border border-slate-300 text-xs">
+                <table className="w-full border-collapse border border-slate-400 text-xs">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-800 font-bold text-left border-b border-slate-300">
-                      <th className="p-2 border-r border-slate-300 w-12 text-center">#</th>
-                      <th className="p-2 border-r border-slate-300">Concrete Mix Specification</th>
-                      <th className="p-2 border-r border-slate-300">Target Slump</th>
-                      <th className="p-2 border-r border-slate-300 text-center">Billing Classification</th>
-                      <th className="p-2 text-right">Dispatched Volume</th>
+                    <tr className="bg-slate-200 text-black font-black text-left border-b border-slate-400">
+                      <th className="p-2 border-r border-slate-400 w-12 text-center text-black font-black">#</th>
+                      <th className="p-2 border-r border-slate-400 text-black font-black">Concrete Mix Specification</th>
+                      <th className="p-2 border-r border-slate-400 text-black font-black">Target Slump</th>
+                      <th className="p-2 border-r border-slate-400 text-center text-black font-black">Billing Classification</th>
+                      <th className="p-2 text-right text-black font-black">Dispatched Volume</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-slate-300">
-                      <td className="p-2.5 border-r border-slate-300 text-center font-mono">1</td>
-                      <td className="p-2.5 border-r border-slate-300">
-                        <div className="font-bold text-slate-900">{printingChallan.grade}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">Standard Ready Mix Concrete (IS 456 / IS 10262)</div>
+                    <tr className="border-b border-slate-400 text-black">
+                      <td className="p-2.5 border-r border-slate-400 text-center font-mono font-bold text-black">1</td>
+                      <td className="p-2.5 border-r border-slate-400">
+                        <div className="font-black text-black text-sm">{printingChallan.grade}</div>
+                        <div className="text-[11px] text-black font-mono font-medium">Standard Ready Mix Concrete (IS 456 / IS 10262)</div>
                       </td>
-                      <td className="p-2.5 border-r border-slate-300 font-mono">{printingChallan.slump || '125 ± 25 mm'}</td>
-                      <td className="p-2.5 border-r border-slate-300 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                      <td className="p-2.5 border-r border-slate-400 font-mono font-bold text-black">{printingChallan.slump || '125 ± 25 mm'}</td>
+                      <td className="p-2.5 border-r border-slate-400 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${
+                          printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'bg-amber-100 text-black border-amber-400' : 'bg-emerald-100 text-black border-emerald-400'
                         }`}>
                           {printingChallan.isNonBill || printingChallan.billingType === 'Non-Bill' ? 'Non-Bill (NB)' : 'Commercial Billable'}
                         </span>
                       </td>
-                      <td className="p-2.5 text-right font-mono font-black text-sm text-slate-900">
+                      <td className="p-2.5 text-right font-mono font-black text-sm text-black">
                         {Number(printingChallan.quantity).toFixed(2)} m³
                       </td>
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr className="bg-slate-50 font-bold">
-                      <td colSpan="4" className="p-2 text-right border-r border-slate-300">Total Dispatched Concrete Volume:</td>
-                      <td className="p-2 text-right font-mono font-black text-sm text-emerald-900">{Number(printingChallan.quantity).toFixed(2)} m³</td>
+                    <tr className="bg-slate-100 font-black text-black">
+                      <td colSpan="4" className="p-2 text-right border-r border-slate-400 text-black font-black">Total Dispatched Concrete Volume:</td>
+                      <td className="p-2 text-right font-mono font-black text-sm text-black">{Number(printingChallan.quantity).toFixed(2)} m³</td>
                     </tr>
                   </tfoot>
                 </table>
 
                 {/* Technical Quality & Handling Terms */}
-                <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-lg text-[10px] text-amber-950 leading-relaxed">
-                  <strong>Quality & Handling Disclaimer:</strong>
-                  <ul className="list-disc list-inside mt-0.5 space-y-0.5">
+                <div className="p-2.5 bg-amber-50/90 border border-amber-300 rounded-lg text-[10px] text-black leading-relaxed font-medium">
+                  <strong className="text-black font-black">Quality & Handling Disclaimer:</strong>
+                  <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-black">
                     <li>Concrete must be completely unloaded and placed within 120 minutes from the batching time indicated on this challan.</li>
-                    <li>Strictly <strong>NO WATER</strong> should be added to the mixer drum at site without written authorization from our QA/QC Engineer. Any additional water reduces characteristic compressive strength and voids structural concrete quality warranties.</li>
+                    <li>Strictly <strong className="font-black text-black">NO WATER</strong> should be added to the mixer drum at site without written authorization from our QA/QC Engineer. Any additional water reduces characteristic compressive strength and voids structural concrete quality warranties.</li>
                     <li>Test cubes must be cast strictly in accordance with IS 516 standards by certified site personnel.</li>
                   </ul>
                 </div>
 
                 {/* 3-Signature Verification Block */}
-                <div className="grid grid-cols-3 gap-6 pt-10 text-center text-xs">
-                  <div className="border-t border-slate-400 pt-2">
-                    <div className="font-bold text-slate-800">Batching Plant Incharge</div>
-                    <div className="text-[10px] text-slate-500">SM Concrete Tech</div>
+                <div className="grid grid-cols-3 gap-6 pt-10 text-center text-xs text-black">
+                  <div className="border-t border-black pt-2">
+                    <div className="font-black text-black">Batching Plant Incharge</div>
+                    <div className="text-[10px] text-black font-semibold">SM Concrete Tech</div>
                   </div>
-                  <div className="border-t border-slate-400 pt-2">
-                    <div className="font-bold text-slate-800">Transit Mixer Driver</div>
-                    <div className="text-[10px] text-slate-500">({printingChallan.driverName})</div>
+                  <div className="border-t border-black pt-2">
+                    <div className="font-black text-black">Transit Mixer Driver</div>
+                    <div className="text-[10px] text-black font-semibold">({printingChallan.driverName})</div>
                   </div>
-                  <div className="border-t border-slate-400 pt-2">
-                    <div className="font-bold text-slate-800">Customer Receiver / Engineer</div>
-                    <div className="text-[10px] text-slate-500">Name & Contact Signature</div>
+                  <div className="border-t border-black pt-2">
+                    <div className="font-black text-black">Customer Receiver / Engineer</div>
+                    <div className="text-[10px] text-black font-semibold">Name & Contact Signature</div>
                   </div>
                 </div>
 
-                <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-200">
+                <div className="text-center text-[10px] text-black font-medium pt-2 border-t border-slate-300">
                   This is a computer-generated delivery document registered in SM Concrete Tech Cloud Operations System.
                 </div>
               </div>

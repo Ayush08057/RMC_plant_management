@@ -346,36 +346,29 @@ button[class*="bg-emerald-600"] span,
   stroke: #FFFFFF !important;
 }
 
-/* ABSOLUTE HIGHEST SPECIFICITY FOR ALL TABLE HEADERS (MAIN & COLORED) */
-.app-shell thead.table-header-main th,
-.app-shell thead.table-header-main th *,
-.app-shell thead.table-header-main span,
-.app-shell thead[class*="bg-"] th,
-.app-shell thead[class*="bg-"] th *,
-.app-shell thead[class*="bg-"] span,
-.app-shell table thead.table-header-main th,
-.app-shell table thead.table-header-main th *,
-.app-shell table thead[class*="bg-"] th,
-.app-shell table thead[class*="bg-"] th *,
-.app-shell .table-header-main th,
-.app-shell .table-header-main th *,
+/* SPECIFIC CONTRAST FOR DARK TABLE HEADERS (.table-header-main only) */
 thead.table-header-main th,
 thead.table-header-main th *,
 thead.table-header-main span,
-thead[class*="bg-"] th,
-thead[class*="bg-"] th *,
-thead[class*="bg-"] span,
-thead tr[class*="bg-"] th,
-thead tr[class*="bg-"] th *,
-table thead th.text-white,
-table thead th[class*="text-white"],
-table thead th[class*="text-white"] *,
-.table-header-main,
 .table-header-main th,
 .table-header-main th *,
-.table-header-main th span {
+.table-header-main span,
+tr[class*="from-[#123B6D]"] th,
+tr[class*="from-[#123B6D]"] th * {
   color: #FFFFFF !important;
   -webkit-text-fill-color: #FFFFFF !important;
+}
+
+/* GUARANTEE LIGHT / MODAL TABLE HEADERS HAVE CRISP DARK READABLE TEXT */
+table thead:not(.table-header-main) th,
+table thead:not(.table-header-main) th *,
+table thead tr[class*="bg-slate-50"] th,
+table thead tr[class*="bg-slate-100"] th,
+table thead tr[class*="bg-gray-50"] th,
+table thead tr[class*="bg-white"] th {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  font-weight: 700 !important;
 }
 
 /* Standardized Main Table Header Style */
