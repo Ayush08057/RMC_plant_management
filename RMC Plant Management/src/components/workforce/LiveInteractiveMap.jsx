@@ -835,15 +835,9 @@ export default function LiveInteractiveMap({
       const isDistantSparse = false;
 
       if (isRoadSnapped || !isDistantSparse) {
-        // Use subtle simplification & dwell-drift suppression for crisp Leaflet rendering
+        // Render clean, accurate route directly along the real consecutive GPS path
         const cleanRenderCoords = generateCleanLeafletRoutePolyline(rawLatLngs, { epsilonMeters: 5, dwellRadiusMeters: 25 });
-        const baseCoords = (cleanRenderCoords && cleanRenderCoords.length > 1) ? cleanRenderCoords : rawLatLngs;
-        let activePolylineCoords = isRoadSnapped ? snappedRouteState.coords : baseCoords;
-
-        // Strictly guarantee the route polyline connects through every visited waypoint and green arrow
-        if (isRoadSnapped && activePolylineCoords.length > 1 && baseCoords.length > 0) {
-          activePolylineCoords = ensureRoutePassesThroughWaypoints(activePolylineCoords, baseCoords);
-        }
+        const activePolylineCoords = (cleanRenderCoords && cleanRenderCoords.length > 1) ? cleanRenderCoords : rawLatLngs;
 
         drawnPolylineCoords = activePolylineCoords;
         drawnPolylineCoordsRef.current = activePolylineCoords;
