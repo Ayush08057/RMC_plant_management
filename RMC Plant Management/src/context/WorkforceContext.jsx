@@ -52,8 +52,8 @@ const DEFAULT_COMPANY_ID = DEFAULT_COMPANIES[0].id;
 // Firebase write throttling map: tracks last cloud write timestamp per employee
 const locationFirestoreThrottleMap = new Map();
 const locationRouteTrailThrottleMap = new Map();
-const MIN_FIRESTORE_WRITE_INTERVAL_MS = 10000; // write to Firebase at most once every 10 seconds per employee
-const MIN_ROUTETRAIL_WRITE_INTERVAL_MS = 30000; // sync full routeTrail array to attendance doc every 30s or on waypoint change
+const MIN_FIRESTORE_WRITE_INTERVAL_MS = 25000; // write live location to Firebase at most once every 25 seconds when moving
+const MIN_ROUTETRAIL_WRITE_INTERVAL_MS = 120000; // sync full routeTrail array to attendance doc every 2 minutes or on major stops/punchout
 
 export const normalizeCompanyId = (id) => {
   if (!id) return DEFAULT_COMPANY_ID;
@@ -901,7 +901,8 @@ export const WorkforceProvider = ({ children }) => {
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 }
     );
 
-    const pollInterval = setInterval(pollOnce, 6000);
+    // Light periodic check every 30 seconds (replaces the aggressive 6s continuous poll)
+    const pollInterval = setInterval(pollOnce, 30000);
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
@@ -2626,7 +2627,11 @@ export const WorkforceProvider = ({ children }) => {
     const now = Date.now();
     const lastWriteTime = locationFirestoreThrottleMap.get(canonicalEmpId) || 0;
 
-    if ((now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
+    // Movement-aware throttling: if moving, sync live doc every 25s; if stationary dwell, only heartbeat every 3 minutes
+    const isMovingPing = dist >= 15;
+    const writeIntervalRequired = isMovingPing ? MIN_FIRESTORE_WRITE_INTERVAL_MS : 180000;
+
+    if ((now - lastWriteTime) >= writeIntervalRequired) {
       locationFirestoreThrottleMap.set(canonicalEmpId, now);
       const resolvedUid = auth.currentUser?.uid || userRef.current?.uid || target.userId || null;
 
@@ -2653,32 +2658,33 @@ export const WorkforceProvider = ({ children }) => {
       });
       updateDocument(COLLECTIONS.LIVE_LOCATIONS, canonicalEmpId, livePayload).catch(() => {});
 
-      // 2. Sync attendance_<companyId>/<target.id> (include routeTrail only when changed or >= 30s elapsed)
+      // 2. Sync attendance_<companyId>/<target.id> only when trail sync interval elapses (every 2 mins)
+      // This eliminates the redundant 10-second attendance rewrites while keeping all route points safe
       const lastTrailTime = locationRouteTrailThrottleMap.get(canonicalEmpId) || 0;
-      const shouldSyncTrail = trailChanged || (now - lastTrailTime) >= MIN_ROUTETRAIL_WRITE_INTERVAL_MS;
+      const shouldSyncTrail = isMovingPing && (now - lastTrailTime) >= MIN_ROUTETRAIL_WRITE_INTERVAL_MS;
       if (shouldSyncTrail) {
         locationRouteTrailThrottleMap.set(canonicalEmpId, now);
+        const attendancePayload = {
+          id: target.id,
+          employeeId: canonicalEmpId,
+          userId: resolvedUid,
+          employeeName: target.employeeName || canonicalEmpId,
+          companyId: activeCompanyId,
+          role: target.role || 'Staff',
+          date: target.date || today,
+          status: target.status || 'Present',
+          punchIn: target.punchIn || null,
+          geofenceStatus: nextGeofenceStatus,
+          lastKnownLocation: nextLastKnown,
+          totalDistanceKm: calculatedTotalKm,
+          total_distance: calculatedTotalKm,
+          routeTrail: newTrail,
+          updatedAt: nowIso,
+        };
+        updateDocument(COLLECTIONS.ATTENDANCE, target.id, attendancePayload).catch((err) => {
+          console.warn(`[ATTENDANCE_LIVE_LOCATION_ERR] Failed updating location for ${target.id}:`, err?.message || err);
+        });
       }
-      const attendancePayload = {
-        id: target.id,
-        employeeId: canonicalEmpId,
-        userId: resolvedUid,
-        employeeName: target.employeeName || canonicalEmpId,
-        companyId: activeCompanyId,
-        role: target.role || 'Staff',
-        date: target.date || today,
-        status: target.status || 'Present',
-        punchIn: target.punchIn || null,
-        geofenceStatus: nextGeofenceStatus,
-        lastKnownLocation: nextLastKnown,
-        totalDistanceKm: calculatedTotalKm,
-        total_distance: calculatedTotalKm,
-        ...(shouldSyncTrail ? { routeTrail: newTrail } : {}),
-        updatedAt: nowIso,
-      };
-      updateDocument(COLLECTIONS.ATTENDANCE, target.id, attendancePayload).catch((err) => {
-        console.warn(`[ATTENDANCE_LIVE_LOCATION_ERR] Failed updating location for ${target.id}:`, err?.message || err);
-      });
     }
   };
   updateLiveLocationRef.current = updateLiveEmployeeLocation;
