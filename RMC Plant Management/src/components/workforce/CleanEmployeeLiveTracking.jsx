@@ -301,15 +301,8 @@ export default function CleanEmployeeLiveTracking() {
     const lkLng = dayRecord?.lastKnownLocation?.lng != null ? Number(dayRecord.lastKnownLocation.lng) : null;
 
     let isLastKnownValid = Boolean(
-      Number.isFinite(lkLat) && Number.isFinite(lkLng) && lkLat !== 0 && lkLng !== 0 && lastAcc <= 30
+      Number.isFinite(lkLat) && Number.isFinite(lkLng) && lkLat !== 0 && lkLng !== 0 && lastAcc <= 50
     );
-    if (isLastKnownValid && Number.isFinite(punchLat) && Number.isFinite(punchLng)) {
-      // Discard stale lastKnownLocation that teleports > 25km away without intermediate trail
-      const distToPunch = Math.hypot((lkLat - punchLat) * 111000, (lkLng - punchLng) * 111000 * Math.cos(punchLat * Math.PI / 180));
-      if (distToPunch > 25000 && (!Array.isArray(dayRecord?.routeTrail) || dayRecord.routeTrail.length <= 1)) {
-        isLastKnownValid = false;
-      }
-    }
 
     // After punch-out, prefer exit GPS location; otherwise verified live/last known location, gpsLocation, or last route waypoint
     const lat = (isPunchedOut && dayRecord?.exitGpsLocation?.lat != null)

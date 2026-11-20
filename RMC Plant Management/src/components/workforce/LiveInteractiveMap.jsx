@@ -581,8 +581,8 @@ export default function LiveInteractiveMap({
     }
     lastFetchedStopsKeyRef.current = snapKey;
 
-    // Only request road snapping if there are real intermediate points or verified travel trail (> 2 distinct stops and effective travel distance >= 0.2 km)
-    const hasGenuineTravelPoints = (stops.length > 2 || (validTarget?.routeTrail && validTarget.routeTrail.length > 1)) && (effectiveTotalKm >= 0.2);
+    // Only request road snapping if there are real intermediate points or verified travel trail (effective travel distance >= 0.1 km or movement > 100m)
+    const hasGenuineTravelPoints = (stops.length >= 2 || (validTarget?.routeTrail && validTarget.routeTrail.length > 0) || (hasPunchIn && hasLiveCoords && getDistanceMeters(punchInLat, punchInLng, displayLat, displayLng) > 100)) && (effectiveTotalKm >= 0.1 || (hasPunchIn && hasLiveCoords && getDistanceMeters(punchInLat, punchInLng, displayLat, displayLng) > 100));
     if (roadSnapEnabled && pointsToSnap.length > 1 && hasGenuineTravelPoints) {
       // Calculate total cumulative path distance across all waypoints
       let totalPathMeters = 0;
@@ -818,9 +818,9 @@ export default function LiveInteractiveMap({
     liveMarkerTargetIdRef.current = null;
 
     // 1. Draw the complete travelled route line along real roads
-    // Strictly require real travel movement (effectiveTotalKm >= 0.2 km AND genuine multi-point routeTrail)
-    const hasGenuineRouteTrail = (stops && stops.length > 2) || (validTarget?.routeTrail && validTarget.routeTrail.length > 1);
-    const shouldDrawTrail = rawLatLngs.length > 1 && hasGenuineRouteTrail && (effectiveTotalKm >= 0.2);
+    // Require real travel movement (effectiveTotalKm >= 0.1 km and at least 2 distinct points)
+    const hasGenuineRouteTrail = (stops && stops.length >= 2) || (validTarget?.routeTrail && validTarget.routeTrail.length > 0) || (hasPunchIn && hasLiveCoords && getDistanceMeters(punchInLat, punchInLng, displayLat, displayLng) > 100);
+    const shouldDrawTrail = rawLatLngs.length > 1 && hasGenuineRouteTrail && (effectiveTotalKm >= 0.1 || (hasPunchIn && hasLiveCoords && getDistanceMeters(punchInLat, punchInLng, displayLat, displayLng) > 100));
     let drawnPolylineCoords = shouldDrawTrail ? rawLatLngs : [];
     if (shouldDrawTrail) {
       const isRoadSnapped = Boolean(roadSnapEnabled && snappedRouteState && snappedRouteState.snapped && snappedRouteState.coords.length > 1);

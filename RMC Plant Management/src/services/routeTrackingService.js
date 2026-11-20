@@ -176,32 +176,25 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
       });
 
     if (hasRealPunchIn && rawStops.length > 0) {
-      // Trail must start within 1500m of punch-in GPS — otherwise it's from a different session
-      const firstStopDist = calculateDistanceMeters(pLat, pLng, rawStops[0].lat, rawStops[0].lng);
-      if (firstStopDist > 3000) {
-        // Stale trail from different date/location — discard entirely
-        stops = [];
-      } else {
-        // Continuity check: allow up to 80 km between highway waypoints/gaps
-        stops = [rawStops[0]];
-        for (let i = 1; i < rawStops.length; i++) {
-          const prev = stops[stops.length - 1];
-          const curr = rawStops[i];
-          const legDist = calculateDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
-          if (legDist <= 80000) {
-            stops.push(curr);
-          }
+      // Continuity check: allow real highway travel and cross-town movements (up to 150 km between intermediate points)
+      stops = [rawStops[0]];
+      for (let i = 1; i < rawStops.length; i++) {
+        const prev = stops[stops.length - 1];
+        const curr = rawStops[i];
+        const legDist = calculateDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+        if (legDist <= 150000) {
+          stops.push(curr);
         }
       }
     } else if (!hasRealPunchIn && rawStops.length > 0) {
-      // No verified punch-in GPS → allow continuous trail up to 80 km jumps
+      // No verified punch-in GPS → allow continuous trail up to 150 km jumps
       const firstRaw = rawStops[0];
       const contiguous = [firstRaw];
       for (let i = 1; i < rawStops.length; i++) {
         const prev = contiguous[contiguous.length - 1];
         const curr = rawStops[i];
         const legDist = calculateDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
-        if (legDist <= 80000) {
+        if (legDist <= 150000) {
           contiguous.push(curr);
         }
       }
@@ -303,10 +296,10 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
             const lastStop = stops[stops.length - 1];
             const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
 
-            // Only append continuous realistic live movement if employee has ACTUALLY travelled (>= 150m from punch-in anchor and last stop)
-            // This prevents stationary employees from having a secondary "Live GPS Location" stop created right outside their building
+            // Only append continuous realistic live movement if employee has ACTUALLY travelled (>= 80m from punch-in anchor and last stop)
+            // This prevents stationary employees from having jitter stops, while capturing real movements reliably
             const distToPunch = hasRealPunchIn ? calculateDistanceMeters(pLat, pLng, cLat, cLng) : 999;
-            if (distToLast >= 150 && distToPunch >= 150 && distToLast <= 25000) {
+            if (distToLast >= 80 && distToPunch >= 80 && distToLast <= 150000) {
               stops.push({
                 stopNo: stops.length + 1,
                 title: landmark.landmarkName || 'Live GPS Location',
