@@ -33,6 +33,27 @@ export function cachePunchInSelfie(empId, photoUrl, dateStr = null) {
 }
 
 /**
+ * Helper to check if a photo URL is an authentic genuine selfie or a mock/synthetic image.
+ * Returns true if valid real photo, false if mock asset.
+ */
+export function isAuthenticSelfie(url, empId = '') {
+  if (!url || typeof url !== 'string') return false;
+  const cleanUrl = url.trim();
+  if (cleanUrl.length < 25) return false;
+  if (cleanUrl.startsWith('data:image/svg+xml') || cleanUrl.includes('BIOMETRIC') || cleanUrl.includes('canvas')) return false;
+
+  const id = empId.toString().toUpperCase();
+  const isExcludedRole = id.includes('DIS') || id.includes('SS');
+
+  // Strictly reject static mock employee portraits for Dispatcher and Supervisor
+  if (isExcludedRole) {
+    if (cleanUrl.includes('dis_dispatcher.jpg') || cleanUrl.includes('ss_supervisor.jpg')) return false;
+    if (cleanUrl.includes('/assets/employees/')) return false;
+  }
+  return true;
+}
+
+/**
  * Resolves the genuine punch-in photo for any attendance record.
  * Strictly returns genuine human photographs — zero computer drawings, SVGs, or initials graphics!
  * 
@@ -52,11 +73,10 @@ export function resolvePunchInPhoto(record, employees = []) {
     record.photoUrl,
     record.attendancePhoto,
     record.inPhoto
-  ].filter(u => u && typeof u === 'string' && u.trim().length > 25);
+  ];
 
   for (const u of candidateUrls) {
-    // Strictly filter out synthetic SVG badges or canvas drawings
-    if (!u.startsWith('data:image/svg+xml') && !u.includes('BIOMETRIC') && !u.includes('canvas')) {
+    if (isAuthenticSelfie(u, empId)) {
       return u;
     }
   }
@@ -64,11 +84,11 @@ export function resolvePunchInPhoto(record, employees = []) {
   // Priority 2: Local cache check (real camera selfie stored locally from live punch-in)
   try {
     const cachedDate = localStorage.getItem(`rmc_punch_selfie_${dateStr}_${empId}`);
-    if (cachedDate && cachedDate.length > 50 && !cachedDate.startsWith('data:image/svg+xml') && !cachedDate.includes('BIOMETRIC')) {
+    if (isAuthenticSelfie(cachedDate, empId)) {
       return cachedDate;
     }
     const cachedEmp = localStorage.getItem(`rmc_punch_selfie_${empId}`);
-    if (cachedEmp && cachedEmp.length > 50 && !cachedEmp.startsWith('data:image/svg+xml') && !cachedEmp.includes('BIOMETRIC')) {
+    if (isAuthenticSelfie(cachedEmp, empId)) {
       return cachedEmp;
     }
   } catch (_) {}
@@ -79,9 +99,9 @@ export function resolvePunchInPhoto(record, employees = []) {
       const eId = (e.employeeId || e.id || '').toString().trim().toUpperCase();
       return eId === empId || (record.employeeName && e.name && e.name.toLowerCase() === record.employeeName.toLowerCase());
     });
-    if (matched?.selfieUrl && !matched.selfieUrl.startsWith('data:image/svg+xml') && !matched.selfieUrl.includes('ss_supervisor.jpg')) return matched.selfieUrl;
-    if (matched?.photoUrl && !matched.photoUrl.startsWith('data:image/svg+xml') && !matched.photoUrl.includes('ss_supervisor.jpg')) return matched.photoUrl;
-    if (matched?.avatarUrl && !matched.avatarUrl.startsWith('data:image/svg+xml') && !matched.avatarUrl.includes('ss_supervisor.jpg')) return matched.avatarUrl;
+    if (isAuthenticSelfie(matched?.selfieUrl, empId)) return matched.selfieUrl;
+    if (isAuthenticSelfie(matched?.photoUrl, empId)) return matched.photoUrl;
+    if (isAuthenticSelfie(matched?.avatarUrl, empId)) return matched.avatarUrl;
   }
 
   // Priority 4: Verified real portrait for official personnel if not supervisor or dispatcher

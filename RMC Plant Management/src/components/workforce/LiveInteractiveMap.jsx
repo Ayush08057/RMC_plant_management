@@ -667,11 +667,26 @@ export default function LiveInteractiveMap({
 
     // Target and display coordinates are lifted to component level
 
-    const targetPhoto = validTarget?.selfieUrl || 
+    const rawCandidatePhoto = validTarget?.selfieUrl || 
       validTarget?.record?.selfieUrl || 
       validTarget?.photoUrl || 
       punchInSource?.selfieUrl || 
       resolvePunchInPhoto(validTarget?.record || validTarget);
+
+    const isExcludedMockRole = Boolean(
+      String(validTarget?.employeeId || validTarget?.id || '').toUpperCase().includes('DIS') ||
+      String(validTarget?.employeeId || validTarget?.id || '').toUpperCase().includes('SS') ||
+      String(validTarget?.role || '').toLowerCase().includes('dispatch') ||
+      String(validTarget?.role || '').toLowerCase().includes('supervisor')
+    );
+
+    const isMockPhoto = typeof rawCandidatePhoto === 'string' && (
+      rawCandidatePhoto.includes('dis_dispatcher.jpg') ||
+      rawCandidatePhoto.includes('ss_supervisor.jpg') ||
+      (isExcludedMockRole && rawCandidatePhoto.includes('/assets/employees/'))
+    );
+
+    const targetPhoto = isMockPhoto ? null : rawCandidatePhoto;
     const buildLivePopupHtml = (latVal, lngVal, isOnline) => `
       <div class="p-3 text-xs font-sans min-w-[245px]">
         <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-2">

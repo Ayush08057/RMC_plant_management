@@ -334,7 +334,19 @@ export default function CleanEmployeeLiveTracking() {
 
     const geofence = dayRecord?.geofenceStatus || dayRecord?.lastKnownLocation?.landmarkName || dayRecord?.exitGpsLocation?.landmarkName || dayRecord?.gpsLocation?.landmarkName || 'Base Location';
 
-    const punchInPhoto = dayRecord?.selfieUrl || dayRecord?.photoUrl || activeEmployee?.selfieUrl || resolvePunchInPhoto(dayRecord || activeEmployee, employees);
+    const rawCandidatePhoto = dayRecord?.selfieUrl || dayRecord?.photoUrl || activeEmployee?.selfieUrl || resolvePunchInPhoto(dayRecord || activeEmployee, employees);
+    const isExcludedMockRole = Boolean(
+      String(activeEmployee?.employeeId || activeEmployee?.id || '').toUpperCase().includes('DIS') ||
+      String(activeEmployee?.employeeId || activeEmployee?.id || '').toUpperCase().includes('SS') ||
+      String(activeEmployee?.role || '').toLowerCase().includes('dispatch') ||
+      String(activeEmployee?.role || '').toLowerCase().includes('supervisor')
+    );
+    const isMockPhoto = typeof rawCandidatePhoto === 'string' && (
+      rawCandidatePhoto.includes('dis_dispatcher.jpg') ||
+      rawCandidatePhoto.includes('ss_supervisor.jpg') ||
+      (isExcludedMockRole && rawCandidatePhoto.includes('/assets/employees/'))
+    );
+    const punchInPhoto = isMockPhoto ? null : rawCandidatePhoto;
 
     return {
       id: activeEmployee.employeeId || activeEmployee.id,
