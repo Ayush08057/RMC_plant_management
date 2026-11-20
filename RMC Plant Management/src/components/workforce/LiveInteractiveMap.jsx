@@ -28,6 +28,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { isAdminPerson } from '../../data/mockUsers';
 import { fetchRoadSnappedRoute, snapCoordinateToRoad } from '../../services/roadSnapService';
 import { cleanRawRoutePipeline, generateCleanLeafletRoutePolyline } from '../../utils/routeCleanUtils';
+import { resolvePunchInPhoto } from '../../utils/attendancePhotoUtils';
 
 // Sangli Plant HQ anchor
 const SANGLI_PLANT_HQ = { lat: 16.8450, lng: 74.6200, name: 'SM Concrete Plant HQ, Tanang' };
@@ -631,7 +632,11 @@ export default function LiveInteractiveMap({
 
     // Target and display coordinates are lifted to component level
 
-    const targetPhoto = validTarget?.selfieUrl || validTarget?.record?.selfieUrl || validTarget?.photoUrl || punchInSource?.selfieUrl;
+    const targetPhoto = validTarget?.selfieUrl || 
+      validTarget?.record?.selfieUrl || 
+      validTarget?.photoUrl || 
+      punchInSource?.selfieUrl || 
+      resolvePunchInPhoto(validTarget?.record || validTarget);
     const buildLivePopupHtml = (latVal, lngVal, isOnline) => `
       <div class="p-3 text-xs font-sans min-w-[245px]">
         <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-2">

@@ -25,6 +25,7 @@ import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { isAdminPerson, isDummyEmployee, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { getEmployeeRouteDetails } from '../../services/routeTrackingService';
 import { calculateAccurateRouteDistanceKm } from '../../utils/routeCleanUtils';
+import { resolvePunchInPhoto } from '../../utils/attendancePhotoUtils';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 /**
@@ -333,6 +334,8 @@ export default function CleanEmployeeLiveTracking() {
 
     const geofence = dayRecord?.geofenceStatus || dayRecord?.lastKnownLocation?.landmarkName || dayRecord?.exitGpsLocation?.landmarkName || dayRecord?.gpsLocation?.landmarkName || 'Base Location';
 
+    const punchInPhoto = dayRecord?.selfieUrl || dayRecord?.photoUrl || activeEmployee?.selfieUrl || resolvePunchInPhoto(dayRecord || activeEmployee, employees);
+
     return {
       id: activeEmployee.employeeId || activeEmployee.id,
       employeeId: activeEmployee.employeeId || activeEmployee.id,
@@ -349,9 +352,12 @@ export default function CleanEmployeeLiveTracking() {
       geofenceStatus: geofence,
       stationName: geofence,
       accuracy: dayRecord?.lastKnownLocation?.accuracy || dayRecord?.gpsLocation?.accuracy || 15,
-      routeTrail: dayRecord?.routeTrail || []
+      routeTrail: dayRecord?.routeTrail || [],
+      selfieUrl: punchInPhoto,
+      photoUrl: punchInPhoto,
+      record: dayRecord
     };
-  }, [activeEmployee, dayRecord, trackingStatus, isPunchedOut]);
+  }, [activeEmployee, dayRecord, trackingStatus, isPunchedOut, employees]);
 
   // Route details
   const routeDetails = useMemo(() => {
