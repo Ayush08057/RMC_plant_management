@@ -698,34 +698,36 @@ export default function MobilePunchWidget({
         } catch (_) {}
       }
 
-      // ── Step 2: Acquire Genuine Device GPS (never use fake coordinates) ──
+      // ── Step 2: Acquire Genuine Device GPS (always fresh fix at punch moment) ──
       let currentGps = null;
 
-      // Priority 1: Native hardware GPS fix from background tracker
-      try {
-        const nativeFix = nativeTracking.getLatestNativeFix();
-        if (nativeFix && nativeFix.lat && (!nativeFix.accuracy || nativeFix.accuracy <= 80)) {
-          currentGps = nativeFix;
-        }
-      } catch (_) {}
-
-      // Priority 2: In-memory GPS already acquired by background poller
-      if ((!currentGps || !currentGps.lat) && gpsCoords && gpsCoords.lat && gpsCoords.accuracy <= 80) {
-        currentGps = gpsCoords;
-      }
-
-      // Priority 3: Active GPS hardware polling via bridge
-      if (!currentGps || !currentGps.lat) {
+      // Priority 1: Request immediate live fix from device GPS hardware
+      if (nativeTracking.isNativeApp()) {
         try {
-          currentGps = await nativeTracking.requestImmediateFix(2500);
+          currentGps = await nativeTracking.requestImmediateFix(3000);
         } catch (_) {}
       }
 
-      // Priority 4: Browser geolocation if available
+      // Priority 2: Force fresh acquisition directly from device hardware
       if (!currentGps || !currentGps.lat) {
         try {
           currentGps = await acquireGpsLocation(true);
         } catch (_) {}
+      }
+
+      // Priority 3: Native hardware GPS fix from background tracker
+      if (!currentGps || !currentGps.lat) {
+        try {
+          const nativeFix = nativeTracking.getLatestNativeFix();
+          if (nativeFix && nativeFix.lat && (!nativeFix.accuracy || nativeFix.accuracy <= 80)) {
+            currentGps = nativeFix;
+          }
+        } catch (_) {}
+      }
+
+      // Priority 4: In-memory GPS already acquired by background poller
+      if ((!currentGps || !currentGps.lat) && gpsCoords && gpsCoords.lat && gpsCoords.accuracy <= 80) {
+        currentGps = gpsCoords;
       }
 
       // Strict enforcement: if GPS could not be resolved, reject fake coordinates
