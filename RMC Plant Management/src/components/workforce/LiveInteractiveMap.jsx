@@ -835,9 +835,15 @@ export default function LiveInteractiveMap({
       const isDistantSparse = false;
 
       if (isRoadSnapped || !isDistantSparse) {
-        // Render clean, accurate route directly along the real consecutive GPS path
+        // Use the road-snapped road geometry if available to follow every curve of the street,
+        // otherwise follow the clean real GPS coordinates
         const cleanRenderCoords = generateCleanLeafletRoutePolyline(rawLatLngs, { epsilonMeters: 5, dwellRadiusMeters: 25 });
-        const activePolylineCoords = (cleanRenderCoords && cleanRenderCoords.length > 1) ? cleanRenderCoords : rawLatLngs;
+        const baseCoords = (cleanRenderCoords && cleanRenderCoords.length > 1) ? cleanRenderCoords : rawLatLngs;
+        let activePolylineCoords = isRoadSnapped ? snappedRouteState.coords : baseCoords;
+
+        if (isRoadSnapped && activePolylineCoords.length > 1 && baseCoords.length > 0) {
+          activePolylineCoords = ensureRoutePassesThroughWaypoints(activePolylineCoords, baseCoords);
+        }
 
         drawnPolylineCoords = activePolylineCoords;
         drawnPolylineCoordsRef.current = activePolylineCoords;
