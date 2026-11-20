@@ -305,13 +305,19 @@ export default function LiveInteractiveMap({
   const displayLng = isLiveSnapped ? Number(snappedLiveGps.lng) : targetLng;
   const hasLiveCoords = Boolean(validTarget && Number.isFinite(displayLat) && Number.isFinite(displayLng) && displayLat !== 0 && displayLng !== 0);
 
+  const targetTrail = Array.isArray(validTarget?.routeTrail) && validTarget.routeTrail.length > 0
+    ? validTarget.routeTrail
+    : (Array.isArray(validTarget?.record?.routeTrail) && validTarget.record.routeTrail.length > 0
+      ? validTarget.record.routeTrail
+      : []);
+
   // effectiveTotalKm priority: trailDistanceKm (authoritative Haversine from actual movement trail) > totalKm from routeDetails
   // If employee is stationary (no movement in routeTrail), effectiveTotalKm is strictly 0.0 KM.
   const effectiveTotalKm = (trailDistanceKm != null && trailDistanceKm > 0)
     ? trailDistanceKm
-    : (roadSnapEnabled && snappedRouteState?.snapped && snappedRouteState?.distanceKm > 0 && stops.length > 2)
+    : (roadSnapEnabled && snappedRouteState?.snapped && snappedRouteState?.distanceKm > 0 && (stops.length > 2 || targetTrail.length > 2))
       ? snappedRouteState.distanceKm
-      : (totalKm > 0 && stops.length > 2 ? totalKm : 0);
+      : (totalKm > 0 && (stops.length > 2 || targetTrail.length > 2) ? totalKm : 0);
 
   const userInteractedRef = useRef(false);
 
@@ -508,29 +514,58 @@ export default function LiveInteractiveMap({
     let isCancelled = false;
 
     // Collect all real points for the current employee's shift to resolve exact road geometry
+    // Give top priority to the actual GPS route trail breadcrumbs recorded during the shift
     const rawPointsToSnap = [];
-    if (hasPunchIn) {
-      rawPointsToSnap.push({ lat: punchInLat, lng: punchInLng });
-    }
-    (stops || []).forEach((s) => {
-      const sLat = Number(s?.lat);
-      const sLng = Number(s?.lng);
-      if (Number.isFinite(sLat) && Number.isFinite(sLng) && sLat !== 0 && sLng !== 0) {
+    const trailPoints = Array.isArray(validTarget?.routeTrail) && validTarget.routeTrail.length > 0
+      ? validTarget.routeTrail
+      : (Array.isArray(validTarget?.record?.routeTrail) && validTarget.record.routeTrail.length > 0
+        ? validTarget.record.routeTrail
+        : []);
+
+    if (trailPoints.length > 1) {
+      if (hasPunchIn) {
+        rawPointsToSnap.push({ lat: punchInLat, lng: punchInLng });
+      }
+      trailPoints.forEach((pt) => {
+        const ptLat = Number(pt?.lat != null ? pt.lat : (Array.isArray(pt) ? pt[0] : null));
+        const ptLng = Number(pt?.lng != null ? pt.lng : (Array.isArray(pt) ? pt[1] : null));
+        if (Number.isFinite(ptLat) && Number.isFinite(ptLng) && ptLat !== 0 && ptLng !== 0) {
+          const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
+          if (!prev || Math.abs(prev.lat - ptLat) > 0.00005 || Math.abs(prev.lng - ptLng) > 0.00005) {
+            rawPointsToSnap.push({ lat: ptLat, lng: ptLng });
+          }
+        }
+      });
+      if (hasPunchOut) {
         const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
-        if (!prev || Math.abs(prev.lat - sLat) > 0.0001 || Math.abs(prev.lng - sLng) > 0.0001) {
-          rawPointsToSnap.push({ lat: sLat, lng: sLng });
+        if (!prev || Math.abs(prev.lat - punchOutLat) > 0.00005 || Math.abs(prev.lng - punchOutLng) > 0.00005) {
+          rawPointsToSnap.push({ lat: punchOutLat, lng: punchOutLng });
         }
       }
-    });
-    if (hasPunchOut) {
-      const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
-      if (!prev || Math.abs(prev.lat - punchOutLat) > 0.0001 || Math.abs(prev.lng - punchOutLng) > 0.0001) {
-        rawPointsToSnap.push({ lat: punchOutLat, lng: punchOutLng });
+    } else {
+      if (hasPunchIn) {
+        rawPointsToSnap.push({ lat: punchInLat, lng: punchInLng });
       }
-    } else if (hasLiveCoords) {
-      const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
-      if (!prev || Math.abs(prev.lat - displayLat) > 0.0001 || Math.abs(prev.lng - displayLng) > 0.0001) {
-        rawPointsToSnap.push({ lat: displayLat, lng: displayLng });
+      (stops || []).forEach((s) => {
+        const sLat = Number(s?.lat);
+        const sLng = Number(s?.lng);
+        if (Number.isFinite(sLat) && Number.isFinite(sLng) && sLat !== 0 && sLng !== 0) {
+          const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
+          if (!prev || Math.abs(prev.lat - sLat) > 0.0001 || Math.abs(prev.lng - sLng) > 0.0001) {
+            rawPointsToSnap.push({ lat: sLat, lng: sLng });
+          }
+        }
+      });
+      if (hasPunchOut) {
+        const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
+        if (!prev || Math.abs(prev.lat - punchOutLat) > 0.0001 || Math.abs(prev.lng - punchOutLng) > 0.0001) {
+          rawPointsToSnap.push({ lat: punchOutLat, lng: punchOutLng });
+        }
+      } else if (hasLiveCoords) {
+        const prev = rawPointsToSnap[rawPointsToSnap.length - 1];
+        if (!prev || Math.abs(prev.lat - displayLat) > 0.0001 || Math.abs(prev.lng - displayLng) > 0.0001) {
+          rawPointsToSnap.push({ lat: displayLat, lng: displayLng });
+        }
       }
     }
 
@@ -713,12 +748,33 @@ export default function LiveInteractiveMap({
         rawLatLngs.push([ptLat, ptLng]);
       }
     };
-    if (hasPunchIn) appendPointIfDistinct(punchInLat, punchInLng);
-    stops.forEach((s) => appendPointIfDistinct(Number(s?.lat), Number(s?.lng)));
-    if (hasPunchOut) {
-      appendPointIfDistinct(punchOutLat, punchOutLng);
-    } else if (hasLiveCoords) {
-      appendPointIfDistinct(displayLat, displayLng);
+
+    const targetTrail = Array.isArray(validTarget?.routeTrail) && validTarget.routeTrail.length > 0
+      ? validTarget.routeTrail
+      : (Array.isArray(validTarget?.record?.routeTrail) && validTarget.record.routeTrail.length > 0
+        ? validTarget.record.routeTrail
+        : []);
+
+    if (targetTrail.length > 1) {
+      if (hasPunchIn) appendPointIfDistinct(punchInLat, punchInLng);
+      targetTrail.forEach((pt) => {
+        const ptLat = Number(pt?.lat != null ? pt.lat : (Array.isArray(pt) ? pt[0] : null));
+        const ptLng = Number(pt?.lng != null ? pt.lng : (Array.isArray(pt) ? pt[1] : null));
+        appendPointIfDistinct(ptLat, ptLng);
+      });
+      if (hasPunchOut) {
+        appendPointIfDistinct(punchOutLat, punchOutLng);
+      } else if (hasLiveCoords) {
+        appendPointIfDistinct(displayLat, displayLng);
+      }
+    } else {
+      if (hasPunchIn) appendPointIfDistinct(punchInLat, punchInLng);
+      stops.forEach((s) => appendPointIfDistinct(Number(s?.lat), Number(s?.lng)));
+      if (hasPunchOut) {
+        appendPointIfDistinct(punchOutLat, punchOutLng);
+      } else if (hasLiveCoords) {
+        appendPointIfDistinct(displayLat, displayLng);
+      }
     }
 
     if (lastTargetIdRef.current !== currentTargetId) {
@@ -1522,12 +1578,12 @@ export default function LiveInteractiveMap({
               </span>
             </>
           )}
-          {stops.length > 2 && (
+          {((stops.length > 2) || (targetTrail && targetTrail.length > 2)) && (
             <>
               <span className="text-slate-300">•</span>
               <span className="flex items-center gap-1.5 font-mono text-[11px] text-indigo-700 font-bold">
                 <span className="w-2.5 h-2.5 rounded-full border-2 border-blue-600 bg-white shadow-xs" />
-                <span>Waypoints ({stops.length - 2})</span>
+                <span>Waypoints ({targetTrail && targetTrail.length > 2 ? targetTrail.length : Math.max(0, stops.length - 2)})</span>
               </span>
             </>
           )}
