@@ -2003,9 +2003,9 @@ export const WorkforceProvider = ({ children }) => {
       role: emp.role,
       plant: emp.plant || (data.plants && data.plants[0]?.name) || 'Central Plant',
       punchIn: actualPunchIn, // Always record the actual real punch in time
-      punchOut: existingIndex >= 0 ? data.attendance[existingIndex].punchOut : null, // Starting shift - punch out is null until clocked out
-      workingHours: existingIndex >= 0 ? data.attendance[existingIndex].workingHours : null,
-      eligibleHours: existingIndex >= 0 ? data.attendance[existingIndex].eligibleHours : null,
+      punchOut: null, // Always strictly null on punch-in so an employee is NEVER auto-punched-out when starting a shift
+      workingHours: null,
+      eligibleHours: null,
       totalDistanceKm: 0.0,
       total_distance: 0.0,
       status: 'Present',
