@@ -12,10 +12,10 @@ import { EMPLOYEE_PHOTO_BASE64 } from '../data/officialEmployeePhotosBase64.js';
  */
 export const OFFICIAL_EMPLOYEE_PHOTOS = {
   'QC-001': EMPLOYEE_PHOTO_BASE64['QC-001'] || '/assets/employees/qc_engineer.jpg',
-  'SS-001': null, // Live selfie capture required for Site Supervisor
+  'SS-001': null, // Live selfie capture strictly required for Site Supervisor
+  'DIS-001': null, // Live selfie capture strictly required for Dispatcher (zero mock fallback)
   'PM-001': EMPLOYEE_PHOTO_BASE64['PM-001'] || '/assets/employees/pm_manager.jpg',
   'DRV-001': EMPLOYEE_PHOTO_BASE64['DRV-001'] || '/assets/employees/drv_driver.jpg',
-  'DIS-001': EMPLOYEE_PHOTO_BASE64['DIS-001'] || '/assets/employees/dis_dispatcher.jpg',
   'ACC-001': EMPLOYEE_PHOTO_BASE64['ACC-001'] || '/assets/employees/acc_accountant.jpg',
 };
 
@@ -84,9 +84,9 @@ export function resolvePunchInPhoto(record, employees = []) {
     if (matched?.avatarUrl && !matched.avatarUrl.startsWith('data:image/svg+xml') && !matched.avatarUrl.includes('ss_supervisor.jpg')) return matched.avatarUrl;
   }
 
-  // Priority 4: Verified real portrait for official personnel if not supervisor
+  // Priority 4: Verified real portrait for official personnel if not supervisor or dispatcher
   for (const [key, path] of Object.entries(OFFICIAL_EMPLOYEE_PHOTOS)) {
-    if ((empId.includes(key) || empId === key) && key !== 'SS-001') {
+    if ((empId.includes(key) || empId === key) && key !== 'SS-001' && key !== 'DIS-001' && path) {
       return path;
     }
   }

@@ -594,13 +594,13 @@ export default function MobilePunchWidget({
   // Real employee photographic portrait fallback
   const generateSimulatedSelfie = () => {
     const cleanId = (activeEmployee?.employeeId || activeEmployee?.id || '').toString().trim().toUpperCase();
-    if (cleanId.includes('SS') || cleanId.includes('SUP')) return OFFICIAL_EMPLOYEE_PHOTOS['SS-001'];
+    if (cleanId.includes('SS') || cleanId.includes('SUP')) return null;
+    if (cleanId.includes('DIS')) return null; // Dispatcher strictly requires genuine live selfie
     if (cleanId.includes('QC')) return OFFICIAL_EMPLOYEE_PHOTOS['QC-001'];
     if (cleanId.includes('PM') || cleanId.includes('MAN')) return OFFICIAL_EMPLOYEE_PHOTOS['PM-001'];
     if (cleanId.includes('DRV') || cleanId.includes('DV')) return OFFICIAL_EMPLOYEE_PHOTOS['DRV-001'];
-    if (cleanId.includes('DIS')) return OFFICIAL_EMPLOYEE_PHOTOS['DIS-001'];
     if (cleanId.includes('ACC')) return OFFICIAL_EMPLOYEE_PHOTOS['ACC-001'];
-    return OFFICIAL_EMPLOYEE_PHOTOS['QC-001'];
+    return null;
   };
 
   // Capture real photo from live video, custom upload, or fallback
@@ -701,33 +701,37 @@ export default function MobilePunchWidget({
       // ── Step 2: Acquire Genuine Device GPS (always fresh fix at punch moment) ──
       let currentGps = null;
 
-      // Priority 1: Request immediate live fix from device GPS hardware
-      if (nativeTracking.isNativeApp()) {
+      // Priority 1: Force fresh acquisition directly from device hardware (maximumAge: 0)
+      try {
+        currentGps = await acquireGpsLocation(true);
+      } catch (_) {}
+
+      // Priority 2: Request immediate live fix from device GPS hardware via native bridge
+      if ((!currentGps || !currentGps.lat) && nativeTracking.isNativeApp()) {
         try {
           currentGps = await nativeTracking.requestImmediateFix(3000);
         } catch (_) {}
       }
 
-      // Priority 2: Force fresh acquisition directly from device hardware
-      if (!currentGps || !currentGps.lat) {
-        try {
-          currentGps = await acquireGpsLocation(true);
-        } catch (_) {}
-      }
-
-      // Priority 3: Native hardware GPS fix from background tracker
+      // Priority 3: Native hardware GPS fix from background tracker if recently acquired (< 10 seconds)
       if (!currentGps || !currentGps.lat) {
         try {
           const nativeFix = nativeTracking.getLatestNativeFix();
-          if (nativeFix && nativeFix.lat && (!nativeFix.accuracy || nativeFix.accuracy <= 80)) {
+          const fixAgeSec = nativeFix?.timestamp ? Math.abs((Date.now() - new Date(nativeFix.timestamp).getTime()) / 1000) : 999;
+          if (nativeFix && nativeFix.lat && fixAgeSec <= 10 && (!nativeFix.accuracy || nativeFix.accuracy <= 50)) {
             currentGps = nativeFix;
           }
         } catch (_) {}
       }
 
-      // Priority 4: In-memory GPS already acquired by background poller
-      if ((!currentGps || !currentGps.lat) && gpsCoords && gpsCoords.lat && gpsCoords.accuracy <= 80) {
-        currentGps = gpsCoords;
+      // Priority 4: In-memory GPS fix only if strictly fresh (< 10 seconds old and accuracy <= 50m)
+      if (!currentGps || !currentGps.lat) {
+        if (gpsCoords && gpsCoords.lat) {
+          const inMemAgeSec = gpsCoords.timestamp ? Math.abs((Date.now() - new Date(gpsCoords.timestamp).getTime()) / 1000) : 999;
+          if (inMemAgeSec <= 10 && gpsCoords.accuracy <= 50) {
+            currentGps = gpsCoords;
+          }
+        }
       }
 
       // Strict enforcement: if GPS could not be resolved, reject fake coordinates
