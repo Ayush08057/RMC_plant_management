@@ -303,8 +303,10 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
             const lastStop = stops[stops.length - 1];
             const distToLast = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, cLat, cLng) : 999;
 
-            // Only append continuous realistic live movement (between 15 meters and 25 km from last verified fix)
-            if (distToLast >= 15 && distToLast <= 25000) {
+            // Only append continuous realistic live movement if employee has ACTUALLY travelled (>= 150m from punch-in anchor and last stop)
+            // This prevents stationary employees from having a secondary "Live GPS Location" stop created right outside their building
+            const distToPunch = hasRealPunchIn ? calculateDistanceMeters(pLat, pLng, cLat, cLng) : 999;
+            if (distToLast >= 150 && distToPunch >= 150 && distToLast <= 25000) {
               stops.push({
                 stopNo: stops.length + 1,
                 title: landmark.landmarkName || 'Live GPS Location',

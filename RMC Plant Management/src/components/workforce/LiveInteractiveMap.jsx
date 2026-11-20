@@ -545,8 +545,8 @@ export default function LiveInteractiveMap({
     }
     lastFetchedStopsKeyRef.current = snapKey;
 
-    // Only request road snapping if there are real intermediate points or verified travel trail
-    const hasGenuineTravelPoints = stops.length > 2 || (validTarget?.routeTrail && validTarget.routeTrail.length > 1);
+    // Only request road snapping if there are real intermediate points or verified travel trail (> 2 distinct stops and effective travel distance >= 0.2 km)
+    const hasGenuineTravelPoints = (stops.length > 2 || (validTarget?.routeTrail && validTarget.routeTrail.length > 1)) && (effectiveTotalKm >= 0.2);
     if (roadSnapEnabled && pointsToSnap.length > 1 && hasGenuineTravelPoints) {
       // Calculate total cumulative path distance across all waypoints
       let totalPathMeters = 0;
@@ -742,9 +742,9 @@ export default function LiveInteractiveMap({
     liveMarkerTargetIdRef.current = null;
 
     // 1. Draw the complete travelled route line along real roads
-    // Strictly require real travel movement (effectiveTotalKm > 0 or genuine routeTrail > 1)
+    // Strictly require real travel movement (effectiveTotalKm >= 0.2 km AND genuine multi-point routeTrail)
     const hasGenuineRouteTrail = (stops && stops.length > 2) || (validTarget?.routeTrail && validTarget.routeTrail.length > 1);
-    const shouldDrawTrail = rawLatLngs.length > 1 && hasGenuineRouteTrail && (effectiveTotalKm > 0 || (stops && stops.length > 2));
+    const shouldDrawTrail = rawLatLngs.length > 1 && hasGenuineRouteTrail && (effectiveTotalKm >= 0.2);
     let drawnPolylineCoords = shouldDrawTrail ? rawLatLngs : [];
     if (shouldDrawTrail) {
       const isRoadSnapped = Boolean(roadSnapEnabled && snappedRouteState && snappedRouteState.snapped && snappedRouteState.coords.length > 1);
