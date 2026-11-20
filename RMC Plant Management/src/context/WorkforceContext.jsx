@@ -665,22 +665,9 @@ export const WorkforceProvider = ({ children }) => {
             return sameAtt || sameTodayEmp;
           });
           if (!matchedLive || matchedLive.lat === undefined || matchedLive.lng === undefined) return att;
-          // Strictly reject low-accuracy live fixes (> 30 m) per GPS requirements
+          // Allow realistic GNSS satellite fixes (accuracy up to 60m)
           const liveAcc = Number(matchedLive.accuracy != null ? matchedLive.accuracy : 15);
-          if (liveAcc > 30) return att;
-
-          // Reject disconnected teleportation jumps (> 25 km from punch-in location when stationary)
-          if (att.gpsLocation?.lat && att.gpsLocation?.lng) {
-            const jumpDist = calculateDistanceMeters(
-              Number(att.gpsLocation.lat),
-              Number(att.gpsLocation.lng),
-              Number(matchedLive.lat),
-              Number(matchedLive.lng)
-            );
-            if (jumpDist > 25000 && (!Array.isArray(att.routeTrail) || att.routeTrail.length <= 1)) {
-              return att;
-            }
-          }
+          if (liveAcc > 60) return att;
 
           const liveTs = matchedLive.timestamp || matchedLive.updatedAt || new Date().toISOString();
           const candidate = {
