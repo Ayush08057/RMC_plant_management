@@ -31,14 +31,14 @@ export async function resolveAccurateAddress(lat, lng) {
     return reverseGeocodeCache.get(cacheKey);
   }
 
-  // 1. Check if user is genuinely INSIDE an operational landmark (tight <= 150m boundary)
-  const sangliCheck = resolveSangliLandmark(numLat, numLng);
-  if (sangliCheck.isKnownLandmark && sangliCheck.distanceMeters !== null && sangliCheck.distanceMeters <= 150) {
+  // 1. Check if user is genuinely INSIDE an operational plant site (tight <= 100m boundary)
+  const siteCheck = resolveSangliLandmark(numLat, numLng);
+  if (siteCheck.isKnownLandmark && siteCheck.distanceMeters !== null && siteCheck.distanceMeters <= 100) {
     const res = {
-      landmarkName: sangliCheck.landmarkName,
-      address: sangliCheck.address,
-      shortName: sangliCheck.shortName,
-      city: 'Sangli'
+      landmarkName: siteCheck.landmarkName,
+      address: siteCheck.address,
+      shortName: siteCheck.shortName,
+      city: 'Plant HQ'
     };
     reverseGeocodeCache.set(cacheKey, res);
     return res;

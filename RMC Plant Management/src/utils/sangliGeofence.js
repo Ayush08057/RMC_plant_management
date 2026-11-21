@@ -128,7 +128,8 @@ export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Resolves coordinates into an operational Sangli landmark name and formatted location string
+ * Resolves coordinates into a clean formatted location string
+ * Universal across any district, city, state, or highway
  */
 export function resolveSangliLandmark(lat, lng) {
   if (lat === null || lat === undefined || lng === null || lng === undefined) {
@@ -143,41 +144,30 @@ export function resolveSangliLandmark(lat, lng) {
   const numLat = Number(lat);
   const numLng = Number(lng);
 
-  // Check known Sangli landmarks
+  // Check known primary plant sites only if physically within 100 meters
   for (const lm of SANGLI_LANDMARKS) {
-    const dist = calculateDistanceMeters(numLat, numLng, lm.lat, lm.lng);
-    if (dist <= lm.radiusMeters) {
-      return {
-        landmarkName: lm.name,
-        shortName: lm.shortName,
-        address: lm.address,
-        distanceMeters: dist,
-        isKnownLandmark: true,
-        type: lm.type,
-      };
+    if (lm.type === 'MAIN_PLANT') {
+      const dist = calculateDistanceMeters(numLat, numLng, lm.lat, lm.lng);
+      if (dist <= 100) {
+        return {
+          landmarkName: lm.name,
+          shortName: lm.shortName,
+          address: lm.address,
+          distanceMeters: dist,
+          isKnownLandmark: true,
+          type: lm.type,
+        };
+      }
     }
   }
 
-
-
-  // Check Sangli District bounding box (lat: 16.70 to 16.98, lng: 74.40 to 74.80)
-  if (numLat >= 16.70 && numLat <= 16.98 && numLng >= 74.40 && numLng <= 74.80) {
-    return {
-      landmarkName: 'Sangli Regional Zone',
-      shortName: 'Sangli District',
-      address: `Sangli District (${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E)`,
-      distanceMeters: null,
-      isKnownLandmark: true,
-      type: 'REGIONAL',
-    };
-  }
-
+  // Universal format: Real coordinates without artificial regional snapping or city lock
   return {
     landmarkName: `${numLat.toFixed(4)}°N, ${numLng.toFixed(4)}°E`,
     shortName: `${numLat.toFixed(3)}°, ${numLng.toFixed(3)}°`,
-    address: `Coordinates: ${numLat.toFixed(5)}° N, ${numLng.toFixed(5)}° E`,
+    address: `${numLat.toFixed(5)}°N, ${numLng.toFixed(5)}°E`,
     distanceMeters: null,
     isKnownLandmark: false,
-    type: 'COORDINATES',
+    type: 'GPS_COORDINATES',
   };
 }
