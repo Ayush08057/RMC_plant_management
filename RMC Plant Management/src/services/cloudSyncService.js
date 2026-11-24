@@ -13,7 +13,7 @@
  */
 
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../config/firebase.js';
+import { db } from '../config/firebase.js';
 import { sanitizeForFirestore } from './firestoreService.js';
 
 // Default company scope
@@ -92,19 +92,7 @@ export function isItemDeleted(item, deletedIds) {
   const id = item.id ? String(item.id).trim().toLowerCase() : '';
   const billNo = item.billNo ? String(item.billNo).trim().toLowerCase() : '';
   const voucherNo = item.voucherNo ? String(item.voucherNo).trim().toLowerCase() : '';
-  const sheetNo = item.sheetNo ? String(item.sheetNo).trim().toLowerCase() : '';
-  const challanNo = item.challanNo ? String(item.challanNo).trim().toLowerCase() : '';
-  const slipNo = item.slipNo ? String(item.slipNo).trim().toLowerCase() : '';
-  const tripId = item.tripId ? String(item.tripId).trim().toLowerCase() : '';
-  return Boolean(
-    (id && deletedIds.has(id)) ||
-    (billNo && deletedIds.has(billNo)) ||
-    (voucherNo && deletedIds.has(voucherNo)) ||
-    (sheetNo && deletedIds.has(sheetNo)) ||
-    (challanNo && deletedIds.has(challanNo)) ||
-    (slipNo && deletedIds.has(slipNo)) ||
-    (tripId && deletedIds.has(tripId))
-  );
+  return (id && deletedIds.has(id)) || (billNo && deletedIds.has(billNo)) || (voucherNo && deletedIds.has(voucherNo));
 }
 
 /**
@@ -197,7 +185,6 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
             setDoc(primaryRef, {
               items: migrated,
               updatedAt: Date.now(),
-              lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
               source: 'auto_migrated_from_hrSettings'
             }, { merge: true }).catch(() => {});
             return;
@@ -212,7 +199,6 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
             await setDoc(primaryRef, {
               items: cleanLocal,
               updatedAt: Date.now(),
-              lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
               source: 'initial_device_seed'
             }, { merge: true });
           } catch {
@@ -220,7 +206,6 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
             setDoc(legacyRef, {
               items: cleanLocal,
               updatedAt: Date.now(),
-              lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
               source: 'initial_device_seed_fallback'
             }, { merge: true }).catch(() => {});
           }
@@ -412,7 +397,6 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
       items: cleanPayload,
       updatedAt: Date.now(),
       updatedAtIso: new Date().toISOString(),
-      lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
       source: 'web_client_sync'
     }, { merge: true });
 
@@ -432,7 +416,6 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
         items: cleanLegacyPayload,
         updatedAt: Date.now(),
         updatedAtIso: new Date().toISOString(),
-        lastUpdatedBy: auth?.currentUser?.uid || 'web_client',
         source: 'web_client_sync_fallback'
       }, { merge: true });
     } catch (fallbackErr) {

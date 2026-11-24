@@ -21,7 +21,6 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { useWorkforce } from '../../../context/WorkforceContext';
 import { subscribeCloudStore, pushCloudStore } from '../../../services/cloudSyncService';
-import { allocateNextSequenceNumber, recordVoidedSequenceNumber, getActiveFinancialYear } from '../../../services/sequenceCounterService';
 import HelpModal from './HelpModal';
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
@@ -38,8 +37,7 @@ const VOLUME_PRESETS = [3.0, 4.5, 6.0, 7.0, 8.0];
 
 export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
   const { language, t } = useLanguage();
-  const { employees, activeCompanyId } = useWorkforce();
-  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
+  const { employees } = useWorkforce();
   const [step, setStep] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -229,25 +227,8 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
     setValidationError('');
   };
 
-  const handleConfirmAndSave = async (shouldPrint = false) => {
-    let allocatedSequence = null;
-    let challanNumber = null;
-
-    try {
-      allocatedSequence = await allocateNextSequenceNumber({
-        type: 'delivery_challans',
-        companyId: resolvedCompanyId,
-        prefix: 'DC',
-      });
-      challanNumber = allocatedSequence?.sequenceNumber;
-    } catch (counterErr) {
-      console.warn('[SendVehicleWizard] Counter allocation notice:', counterErr);
-    }
-    if (!challanNumber) {
-      const fy = getActiveFinancialYear();
-      challanNumber = `DC-${fy}/1`;
-    }
-
+  const handleConfirmAndSave = (shouldPrint = false) => {
+    const challanNumber = `DC-25-26/${Date.now().toString().slice(-4)}`;
     const departureTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const todayDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -276,15 +257,6 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
       pushCloudStore('cloud_delivery_challans', CHALLAN_STORAGE_KEY, updatedChallans);
     } catch (e) {
       console.warn('Error saving challan:', e);
-      if (allocatedSequence) {
-        recordVoidedSequenceNumber({
-          companyId: 'sm-concretech',
-          type: 'delivery_challans',
-          sequenceNumber: allocatedSequence.sequenceNumber,
-          financialYear: allocatedSequence.financialYear,
-          reason: `SendVehicleWizard challan save error: ${e.message}`,
-        });
-      }
     }
 
     // Save into rmc_driver_trips_v2

@@ -825,115 +825,6 @@ const LOWER_MARATHI_MAP = Object.keys(DIRECT_MARATHI_MAP).reduce((acc, k) => {
   return acc;
 }, {});
 
-// Helper to resolve mixed bilingual strings like "Marathi (English)" or "English (Marathi)"
-export function resolveBilingual(str, targetLang) {
-  if (!str || typeof str !== 'string') return null;
-
-  // Pattern: "Part1 (Part2)"
-  const bracketMatch = str.match(/^([^(]+)\s*\(([^)]+)\)\s*$/);
-  if (bracketMatch) {
-    const part1 = bracketMatch[1].trim();
-    const part2 = bracketMatch[2].trim();
-    const p1Deva = /[\u0900-\u097F]/.test(part1);
-    const p2Deva = /[\u0900-\u097F]/.test(part2);
-
-    if (p1Deva && !p2Deva) {
-      // "Marathi (English)" -> e.g. "क्युब चाचणी (Cube Testing)"
-      return targetLang === 'en' ? part2 : part1;
-    } else if (!p1Deva && p2Deva) {
-      // "English (Marathi)" -> e.g. "Cube Testing (क्युब चाचणी)"
-      return targetLang === 'en' ? part1 : part2;
-    }
-  }
-
-  // Pattern: "Part1 / Part2"
-  if (str.includes('/')) {
-    const parts = str.split('/').map(p => p.trim());
-    if (parts.length === 2) {
-      const p0Deva = /[\u0900-\u097F]/.test(parts[0]);
-      const p1Deva = /[\u0900-\u097F]/.test(parts[1]);
-      if (p0Deva && !p1Deva) {
-        return targetLang === 'en' ? parts[1] : parts[0];
-      } else if (!p0Deva && p1Deva) {
-        return targetLang === 'en' ? parts[0] : parts[1];
-      }
-    }
-  }
-
-  return null;
-}
-
-// Reverse mapping for translating Marathi back to English when in English mode
-export const MARATHI_TO_ENGLISH_MAP = Object.entries(DIRECT_MARATHI_MAP).reduce((acc, [en, mr]) => {
-  const cleanMr = mr.trim();
-  acc[cleanMr] = en;
-  acc[cleanMr.toLowerCase()] = en;
-  return acc;
-}, {
-  // Extra dedicated operational & QC terms
-  'क्युब चाचणी व ऑटो रिमाइंडर्स': 'Cube Testing & Schedule',
-  'स्लम व ऑन-साईट टेस्ट्स': 'Daily Slump Tests',
-  'साहित्य आवक नोंदवा': 'Inward Stock',
-  'साहित्य वापर नोंदवा': 'Issue Spare',
-  'शिल्लक साठा': 'Current Stock',
-  'आवक-जावक नोंदवही': 'Transaction Logs',
-  'टॅली प्राइम XML एक्सपोर्ट': '1-Click Tally XML Sync',
-  'विक्री बिले': 'Sales Invoices',
-  'पेमेंट पावत्या': 'Receipt Vouchers',
-  'कच्चा माल खरेदी': 'Material Purchases',
-  'भेट दिलेल्या ठिकाणांची टाइमलाइन': 'Visited Locations Timeline',
-  'एकूण प्रवास अंतर': 'Total Run',
-  'गाडी मीटर': 'Odometer',
-  'ड्यूटी वेळ': 'Shift Runtime',
-  'भेट दिलेली ठिकाणे': 'Visited Places',
-  'नवीन भेट दिलेले ठिकाण नोंदवा': 'Record Visited Location',
-  'काटा १ & २': 'Gross & Tare',
-  'थेट निव्वळ': 'Direct Net',
-  'केमिकल बॅरल्स': 'Chemical Barrels',
-  'एकूण वजन': 'Gross Weight',
-  'रिकामी गाडीचे वजन': 'Tare Weight',
-  'निव्वळ वजन': 'Net Weight',
-  'काँक्रीट ओतणे': 'Site Pouring',
-  'साइट तपासणी': 'Site Inspection',
-  'लॅब चाचणी': 'Quality Lab Test',
-  'डिलिव्हरी पॉईंट': 'Delivery Checkpoint',
-  'हायवे प्रवास': 'Highway Transit',
-  'क्लायंट ऑफिस': 'Client Office',
-  'लॉजिस्टिक्स हब': 'Logistics Hub',
-  'उत्तीर्ण': 'Passed',
-  'अनुत्तीर्ण': 'Failed',
-  'आज चाचणी': 'Due Today',
-  'मुदत संपली': 'Overdue',
-  'क्युरिंग सुरू': 'In Curing Tank',
-  'सामान आले': 'Inward Stock',
-  'सामान वापरले': 'Issue Spare',
-  'सुटे भाग': 'Spare Parts',
-  'कमी साठा': 'Low Stock',
-  'हजर': 'Present',
-  'गैरहजर': 'Absent',
-  'नोंदणीकृत': 'Enrolled',
-  'सक्रिय': 'Active',
-  'रस्त्यावर': 'In Transit',
-  'प्लॅन्टमध्ये': 'In-Plant',
-  'पहिली वजन नोंद करा': 'Record First Weighment',
-  'एकूण नोंदवलेले सुटे भाग': 'Total Items in Store',
-  'आजचे व्यवहार': "Today's Transactions",
-  'आजचे आवक / जावक व्यवहार': 'Today’s Transactions',
-  'कमी साठा असणारे आयटम्स': 'Low Stock Items',
-  'नवीन काँक्रीट क्युब लॉट कास्ट करा': 'Cast New Concrete Cube Lot',
-  'चाचणी पूर्ण व प्रमाणित': 'Tested & Certified',
-  'एकूण क्युब लॉट्स': 'Total Cube Lots',
-  'क्युरिंग चालू': 'In Curing (Upcoming)',
-  'क्युरिंग चालू असलेले': 'Currently in Curing',
-  'आज चाचणी आवश्यक': 'Testing Due Today',
-  'आज चाचणी / मुदत संपली': 'Due Today / Overdue',
-});
-
-const LOWER_ENGLISH_MAP = Object.keys(MARATHI_TO_ENGLISH_MAP).reduce((acc, k) => {
-  acc[k.toLowerCase().trim()] = MARATHI_TO_ENGLISH_MAP[k];
-  return acc;
-}, {});
-
 const LanguageContext = createContext(null);
 
 export function LanguageProvider({ children }) {
@@ -960,117 +851,55 @@ export function LanguageProvider({ children }) {
   };
 
   /**
-   * Universal bidirectional translation resolver:
-   * Dynamically handles English -> Marathi AND Marathi -> English,
-   * bilingual bracket formats, numeric patterns, and prefixes.
+   * Universal translation resolver:
+   * Handles direct keys, camelCase keys, exact strings, trimmed strings,
+   * case-insensitive variations, prefixes ('+ ', '• '), and colons.
    */
   const t = (key, fallback = '') => {
     if (!key && key !== 0) return fallback || '';
     if (typeof key !== 'string') return key;
 
-    const trimmed = key.trim();
-
-    // =========================================================
-    // 1. Resolve Bilingual Brackets like "Marathi (English)" or "English (Marathi)"
-    // =========================================================
-    const resolvedBilingual = resolveBilingual(trimmed, language);
-    if (resolvedBilingual) {
-      return resolvedBilingual;
-    }
-
-    // =========================================================
-    // 2. ENGLISH MODE ('en')
-    // =========================================================
+    // If language is English, return English cleanly
     if (language === 'en') {
-      // Check TRANSLATIONS.en
       const langDict = TRANSLATIONS.en;
       if (langDict && langDict[key] !== undefined) {
         return langDict[key];
       }
-
-      // Check if key is in Marathi and translate back to English
-      if (MARATHI_TO_ENGLISH_MAP[key]) {
-        return MARATHI_TO_ENGLISH_MAP[key];
-      }
-      if (MARATHI_TO_ENGLISH_MAP[trimmed]) {
-        return MARATHI_TO_ENGLISH_MAP[trimmed];
-      }
-      const lowerKey = trimmed.toLowerCase();
-      if (LOWER_ENGLISH_MAP[lowerKey]) {
-        return LOWER_ENGLISH_MAP[lowerKey];
-      }
-
-      // Dynamic Marathi numeric pattern matching (e.g. "4 हजर" -> "4 Present")
-      const numMrPresent = trimmed.match(/^(\d+)\s+हजर$/);
-      if (numMrPresent) return `${numMrPresent[1]} Present`;
-
-      const numMrAbsent = trimmed.match(/^(\d+)\s+गैरहजर$/);
-      if (numMrAbsent) return `${numMrAbsent[1]} Absent`;
-
-      const numMrEnrolled = trimmed.match(/^(\d+)\s+नोंदणीकृत$/);
-      if (numMrEnrolled) return `${numMrEnrolled[1]} Enrolled`;
-
-      const numMrTransit = trimmed.match(/^(\d+)\s+रस्त्यावर$/);
-      if (numMrTransit) return `${numMrTransit[1]} Transit`;
-
-      const numMrPlant = trimmed.match(/^(\d+)\s+प्लॅन्टमध्ये$/);
-      if (numMrPlant) return `${numMrPlant[1]} In-Plant`;
-
-      // Bullet separator in Marathi
-      if (trimmed.includes('•')) {
-        const parts = trimmed.split('•');
-        return parts.map(p => t(p.trim())).join(' • ');
-      }
-
-      // Trailing colon
-      if (trimmed.endsWith(':')) {
-        const core = trimmed.slice(0, -1).trim();
-        const enCore = MARATHI_TO_ENGLISH_MAP[core] || LOWER_ENGLISH_MAP[core.toLowerCase()];
-        if (enCore) return `${enCore}:`;
-      }
-
-      // Leading '+'
-      if (trimmed.startsWith('+ ')) {
-        const core = trimmed.slice(2).trim();
-        const enCore = MARATHI_TO_ENGLISH_MAP[core] || LOWER_ENGLISH_MAP[core.toLowerCase()];
-        if (enCore) return `+ ${enCore}`;
-      }
-
       return fallback || key;
     }
 
-    // =========================================================
-    // 3. MARATHI MODE ('mr')
-    // =========================================================
-    // Direct key from TRANSLATIONS.mr
+    // Language is Marathi ('mr'):
+    // 1. Direct key from TRANSLATIONS.mr
     if (TRANSLATIONS.mr && TRANSLATIONS.mr[key] !== undefined) {
       return TRANSLATIONS.mr[key];
     }
 
-    // Exact match in DIRECT_MARATHI_MAP
+    // 2. Exact match in DIRECT_MARATHI_MAP
     if (DIRECT_MARATHI_MAP[key]) {
       return DIRECT_MARATHI_MAP[key];
     }
 
-    // Trimmed match
+    // 3. Trimmed match
+    const trimmed = key.trim();
     if (DIRECT_MARATHI_MAP[trimmed]) {
       return DIRECT_MARATHI_MAP[trimmed];
     }
 
-    // Case-insensitive lookup
+    // 4. Case-insensitive lookup
     const lowerKey = trimmed.toLowerCase();
     if (LOWER_MARATHI_MAP[lowerKey]) {
       return LOWER_MARATHI_MAP[lowerKey];
     }
 
-    // Handling bullet separator '•' (e.g. '4 Late Arrivals Today • Biometric Sync')
+
+    // 5. Handling bullet separator '•' (e.g. '4 Late Arrivals Today • Biometric Sync')
     if (trimmed.includes('•')) {
       const parts = trimmed.split('•');
       const translatedParts = parts.map(p => t(p.trim()));
       return translatedParts.join(' • ');
     }
 
-    // Dynamic numeric patterns (e.g. '4 Present', '8 Enrolled', '2 Active Duty')
+    // 6. Dynamic numeric patterns (e.g. '4 Present', '8 Enrolled', '2 Active Duty')
     const numPresentMatch = trimmed.match(/^(\d+)\s+Present$/i);
     if (numPresentMatch) return `${numPresentMatch[1]} हजर`;
 
@@ -1112,7 +941,7 @@ export function LanguageProvider({ children }) {
 
     if (/^0\s+marked\s+today/i.test(trimmed)) return 'आज ० नोंद';
 
-    // Handling '+ ' prefix
+    // 7. Handling '+ ' prefix (e.g. '+ Add Employee' -> '+ नवीन कर्मचारी जोडा')
     if (trimmed.startsWith('+ ')) {
       const core = trimmed.slice(2).trim();
       const translatedCore = DIRECT_MARATHI_MAP[core] || LOWER_MARATHI_MAP[core.toLowerCase()];
@@ -1121,7 +950,7 @@ export function LanguageProvider({ children }) {
       }
     }
 
-    // Handling trailing colon ':'
+    // 6. Handling trailing colon ':' (e.g. 'Status:' -> 'स्थिती:')
     if (trimmed.endsWith(':')) {
       const core = trimmed.slice(0, -1).trim();
       const translatedCore = DIRECT_MARATHI_MAP[core] || LOWER_MARATHI_MAP[core.toLowerCase()];
@@ -1130,7 +959,7 @@ export function LanguageProvider({ children }) {
       }
     }
 
-    // Check fallback string
+    // 7. Check fallback string
     if (fallback) {
       const trimmedFb = fallback.trim();
       if (DIRECT_MARATHI_MAP[trimmedFb]) {
@@ -1141,7 +970,7 @@ export function LanguageProvider({ children }) {
       }
     }
 
-    // If key exists in TRANSLATIONS.en, see if its English value has a Marathi mapping
+    // 8. If key exists in TRANSLATIONS.en, see if its English value has a Marathi mapping
     if (TRANSLATIONS.en && TRANSLATIONS.en[key] !== undefined) {
       const enVal = TRANSLATIONS.en[key];
       if (DIRECT_MARATHI_MAP[enVal]) {
@@ -1156,12 +985,12 @@ export function LanguageProvider({ children }) {
   };
 
 
-  // Comprehensive Bidirectional DOM Auto-Translator
+  // Global DOM Auto-Translator for Marathi
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
     if (language === 'en') {
-      // 1. Restore original English text cached in data-rmc-orig
+      // Restore original English text
       const origEls = document.querySelectorAll('[data-rmc-orig]');
       origEls.forEach((el) => {
         if (el.dataset.rmcOrig) {
@@ -1176,70 +1005,9 @@ export function LanguageProvider({ children }) {
           input.removeAttribute('data-rmc-orig-ph');
         }
       });
-
-      // 2. Actively translate any remaining Devanagari text nodes to pure English
-      const devanagariRegex = /[\u0900-\u097F]/;
-      const cleanDevanagariNode = (node) => {
-        if (!node || node.nodeType !== 3) return;
-        const text = node.nodeValue;
-        if (!text || !devanagariRegex.test(text)) return;
-        const parent = node.parentElement;
-        if (!parent) return;
-        const tag = parent.tagName ? parent.tagName.toLowerCase() : '';
-        if (['script', 'style', 'code', 'pre'].includes(tag)) return;
-        // Keep the language switch button "मराठी" untouched
-        if (text.trim() === 'मराठी') return;
-
-        const en = t(text);
-        if (en && en !== text) {
-          node.nodeValue = en;
-        }
-      };
-
-      const cleanAllDevanagari = (root = document.body) => {
-        if (!root) return;
-        try {
-          const walker = document.createTreeWalker(root, 4, null, false);
-          let curr = walker.nextNode();
-          while (curr) {
-            cleanDevanagariNode(curr);
-            curr = walker.nextNode();
-          }
-        } catch {}
-      };
-
-      cleanAllDevanagari();
-
-      const enObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (mutation.type === 'childList') {
-            mutation.addedNodes.forEach((added) => {
-              if (added.nodeType === 3) {
-                cleanDevanagariNode(added);
-              } else if (added.nodeType === 1) {
-                cleanAllDevanagari(added);
-              }
-            });
-          } else if (mutation.type === 'characterData') {
-            cleanDevanagariNode(mutation.target);
-          }
-        }
-      });
-
-      enObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-
-      return () => {
-        enObserver.disconnect();
-      };
+      return;
     }
 
-    // -------------------------------------------------------------
-    // MARATHI ACTIVE: Translate DOM to Marathi
-    // -------------------------------------------------------------
     let isTranslating = false;
 
     const translateNode = (node) => {

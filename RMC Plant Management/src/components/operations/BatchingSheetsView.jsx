@@ -23,10 +23,7 @@ import {
   Building2,
   Calendar
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
-import { adjustSiloStock, resolveMaterialKey } from '../../services/siloStockService';
-import { useAuth } from '../../context/AuthContext';
-import { useWorkforce } from '../../context/WorkforceContext';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import HelpModal from './guided/HelpModal';
 import MakeConcreteWizard from './guided/MakeConcreteWizard';
 import { useLanguage } from '../../context/LanguageContext';
@@ -43,69 +40,10 @@ export const MIX_DESIGN_PRESETS = {
   'M40': { grade: 'M40', cement: 450, flyash: 90, agg20: 720, agg10: 470, sand: 770, water: 150, admixture: 4.5, slump: '150 ± 25 mm', wcRatio: 0.32 },
 };
 
-// Map full material description to standard RMC SCADA Product Code (matching client demo format)
-export const mapProductCode = (name) => {
-  const n = (name || '').toLowerCase();
-  if (n.includes('10mm')) return '10MM';
-  if (n.includes('20mm')) return '20MM';
-  if (n.includes('sand')) return 'C SAND';
-  if (n.includes('cement') || n.includes('opc')) return 'CMT1';
-  if (n.includes('fly') || n.includes('ash') || n.includes('pozzo')) return 'FLYASH';
-  if (n.includes('water')) return 'WTR1';
-  if (n.includes('admixture') || n.includes('pce')) return 'ADM1';
-  return (name || '').toUpperCase();
-};
-
-export const calculateBatchEndTime = (startTimeStr, count = 5) => {
-  if (!startTimeStr) return '12:22:51';
-  try {
-    const parts = startTimeStr.match(/(\d+):(\d+)(?::(\d+))?\s*(AM|PM)?/i);
-    if (!parts) return startTimeStr;
-    let hours = parseInt(parts[1], 10);
-    const minutes = parseInt(parts[2], 10);
-    const seconds = parts[3] ? parseInt(parts[3], 10) : 0;
-    const isPM = parts[4] && parts[4].toUpperCase() === 'PM';
-    const isAM = parts[4] && parts[4].toUpperCase() === 'AM';
-    if (isPM && hours < 12) hours += 12;
-    if (isAM && hours === 12) hours = 0;
-
-    const totalSeconds = hours * 3600 + minutes * 60 + seconds + (Math.max(1, count) * 100);
-    const endH = Math.floor(totalSeconds / 3600) % 24;
-    const endM = Math.floor((totalSeconds % 3600) / 60);
-    const endS = totalSeconds % 60;
-    const pad = (n) => String(n).padStart(2, '0');
-    
-    if (parts[4]) {
-      const displayH = endH % 12 || 12;
-      const ampm = endH >= 12 ? 'PM' : 'AM';
-      return `${pad(displayH)}:${pad(endM)} ${ampm}`;
-    }
-    return `${pad(endH)}:${pad(endM)}:${pad(endS)}`;
-  } catch {
-    return startTimeStr;
-  }
-};
-
-export const getReportGenTime = (sheet) => {
-  if (sheet?.reportGenTime) return sheet.reportGenTime;
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const d = pad(now.getDate());
-  const m = pad(now.getMonth() + 1);
-  const y = now.getFullYear();
-  const h = pad(now.getHours());
-  const min = pad(now.getMinutes());
-  const s = pad(now.getSeconds());
-  return `${d}-${m}-${y} ${h}:${min}:${s}`;
-};
-
 const INITIAL_BATCH_SHEETS = [];
 
 export default function BatchingSheetsView() {
   const { language } = useLanguage();
-  const { user } = useAuth();
-  const { activeCompanyId } = useWorkforce();
-  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const [helpOpen, setHelpOpen] = useState(false);
   const [guidedWizardOpen, setGuidedWizardOpen] = useState(false);
 
@@ -286,36 +224,97 @@ export default function BatchingSheetsView() {
     error: ''
   });
 
-  const handleFinalizeProduction = async (sheet, supervisorApproval = null) => {
+  const handleFinalizeProduction = (sheet, supervisorApproval = null) => {
     if (!sheet) return;
     if (sheet.stockDeducted) {
       showToast(`Stock already deducted for batch #${sheet.sheetNo}.`);
       return;
     }
 
-    const deductionItems = (sheet.materials || []).map((m) => {
-      const act = Number(m.actual) || Number(m.target) || 0;
-      const tons = act / 1000;
-      const nameLower = (m.name || '').toLowerCase();
-      const isChemical = nameLower.includes('admixture') || nameLower.includes('retarder') || (m.unit || '').toLowerCase().includes('l');
-      return {
-        rawName: m.name,
-        materialKey: resolveMaterialKey(m.name),
-        delta: isChemical ? act : tons,
-        unit: isChemical ? 'Litres' : 'Tons',
-      };
-    });
-
     try {
-      await adjustSiloStock({
-        companyId: resolvedCompanyId,
-        operation: 'deduct',
-        referenceId: sheet.sheetNo || sheet.id,
-        items: deductionItems,
-        allowNegative: Boolean(supervisorApproval),
-        overrideReason: supervisorApproval ? (supervisorApproval.reason || 'Physical silo unrecorded bulk delivery') : '',
-        user,
-      });
+      const siloKey = 'rmc_silo_inventory_v2';
+      const rawSilo = localStorage.getItem(siloKey);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : null;
+
+      // 1. Strict Stock Availability Validation before deduction
+      if (!supervisorApproval && siloData) {
+        const shortfalls = [];
+        (sheet.materials || []).forEach((m) => {
+          const act = Number(m.actual) || Number(m.target) || 0;
+          const tons = act / 1000;
+          const nameLower = (m.name || '').toLowerCase();
+
+          let available = 0;
+          let unit = m.unit || 'kg';
+          let required = act;
+
+          if (nameLower.includes('cement') && siloData.cement) {
+            available = Number(siloData.cement.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('fly ash') && siloData.flyash) {
+            available = Number(siloData.flyash.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('20mm') && siloData.agg20) {
+            available = Number(siloData.agg20.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('10mm') && siloData.agg10) {
+            available = Number(siloData.agg10.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('sand') && siloData.sand) {
+            available = Number(siloData.sand.stockTons || 0);
+            required = tons;
+            unit = 'MT';
+          } else if (nameLower.includes('admixture') && siloData.admixturePce) {
+            available = Number(siloData.admixturePce.stockLiters || 0);
+            required = act;
+            unit = 'Litres';
+          }
+
+          if (required > available) {
+            shortfalls.push({
+              material: m.name,
+              required: Number(required.toFixed(2)),
+              available: Number(available.toFixed(2)),
+              deficit: Number((required - available).toFixed(2)),
+              unit
+            });
+          }
+        });
+
+        if (shortfalls.length > 0) {
+          // Block finalization and display shortfall authorization workflow
+          setShortfallModal({ sheet, shortfalls });
+          return;
+        }
+      }
+
+      // 2. Perform safe deductions
+      if (siloData) {
+        (sheet.materials || []).forEach((m) => {
+          const act = Number(m.actual) || Number(m.target) || 0;
+          const tons = act / 1000;
+          const nameLower = (m.name || '').toLowerCase();
+          if (nameLower.includes('cement') && siloData.cement) {
+            siloData.cement.stockTons = Math.max(0, Number((Number(siloData.cement.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('fly ash') && siloData.flyash) {
+            siloData.flyash.stockTons = Math.max(0, Number((Number(siloData.flyash.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('20mm') && siloData.agg20) {
+            siloData.agg20.stockTons = Math.max(0, Number((Number(siloData.agg20.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('10mm') && siloData.agg10) {
+            siloData.agg10.stockTons = Math.max(0, Number((Number(siloData.agg10.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('sand') && siloData.sand) {
+            siloData.sand.stockTons = Math.max(0, Number((Number(siloData.sand.stockTons || 0) - tons).toFixed(2)));
+          } else if (nameLower.includes('admixture') && siloData.admixturePce) {
+            siloData.admixturePce.stockLiters = Math.max(0, Number((Number(siloData.admixturePce.stockLiters || 0) - act).toFixed(1)));
+          }
+        });
+        localStorage.setItem(siloKey, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', siloKey, siloData);
+      }
 
       const updated = sheets.map(s => s.id === sheet.id ? {
         ...s,
@@ -350,12 +349,7 @@ export default function BatchingSheetsView() {
       setShortfallModal(null);
       showToast(`✓ Production for Sheet #${sheet.sheetNo} finalized! Raw materials deducted from Silo inventory.`);
     } catch (err) {
-      if (err.code === 'INSUFFICIENT_STOCK' && err.shortfalls) {
-        setShortfallModal({ sheet, shortfalls: err.shortfalls });
-      } else {
-        console.warn('Production stock deduction notice:', err.message);
-        alert(`⚠️ Stock deduction error:\n${err.message}`);
-      }
+      console.warn('Production stock deduction notice:', err.message);
     }
   };
 
@@ -435,11 +429,8 @@ export default function BatchingSheetsView() {
 
   const handleDeleteSheet = (id, sheetNo) => {
     if (confirm(`Are you sure you want to delete Batching Sheet #${sheetNo}?`)) {
-      if (id) markItemAsDeleted(BATCHING_STORAGE_KEY, id);
-      if (sheetNo) markItemAsDeleted(BATCHING_STORAGE_KEY, sheetNo);
-      const updated = sheets.filter((s) => s.id !== id && s.sheetNo !== sheetNo);
+      const updated = sheets.filter((s) => s.id !== id);
       setSheets(updated);
-      pushCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, updated);
       showToast(`Batching Sheet #${sheetNo} removed.`);
       if (selectedSheet?.id === id) setSelectedSheet(null);
     }
@@ -705,7 +696,7 @@ export default function BatchingSheetsView() {
                           type="button"
                           onClick={() => setPrintingSheet(s)}
                           className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-2xs transition-colors cursor-pointer"
-                          title="Print Batch Sheet Docket"
+                          title="Print Batch Sheet Ticket"
                         >
                           <Printer className="w-3.5 h-3.5" />
                         </button>
@@ -990,7 +981,7 @@ export default function BatchingSheetsView() {
                     />
                   </div>
                   <div className="text-[10px] text-amber-800 bg-amber-100/60 p-2 rounded-lg border border-amber-300/80 font-mono">
-                    Free Moisture: <strong>{Math.max(0, ((Number(form.moisturePercent) || 0) - (Number(form.absorptionPercent) || 0))).toFixed(1)}%</strong>
+                    Free Moisture: <strong>{Math.max(0, (form.moisturePercent - form.absorptionPercent)).toFixed(1)}%</strong>
                     <span className="block text-[9px] text-amber-700 font-sans">
                       Deducted from water; added to moist aggregate scale
                     </span>
@@ -1000,7 +991,7 @@ export default function BatchingSheetsView() {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[500px] text-xs">
                     <thead>
-                      <tr className="bg-slate-100 text-slate-900 font-extrabold border-b border-slate-300">
+                      <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                         <th className="py-2 px-3 text-left">Material Component</th>
                         <th className="py-2 px-3 text-right">Target Proportions</th>
                         <th className="py-2 px-3 text-right">Actual Batched Weight</th>
@@ -1121,7 +1112,7 @@ export default function BatchingSheetsView() {
                   className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Print Docket</span>
+                  <span>Print Ticket</span>
                 </button>
                 <button
                   type="button"
@@ -1275,7 +1266,7 @@ export default function BatchingSheetsView() {
                   className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#1D5FA7] text-white hover:bg-[#123B6D] flex items-center gap-1.5 shadow-sm"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Print Docket</span>
+                  <span>Print Official Slip</span>
                 </button>
               </div>
             </div>
@@ -1285,199 +1276,346 @@ export default function BatchingSheetsView() {
       )}
 
       {/* ========================================================
-          MODAL: PRINTABLE COMPUTERIZED BATCH DOCKET
+          MODAL: PRINTABLE COMPUTERIZED BATCH DOCKET (TECHNICAL BATCH DATA REPORT)
           ======================================================== */}
       {printingSheet && typeof document !== 'undefined' && (() => {
-        const vol = Number(printingSheet.volume) || 1;
-        const batchCap = Number(printingSheet.batchCapacity) > 0 ? Number(printingSheet.batchCapacity) : 0.5;
-        const numBatches = printingSheet.batchesCount || Math.ceil(vol / batchCap);
-        const orderedQty = printingSheet.orderedQty 
-          ? Number(printingSheet.orderedQty).toFixed(2) 
-          : (printingSheet.totalOrderedM3 ? Number(printingSheet.totalOrderedM3).toFixed(2) : '999.99');
-        const producedQty = Number(vol).toFixed(2);
-        const setThisLoad = Number(vol).toFixed(2);
-        const batchSize = Number(batchCap).toFixed(3);
-        const batchEndTime = printingSheet.endTime || calculateBatchEndTime(printingSheet.time, numBatches);
-        const reportGenTime = getReportGenTime(printingSheet);
+        const preset = MIX_DESIGN_PRESETS[printingSheet.mixGrade] || MIX_DESIGN_PRESETS['M25'] || {};
+        const vol = Number(printingSheet.volume) || 6.0;
+        const batchCap = Number(printingSheet.batchCapacity) || 0.5;
+        const numBatches = Math.max(1, Math.round(vol / batchCap));
+        const moisturePct = printingSheet.moisturePercent !== undefined && printingSheet.moisturePercent !== null 
+          ? Number(printingSheet.moisturePercent).toFixed(2) 
+          : '2.00';
+
+        // Format Report Gen. Date/Time: DD-MM-YYYY HH:mm:ss
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const reportGenDateTime = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+        // Calculate Batch End Time (approx 20 mins after start time if not provided)
+        const getBatchEndTime = (startTimeStr) => {
+          if (!startTimeStr) return '03:29 PM';
+          const match = startTimeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+          if (!match) return startTimeStr;
+          let h = parseInt(match[1], 10);
+          let m = parseInt(match[2], 10) + 20;
+          let ampm = match[3] ? match[3].toUpperCase() : '';
+          if (m >= 60) {
+            h += Math.floor(m / 60);
+            m = m % 60;
+          }
+          if (ampm && h > 12) {
+            h = h - 12;
+            ampm = ampm === 'AM' ? 'PM' : 'AM';
+          } else if (ampm && h === 12 && match[1] !== '12') {
+            ampm = ampm === 'AM' ? 'PM' : 'AM';
+          }
+          return `${pad(h)}:${pad(m)} ${ampm}`.trim();
+        };
+
+        const batchEndTime = printingSheet.endTime || getBatchEndTime(printingSheet.time);
+
+        // Prepare materials table matching the reference technical docket
+        // Materials: CMT1, FLYASH, 20MM, 10MM, C SAND, WTR1, ADM1
+        const resolvedMaterials = (printingSheet.materials && printingSheet.materials.length > 0)
+          ? printingSheet.materials
+          : updateMaterialsForGradeAndVolume(printingSheet.mixGrade || 'M25', vol, printingSheet.moisturePercent || 2.0);
+
+        // Map materials to standard docket rows
+        const rawRows = [
+          {
+            key: 'cement',
+            codeName: 'CMT1 (Cement (OPC 53))',
+            matcher: (m) => m.name.toLowerCase().includes('cement') || m.name.toLowerCase().includes('opc'),
+            fallbackDesign: Number(preset.cement) || 360,
+            hasMoisture: false,
+          },
+          {
+            key: 'flyash',
+            codeName: 'FLYASH (Fly Ash (Pozzocrete))',
+            matcher: (m) => m.name.toLowerCase().includes('fly') || m.name.toLowerCase().includes('ash') || m.name.toLowerCase().includes('pozz'),
+            fallbackDesign: Number(preset.flyash) || 60,
+            hasMoisture: false,
+          },
+          {
+            key: 'agg20',
+            codeName: '20MM (20mm Coarse Aggregate)',
+            matcher: (m) => m.name.toLowerCase().includes('20mm') || m.name.toLowerCase().includes('20 mm'),
+            fallbackDesign: Number(preset.agg20) || 750,
+            hasMoisture: false,
+          },
+          {
+            key: 'agg10',
+            codeName: '10MM (10mm Coarse Aggregate)',
+            matcher: (m) => m.name.toLowerCase().includes('10mm') || m.name.toLowerCase().includes('10 mm'),
+            fallbackDesign: Number(preset.agg10) || 500,
+            hasMoisture: false,
+          },
+          {
+            key: 'sand',
+            codeName: 'C SAND (Crushed M-Sand)',
+            matcher: (m) => m.name.toLowerCase().includes('sand'),
+            fallbackDesign: ((Number(preset.sand) || 800) * 1.02),
+            hasMoisture: true,
+          },
+          {
+            key: 'water',
+            codeName: 'WTR1 (Water)',
+            matcher: (m) => m.name.toLowerCase().includes('water'),
+            fallbackDesign: 150.67,
+            hasMoisture: true,
+          },
+          {
+            key: 'admixture',
+            codeName: 'ADM1 (Admixture (PCE))',
+            matcher: (m) => m.name.toLowerCase().includes('admixture') || m.name.toLowerCase().includes('pce'),
+            fallbackDesign: Number(preset.admixture) || 3.0,
+            hasMoisture: false,
+          },
+        ];
 
         let sumDesign = 0;
-        let sumReq = 0;
-        let sumAct = 0;
+        let sumRequired = 0;
+        let sumBatched = 0;
 
-        const tableRows = (printingSheet.materials || []).map((m) => {
-          const req = Number(m.target) || 0;
-          const designQtyNum = vol > 0 ? (req / vol) : req;
-          const hasAct = m.actual !== null && m.actual !== undefined && m.actual !== '';
-          const act = hasAct ? Number(m.actual) : req;
-          const diff = req > 0 ? (((act - req) / req) * 100) : 0;
+        const docketRows = rawRows.map(def => {
+          const mat = resolvedMaterials.find(def.matcher);
+          let reqVal = 0;
+          let batchedVal = 0;
+          let designVal = def.fallbackDesign;
 
-          sumDesign += designQtyNum;
-          sumReq += req;
-          sumAct += act;
+          if (mat) {
+            reqVal = Number(mat.target) || (designVal * vol);
+            batchedVal = (mat.actual !== null && mat.actual !== undefined && mat.actual !== '')
+              ? Number(mat.actual)
+              : reqVal;
+            if (vol > 0) {
+              designVal = reqVal / vol;
+            }
+          } else {
+            reqVal = designVal * vol;
+            batchedVal = reqVal;
+          }
 
-          const isSand = (m.name || '').toLowerCase().includes('sand');
-          const moistPct = (isSand || m.moistureCompensated) && printingSheet.moisturePercent != null
-            ? `${Number(printingSheet.moisturePercent).toFixed(2)}`
-            : '';
+          sumDesign += designVal;
+          sumRequired += reqVal;
+          sumBatched += batchedVal;
+
+          const errorPct = reqVal > 0 ? (((batchedVal - reqVal) / reqVal) * 100) : 0;
 
           return {
-            code: mapProductCode(m.name),
-            name: m.name,
-            designQty: designQtyNum.toFixed(2),
-            requiredQty: req.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-            batchedQty: act.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-            moisturePct: moistPct,
-            errorPct: hasAct ? `${diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}` : '0.00',
-            unit: m.unit || 'kg'
+            productName: def.codeName,
+            designQty: designVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            requiredQty: reqVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            batchedQty: batchedVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            moisturePct: def.hasMoisture ? moisturePct : '',
+            errorPct: `${errorPct.toFixed(2)}`,
           };
         });
 
-        const totalErrorPct = sumReq > 0 ? (((sumAct - sumReq) / sumReq) * 100).toFixed(2) : '0.00';
+        const totalErrorPct = sumRequired > 0 ? (((sumBatched - sumRequired) / sumRequired) * 100).toFixed(2) : '0.00';
 
         return createPortal(
           <div 
             className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 print:p-0 print:bg-white print:static print:block"
           >
-            <div className="bg-white text-black max-w-2xl w-full rounded-2xl shadow-2xl p-6 border border-black space-y-3 font-mono text-[11px] print:shadow-none print:border-none print:max-w-none print:w-full print:p-2">
+            <div className="bg-white text-black max-w-3xl w-full rounded-2xl shadow-2xl p-6 border border-slate-300 font-mono text-xs print:shadow-none print:border-none print:max-w-none print:w-full print:p-4">
               
-              {/* Preview Action Bar */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2 no-print">
-                <span className="font-bold text-xs text-slate-700">Batch Docket Print Preview</span>
+              {/* Header Action Bar */}
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3 no-print">
+                <span className="font-bold text-sm text-slate-800">Batch Docket Print Preview</span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => window.print()}
-                    className="px-3.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 font-bold text-xs text-slate-950 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 font-bold text-xs text-slate-950 flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
                   >
-                    <Printer className="w-3.5 h-3.5" />
+                    <Printer className="w-4 h-4" />
                     <span>Print Docket</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPrintingSheet(null)}
-                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Top Report Gen Timestamp (matching Image 1 top-right) */}
-              <div className="flex justify-end text-[10px] text-slate-600 print:text-black">
-                <span>Report Gen. Date/Time: {reportGenTime}</span>
-              </div>
-
-              {/* Plant Details & Header Title (matching Image 1 layout) */}
-              <div className="grid grid-cols-12 items-start pb-2 border-b border-black gap-2">
-                <div className="col-span-5 text-left text-[10px] leading-tight space-y-0.5">
-                  <div className="font-bold uppercase text-[9px] tracking-wider text-slate-700 print:text-black">Plant Details</div>
-                  <div className="font-black text-xs uppercase tracking-wide">SM CONCRETECH</div>
-                  <div className="font-semibold">AT POST TANANG</div>
-                  <div>MIRAJ, SANGLI - 416410</div>
+              {/* Printable Docket Content */}
+              <div>
+                {/* Generation Date/Time */}
+                <div className="text-right text-[11px] text-slate-600 mb-1">
+                  Report Gen. Date/Time: {reportGenDateTime}
                 </div>
-                <div className="col-span-7 text-center">
-                  <h2 className="text-base font-black tracking-wider uppercase">Technical Batch Data Report</h2>
-                  <div className="text-[10px] uppercase font-bold tracking-wide text-slate-700 print:text-black mt-0.5">
-                    Computerized RMC Batching Docket
+
+                {/* Company & Title Header */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-600 tracking-wider">PLANT DETAILS</div>
+                    <div className="text-sm font-black tracking-wider text-black">SM CONCRETE TECH</div>
+                    <div className="text-xs text-black">AT POST TANANG</div>
+                    <div className="text-xs text-black">MIRAJ, SANGLI - 416410</div>
+                  </div>
+                  <div className="text-right">
+                    <h1 className="text-base font-black tracking-wider text-black uppercase">TECHNICAL BATCH DATA REPORT</h1>
+                    <div className="text-[11px] font-bold tracking-wider text-slate-700 uppercase mt-0.5">COMPUTERIZED RMC BATCHING DOCKET</div>
                   </div>
                 </div>
-              </div>
 
-              {/* Docket Metadata Block - Two Columns (matching Image 1) */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 border-b border-black pb-2 text-[10.5px]">
-                <div className="space-y-0.5">
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Docket No.</span><span className="truncate">: {printingSheet.sheetNo}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Docket Date</span><span className="truncate">: {printingSheet.date}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Batch Start Time</span><span className="truncate">: {printingSheet.time}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Customer</span><span className="truncate font-semibold">: {printingSheet.customerName || 'Direct Client'}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Site</span><span className="truncate">: {printingSheet.site || 'Main Delivery Zone'}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Truck No</span><span className="truncate font-bold">: {printingSheet.vehicleNo}</span></div>
-                </div>
-                <div className="space-y-0.5">
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Mix Name</span><span className="truncate font-bold">: {printingSheet.mixGrade}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Ordered Qty</span><span className="truncate">: {orderedQty} M3</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Produced Qty</span><span className="truncate font-bold">: {producedQty} M3</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Set This Load</span><span className="truncate">: {setThisLoad} M3</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">Batch Size</span><span className="truncate">: {batchSize}</span></div>
-                  <div className="flex"><span className="w-32 font-bold shrink-0">User</span><span className="truncate">: {printingSheet.operatorName || 'OEM'}</span></div>
-                </div>
-              </div>
+                <hr className="border-t border-black my-2.5" />
 
-              {/* 6-Column Batch Materials Table (matching Image 1) */}
-              <table className="w-full text-[10px] border-b border-black pb-2">
-                <thead>
-                  <tr className="border-b border-black text-left">
-                    <th className="py-1">Product Name</th>
-                    <th className="py-1 text-right">Design Qty/M3</th>
-                    <th className="py-1 text-right">Required Quantity</th>
-                    <th className="py-1 text-right">Batched Quantity</th>
-                    <th className="py-1 text-right">Moisture %</th>
-                    <th className="py-1 text-right">Error %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((m) => (
-                    <tr key={m.code} className="border-b border-dotted border-slate-300 print:border-black/30">
-                      <td className="py-1">
-                        <span className="font-bold">{m.code}</span>
-                        <span className="text-[9px] text-slate-500 print:text-black ml-1.5">({m.name})</span>
-                      </td>
-                      <td className="text-right py-1">{m.designQty}</td>
-                      <td className="text-right py-1">{m.requiredQty}</td>
-                      <td className="text-right py-1 font-bold">{m.batchedQty}</td>
-                      <td className="text-right py-1">{m.moisturePct}</td>
-                      <td className="text-right py-1">{m.errorPct}</td>
+                {/* Metadata 2 Columns Grid */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                  {/* Left Column */}
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-[140px_12px_1fr]">
+                      <span className="font-semibold text-black">Docket No.</span>
+                      <span>:</span>
+                      <span className="font-bold text-black">{printingSheet.sheetNo || '25-26/1045'}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_12px_1fr]">
+                      <span className="font-semibold text-black">Docket Date</span>
+                      <span>:</span>
+                      <span className="text-black">{printingSheet.date || '18 Nov 2026'}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_12px_1fr]">
+                      <span className="font-semibold text-black">Batch Start Time</span>
+                      <span>:</span>
+                      <span className="text-black">{printingSheet.time || '03:09 PM'}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_12px_1fr]">
+                      <span className="font-semibold text-black">Customer</span>
+                      <span>:</span>
+                      <span className="font-semibold text-black">{printingSheet.customerName || 'jaskl'}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_12px_1fr]">
+                      <span className="font-semibold text-black">Site</span>
+                      <span>:</span>
+                      <span className="text-black">{printingSheet.site || 'saol'}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_12px_1fr]">
+                      <span className="font-semibold text-black">Truck No</span>
+                      <span>:</span>
+                      <span className="text-black">{printingSheet.vehicleNo || 'MH-10-CR-1212'}</span>
+                    </div>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-[130px_12px_1fr]">
+                      <span className="font-semibold text-black">Mix Name</span>
+                      <span>:</span>
+                      <span className="font-bold text-black">{printingSheet.mixGrade || 'M25'}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_12px_1fr]">
+                      <span className="font-semibold text-black">Ordered Qty</span>
+                      <span>:</span>
+                      <span className="text-black">{printingSheet.orderedQty || '999.99 M3'}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_12px_1fr]">
+                      <span className="font-semibold text-black">Produced Qty</span>
+                      <span>:</span>
+                      <span className="text-black">{vol.toFixed(2)} M3</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_12px_1fr]">
+                      <span className="font-semibold text-black">Set This Load</span>
+                      <span>:</span>
+                      <span className="text-black">{vol.toFixed(2)} M3</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_12px_1fr]">
+                      <span className="font-semibold text-black">Batch Size</span>
+                      <span>:</span>
+                      <span className="text-black">{batchCap.toFixed(3)}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_12px_1fr]">
+                      <span className="font-semibold text-black">User</span>
+                      <span>:</span>
+                      <span className="text-black">{printingSheet.operatorName || 'Rajesh Mane'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <hr className="border-t border-black my-2.5" />
+
+                {/* Technical Materials Table */}
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-black text-left">
+                      <th className="py-1 font-bold text-black">Product Name</th>
+                      <th className="py-1 text-right font-bold text-black">Design Qty/M3</th>
+                      <th className="py-1 text-right font-bold text-black">Required Quantity</th>
+                      <th className="py-1 text-right font-bold text-black">Batched Quantity</th>
+                      <th className="py-1 text-right font-bold text-black">Moisture %</th>
+                      <th className="py-1 text-right font-bold text-black">Error %</th>
                     </tr>
-                  ))}
-                  {/* Summary Total Row (matching Image 1) */}
-                  <tr className="border-t-2 border-black font-black text-[10.5px]">
-                    <td className="py-1.5 text-right pr-4 uppercase">Total</td>
-                    <td className="text-right py-1.5">{Math.round(sumDesign)}</td>
-                    <td className="text-right py-1.5">{Math.round(sumReq)}</td>
-                    <td className="text-right py-1.5">{Math.round(sumAct)}</td>
-                    <td className="text-right py-1.5"></td>
-                    <td className="text-right py-1.5">{totalErrorPct}%</td>
-                  </tr>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {docketRows.map((r, idx) => (
+                      <tr key={idx} className="border-b border-slate-100">
+                        <td className="py-1 text-black">{r.productName}</td>
+                        <td className="text-right py-1 text-black">{r.designQty}</td>
+                        <td className="text-right py-1 font-semibold text-black">{r.requiredQty}</td>
+                        <td className="text-right py-1 font-bold text-black">{r.batchedQty}</td>
+                        <td className="text-right py-1 text-black">{r.moisturePct}</td>
+                        <td className="text-right py-1 text-black">{r.errorPct}</td>
+                      </tr>
+                    ))}
+                    {/* TOTAL ROW */}
+                    <tr className="border-t border-b border-black font-bold">
+                      <td className="py-1.5 text-center font-bold text-black">TOTAL</td>
+                      <td className="text-right py-1.5 font-bold text-black">{Math.round(sumDesign)}</td>
+                      <td className="text-right py-1.5 font-bold text-black">{Math.round(sumRequired).toLocaleString('en-US')}</td>
+                      <td className="text-right py-1.5 font-bold text-black">{Math.round(sumBatched).toLocaleString('en-US')}</td>
+                      <td className="text-right py-1.5"></td>
+                      <td className="text-right py-1.5 font-bold text-black">{totalErrorPct}%</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-              {/* Bottom Load Execution Metrics (matching Image 1 footer) */}
-              <div className="grid grid-cols-4 text-center border-b border-black py-2 text-[10px]">
-                <div>
-                  <div className="font-bold text-slate-700 print:text-black">Num Batches:</div>
-                  <div className="font-mono font-black text-xs mt-0.5">{numBatches}</div>
+                {/* Batch Summary Line */}
+                <div className="grid grid-cols-4 text-center text-xs py-2.5">
+                  <div>
+                    <div className="font-semibold text-black">Num Batches:</div>
+                    <div className="font-bold text-sm mt-0.5 text-black">{numBatches}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-black">With this Load:</div>
+                    <div className="font-bold text-sm mt-0.5 text-black">{vol.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-black">This Load:</div>
+                    <div className="font-bold text-sm mt-0.5 text-black">{vol.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-black">Batch End Time:</div>
+                    <div className="font-bold text-sm mt-0.5 text-black">{batchEndTime}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-bold text-slate-700 print:text-black">With this Load:</div>
-                  <div className="font-mono font-black text-xs mt-0.5">{producedQty}</div>
-                </div>
-                <div>
-                  <div className="font-bold text-slate-700 print:text-black">This Load:</div>
-                  <div className="font-mono font-black text-xs mt-0.5">{producedQty}</div>
-                </div>
-                <div>
-                  <div className="font-bold text-slate-700 print:text-black">Batch End Time:</div>
-                  <div className="font-mono font-black text-xs mt-0.5">{batchEndTime}</div>
-                </div>
-              </div>
 
-              {/* Quality Specs & Signatures */}
-              <div className="pt-2 text-[10px] space-y-0.5">
-                <div>Slump at Plant: <strong>{printingSheet.actualSlump || '125 mm'}</strong></div>
-                <div>Water-Cement Ratio: <strong>{MIX_DESIGN_PRESETS[printingSheet.mixGrade]?.wcRatio || '0.42'}</strong></div>
-                <div>Plant Operator: <strong>{printingSheet.operatorName || 'Rajesh Mane'}</strong></div>
-                <div>Driver: <strong>{printingSheet.driverName || 'Sachin Shinde'}</strong></div>
-              </div>
+                <hr className="border-t border-black my-2.5" />
 
-              <div className="pt-6 grid grid-cols-2 text-center text-[10px] border-t border-black">
-                <div>
-                  <div className="h-6"></div>
-                  <div className="border-t border-dotted border-black pt-0.5">Plant Operator Sign</div>
+                {/* Technical Specs */}
+                <div className="text-xs space-y-1">
+                  <div>Slump at Plant: <span className="font-semibold text-black">{printingSheet.actualSlump || '125 mm'}</span></div>
+                  <div>Water-Cement Ratio: <span className="font-semibold text-black">{preset.wcRatio || '0.42'}</span></div>
+                  <div>Plant Operator: <span className="font-semibold text-black">{printingSheet.operatorName || 'Rajesh Mane'}</span></div>
+                  <div>Driver: <span className="font-semibold text-black">{printingSheet.driverName || 'Sachin Shinde'}</span></div>
                 </div>
-                <div>
-                  <div className="h-6"></div>
-                  <div className="border-t border-dotted border-black pt-0.5">Transit Driver Sign</div>
+
+                <hr className="border-t border-black my-4" />
+
+                {/* Signatures */}
+                <div className="pt-6 pb-2 grid grid-cols-2 text-center text-xs">
+                  <div className="px-8">
+                    <div className="border-t border-dotted border-black pt-1 font-medium text-black">Plant Operator Sign</div>
+                  </div>
+                  <div className="px-8">
+                    <div className="border-t border-dotted border-black pt-1 font-medium text-black">Transit Driver Sign</div>
+                  </div>
                 </div>
+
               </div>
 
             </div>

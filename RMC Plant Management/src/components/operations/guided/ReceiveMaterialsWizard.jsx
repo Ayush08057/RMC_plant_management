@@ -15,11 +15,8 @@ import {
   Layers
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
-import { useAuth } from '../../../context/AuthContext';
-import { useWorkforce } from '../../../context/WorkforceContext';
 import { pushCloudStore } from '../../../services/cloudSyncService';
-import { adjustSiloStock } from '../../../services/siloStockService';
-import { STORAGE_KEYS } from '../../../services/plantOperationsService';
+import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../../services/plantOperationsService';
 import HelpModal from './HelpModal';
 
 const INWARD_STORAGE_KEY = STORAGE_KEYS?.INWARD || 'rmc_material_inward_v2';
@@ -44,9 +41,6 @@ const SUPPLIERS_LIST = [
 
 export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) {
   const { language, t } = useLanguage();
-  const { user } = useAuth();
-  const { activeCompanyId } = useWorkforce();
-  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const [step, setStep] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -155,7 +149,7 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       localStorage.setItem(wbKey, JSON.stringify(updatedWb));
       pushCloudStore('cloud_weighbridge', wbKey, updatedWb);
 
-      // Update Silo stock ledger via atomic adjustSiloStock
+      // Update Silo stock ledger with net intake
       let targetKey = 'agg20';
       const matLower = (selectedMaterial.name || '').toLowerCase();
       if (matLower.includes('cement')) targetKey = 'cement';
@@ -165,18 +159,15 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
       else if (matLower.includes('river sand')) targetKey = 'riverSand';
 
-      adjustSiloStock({
-        companyId: resolvedCompanyId,
-        operation: 'inward',
-        referenceId: inwardRecord.slipNo || inwardRecord.id,
-        items: [{
-          rawName: selectedMaterial.name,
-          materialKey: targetKey,
-          delta: finalNet,
-          unit: 'Tons',
-        }],
-        user,
-      }).catch(err => console.warn('[ReceiveMaterialsWizard] Silo inward notice:', err.message));
+      const siloKey = STORAGE_KEYS?.SILO_INVENTORY || 'rmc_silo_inventory_v2';
+      const rawSilo = localStorage.getItem(siloKey);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
+      if (siloData[targetKey]) {
+        const cur = Number(siloData[targetKey].stockTons) || 0;
+        siloData[targetKey].stockTons = Math.max(0, Number((cur + finalNet).toFixed(2)));
+        localStorage.setItem(siloKey, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', siloKey, siloData);
+      }
     } catch (e) {
       console.warn('Error saving material inward:', e);
     }

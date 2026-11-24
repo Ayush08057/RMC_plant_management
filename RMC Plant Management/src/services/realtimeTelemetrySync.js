@@ -55,14 +55,6 @@ class RealtimeTelemetrySync {
           if (topic.startsWith('smconcretech/attendance/')) {
             const record = data.record || data;
             if (record && (record.employeeId || record.id)) {
-              if (record.selfieUrl) {
-                try {
-                  const empId = (record.employeeId || record.id).toString().trim().toUpperCase();
-                  const recDate = record.date || new Date().toISOString().split('T')[0];
-                  localStorage.setItem(`rmc_punch_selfie_${recDate}_${empId}`, record.selfieUrl);
-                  localStorage.setItem(`rmc_punch_selfie_${empId}`, record.selfieUrl);
-                } catch (_) {}
-              }
               this.attendanceListeners.forEach((fn) => {
                 try { fn(record); } catch (e) { console.error(e); }
               });
@@ -134,19 +126,12 @@ class RealtimeTelemetrySync {
     const cleanId = (record.employeeId || record.id || '').toString().trim().toUpperCase();
     if (!cleanId) return;
 
-    // Cache punch-in selfie locally so it persists across reloads and tab navigation
-    if (record.selfieUrl) {
-      try {
-        const dStr = record.date || new Date().toISOString().split('T')[0];
-        localStorage.setItem(`rmc_punch_selfie_${dStr}_${cleanId}`, record.selfieUrl);
-        localStorage.setItem(`rmc_punch_selfie_${cleanId}`, record.selfieUrl);
-      } catch (_) {}
-    }
-
+    // Never broadcast Base64 selfie images over public MQTT broker
+    const { selfieUrl: _omitSelfie, ...mqttSafeRecord } = record;
     const topic = `smconcretech/attendance/${cleanId}`;
     const payload = JSON.stringify({
       type: 'ATTENDANCE_UPDATE',
-      record: record,
+      record: mqttSafeRecord,
       timestamp: Date.now(),
     });
 

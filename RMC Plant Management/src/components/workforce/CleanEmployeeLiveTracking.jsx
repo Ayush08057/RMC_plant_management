@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { 
   MapPin, 
   Clock, 
@@ -22,21 +21,58 @@ import {
 import { useWorkforce, resolveCanonicalEmployeeId, attendanceMatchesEmployee } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { getLocalIstDateStr } from '../../utils/shiftUtils';
-import { isAdminPerson, isDummyEmployee, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
+import { isAdminPerson, OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee } from '../../data/mockUsers';
 import { getEmployeeRouteDetails } from '../../services/routeTrackingService';
-import { calculateAccurateRouteDistanceKm } from '../../utils/routeCleanUtils';
-import { resolvePunchInPhoto } from '../../utils/attendancePhotoUtils';
 import LiveInteractiveMap from './LiveInteractiveMap';
 
 /**
- * Operational workforce accounts filter for Employee Live GPS Locations.
- * STRICT: Only employees registered in the admin's employee directory are shown.
- * No fallback caches, no hardcoded role accounts, no allUsers injection.
+ * Strict whitelist of authorized operational employee accounts for Employee Live GPS Locations.
+ * Only these 7 operational workforce roles are shown in this section.
  */
+export const ALLOWED_LIVE_TRACKING_CANONICAL_IDS = new Set([
+  'DIS-001',
+  'ACC-001',
+  'DRV-001',
+  'PM-001',
+  'QC-001',
+  'SS-001',
+]);
+
+/**
+ * Safely extracts cached workforce records from localStorage to ensure zero missing staff
+ */
+function getCachedStaffFallback() {
+  if (typeof window === 'undefined') return [];
+  const list = [];
+  try {
+    const rawUsers = localStorage.getItem('rmc_users_db_v2');
+    if (rawUsers) {
+      const parsed = JSON.parse(rawUsers);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('rmc_workforce_state_')) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed?.employees)) list.push(...parsed.employees);
+        }
+      }
+    }
+  } catch {}
+  return list.filter((p) => {
+    if (!p || isDummyEmployee(p) || isAdminPerson(p)) return false;
+    const cid = resolveCanonicalEmployeeId(p.employeeId || p.id || '');
+    return ALLOWED_LIVE_TRACKING_CANONICAL_IDS.has(cid);
+  });
+}
 
 export default function CleanEmployeeLiveTracking() {
-  const { user } = useAuth();
-  const { attendance, employees, activeCompanyId } = useWorkforce();
+  const { user, allUsers } = useAuth();
+  const { attendance, employees, trips, activeCompanyId } = useWorkforce();
 
   // 1. Date Filter (Defaults to today YYYY-MM-DD in IST)
   const [selectedDate, setSelectedDate] = useState(() => getLocalIstDateStr());
@@ -45,12 +81,11 @@ export default function CleanEmployeeLiveTracking() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState(null);
 
-  // 3. Map View Options (Default to High-Resolution Satellite view matching reference design)
-  const [mapSatellite, setMapSatellite] = useState(true);
+  // 3. Map View Options
+  const [mapSatellite, setMapSatellite] = useState(false);
   const [isFullWidth, setIsFullWidth] = useState(false);
   const [selectedStop, setSelectedStop] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
-  const [snappedDistanceKm, setSnappedDistanceKm] = useState(null);
 
   // Build authorized workforce list with live duty status & smart sorting
   const staffList = useMemo(() => {
@@ -61,7 +96,7 @@ export default function CleanEmployeeLiveTracking() {
       const rawId = (person.employeeId || person.id || '').toString().trim().toUpperCase();
       if (!rawId) return;
       const canonicalKey = resolveCanonicalEmployeeId(rawId);
-      if (!canonicalKey) return;
+      if (!canonicalKey || !ALLOWED_LIVE_TRACKING_CANONICAL_IDS.has(canonicalKey)) return;
 
       const existing = map.get(canonicalKey);
       if (!existing) {
@@ -83,14 +118,38 @@ export default function CleanEmployeeLiveTracking() {
       }
     };
 
-    // SOURCE 1: OFFICIAL_ROLE_ACCOUNTS — the 6 known non-admin role accounts (PM, ACC, DIS, QC, SS, DRV).
-    // These are the base entries that always appear. Only non-admin, non-dummy ones are included.
-    (OFFICIAL_ROLE_ACCOUNTS || []).forEach(addPerson);
-
-    // SOURCE 2: Firestore employees (admin-added in Directory Records).
-    // These override / augment the base layer above. Fake/test accounts are blocked by isDummyEmployee.
-    // If admin adds a new employee → it appears here automatically. No other source is used.
+    // 1. Employees from Workforce Context
     (employees || []).forEach(addPerson);
+    // 2. All Users from Auth Context
+    (allUsers || []).forEach(addPerson);
+    // 3. Current User if operational
+    if (user) addPerson(user);
+    // 4. Any personnel from attendance records
+    (attendance || []).forEach((att) => {
+      if (att && (att.employeeId || att.id)) {
+        addPerson({
+          employeeId: att.employeeId || att.id,
+          name: att.employeeName || att.name,
+          role: att.role,
+          department: att.department
+        });
+      }
+    });
+    // 5. Any drivers from active/completed trips
+    (trips || []).forEach((tr) => {
+      if (tr && tr.driverId) {
+        addPerson({
+          employeeId: tr.driverId,
+          name: tr.driverName || 'Driver',
+          role: 'Driver',
+          department: 'Fleet Operations'
+        });
+      }
+    });
+    // 6. LocalStorage fallback caches
+    getCachedStaffFallback().forEach(addPerson);
+    // 7. Official Role Accounts fallback
+    (OFFICIAL_ROLE_ACCOUNTS || []).forEach(addPerson);
 
     // Compute real-time duty status for selectedDate
     const compactDate = selectedDate.replace(/-/g, '');
@@ -119,10 +178,9 @@ export default function CleanEmployeeLiveTracking() {
         return bUpd - aUpd;
       })[0] || null;
 
-      const isPastDate = selectedDate < getLocalIstDateStr();
       const hasGps = Boolean(record?.lastKnownLocation?.lat || record?.gpsLocation?.lat);
       const isPunchIn = Boolean(record?.punchIn);
-      const isPunchOut = Boolean(record?.punchOut || (isPastDate && isPunchIn));
+      const isPunchOut = Boolean(record?.punchOut);
 
       let statusPriority = 4;
       let statusText = 'Offline';
@@ -146,15 +204,6 @@ export default function CleanEmployeeLiveTracking() {
         statusEmoji = '🏁';
       }
 
-      const effectiveRecord = (isPastDate && record?.punchIn && !record?.punchOut)
-        ? {
-            ...record,
-            punchOut: record.punchOut || (Array.isArray(record.routeTrail) && record.routeTrail.length > 0 ? record.routeTrail[record.routeTrail.length - 1].time : '06:00 PM'),
-            completionStatus: record.completionStatus && record.completionStatus !== 'Active' ? record.completionStatus : 'Shift Concluded',
-            exitGpsLocation: record.exitGpsLocation || record.lastKnownLocation || record.gpsLocation || null
-          }
-        : (record || null);
-
       return {
         ...emp,
         statusPriority,
@@ -162,7 +211,7 @@ export default function CleanEmployeeLiveTracking() {
         statusEmoji,
         isLiveOnDuty,
         hasAttendanceToday: Boolean(record),
-        recordToday: effectiveRecord
+        recordToday: record || null
       };
     });
 
@@ -178,11 +227,12 @@ export default function CleanEmployeeLiveTracking() {
       return a.name.localeCompare(b.name);
     });
 
-    // Return operational staff members (strictly excluding admin or dummy placeholder accounts)
+    // Strictly guarantee that ONLY the 7 authorized operational workforce accounts are shown
     return staffArray.filter((e) => {
-      return !isAdminPerson(e) && !isDummyEmployee(e);
+      const cId = resolveCanonicalEmployeeId(e.employeeId || e.id);
+      return ALLOWED_LIVE_TRACKING_CANONICAL_IDS.has(cId);
     });
-  }, [employees, attendance, selectedDate, activeCompanyId]);
+  }, [employees, allUsers, user, attendance, trips, selectedDate, activeCompanyId]);
 
   // 4. Filtered dropdown list based on search
   const filteredStaffList = useMemo(() => {
@@ -215,9 +265,7 @@ export default function CleanEmployeeLiveTracking() {
     if (effectiveSelectedEmpId && selectedEmpId !== effectiveSelectedEmpId) {
       setSelectedEmpId(effectiveSelectedEmpId);
     }
-    setSnappedDistanceKm(null);
-    setSelectedStop(null);
-  }, [selectedEmpId, effectiveSelectedEmpId, selectedDate]);
+  }, [selectedEmpId, effectiveSelectedEmpId]);
 
   // Active selected employee object
   const activeEmployee = useMemo(() => {
@@ -244,7 +292,7 @@ export default function CleanEmployeeLiveTracking() {
       return Boolean(!a.employeeId && aName && cleanName && aName === cleanName);
     });
 
-    const rec = matchingRecords.sort((a, b) => {
+    return matchingRecords.sort((a, b) => {
       const aHasOut = Boolean(a.punchOut);
       const bHasOut = Boolean(b.punchOut);
       if (aHasOut !== bHasOut) return bHasOut ? 1 : -1;
@@ -255,19 +303,6 @@ export default function CleanEmployeeLiveTracking() {
       const bUpd = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
       return bUpd - aUpd;
     })[0] || null;
-
-    if (!rec) return null;
-    const isPastDate = selectedDate < getLocalIstDateStr();
-    if (isPastDate && rec.punchIn && !rec.punchOut) {
-      const lastStop = Array.isArray(rec.routeTrail) && rec.routeTrail.length > 0 ? rec.routeTrail[rec.routeTrail.length - 1] : null;
-      return {
-        ...rec,
-        punchOut: rec.punchOut || lastStop?.time || '06:00 PM',
-        completionStatus: rec.completionStatus && rec.completionStatus !== 'Active' ? rec.completionStatus : 'Shift Concluded',
-        exitGpsLocation: rec.exitGpsLocation || rec.lastKnownLocation || rec.gpsLocation || lastStop || null
-      };
-    }
-    return rec;
   }, [attendance, activeEmployee, selectedDate]);
 
   // Tracking status evaluation
@@ -294,21 +329,11 @@ export default function CleanEmployeeLiveTracking() {
       ? dayRecord.routeTrail[dayRecord.routeTrail.length - 1]
       : null;
 
-    const lastAcc = Number(dayRecord?.lastKnownLocation?.accuracy != null ? dayRecord.lastKnownLocation.accuracy : 15);
-    const punchLat = dayRecord?.gpsLocation?.lat != null ? Number(dayRecord.gpsLocation.lat) : null;
-    const punchLng = dayRecord?.gpsLocation?.lng != null ? Number(dayRecord.gpsLocation.lng) : null;
-    const lkLat = dayRecord?.lastKnownLocation?.lat != null ? Number(dayRecord.lastKnownLocation.lat) : null;
-    const lkLng = dayRecord?.lastKnownLocation?.lng != null ? Number(dayRecord.lastKnownLocation.lng) : null;
-
-    let isLastKnownValid = Boolean(
-      Number.isFinite(lkLat) && Number.isFinite(lkLng) && lkLat !== 0 && lkLng !== 0 && lastAcc <= 50
-    );
-
-    // After punch-out, prefer exit GPS location; otherwise verified live/last known location, gpsLocation, or last route waypoint
+    // After punch-out, prefer exit GPS location; otherwise live/last known location, gpsLocation, or last route waypoint
     const lat = (isPunchedOut && dayRecord?.exitGpsLocation?.lat != null)
       ? Number(dayRecord.exitGpsLocation.lat)
-      : (isLastKnownValid
-        ? lkLat
+      : (dayRecord?.lastKnownLocation?.lat != null
+        ? Number(dayRecord.lastKnownLocation.lat)
         : (dayRecord?.exitGpsLocation?.lat != null
           ? Number(dayRecord.exitGpsLocation.lat)
           : (dayRecord?.gpsLocation?.lat != null
@@ -317,8 +342,8 @@ export default function CleanEmployeeLiveTracking() {
 
     const lng = (isPunchedOut && dayRecord?.exitGpsLocation?.lng != null)
       ? Number(dayRecord.exitGpsLocation.lng)
-      : (isLastKnownValid
-        ? lkLng
+      : (dayRecord?.lastKnownLocation?.lng != null
+        ? Number(dayRecord.lastKnownLocation.lng)
         : (dayRecord?.exitGpsLocation?.lng != null
           ? Number(dayRecord.exitGpsLocation.lng)
           : (dayRecord?.gpsLocation?.lng != null
@@ -326,20 +351,6 @@ export default function CleanEmployeeLiveTracking() {
             : (trailLast?.lng != null ? Number(trailLast.lng) : null))));
 
     const geofence = dayRecord?.geofenceStatus || dayRecord?.lastKnownLocation?.landmarkName || dayRecord?.exitGpsLocation?.landmarkName || dayRecord?.gpsLocation?.landmarkName || 'Base Location';
-
-    const rawCandidatePhoto = dayRecord?.selfieUrl || dayRecord?.photoUrl || activeEmployee?.selfieUrl || resolvePunchInPhoto(dayRecord || activeEmployee, employees);
-    const isExcludedMockRole = Boolean(
-      String(activeEmployee?.employeeId || activeEmployee?.id || '').toUpperCase().includes('DIS') ||
-      String(activeEmployee?.employeeId || activeEmployee?.id || '').toUpperCase().includes('SS') ||
-      String(activeEmployee?.role || '').toLowerCase().includes('dispatch') ||
-      String(activeEmployee?.role || '').toLowerCase().includes('supervisor')
-    );
-    const isMockPhoto = typeof rawCandidatePhoto === 'string' && (
-      rawCandidatePhoto.includes('dis_dispatcher.jpg') ||
-      rawCandidatePhoto.includes('ss_supervisor.jpg') ||
-      (isExcludedMockRole && rawCandidatePhoto.includes('/assets/employees/'))
-    );
-    const punchInPhoto = isMockPhoto ? null : rawCandidatePhoto;
 
     return {
       id: activeEmployee.employeeId || activeEmployee.id,
@@ -358,91 +369,16 @@ export default function CleanEmployeeLiveTracking() {
       stationName: geofence,
       accuracy: dayRecord?.lastKnownLocation?.accuracy || dayRecord?.gpsLocation?.accuracy || 15,
       routeTrail: dayRecord?.routeTrail || [],
-      selfieUrl: punchInPhoto,
-      photoUrl: punchInPhoto,
-      record: dayRecord
+      totalDistanceKm: dayRecord?.totalDistanceKm || 0,
+      record: dayRecord || null,
     };
-  }, [activeEmployee, dayRecord, trackingStatus, isPunchedOut, employees]);
+  }, [activeEmployee, dayRecord, trackingStatus, isPunchedOut]);
 
   // Route details
   const routeDetails = useMemo(() => {
     if (!mapTarget || !mapTarget.lat || !mapTarget.lng) return null;
     return getEmployeeRouteDetails(mapTarget);
   }, [mapTarget]);
-
-  // ── SINGLE SOURCE OF TRUTH for distance ──────────────────────────────────
-  // Harmonized between sidebar display and map legend for all employees:
-  // Priority:
-  //   1. Computed accurate route distance from routeTrail via calculateAccurateRouteDistanceKm
-  //      (Cleans noise, collapses stationary dwell clusters, and preserves real movement)
-  //   2. Computed route distance from routeDetails (Haversine along verified stops)
-  //   3. Snapped distance from real road routing (> 0) ONLY if employee has travelled routeTrail
-  //   4. Last stop's progressive distanceKm if present
-  //   5. Stored dayRecord.totalDistanceKm ONLY when routeTrail has > 1 real stop
-  // STRICT LOGICAL PRINCIPLE: If employee is stationary (no movement in routeTrail), distance is STRICTLY 0.0 KM.
-  const trailDistanceKm = useMemo(() => {
-    const trail = dayRecord?.routeTrail;
-
-    // Physical zero-movement check:
-    const inTime = dayRecord?.punchIn;
-    const outTime = dayRecord?.punchOut;
-    const isInstantPunch = Boolean(inTime && outTime && inTime === outTime);
-
-    // 1. First priority: Calculate authoritative distance directly from dayRecord.routeTrail
-    // over raw filtered GPS points with dwell-drift suppression and OSRM map-matching cross-check
-    if (Array.isArray(trail) && trail.length > 1) {
-      if (isInstantPunch && trail.length <= 2) {
-        const p1 = trail[0];
-        const p2 = trail[trail.length - 1];
-        const p1Lat = Number(p1.lat != null ? p1.lat : p1[0]);
-        const p1Lng = Number(p1.lng != null ? p1.lng : p1[1]);
-        const p2Lat = Number(p2.lat != null ? p2.lat : p2[0]);
-        const p2Lng = Number(p2.lng != null ? p2.lng : p2[1]);
-        if (!isNaN(p1Lat) && !isNaN(p2Lat)) {
-          const span = Math.hypot((p2Lat - p1Lat) * 111000, (p2Lng - p1Lng) * 111000 * Math.cos(p1Lat * Math.PI / 180));
-          if (span < 60) return 0.0;
-        }
-      }
-
-      const computed = calculateAccurateRouteDistanceKm(trail, isInstantPunch ? 0 : snappedDistanceKm);
-      if (Number.isFinite(computed) && computed > 0 && computed <= 500) {
-        return Number(computed.toFixed(1));
-      }
-      return 0.0;
-    }
-
-    if (isInstantPunch) return 0.0;
-
-    // 2. If routeDetails has computed totalDistanceKm from verified stops (requires > 1 distinct stops)
-    if (routeDetails?.stops?.length > 1 && routeDetails?.totalDistanceKm != null && Number.isFinite(routeDetails.totalDistanceKm) && routeDetails.totalDistanceKm > 0) {
-      return Number(routeDetails.totalDistanceKm.toFixed(1));
-    }
-
-    // 3. If snapped distance from real road geometry is available (> 0) ONLY if trail has real points
-    if (snappedDistanceKm != null && Number.isFinite(snappedDistanceKm) && snappedDistanceKm > 0 && snappedDistanceKm <= 500) {
-      if (Array.isArray(trail) && trail.length > 1) {
-        return Number(snappedDistanceKm.toFixed(1));
-      }
-    }
-
-    // 4. Old stop format: each stop has a progressive distanceKm field
-    if (Array.isArray(trail) && trail.length > 1) {
-      const lastStop = trail[trail.length - 1];
-      if (lastStop?.distanceKm != null && Number.isFinite(Number(lastStop.distanceKm))) {
-        const v = Number(lastStop.distanceKm);
-        if (v > 0 && v <= 500) return Number(v.toFixed(1));
-      }
-    }
-
-    // 5. Stored totalDistanceKm only if trail has real stops (> 1)
-    const stored = Number(dayRecord?.totalDistanceKm ?? dayRecord?.total_distance ?? 0);
-    if (Number.isFinite(stored) && stored > 0 && stored <= 500 && Array.isArray(trail) && trail.length > 1) {
-      return Number(stored.toFixed(1));
-    }
-
-    // If stationary, no route trail, or zero physical displacement: strictly 0.0 KM
-    return 0.0;
-  }, [snappedDistanceKm, routeDetails, dayRecord]);
 
   const hasTrackingData = Boolean(mapTarget && mapTarget.lat && mapTarget.lng);
 
@@ -642,7 +578,7 @@ export default function CleanEmployeeLiveTracking() {
             <div className="pt-2 border-t border-slate-100">
               <span className="text-slate-400 font-medium block text-[11px]">Distance Travelled</span>
               <span className="text-lg font-black font-mono text-blue-900 mt-0.5 block">
-                {`${trailDistanceKm.toFixed(1)} KM`}
+                {routeDetails?.totalDistanceKm || dayRecord?.totalDistanceKm || 0.0} KM
               </span>
             </div>
 
@@ -696,7 +632,6 @@ export default function CleanEmployeeLiveTracking() {
               telemetryList={staffList}
               activeTarget={mapTarget}
               activeRouteDetails={routeDetails}
-              trailDistanceKm={trailDistanceKm}
               selectedStop={selectedStop}
               onSelectStop={(stop) => setSelectedStop(stop)}
               onSelectTarget={(emp) => setSelectedEmpId(emp.employeeId || emp.id)}
@@ -705,11 +640,6 @@ export default function CleanEmployeeLiveTracking() {
               mapRouteMode={true}
               isFullWidth={isFullWidth}
               onToggleFullWidth={() => setIsFullWidth((prev) => !prev)}
-              onRouteSnapped={(res) => {
-                if (res && res.distanceKm != null && res.distanceKm > 0) {
-                  setSnappedDistanceKm((prev) => (Math.abs((prev || 0) - res.distanceKm) > 0.05 ? res.distanceKm : prev));
-                }
-              }}
             />
           ) : (
             <div className="h-[460px] rounded-2xl bg-slate-50 border border-dashed border-slate-300 flex flex-col items-center justify-center p-6 text-center">
@@ -728,10 +658,10 @@ export default function CleanEmployeeLiveTracking() {
       </div>
 
       {/* Biometric Punch-In Photo Preview Modal */}
-      {previewPhoto && typeof document !== 'undefined' && createPortal(
+      {previewPhoto && (
         <div 
           onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-[999999] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 select-none"
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 select-none"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
@@ -768,8 +698,7 @@ export default function CleanEmployeeLiveTracking() {
               </div>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

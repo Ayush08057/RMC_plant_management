@@ -123,8 +123,29 @@ export async function getAccurateDeviceLocation(options = {}) {
   // Step 0: Priority 1 - Native Flutter Hardware GPS Fix via Bridge (mobile app is authoritative)
   if (nativeTracking.isNativeApp()) {
     try {
-      // 1. Request a fresh real GNSS satellite ping from the phone's GPS hardware (wait up to 4.5 seconds)
-      const nativeFix = await nativeTracking.requestImmediateFix(4500);
+      // 1. Instant check: If we already have a warm hardware GPS fix in memory, return it immediately (<1ms)
+      if (!forceFresh) {
+        const cached = nativeTracking.getLatestNativeFix();
+        if (cached && cached.lat && cached.lng) {
+          const nLat = Number(Number(cached.lat).toFixed(6));
+          const nLng = Number(Number(cached.lng).toFixed(6));
+          const addrInfo = await resolveAccurateAddress(nLat, nLng);
+          return {
+            lat: nLat,
+            lng: nLng,
+            accuracy: Math.round(cached.accuracy || 15),
+            timestamp: cached.timestamp || new Date().toISOString(),
+            address: addrInfo.address,
+            landmarkName: addrInfo.landmarkName,
+            shortName: addrInfo.shortName,
+            source: 'NATIVE_HARDWARE_GPS_CACHED',
+            isFallback: false
+          };
+        }
+      }
+
+      // 2. Request a fresh real GNSS satellite ping from the phone's GPS hardware (wait up to 1500ms max)
+      const nativeFix = await nativeTracking.requestImmediateFix(1500);
       if (nativeFix && nativeFix.lat && nativeFix.lng) {
         const nLat = Number(Number(nativeFix.lat).toFixed(6));
         const nLng = Number(Number(nativeFix.lng).toFixed(6));
@@ -142,7 +163,7 @@ export async function getAccurateDeviceLocation(options = {}) {
         };
       }
 
-      // 2. If immediate ping took longer, fallback to the latest real hardware fix recorded by foreground service
+      // 3. Fallback to latest real hardware fix recorded by foreground service
       const cached = nativeTracking.getLatestNativeFix();
       if (cached && cached.lat && cached.lng) {
         const nLat = Number(Number(cached.lat).toFixed(6));

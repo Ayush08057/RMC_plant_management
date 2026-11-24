@@ -131,6 +131,7 @@ const PORTAL_LINKS = [
   { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
   { role: ROLES.SITE_SUPERVISOR, label: 'Site Supervisor', path: '/site-supervisor', icon: HardHat, colorClass: 'bg-[#0d9488]' },
   { role: ROLES.DRIVER, label: 'Driver Portal', path: '/driver', icon: Truck, colorClass: 'bg-[#f43f5e]' },
+  { role: ROLES.OWNER_DIRECTOR, label: 'Owner / Director', path: '/owner', icon: Building2, colorClass: 'bg-[#be123c]' },
 ];
 
 export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle, activeTab, onSelectTab }) {
@@ -174,7 +175,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             id: 'employees_group', 
             label: 'Employees', 
             icon: Users,
-            badge: 7,
+            badge: 6,
             children: [
               { id: 'employees', label: 'Directory Records', icon: Users },
               { id: 'attendance', label: 'Attendance System', icon: Clock },
@@ -182,7 +183,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               { id: 'shifts', label: 'Shifts & Roster', icon: Calendar },
               { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
               { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
-              { id: 'loans', label: 'Company Loans', icon: CreditCard },
             ]
           },
           { id: 'billing', label: 'Cash Memos & Billing', icon: Receipt },
@@ -228,7 +228,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
             children: [
               { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
               { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
-              { id: 'loans', label: 'Company Loans', icon: CreditCard },
             ]
           },
           { id: 'otp_audit', label: 'Owner OTP Audit', icon: ShieldCheck },
@@ -285,7 +284,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
               { id: 'employees', label: 'Employees Directory', icon: Users },
               { id: 'payroll', label: 'Payroll Preparation', icon: Receipt },
               { id: 'advances', label: 'Salary Advances', icon: IndianRupee },
-              { id: 'loans', label: 'Company Loans', icon: CreditCard },
             ]
           },
           { id: 'billing', label: 'Cash Memos & Billing', icon: Receipt },

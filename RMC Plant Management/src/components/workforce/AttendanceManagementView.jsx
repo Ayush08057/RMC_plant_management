@@ -48,7 +48,6 @@ import { OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee, isAdminPerson } from '../../da
 import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
-import { resolvePunchInPhoto } from '../../utils/attendancePhotoUtils';
 import { nativeTracking } from '../../services/nativeTrackingBridge';
 import { auth } from '../../config/firebase';
 import KPICard from '../dashboard/KPICard';
@@ -275,8 +274,6 @@ export default function AttendanceManagementView({
     if (staff?.selfieUrl) return staff.selfieUrl;
     if (staff?.avatarUrl) return staff.avatarUrl;
     if (staff?.photoUrl) return staff.photoUrl;
-    const resolved = resolvePunchInPhoto(staff?.record || staff, employees);
-    if (resolved) return resolved;
     return null;
   };
 

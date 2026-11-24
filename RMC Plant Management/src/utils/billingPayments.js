@@ -4,47 +4,26 @@
  * Tracks payments array, paidAmount, cash vs online breakdown, balanceAmount, and paymentStatus.
  */
 
-/**
- * Safe currency helper that rounds to 2 decimal places avoiding IEEE-754 floating drift.
- * Uses exact string-exponent decimal shifting to eliminate floating multiplication artifacts (no Number.EPSILON).
- * Handles half-up rounding accurately (e.g., 1.005 -> 1.01, 1234567.005 -> 1234567.01, 0.015 -> 0.02, 2.675 -> 2.68).
- * Supports large sums, negative values, and zero balances.
- */
-export const roundCurrency = (val) => {
-  if (val === null || val === undefined) return 0;
-  const num = Number(val);
-  if (!isFinite(num)) return 0;
-  if (Math.abs(num) < 0.005) return 0;
-  const sign = num < 0 ? -1 : 1;
-  const abs = Math.abs(num);
-  const rounded = Number(Math.round(Number(abs + 'e2')) + 'e-2');
-  return sign * rounded;
-};
-
 export const normalizeBill = (b) => {
   if (!b) return b;
-  const rawFinal = Number(b.finalAmount) || (Number(b.totalAmount || 0) + Number(b.transportation || 0));
-  const finalAmount = roundCurrency(rawFinal);
+  const finalAmount = Number(b.finalAmount) || (Number(b.totalAmount || 0) + Number(b.transportation || 0));
   const payments = Array.isArray(b.payments) ? b.payments : [];
 
   // When payments array has records, paidAmount is the direct authoritative sum of all transactions
-  const rawPaid = payments.length > 0
+  const paidAmount = payments.length > 0
     ? payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
     : Number(b.paidAmount || 0);
-  const paidAmount = roundCurrency(rawPaid);
 
-  const rawCash = payments.length > 0
+  const cashPaidAmount = payments.length > 0
     ? payments.filter((p) => (p.mode || '').toLowerCase().includes('cash')).reduce((s, p) => s + (Number(p.amount) || 0), 0)
     : (b.cashPaidAmount !== undefined ? Number(b.cashPaidAmount) : (b.payments ? 0 : paidAmount));
-  const cashPaidAmount = roundCurrency(rawCash);
 
-  const rawOnline = payments.length > 0
+  const onlinePaidAmount = payments.length > 0
     ? payments.filter((p) => !(p.mode || '').toLowerCase().includes('cash')).reduce((s, p) => s + (Number(p.amount) || 0), 0)
     : Number(b.onlinePaidAmount || 0);
-  const onlinePaidAmount = roundCurrency(rawOnline);
 
-  // Outstanding balance is always strictly derived from finalAmount - paidAmount, clamped >= 0 and rounded
-  const balanceAmount = roundCurrency(Math.max(0, finalAmount - paidAmount));
+  // Outstanding balance is always strictly derived from finalAmount - paidAmount
+  const balanceAmount = Math.max(0, finalAmount - paidAmount);
 
   const paymentStatus = balanceAmount <= 0
     ? 'Paid'

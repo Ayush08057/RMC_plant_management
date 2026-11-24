@@ -147,16 +147,7 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Fast race (2.5s) so slow cloud fetch never blocks app launch
-          let profile = null;
-          try {
-            profile = await Promise.race([
-              fetchDocument(COLLECTIONS.USERS, firebaseUser.uid),
-              new Promise((res) => setTimeout(() => res(null), 2500))
-            ]);
-          } catch (_) {
-            profile = null;
-          }
+          let profile = await fetchDocument(COLLECTIONS.USERS, firebaseUser.uid);
 
           if (!profile && firebaseUser.email) {
             const targetEmail = firebaseUser.email.toLowerCase();
@@ -453,14 +444,7 @@ export const AuthProvider = ({ children }) => {
           // ignore
         }
       }
-      // 3.0s timeout race so slow cellular network never blocks or hangs login
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('AUTH_TIMEOUT')), 3000)
-      );
-      const userCredential = await Promise.race([
-        signInWithEmailAndPassword(auth, resolved.email, password),
-        timeoutPromise
-      ]);
+      const userCredential = await signInWithEmailAndPassword(auth, resolved.email, password);
       firebaseUser = userCredential.user;
     } catch (firebaseErr) {
       console.warn('Firebase Auth sign-in notice:', firebaseErr.code, firebaseErr.message);
@@ -561,23 +545,18 @@ export const AuthProvider = ({ children }) => {
       // ignore
     }
 
-    // Immediately establish user session locally and clear loading state so app opens without delay
-    setUser(sessionData);
-    setLoading(false);
-
-    // Save/update verified user profile in Cloud Firestore in background (non-blocking)
+    // Save/update verified user profile in Cloud Firestore under UID (without password)
     const isOfflineMockSession = String(firebaseUser.uid || '').startsWith('EMP-');
     if (!isOfflineMockSession) {
-      saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, {
+      await saveDocumentWithId(COLLECTIONS.USERS, firebaseUser.uid, {
         ...sessionData,
         syncedAt: new Date().toISOString(),
       }).catch(() => {});
 
       try {
         if (typeof firebaseUser.getIdToken === 'function') {
-          firebaseUser.getIdToken().then((token) => {
-            nativeTracking.syncAuth(token, sessionData.companyId, firebaseUser.refreshToken || '', firebaseUser.uid || '');
-          }).catch(() => {});
+          const token = await firebaseUser.getIdToken();
+          nativeTracking.syncAuth(token, sessionData.companyId, firebaseUser.refreshToken || '', firebaseUser.uid || '');
         }
       } catch {
         // Ignore bridge token sync errors
@@ -586,6 +565,8 @@ export const AuthProvider = ({ children }) => {
       console.warn('[AUTH_WARNING] Running offline session without Firebase Auth token; cloud sync paused until re-authenticated.');
     }
 
+    setUser(sessionData);
+    setLoading(false);
     return {
       success: true,
       requiresFirstLoginSetup: Boolean(sessionData.mustChangePassword),

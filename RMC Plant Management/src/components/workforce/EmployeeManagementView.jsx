@@ -650,7 +650,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 title={t('Filter by Role')}
               >
                 <option value="All">{t('All Roles')}</option>
-                {Object.values(ROLES).filter((r) => r !== ROLES.ADMIN && r !== ROLES.OWNER_DIRECTOR).map((r) => (
+                {Object.values(ROLES).map((r) => (
                   <option key={r} value={r}>{t(r)}</option>
                 ))}
               </select>
@@ -832,7 +832,7 @@ export default function EmployeeManagementView({ defaultPlant = 'All Plants' }) 
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-medium text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
-                {Object.values(ROLES).filter((r) => r !== ROLES.ADMIN && r !== ROLES.OWNER_DIRECTOR).map((r) => (
+                {Object.values(ROLES).map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>

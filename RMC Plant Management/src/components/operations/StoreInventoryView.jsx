@@ -21,7 +21,6 @@ import {
   Truck
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
-import { useLanguage } from '../../context/LanguageContext';
 
 export const STORE_INVENTORY_KEY = 'rmc_store_inventory_v1';
 export const STORE_LOGS_KEY = 'rmc_store_logs_v1';
@@ -54,7 +53,6 @@ function getTodayIso() {
 }
 
 export default function StoreInventoryView() {
-  const { language, t } = useLanguage();
   const [inventory, setInventory] = useState([]);
   const [logs, setLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('stock'); // 'stock' or 'history'
@@ -322,12 +320,10 @@ export default function StoreInventoryView() {
               <span>Plant Store & Spare Parts Management</span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">
-              {language === 'mr' ? 'स्टोअर व स्पेअर पार्ट्स नोंदवही' : 'Store & Spares Register'}
+              स्टोअर व स्पेअर पार्ट्स इन्व्हेंटरी (Store & Spares Register)
             </h2>
             <p className="text-xs text-slate-300 mt-0.5">
-              {language === 'mr' 
-                ? 'मिक्सर ब्लेड्स, ऑइल ड्रम्स, बेअरिंग्स व मेंटेनन्स साहित्याची आवक-जावक आणि कमी साठा अलर्ट्स.' 
-                : 'Inventory tracking for mixer blades, oil drums, bearings, maintenance spares and low stock alerts.'}
+              मिक्सर ब्लेड्स, ऑइल ड्रम्स, बेअरिंग्स व मेंटेनन्स साहित्याची आवक-जावक आणि कमी साठा (Low Stock) अलर्ट्स.
             </p>
           </div>
 
@@ -350,12 +346,12 @@ export default function StoreInventoryView() {
               className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>{language === 'mr' ? 'साहित्य आवक नोंदवा' : 'Inward Stock'}</span>
+              <span>+ Inward Stock (सामान आले)</span>
             </button>
             <button
               onClick={() => {
                 if (inventory.length === 0) {
-                  alert(language === 'mr' ? 'इन्व्हेंटरीमध्ये कोणतेही साहित्य नाही. कृपया आधी आवक नोंदवा.' : 'No items in inventory. Please inward stock first.');
+                  alert('No items in inventory. Please inward stock first.');
                   return;
                 }
                 setIssueForm({
@@ -371,7 +367,7 @@ export default function StoreInventoryView() {
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <Minus className="w-4 h-4" />
-              <span>{language === 'mr' ? 'साहित्य वापर नोंदवा' : 'Issue Spare'}</span>
+              <span>- Issue Spare (सामान वापरले)</span>
             </button>
           </div>
         </div>
@@ -379,9 +375,9 @@ export default function StoreInventoryView() {
         {/* 3 Metric Cards */}
         <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-800">
           <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
-            <div className="text-[10px] uppercase font-bold text-slate-400">{language === 'mr' ? 'एकूण नोंदवलेले सुटे भाग' : 'Total Items in Store'}</div>
+            <div className="text-[10px] uppercase font-bold text-slate-400">Total Items in Store</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.totalItems}</div>
-            <div className="text-[10px] text-slate-400">{language === 'mr' ? 'एकूण नोंदवलेले सुटे भाग' : 'Registered Spares'}</div>
+            <div className="text-[10px] text-slate-400">एकूण नोंदवलेले सुटे भाग</div>
           </div>
 
           <div 
@@ -391,12 +387,12 @@ export default function StoreInventoryView() {
             }`}
           >
             <div className="text-[10px] uppercase font-bold text-rose-300 flex items-center justify-between">
-              <span>{language === 'mr' ? 'कमी साठा अलर्ट' : 'Low Stock Alert'}</span>
+              <span>Low Stock Alert</span>
               {stats.lowStockCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />}
             </div>
             <div className="text-xl font-black text-white mt-0.5">{stats.lowStockCount}</div>
             <div className="text-[10px] text-slate-300">
-              {filterLowStockOnly ? (language === 'mr' ? 'कमी साठा फिल्टर चालू' : 'Filtered: Low Stock') : (language === 'mr' ? 'कमी साठा असणारे आयटम्स' : 'Items Low on Stock')}
+              {filterLowStockOnly ? 'Filtered: Low Stock (Click to show all)' : 'कमी साठा असणारे आयटम्स'}
             </div>
           </div>
 
@@ -404,9 +400,9 @@ export default function StoreInventoryView() {
             onClick={() => setActiveTab('history')}
             className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 cursor-pointer hover:bg-slate-900/80 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-cyan-300">{language === 'mr' ? 'आजचे व्यवहार' : "Today's Transactions"}</div>
+            <div className="text-[10px] uppercase font-bold text-cyan-300">Today's Transactions</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.todayLogsCount}</div>
-            <div className="text-[10px] text-slate-400">{language === 'mr' ? 'आजचे आवक / जावक व्यवहार' : 'Inward & Outward Logs'}</div>
+            <div className="text-[10px] text-slate-400">आजचे आवक / जावक व्यवहार</div>
           </div>
         </div>
       </div>
@@ -423,7 +419,7 @@ export default function StoreInventoryView() {
             }`}
           >
             <Boxes className="w-3.5 h-3.5" />
-            <span>{language === 'mr' ? 'शिल्लक साठा' : 'Current Stock'}</span>
+            <span>शिल्लक साठा (Current Stock)</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -434,7 +430,7 @@ export default function StoreInventoryView() {
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            <span>{language === 'mr' ? 'आवक-जावक नोंदवही' : 'Transaction Logs'}</span>
+            <span>आवक-जावक नोंदवही (Transaction Logs)</span>
           </button>
         </div>
 
@@ -493,7 +489,7 @@ export default function StoreInventoryView() {
             <div className="p-8 text-center text-slate-400">
               <Package className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-[1.5]" />
               <p className="text-sm font-semibold text-slate-600">No spare parts in store.</p>
-              <p className="text-xs text-slate-400 mt-0.5">Click 'Inward Stock' to add your first spare part, lubricant or blade.</p>
+              <p className="text-xs text-slate-400 mt-0.5">Click '+ Inward Stock' to add your first spare part, lubricant or blade.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -538,11 +534,7 @@ export default function StoreInventoryView() {
                               ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-300'
                           }`}>
-                            <span>
-                              {isLow
-                                ? (language === 'mr' ? '⚠️ कमी साठा (ऑर्डर करा)' : '⚠️ Low Stock (Reorder)')
-                                : (language === 'mr' ? '✅ पुरेसा साठा' : '✅ In Stock')}
-                            </span>
+                            <span>{isLow ? '⚠️ Low Stock (ऑर्डर करा)' : '✅ In Stock'}</span>
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-slate-500 text-[10px]">
@@ -637,11 +629,7 @@ export default function StoreInventoryView() {
                               : 'bg-amber-50 text-amber-800 border-amber-300'
                           }`}>
                             {isInward ? <ArrowDownRight className="w-3 h-3 text-emerald-600" /> : <ArrowUpRight className="w-3 h-3 text-amber-600" />}
-                            <span>
-                              {isInward
-                                ? (language === 'mr' ? 'आवक (Inward)' : 'INWARD')
-                                : (language === 'mr' ? 'वापर (Issue)' : 'ISSUE')}
-                            </span>
+                            <span>{isInward ? 'INWARD (आवक)' : 'ISSUE (वापर)'}</span>
                           </span>
                         </td>
                         <td className="py-2.5 px-3 font-bold text-slate-900">
@@ -687,13 +675,9 @@ export default function StoreInventoryView() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <Plus className="w-4 h-4 text-emerald-600" />
-                  <span>{language === 'mr' ? 'साहित्य आवक नोंदवा' : 'Inward Store Stock'}</span>
+                  <span>Inward Store Stock (साहित्य आवक नोंद)</span>
                 </h3>
-                <p className="text-[11px] text-slate-500">
-                  {language === 'mr' 
-                    ? 'प्लॅन्टसाठी खरेदी केलेले स्पेअर पार्ट्स किंवा ऑइल नोंदवा.' 
-                    : 'Record spare parts, oil drums, or maintenance items received at plant store.'}
-                </p>
+                <p className="text-[11px] text-slate-500">प्लांटसाठी खरेदी केलेले स्पेअर पार्ट्स किंवा ऑइल नोंदवा.</p>
               </div>
               <button onClick={() => setShowInwardModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />
@@ -702,11 +686,11 @@ export default function StoreInventoryView() {
 
             <form onSubmit={handleInwardSubmit} className="p-4 space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">{language === 'mr' ? 'साहित्याचे / स्पेअर पार्टचे नाव *' : 'Item / Spare Part Name *'}</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Item / Spare Part Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder={language === 'mr' ? 'उदा. पॅन मिक्सर ब्लेड सेट, हायड्रॉलिक ऑइल...' : 'e.g. Pan Mixer Blade Set, Hydraulic Oil VG 68...'}
+                  placeholder="e.g. Pan Mixer Blade Set, Hydraulic Oil VG 68..."
                   value={inwardForm.itemName}
                   onChange={(e) => setInwardForm({ ...inwardForm, itemName: e.target.value })}
                   className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500 font-semibold"
@@ -715,30 +699,30 @@ export default function StoreInventoryView() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">{language === 'mr' ? 'प्रवर्ग (Category) *' : 'Category *'}</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Category *</label>
                   <select
                     value={inwardForm.category}
                     onChange={(e) => setInwardForm({ ...inwardForm, category: e.target.value })}
                     className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg font-medium"
                   >
                     {CATEGORIES.map(c => (
-                      <option key={c.id} value={c.id}>{language === 'mr' ? t(c.label) : c.label}</option>
+                      <option key={c.id} value={c.id}>{c.label}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">{language === 'mr' ? 'एकक (Unit)' : 'Unit'}</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
                   <select
                     value={inwardForm.unit}
                     onChange={(e) => setInwardForm({ ...inwardForm, unit: e.target.value })}
                     className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg font-medium"
                   >
-                    <option value="Pcs">{language === 'mr' ? 'नग (Pcs)' : 'Pcs (Pieces)'}</option>
-                    <option value="Liters">{language === 'mr' ? 'लिटर (L)' : 'Liters (L)'}</option>
-                    <option value="Sets">{language === 'mr' ? 'संच (Sets)' : 'Sets'}</option>
-                    <option value="Kg">{language === 'mr' ? 'किलो (Kg)' : 'Kg'}</option>
-                    <option value="Barrels">{language === 'mr' ? 'ड्रम (Barrels)' : 'Barrels'}</option>
-                    <option value="Meters">{language === 'mr' ? 'मीटर (Meters)' : 'Meters'}</option>
+                    <option value="Pcs">Pcs (नग)</option>
+                    <option value="Liters">Liters (लिटर)</option>
+                    <option value="Sets">Sets (संच)</option>
+                    <option value="Kg">Kg (किलो)</option>
+                    <option value="Barrels">Barrels (ड्रम)</option>
+                    <option value="Meters">Meters (मीटर)</option>
                   </select>
                 </div>
               </div>
@@ -831,13 +815,9 @@ export default function StoreInventoryView() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <Minus className="w-4 h-4 text-amber-600" />
-                  <span>{language === 'mr' ? 'साहित्य वापर नोंदवा' : 'Issue Spare Part'}</span>
+                  <span>Issue Spare Part (साहित्य वापर नोंद)</span>
                 </h3>
-                <p className="text-[11px] text-slate-500">
-                  {language === 'mr' 
-                    ? 'कोणत्या कामासाठी किंवा वाहनासाठी सुटे भाग वापरले ते नोंदवा.' 
-                    : 'Record spare part or oil issued for vehicle or plant maintenance.'}
-                </p>
+                <p className="text-[11px] text-slate-500">कोणत्या कामासाठी किंवा वाहनासाठी सुटे भाग वापरले ते नोंदवा.</p>
               </div>
               <button onClick={() => setShowIssueModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />

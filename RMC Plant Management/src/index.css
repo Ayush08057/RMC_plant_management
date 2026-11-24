@@ -346,29 +346,44 @@ button[class*="bg-emerald-600"] span,
   stroke: #FFFFFF !important;
 }
 
-/* SPECIFIC CONTRAST FOR DARK TABLE HEADERS (.table-header-main only) */
+/* ABSOLUTE HIGHEST SPECIFICITY FOR MAIN DARK TABLE HEADERS */
+.app-shell thead.table-header-main th,
+.app-shell thead.table-header-main th *,
+.app-shell thead.table-header-main span,
+.app-shell table thead.table-header-main th,
+.app-shell table thead.table-header-main th *,
+.app-shell .table-header-main th,
+.app-shell .table-header-main th *,
 thead.table-header-main th,
 thead.table-header-main th *,
 thead.table-header-main span,
+table thead th.text-white,
+table thead th[class*="text-white"],
+table thead th[class*="text-white"] *,
+.table-header-main,
 .table-header-main th,
 .table-header-main th *,
-.table-header-main span,
-tr[class*="from-[#123B6D]"] th,
-tr[class*="from-[#123B6D]"] th * {
+.table-header-main th span {
   color: #FFFFFF !important;
   -webkit-text-fill-color: #FFFFFF !important;
 }
 
-/* GUARANTEE LIGHT / MODAL TABLE HEADERS HAVE CRISP DARK READABLE TEXT */
-table thead:not(.table-header-main) th,
-table thead:not(.table-header-main) th *,
-table thead tr[class*="bg-slate-50"] th,
-table thead tr[class*="bg-slate-100"] th,
-table thead tr[class*="bg-gray-50"] th,
-table thead tr[class*="bg-white"] th {
-  color: #0f172a !important;
-  -webkit-text-fill-color: #0f172a !important;
-  font-weight: 700 !important;
+/* Explicit Black Typography for Light/Printable Table Headers */
+thead[class*="bg-slate-"] th,
+thead[class*="bg-slate-"] th *,
+thead[class*="bg-slate-"] span,
+thead tr[class*="bg-slate-"] th,
+thead tr[class*="bg-slate-"] th *,
+thead[class*="bg-gray-"] th,
+thead[class*="bg-gray-"] th *,
+thead tr[class*="bg-gray-"] th,
+thead tr[class*="bg-gray-"] th *,
+thead[class*="bg-white"] th,
+thead[class*="bg-white"] th *,
+thead tr[class*="bg-white"] th,
+thead tr[class*="bg-white"] th * {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 /* Standardized Main Table Header Style */
@@ -633,5 +648,32 @@ button, input, select, textarea {
 
   .cash-memo-printable [class*="border"] {
     border-color: #000000 !important;
+  }
+
+  /* Universal Print Typography: All printable tables, headers, cells, and text MUST be solid black */
+  table,
+  table *,
+  table th,
+  table th *,
+  table th span,
+  table td,
+  table td *,
+  thead,
+  thead *,
+  thead th,
+  thead th *,
+  thead th span,
+  thead tr,
+  thead tr *,
+  tbody,
+  tbody *,
+  tbody td,
+  tbody td *,
+  tfoot,
+  tfoot *,
+  tfoot td,
+  tfoot td * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
   }
 }

@@ -66,7 +66,6 @@ export default function ApprovalsView() {
     leave: pendingApprovals.filter((i) => i.category === 'leave').length,
     work: pendingApprovals.filter((i) => i.category === 'work').length,
     advance: pendingApprovals.filter((i) => i.category === 'advance').length,
-    loan: pendingApprovals.filter((i) => i.category === 'loan').length,
   };
 
   const columns = [
@@ -190,17 +189,6 @@ export default function ApprovalsView() {
           }`}
         >
           Advances ({categoryCounts.advance})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedCategory('loan')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer border transition-colors ${
-            selectedCategory === 'loan'
-              ? 'bg-orange-600 text-white border-orange-700 font-bold shadow-xs'
-              : 'bg-white/80 text-slate-700 border-slate-200 hover:bg-slate-100'
-          }`}
-        >
-          Loans ({categoryCounts.loan})
         </button>
       </div>
 

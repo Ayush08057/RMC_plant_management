@@ -25,10 +25,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
-import { adjustSiloStock, subscribeSiloStock } from '../../services/siloStockService';
-import { useAuth } from '../../context/AuthContext';
-import { useWorkforce } from '../../context/WorkforceContext';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useLanguage } from '../../context/LanguageContext';
 import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../services/plantOperationsService';
 
@@ -71,9 +68,6 @@ const COMMON_PARTIES = [
 
 export default function WeighbridgeView() {
   const { language } = useLanguage();
-  const { user } = useAuth();
-  const { activeCompanyId } = useWorkforce();
-  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const isMarathi = language === 'mr';
 
   const [slips, setSlips] = useState(() => {
@@ -122,11 +116,11 @@ export default function WeighbridgeView() {
   });
 
   useEffect(() => {
-    const unsubSilo = subscribeSiloStock(resolvedCompanyId, (data) => {
+    const unsubSilo = subscribeCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, INITIAL_SILO_STOCK, (data) => {
       if (data && typeof data === 'object') setSiloStock(data);
     });
     return () => unsubSilo();
-  }, [resolvedCompanyId]);
+  }, []);
 
   // 2nd Tare Weight entry state
   const [secondTareKg, setSecondTareKg] = useState('');
@@ -242,26 +236,23 @@ export default function WeighbridgeView() {
     setIsNewModalOpen(true);
   };
 
-  // Helper to sync Weighbridge inward weighments with Silo Inventory via atomic adjustSiloStock
+  // Helper to sync Weighbridge inward weighments with Silo Inventory
   const updateSiloInventoryForWeighment = (materialName, netKg, slipNo, vehNo, party, isReversal = false) => {
     try {
+      const factor = isReversal ? -1 : 1;
       const matLower = (materialName || '').toLowerCase();
+
+      const rawSilo = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
+      const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
 
       // Handle Chemical Admixtures (in Litres)
       if (matLower.includes('chemical') || matLower.includes('admixture') || matLower.includes('pce') || matLower.includes('retarder')) {
         const liters = Number(netKg) || 0;
-        adjustSiloStock({
-          companyId: resolvedCompanyId,
-          operation: isReversal ? 'reversal' : 'weighment',
-          referenceId: slipNo,
-          items: [{
-            rawName: materialName,
-            materialKey: 'admixturePce',
-            delta: liters,
-            unit: 'Litres',
-          }],
-          user,
-        }).catch((err) => console.warn('[WeighbridgeView] Silo chemical weighment notice:', err.message));
+        const curL = Number(siloData.admixturePce?.stockLiters) || 3200;
+        siloData.admixturePce.stockLiters = Math.max(0, curL + factor * liters);
+        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
+        setSiloStock({ ...siloData });
 
         const rawChem = localStorage.getItem(STORAGE_KEYS.CHEMICAL_BARRELS);
         let chemData = rawChem ? JSON.parse(rawChem) : [];
@@ -303,18 +294,13 @@ export default function WeighbridgeView() {
       else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
       else if (matLower.includes('river sand')) targetKey = 'riverSand';
 
-      adjustSiloStock({
-        companyId: resolvedCompanyId,
-        operation: isReversal ? 'reversal' : 'weighment',
-        referenceId: slipNo,
-        items: [{
-          rawName: materialName,
-          materialKey: targetKey,
-          delta: netTons,
-          unit: 'Tons',
-        }],
-        user,
-      }).catch((err) => console.warn('[WeighbridgeView] Silo weighment notice:', err.message));
+      if (siloData[targetKey]) {
+        const cur = Number(siloData[targetKey].stockTons) || 0;
+        siloData[targetKey].stockTons = Math.max(0, Number((cur + factor * netTons).toFixed(2)));
+        localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
+        pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
+        setSiloStock({ ...siloData });
+      }
 
       // Sync with Inward slips
       const rawInward = localStorage.getItem(STORAGE_KEYS.INWARD);
@@ -333,7 +319,7 @@ export default function WeighbridgeView() {
           netTons,
           unit: 'Tons',
           status: 'Finalized',
-          targetSilo: siloStock[targetKey]?.siloName || INITIAL_SILO_STOCK[targetKey]?.siloName || 'Storage Silo',
+          targetSilo: siloData[targetKey]?.siloName || 'Storage Silo',
           createdAt: new Date().toISOString(),
         };
         inwardData = [newInward, ...inwardData];
@@ -483,8 +469,6 @@ export default function WeighbridgeView() {
           true
         );
       }
-      if (id) markItemAsDeleted(WEIGHBRIDGE_STORAGE_KEY, id);
-      if (slipNo) markItemAsDeleted(WEIGHBRIDGE_STORAGE_KEY, slipNo);
       const updated = slips.filter((s) => s.id !== id);
       saveSlips(updated);
       showToast(`Slip #${slipNo} deleted and inventory adjusted.`);
@@ -647,13 +631,13 @@ export default function WeighbridgeView() {
               </div>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-              <div className="text-[10px] text-slate-500 font-bold uppercase truncate">{isMarathi ? 'क्रश सॅन्ड (वाळू)' : 'M-Sand'}</div>
+              <div className="text-[10px] text-slate-500 font-bold uppercase truncate">M-Sand (वाळू)</div>
               <div className="text-xs sm:text-sm font-black text-indigo-800 font-mono mt-0.5">
                 {siloStock?.sand?.stockTons ?? 180.5} MT
               </div>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-              <div className="text-[10px] text-purple-700 font-bold uppercase truncate">{isMarathi ? 'केमिकल (२२०L)' : 'Chemical (220L)'}</div>
+              <div className="text-[10px] text-purple-700 font-bold uppercase truncate">Chemical (२२०L)</div>
               <div className="text-xs sm:text-sm font-black text-purple-900 font-mono mt-0.5">
                 {(Number(siloStock?.admixturePce?.stockLiters || 3200) + Number(siloStock?.retarder?.stockLiters || 1100)).toLocaleString('en-IN')} L
               </div>
@@ -792,7 +776,7 @@ export default function WeighbridgeView() {
                         className="px-4 py-2 rounded-xl bg-[#1D5FA7] hover:bg-[#123B6D] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer font-sans"
                       >
                         <Plus className="w-4 h-4" />
-                        <span>{isMarathi ? 'पहिली वजन नोंद करा' : 'Record First Weighment'}</span>
+                        <span>Record First Weighment</span>
                       </button>
                     </div>
                   </td>
@@ -956,7 +940,7 @@ export default function WeighbridgeView() {
               {/* Option 1: Select Inward or Outward */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  {isMarathi ? '१. वाहनाची दिशा (आवक / जावक) *' : '1. Movement Direction *'}
+                  1. Movement Direction (वाहनाची दिशा) *
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -972,8 +956,8 @@ export default function WeighbridgeView() {
                       <ArrowDownToLine className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="font-bold text-xs block">{isMarathi ? '📥 कच्चा माल आवक' : '📥 Inward Material'}</span>
-                      <span className="text-[10px] text-slate-500">{isMarathi ? 'वाळू, सिमेंट, खडी, केमिकल्स' : 'Raw materials (Sand, Cement, Stone)'}</span>
+                      <span className="font-bold text-xs block">📥 Inward Material</span>
+                      <span className="text-[10px] text-slate-500">Raw materials (Sand, Cement, Stone)</span>
                     </div>
                   </button>
 
@@ -990,8 +974,8 @@ export default function WeighbridgeView() {
                       <ArrowUpFromLine className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="font-bold text-xs block">{isMarathi ? '📤 काँक्रीट जावक' : '📤 Outward Concrete'}</span>
-                      <span className="text-[10px] text-slate-500">{isMarathi ? 'साइटवर जाणारे मिक्सर' : 'Transit mixers carrying RMC to site'}</span>
+                      <span className="font-bold text-xs block">📤 Outward Concrete</span>
+                      <span className="text-[10px] text-slate-500">Transit mixers carrying RMC to site</span>
                     </div>
                   </button>
                 </div>
@@ -1001,7 +985,7 @@ export default function WeighbridgeView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    {isMarathi ? 'गाडी नंबर *' : 'Vehicle Number *'}
+                    Vehicle Number (गाडी नंबर) *
                   </label>
                   <input
                     type="text"
@@ -1015,13 +999,13 @@ export default function WeighbridgeView() {
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    {isMarathi ? 'ग्राहक / पुरवठादार / पार्टी *' : 'Party / Supplier / Customer *'}
+                    Party / Supplier / Customer *
                   </label>
                   <input
                     type="text"
                     value={partyName}
                     onChange={(e) => setPartyName(e.target.value)}
-                    placeholder={isMarathi ? 'पार्टीचे नाव टाका किंवा निवडा' : 'Enter or select party name'}
+                    placeholder="Enter or select party name"
                     list="weighbridge-party-list"
                     className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                     required
@@ -1037,7 +1021,7 @@ export default function WeighbridgeView() {
               {/* Material Selector with Quick Pills */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  {isMarathi ? 'कच्चा माल / मिक्स ग्रेड *' : 'Material Name *'}
+                  Material Name (मालाचे नाव) *
                 </label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {(formType === 'Inward' ? COMMON_MATERIALS.inward : COMMON_MATERIALS.outward).map((m, idx) => (
@@ -1071,7 +1055,7 @@ export default function WeighbridgeView() {
                   <div className="flex items-center gap-1.5">
                     <Scale className="w-4 h-4 text-blue-700" />
                     <span className="font-black text-xs text-blue-950 uppercase tracking-wider">
-                      {isMarathi ? 'वजन नोंद पर्याय' : 'Weight Entry Options'}
+                      Weight Entry Options (वजन पर्याय)
                     </span>
                   </div>
 
@@ -1084,7 +1068,7 @@ export default function WeighbridgeView() {
                         weightMode === 'gross_tare' ? 'bg-white text-blue-900 shadow-2xs' : 'text-blue-700 hover:text-blue-900'
                       }`}
                     >
-                      {isMarathi ? 'काटा १ & २' : 'Gross & Tare'}
+                      Gross & Tare (काटा १ & २)
                     </button>
                     <button
                       type="button"
@@ -1093,7 +1077,7 @@ export default function WeighbridgeView() {
                         weightMode === 'direct_net' ? 'bg-white text-blue-900 shadow-2xs' : 'text-blue-700 hover:text-blue-900'
                       }`}
                     >
-                      {isMarathi ? 'थेट निव्वळ' : 'Direct Net'}
+                      Direct Net (निव्वळ)
                     </button>
                     <button
                       type="button"
@@ -1106,7 +1090,7 @@ export default function WeighbridgeView() {
                       }`}
                     >
                       <Droplet className="w-3 h-3" />
-                      <span>{isMarathi ? 'केमिकल बॅरल्स (२२०L)' : 'Chemical Barrels (220L)'}</span>
+                      <span>Chemical Barrels (२२०L)</span>
                     </button>
                   </div>
                 </div>
@@ -1118,7 +1102,7 @@ export default function WeighbridgeView() {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-[11px] font-bold text-slate-700">
-                            {isMarathi ? 'एकूण वजन (भरलेली गाडी) *' : 'Gross Weight *'}
+                            Gross Weight (एकूण वजन - भरलेली गाडी) *
                           </label>
                           <button
                             type="button"
@@ -1150,7 +1134,7 @@ export default function WeighbridgeView() {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-[11px] font-bold text-slate-700">
-                            {isMarathi ? 'रिकामी गाडीचे वजन' : 'Tare Weight'} {isPendingTare ? (isMarathi ? '(बाकी)' : '(Pending)') : '*'}
+                            Tare Weight (रिकामी गाडीचे वजन) {isPendingTare ? '(Pending)' : '*'}
                           </label>
                           {!isPendingTare && (
                             <button
@@ -1170,7 +1154,7 @@ export default function WeighbridgeView() {
                             type="number"
                             value={isPendingTare ? '' : tareKg}
                             onChange={(e) => setTareKg(e.target.value)}
-                            placeholder={isPendingTare ? (isMarathi ? 'रिकामे वजन नंतर केले जाईल' : 'Tare weight will be recorded later') : 'e.g. 11200'}
+                            placeholder={isPendingTare ? 'Tare weight will be recorded later' : 'e.g. 11200'}
                             disabled={isPendingTare}
                             className={`w-full pr-12 pl-3.5 py-2.5 rounded-xl border font-mono text-sm font-black text-slate-900 focus:outline-none ${
                               isPendingTare
@@ -1196,7 +1180,7 @@ export default function WeighbridgeView() {
                           className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
                         />
                         <span className="text-xs text-slate-700 font-semibold">
-                          {isMarathi ? 'फक्त पहिला काटा (गाडी आता रिकामी होत आहे — बाहेर पडताना दुसरे वजन होईल)' : 'First Weighment Only (Truck is unloading now — Tare will be weighed upon exit)'}
+                          First Weighment Only (Truck is unloading now — Tare will be weighed upon exit)
                         </span>
                       </label>
                     </div>
@@ -1206,7 +1190,7 @@ export default function WeighbridgeView() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                          {isMarathi ? '२२०L बॅरल्स संख्या *' : 'Full Barrels (220L) *'}
+                          Full Barrels (२२०L बॅरल्स संख्या) *
                         </label>
                         <input
                           type="number"
@@ -1219,7 +1203,7 @@ export default function WeighbridgeView() {
                       </div>
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                          {isMarathi ? 'प्रति बॅरल लिटर' : 'Capacity / Barrel'}
+                          Capacity / Barrel (प्रति बॅरल लिटर)
                         </label>
                         <input
                           type="number"
@@ -1230,7 +1214,7 @@ export default function WeighbridgeView() {
                       </div>
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                          {isMarathi ? 'शिल्लक लिटर' : 'Partial Litres'}
+                          Partial Litres (शिल्लक लिटर)
                         </label>
                         <input
                           type="number"
@@ -1244,8 +1228,8 @@ export default function WeighbridgeView() {
 
                     {/* Formula Calculation Note */}
                     <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-xs flex items-center justify-between font-mono">
-                      <span>{isMarathi ? `हिशोब: (${chemicalBarrels} बॅरल्स × ${barrelCapacity} L) + ${partialLiters} L` : `Calculation: (${chemicalBarrels} Barrels × ${barrelCapacity} L) + ${partialLiters} L`}</span>
-                      <strong className="text-sm font-black text-purple-800">{calculatedChemVolume.toLocaleString('en-IN')} {isMarathi ? 'लिटर' : 'Litres'}</strong>
+                      <span>हिशोब: ({chemicalBarrels} Barrels × {barrelCapacity} L) + {partialLiters} L</span>
+                      <strong className="text-sm font-black text-purple-800">{calculatedChemVolume.toLocaleString('en-IN')} Litres</strong>
                     </div>
                   </div>
                 ) : (
@@ -1253,7 +1237,7 @@ export default function WeighbridgeView() {
                     {/* Direct Net Weight */}
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-[11px] font-bold text-slate-700">
-                        {isMarathi ? 'थेट निव्वळ वजन *' : 'Direct Net Weight *'}
+                        Direct Net Weight (एकूण निव्वळ वजन) *
                       </label>
                       <button
                         type="button"
@@ -1279,7 +1263,7 @@ export default function WeighbridgeView() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1">
-                      {isMarathi ? 'एकूण व निव्वळ वजन थेट या मूल्यानुसार सेट केले जाईल.' : 'Gross and Net will be set directly to this value.'}
+                      Gross and Net will be set directly to this value.
                     </p>
                   </div>
                 )}
@@ -1290,20 +1274,20 @@ export default function WeighbridgeView() {
                 }`}>
                   <div>
                     <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-200 block">
-                      {weightMode === 'chemical_barrels' ? (isMarathi ? 'एकूण केमिकल आवक प्रमाण' : 'Total Chemical Intake') : (isMarathi ? 'निव्वळ माल वजन' : 'Calculated Net Weight')}
+                      {weightMode === 'chemical_barrels' ? 'Total Chemical Intake (एकूण लिटर आवक)' : 'Calculated Net Weight (निव्वळ माल वजन)'}
                     </span>
                     <div className="text-lg font-black font-mono tracking-tight">
                       {isPendingTare
-                        ? (isMarathi ? 'दुसरे रिकामे वजन बाकी' : 'PENDING TARE WEIGHMENT')
+                        ? 'PENDING TARE WEIGHMENT'
                         : weightMode === 'chemical_barrels'
-                          ? `${calculatedChemVolume.toLocaleString('en-IN')} ${isMarathi ? 'लिटर' : 'LITRES'}`
+                          ? `${calculatedChemVolume.toLocaleString('en-IN')} LITRES`
                           : `${calculatedNetKg.toLocaleString('en-IN')} KG`}
                     </div>
                   </div>
                   {!isPendingTare && (
                     <div className="text-right">
                       <span className="text-[10px] uppercase font-bold text-emerald-200 block">
-                        {weightMode === 'chemical_barrels' ? (isMarathi ? 'बॅरल पॅकिंग' : 'Barrel Package') : (isMarathi ? 'टन (Metric Tons)' : 'Metric Tons')}
+                        {weightMode === 'chemical_barrels' ? 'Barrel Package' : 'Metric Tons'}
                       </span>
                       <span className="text-xl font-black font-mono text-amber-300">
                         {weightMode === 'chemical_barrels' ? `${chemicalBarrels} × ${barrelCapacity}L` : `${calculatedNetTons} MT`}
@@ -1317,7 +1301,7 @@ export default function WeighbridgeView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    {isMarathi ? 'ड्रायव्हरचे नाव (ऐच्छिक)' : 'Driver Name - Optional'}
+                    Driver Name (चालक) - Optional
                   </label>
                   <input
                     type="text"
@@ -1415,7 +1399,7 @@ export default function WeighbridgeView() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                    {isMarathi ? 'रिकामी गाडीचे वजन (Tare Weight) *' : 'Empty Truck Tare Weight *'}
+                    Empty Truck Tare Weight (रिकामी गाडीचे वजन) *
                   </label>
                   <button
                     type="button"
@@ -1570,39 +1554,39 @@ export default function WeighbridgeView() {
                 {activePrintSlip.unit === 'Litres' ? (
                   <>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-slate-700">{isMarathi ? 'पॅकेजिंग प्रकार:' : 'PACKAGE TYPE:'}</span>
+                      <span className="font-semibold text-slate-700">PACKAGE TYPE (पॅकेजिंग):</span>
                       <span className="font-bold text-purple-900">
                         {activePrintSlip.barrelDetails || 'Chemical 220L Barrels'}
                       </span>
                     </div>
                     <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm">
-                      <span className="font-black text-slate-900 uppercase">{isMarathi ? 'प्रमाणित लिटर:' : 'CERTIFIED VOLUME:'}</span>
+                      <span className="font-black text-slate-900 uppercase">CERTIFIED VOLUME (एकूण लिटर):</span>
                       <span className="font-black text-purple-900 text-base">
-                        {Number(activePrintSlip.netKg).toLocaleString('en-IN')} {isMarathi ? 'लिटर' : 'LITRES'}
+                        {Number(activePrintSlip.netKg).toLocaleString('en-IN')} LITRES
                       </span>
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-slate-700">{isMarathi ? '१. एकूण वजन (भरलेली गाडी):' : '1. GROSS WEIGHT:'}</span>
+                      <span className="font-semibold text-slate-700">1. GROSS WEIGHT (भरलेली गाडी):</span>
                       <span className="font-bold text-slate-900">
                         {Number(activePrintSlip.grossKg).toLocaleString('en-IN')} KG
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-slate-700">{isMarathi ? '२. रिकामे वजन (रिकामी गाडी):' : '2. TARE WEIGHT:'}</span>
+                      <span className="font-semibold text-slate-700">2. TARE WEIGHT (रिकामी गाडी):</span>
                       <span className="font-bold text-slate-900">
                         {activePrintSlip.status === 'Pending Tare'
-                          ? (isMarathi ? 'बाकी' : 'PENDING')
+                          ? 'PENDING'
                           : `${Number(activePrintSlip.tareKg).toLocaleString('en-IN')} KG`}
                       </span>
                     </div>
                     <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm">
-                      <span className="font-black text-slate-900 uppercase">{isMarathi ? '३. निव्वळ वजन:' : '3. NET WEIGHT:'}</span>
+                      <span className="font-black text-slate-900 uppercase">3. NET WEIGHT (निव्वळ वजन):</span>
                       <span className="font-black text-emerald-800 text-base">
                         {activePrintSlip.status === 'Pending Tare'
-                          ? (isMarathi ? 'बाकी' : 'PENDING')
+                          ? 'PENDING'
                           : `${Number(activePrintSlip.netKg).toLocaleString('en-IN')} KG`}
                       </span>
                     </div>

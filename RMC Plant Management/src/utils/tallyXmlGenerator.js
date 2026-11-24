@@ -3,7 +3,6 @@
  * Conforms to standard Tally XML envelope structure for 1-click import via:
  * Tally Prime -> Import (Alt + O) -> Transactions -> XML File
  */
-import { roundCurrency } from './billingPayments.js';
 
 function formatTallyDate(dateStr) {
   if (!dateStr) {
@@ -51,12 +50,12 @@ export function generateSalesTallyXml(bills = [], companyName = 'SHIVKRUPA READY
     const vchDate = formatTallyDate(bill.date);
     const billNo = escapeXml(bill.billNo || bill.invoiceNo || 'INV-001');
     const customer = escapeXml(bill.customerName || 'Cash Customer');
-    const total = roundCurrency(parseFloat(bill.total || bill.netTotal || 0) || 0);
-    const cgst = roundCurrency(parseFloat(bill.cgst || 0) || 0);
-    const sgst = roundCurrency(parseFloat(bill.sgst || 0) || 0);
-    const igst = roundCurrency(parseFloat(bill.igst || 0) || 0);
-    const totalGst = roundCurrency(cgst + sgst + igst);
-    const taxable = roundCurrency(total - totalGst > 0 ? total - totalGst : total);
+    const total = parseFloat(bill.total || bill.netTotal || 0) || 0;
+    const cgst = parseFloat(bill.cgst || 0) || 0;
+    const sgst = parseFloat(bill.sgst || 0) || 0;
+    const igst = parseFloat(bill.igst || 0) || 0;
+    const totalGst = cgst + sgst + igst;
+    const taxable = total - totalGst > 0 ? total - totalGst : total;
     const narration = escapeXml(`RMC Concrete supply for ${bill.place || 'Site'}. Challan: ${bill.challanNo || '-'}`);
 
     return `
@@ -156,7 +155,7 @@ export function generateReceiptsTallyXml(bills = [], companyName = 'SHIVKRUPA RE
         receiptNo: `RCP-${bill.billNo || '001'}`,
         date: bill.date,
         customer: bill.customerName || 'Customer',
-        amount: roundCurrency(parseFloat(bill.paidAmount)),
+        amount: parseFloat(bill.paidAmount),
         mode: 'Cash',
         refNo: 'Full/Advance Receipt',
         billNo: bill.billNo || bill.invoiceNo
@@ -226,7 +225,7 @@ export function generatePurchasesTallyXml(purchases = [], companyName = 'SHIVKRU
     const vchDate = formatTallyDate(p.date);
     const vchNo = escapeXml(p.voucherNo || p.billNo || 'PUR-001');
     const supplier = escapeXml(p.supplierName || 'Material Vendor');
-    const total = roundCurrency(parseFloat(p.netTotal || p.total || p.amount || 0) || 0);
+    const total = parseFloat(p.netTotal || p.total || p.amount || 0) || 0;
     const materialLedger = escapeXml(p.material || 'Raw Material Purchases');
     const narration = escapeXml(`Material purchased: ${p.material || 'Raw Material'}. Qty: ${p.qty || '-'} ${p.unit || ''}`);
 

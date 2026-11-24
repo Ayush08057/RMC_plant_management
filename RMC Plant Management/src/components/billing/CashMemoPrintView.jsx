@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Printer, X, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { STAMP_IMAGE_BASE64, COMMON_SEAL_IMAGE_BASE64 } from './billingAssets';
-import { normalizeBill, roundCurrency } from '../../utils/billingPayments';
+import { normalizeBill } from '../../utils/billingPayments';
 
 export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   const printRef = useRef(null);
@@ -82,9 +82,9 @@ export default function CashMemoPrintView({ bill, onClose, onPrint }) {
   ];
 
   const totalQty = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-  const totalAmount = roundCurrency(Number(bill.totalAmount || items.reduce((sum, item) => sum + (Number(item.total) || 0), 0)));
-  const transportation = roundCurrency(Number(bill.transportation || 0));
-  const finalAmount = roundCurrency(totalAmount + transportation);
+  const totalAmount = Number(bill.totalAmount || items.reduce((sum, item) => sum + (Number(item.total) || 0), 0));
+  const transportation = Number(bill.transportation || 0);
+  const finalAmount = totalAmount + transportation;
 
   let amountInWords = bill.amountInWords || numberToIndianWords(finalAmount);
   if (!amountInWords.toLowerCase().includes('rupees')) {

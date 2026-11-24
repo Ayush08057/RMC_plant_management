@@ -66,24 +66,8 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   });
   const [plantFormError, setPlantFormError] = useState('');
 
-  // Only the active System Administrator has the authority to add, register, or delete company workspaces
-  const isAdmin = Boolean(
-    user &&
-    (user.role === 'Admin' || (user.role || '').toLowerCase() === 'admin' || (user.role || '').toLowerCase() === 'administrator') &&
-    user.role !== 'Owner / Director' &&
-    (user.role || '').toLowerCase() !== 'owner / director'
-  );
-
-  const isOwner = Boolean(
-    user &&
-    (user.role === 'Owner / Director' || (user.role || '').toLowerCase().includes('owner') || (user.role || '').toLowerCase().includes('director'))
-  );
-
-  // Switching between existing company workspaces is allowed for Admin and Owner / Director
-  const canSwitchCompany = isAdmin || isOwner;
-
-  // Adding, registering, or permanently deleting company workspaces is strictly restricted to Admin only
-  const canManageCompanies = isAdmin;
+  // Enable company management and brand logo customization across workspaces
+  const canManageCompanies = true;
 
   const handleLogoFileChange = (file, onSuccess) => {
     if (!file) return;
@@ -99,10 +83,6 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   };
 
   const handleConfirmDeletePlant = async (companyId) => {
-    if (!canManageCompanies) {
-      alert('Unauthorized: Only System Administrator has the authority to delete a company.');
-      return;
-    }
     if (!companyId) return;
     try {
       await removeCompany(companyId);
@@ -161,7 +141,6 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
   const unreadCount = (notifications || []).filter((n) => !n.read).length;
 
   const openAddPlantModal = () => {
-    if (!canManageCompanies) return;
     setPlantForm({
       kind: 'company',
       name: '',
@@ -179,10 +158,6 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
 
   const handleAddPlant = (event) => {
     event.preventDefault();
-    if (!canManageCompanies) {
-      setPlantFormError('Unauthorized: Only System Administrator has the authority to add a new company workspace.');
-      return;
-    }
     const name = plantForm.name.trim();
     const requestedCode = plantForm.code.trim().toUpperCase();
 
@@ -267,76 +242,47 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
             <Menu className="w-4 h-4 text-slate-700" />
           </button>
 
-          {/* Plant / Company Display */}
+          {/* Plant / Company Selector */}
           <div className="relative min-w-0" ref={companyDropdownRef}>
-            {canSwitchCompany ? (
-              <button
-                type="button"
-                id="company-selector-button"
-                aria-expanded={showPlantPicker}
-                aria-haspopup="listbox"
-                aria-controls="company-dropdown-menu"
-                aria-label="Select company workspace"
-                onClick={() => {
-                  setShowPlantPicker((prev) => !prev);
-                  setShowNotifications(false);
-                }}
-                className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 transition-all cursor-pointer shadow-2xs min-w-0"
-                title={canManageCompanies ? `Active: ${selectedCompany.name} • Click to switch, add, or delete company` : `Active: ${selectedCompany.name} • Click to switch workspace`}
-              >
-                <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
-                  <img 
-                    src={selectedCompany?.logo || defaultLogo} 
-                    alt={selectedCompany.name} 
-                    className="w-full h-full object-cover scale-[1.04]" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = defaultLogo;
-                    }}
-                  />
-                </div>
-                <div className="text-left min-w-0">
-                  <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
-                    {selectedCompany.name}
-                  </span>
-                  <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
-                    <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
-                    <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
-                  </span>
-                </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
-              </button>
-            ) : (
-              /* Operational employee view: Clean read-only company badge without dropdown */
-              <div 
-                className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 shadow-2xs min-w-0 select-none cursor-default"
-                title={`${selectedCompany.name} • Plant Workspace`}
-              >
-                <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
-                  <img 
-                    src={selectedCompany?.logo || defaultLogo} 
-                    alt={selectedCompany.name} 
-                    className="w-full h-full object-cover scale-[1.04]" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = defaultLogo;
-                    }}
-                  />
-                </div>
-                <div className="text-left min-w-0">
-                  <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
-                    {selectedCompany.name}
-                  </span>
-                  <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
-                    <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
-                    <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
-                  </span>
-                </div>
+            <button
+              type="button"
+              id="company-selector-button"
+              aria-expanded={showPlantPicker}
+              aria-haspopup="listbox"
+              aria-controls="company-dropdown-menu"
+              aria-label="Select company workspace"
+              onClick={() => {
+                setShowPlantPicker((prev) => !prev);
+                setShowNotifications(false);
+              }}
+              className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/70 hover:bg-white/95 backdrop-blur-md border border-white/80 ring-1 ring-slate-900/[0.04] text-slate-900 transition-all cursor-pointer shadow-2xs min-w-0"
+              title={`Active: ${selectedCompany.name} • Click to switch, add, or delete company`}
+            >
+              <div className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                <img 
+                  src={selectedCompany?.logo || defaultLogo} 
+                  alt={selectedCompany.name} 
+                  className="w-full h-full object-cover scale-[1.04]" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = defaultLogo;
+                  }}
+                />
               </div>
-            )}
+              <div className="text-left min-w-0">
+                <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none">
+                  {selectedCompany.name}
+                </span>
+                <span className="text-[11px] text-slate-500 font-normal hidden sm:flex items-center gap-1">
+                  <MapPin className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                  <span className="truncate max-w-[140px]">{selectedCompany.location || 'Tanang, Sangli'}</span>
+                </span>
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${showPlantPicker ? 'rotate-180' : ''}`} />
+            </button>
 
-            {/* Plant Picker Dropdown - Restricted strictly to Admin / Owner */}
-            {canSwitchCompany && showPlantPicker && (
+            {/* Plant Picker Dropdown */}
+            {showPlantPicker && (
               <div 
                 id="company-dropdown-menu"
                 role="listbox"
@@ -595,15 +541,14 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
         </div>
       </header>
 
-      {/* Modal: Register New Company (Admin Authority Only) */}
-      {canManageCompanies && (
-        <Modal
-          isOpen={showAddPlantModal}
-          onClose={() => setShowAddPlantModal(false)}
-          title={t('Register New Company Workspace')}
-          subtitle={t('Create an independent enterprise company entity with its own branding, plants, and workforce.')}
-          icon={Building2}
-        >
+      {/* Modal: Register New Company */}
+      <Modal
+        isOpen={showAddPlantModal}
+        onClose={() => setShowAddPlantModal(false)}
+        title={t('Register New Company Workspace')}
+        subtitle={t('Create an independent enterprise company entity with its own branding, plants, and workforce.')}
+        icon={Building2}
+      >
         <form onSubmit={handleAddPlant} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
           {plantFormError && (
             <p role="alert" className="rounded-lg border border-[#D4E4F7] bg-[#EAF3FF] px-3 py-2 font-bold text-black">
@@ -731,17 +676,15 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </form>
       </Modal>
-      )}
 
-      {/* Modal: Edit Company & Change Logo (Admin Authority Only) */}
-      {canManageCompanies && (
-        <Modal
-          isOpen={Boolean(companyToEdit)}
-          onClose={() => setCompanyToEdit(null)}
-          title={`${t('Company Settings')} • ${companyToEdit?.name || t('Company')}`}
-          subtitle={t('Manage company profile and brand logo icon')}
-          icon={Building2}
-        >
+      {/* Modal: Edit Company & Change Logo (Admin Authority) */}
+      <Modal
+        isOpen={Boolean(companyToEdit)}
+        onClose={() => setCompanyToEdit(null)}
+        title={`${t('Company Settings')} • ${companyToEdit?.name || t('Company')}`}
+        subtitle={t('Manage company profile and brand logo icon')}
+        icon={Building2}
+      >
         <form onSubmit={handleSaveEditCompany} className="space-y-3.5 p-3 sm:p-4 bg-white rounded-xl border border-[#D4E4F7] text-xs">
           {editCompanyError && (
             <p role="alert" className="rounded-lg border border-[#D4E4F7] bg-[#EAF3FF] px-3 py-2 font-bold text-black">
@@ -842,18 +785,16 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </form>
       </Modal>
-      )}
 
-      {/* Confirmation Modal: Delete Company (Admin Authority Only) */}
-      {canManageCompanies && (
-        <Modal
-          isOpen={Boolean(plantToDelete)}
-          onClose={() => setPlantToDelete(null)}
-          title={t('Confirm Company Deletion')}
-          subtitle={t('Permanent workspace removal')}
-          maxWidth="max-w-md"
-          icon={AlertTriangle}
-        >
+      {/* Confirmation Modal: Delete Company */}
+      <Modal
+        isOpen={Boolean(plantToDelete)}
+        onClose={() => setPlantToDelete(null)}
+        title={t('Confirm Company Deletion')}
+        subtitle={t('Permanent workspace removal')}
+        maxWidth="max-w-md"
+        icon={AlertTriangle}
+      >
         <div className="space-y-3.5 text-xs">
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-black">
             <p className="font-bold text-sm text-red-900 mb-1">
@@ -903,7 +844,6 @@ export default function Header({ onOpenSidebar, onToggleSidebar, isSidebarOpen =
           </div>
         </div>
       </Modal>
-      )}
     </>
   );
 }

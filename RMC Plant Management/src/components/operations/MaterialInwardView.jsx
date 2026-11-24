@@ -19,9 +19,6 @@ import {
   Trash2
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
-import { adjustSiloStock, subscribeSiloStock } from '../../services/siloStockService';
-import { useAuth } from '../../context/AuthContext';
-import { useWorkforce } from '../../context/WorkforceContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { 
   calculateNetWeight, 
@@ -70,9 +67,6 @@ const SUPPLIERS_LIST = [
 
 export default function MaterialInwardView() {
   const { language, t } = useLanguage();
-  const { user } = useAuth();
-  const { activeCompanyId } = useWorkforce();
-  const resolvedCompanyId = activeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('rmc_active_company_v1') : null) || 'sm-concretech';
   const isMarathi = language === 'mr';
 
   const [activeSubTab, setActiveSubTab] = useState('inward_slips'); // 'inward_slips' | 'chemical_barrels' | 'silo_inventory'
@@ -125,7 +119,7 @@ export default function MaterialInwardView() {
     const unsubChem = subscribeCloudStore('cloud_chemical_barrels', CHEMICAL_STORAGE_KEY, INITIAL_CHEMICALS, (cloudChems) => {
       if (Array.isArray(cloudChems)) setChemicalRecords(cloudChems);
     });
-    const unsubSilo = subscribeSiloStock(resolvedCompanyId, (cloudSilos) => {
+    const unsubSilo = subscribeCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, INITIAL_SILO_STOCK, (cloudSilos) => {
       if (cloudSilos && typeof cloudSilos === 'object') setSiloInventory(cloudSilos);
     });
 
@@ -237,21 +231,18 @@ export default function MaterialInwardView() {
     setRecords(updatedRecords);
     pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updatedRecords);
 
-    // Update Silo Inventory via atomic idempotent adjustSiloStock
+    // Update Silo Inventory Stock (Safe increment)
     const matConfig = COMMON_RAW_MATERIALS.find(m => m.name === inwardForm.material);
-    if (matConfig && matConfig.key) {
-      adjustSiloStock({
-        companyId: resolvedCompanyId,
-        operation: 'inward',
-        referenceId: newEntry.slipNo || newEntry.id,
-        items: [{
-          rawName: newEntry.material,
-          materialKey: matConfig.key,
-          delta: net,
-          unit: 'Tons',
-        }],
-        user,
-      }).catch(err => console.warn('[MaterialInwardView] Silo inward sync notice:', err.message));
+    if (matConfig && matConfig.key && siloInventory[matConfig.key]) {
+      const updatedSilo = {
+        ...siloInventory,
+        [matConfig.key]: {
+          ...siloInventory[matConfig.key],
+          stockTons: Number((Number(siloInventory[matConfig.key].stockTons || 0) + net).toFixed(2))
+        }
+      };
+      setSiloInventory(updatedSilo);
+      pushCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, updatedSilo);
     }
 
     setShowInwardModal(false);
@@ -291,21 +282,20 @@ export default function MaterialInwardView() {
     setChemicalRecords(updatedChem);
     pushCloudStore('cloud_chemical_barrels', CHEMICAL_STORAGE_KEY, updatedChem);
 
-    // Update Chemical Inventory Stock via atomic adjustSiloStock
+    // Update Chemical Inventory Stock
     const chemConfig = COMMON_CHEMICAL_PRODUCTS.find(c => c.name === chemicalForm.chemicalName);
     const stockKey = chemConfig?.key || 'admixturePce';
-    adjustSiloStock({
-      companyId: resolvedCompanyId,
-      operation: 'inward',
-      referenceId: newChemEntry.entryNo || newChemEntry.id,
-      items: [{
-        rawName: chemicalForm.chemicalName,
-        materialKey: stockKey,
-        delta: totalVolumeLiters,
-        unit: 'Litres',
-      }],
-      user,
-    }).catch(err => console.warn('[MaterialInwardView] Chemical inward sync notice:', err.message));
+    if (siloInventory[stockKey]) {
+      const updatedSilo = {
+        ...siloInventory,
+        [stockKey]: {
+          ...siloInventory[stockKey],
+          stockLiters: Number((Number(siloInventory[stockKey].stockLiters || 0) + totalVolumeLiters).toFixed(2))
+        }
+      };
+      setSiloInventory(updatedSilo);
+      pushCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, updatedSilo);
+    }
 
     setShowChemicalModal(false);
     showToast(`✓ Received ${fullBarrels} barrels (${totalVolumeLiters} Litres) of ${chemicalForm.chemicalName}!`);
@@ -323,19 +313,19 @@ export default function MaterialInwardView() {
       if (target && target.material && (target.netTons || target.quantity)) {
         const netQty = Number(target.netTons || target.quantity || 0);
         const matConfig = COMMON_RAW_MATERIALS.find(m => m.name === target.material);
-        if (matConfig && matConfig.key) {
-          adjustSiloStock({
-            companyId: resolvedCompanyId,
-            operation: 'reversal',
-            referenceId: target.slipNo || target.id,
-            items: [{
-              rawName: target.material,
-              materialKey: matConfig.key,
-              delta: netQty,
-              unit: 'Tons',
-            }],
-            user,
-          }).catch(err => console.warn('[MaterialInwardView] Inward reversal notice:', err.message));
+        if (matConfig && matConfig.key && siloInventory[matConfig.key]) {
+          const updatedSilo = {
+            ...siloInventory,
+            [matConfig.key]: {
+              ...siloInventory[matConfig.key],
+              stockTons: Math.max(0, Number((Number(siloInventory[matConfig.key].stockTons || 0) - netQty).toFixed(2)))
+            }
+          };
+          setSiloInventory(updatedSilo);
+          try {
+            localStorage.setItem(SILO_STORAGE_KEY, JSON.stringify(updatedSilo));
+            pushCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, updatedSilo);
+          } catch {}
         }
       }
       showToast('Material inward record deleted.');
@@ -354,20 +344,22 @@ export default function MaterialInwardView() {
       if (target && target.chemicalName && target.totalVolumeLiters) {
         const chemConfig = COMMON_CHEMICAL_PRODUCTS.find(c => c.name === target.chemicalName);
         const stockKey = chemConfig?.key || 'admixturePce';
-        adjustSiloStock({
-          companyId: resolvedCompanyId,
-          operation: 'reversal',
-          referenceId: target.entryNo || target.id,
-          items: [{
-            rawName: target.chemicalName,
-            materialKey: stockKey,
-            delta: Number(target.totalVolumeLiters || 0),
-            unit: 'Litres',
-          }],
-          user,
-        }).catch(err => console.warn('[MaterialInwardView] Chemical reversal notice:', err.message));
+        if (siloInventory[stockKey]) {
+          const updatedSilo = {
+            ...siloInventory,
+            [stockKey]: {
+              ...siloInventory[stockKey],
+              stockLiters: Math.max(0, Number((Number(siloInventory[stockKey].stockLiters || 0) - Number(target.totalVolumeLiters)).toFixed(2)))
+            }
+          };
+          setSiloInventory(updatedSilo);
+          try {
+            localStorage.setItem(SILO_STORAGE_KEY, JSON.stringify(updatedSilo));
+            pushCloudStore('cloud_silo_inventory', SILO_STORAGE_KEY, updatedSilo);
+          } catch {}
+        }
       }
-      showToast('Chemical barrel delivery record deleted.');
+      showToast('Chemical intake record deleted.');
     }
   };
 

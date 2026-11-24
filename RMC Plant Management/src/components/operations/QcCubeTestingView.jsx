@@ -21,7 +21,6 @@ import {
   Download
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
-import { useLanguage } from '../../context/LanguageContext';
 
 export const QC_CUBES_STORAGE_KEY = 'rmc_qc_cube_tests_v1';
 
@@ -71,7 +70,6 @@ function addDays(isoDate, days) {
 }
 
 export default function QcCubeTestingView() {
-  const { language, t } = useLanguage();
   const [cubes, setCubes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, DUE_TODAY, UPCOMING, COMPLETED
@@ -250,36 +248,30 @@ export default function QcCubeTestingView() {
 
     if (has7d && has28d) {
       const allPassed = cube.test7d.isPass && cube.test28d.isPass;
-      return {
-        code: 'COMPLETED',
-        label: allPassed
-          ? (language === 'mr' ? 'उत्तीर्ण (Passed)' : 'Passed')
-          : (language === 'mr' ? 'अनुत्तीर्ण (Failed)' : 'Failed'),
-        color: allPassed ? 'emerald' : 'rose'
-      };
+      return { code: 'COMPLETED', label: allPassed ? 'Passed (उत्तीर्ण)' : 'Failed (अनुत्तीर्ण)', color: allPassed ? 'emerald' : 'rose' };
     }
 
     // Check if 7d due
     if (!has7d) {
       if (cube.dueDate7d === today) {
-        return { code: 'DUE_TODAY_7D', label: language === 'mr' ? '७ दिवस - आज चाचणी' : '7-Day Due Today', color: 'rose' };
+        return { code: 'DUE_TODAY_7D', label: '7-Day Due Today (आज चाचणी)', color: 'rose' };
       }
       if (cube.dueDate7d < today) {
-        return { code: 'OVERDUE_7D', label: language === 'mr' ? '७ दिवस - मुदत संपली' : '7-Day Overdue', color: 'amber' };
+        return { code: 'OVERDUE_7D', label: '7-Day Overdue (मुदत संपली)', color: 'amber' };
       }
     }
 
     // Check if 28d due
     if (!has28d) {
       if (cube.dueDate28d === today) {
-        return { code: 'DUE_TODAY_28D', label: language === 'mr' ? '२८ दिवस - आज चाचणी' : '28-Day Due Today', color: 'rose' };
+        return { code: 'DUE_TODAY_28D', label: '28-Day Due Today (आज चाचणी)', color: 'rose' };
       }
       if (cube.dueDate28d < today) {
-        return { code: 'OVERDUE_28D', label: language === 'mr' ? '२८ दिवस - मुदत संपली' : '28-Day Overdue', color: 'amber' };
+        return { code: 'OVERDUE_28D', label: '28-Day Overdue (मुदत संपली)', color: 'amber' };
       }
     }
 
-    return { code: 'UPCOMING', label: language === 'mr' ? 'क्युरिंग टँकमध्ये सुरू' : 'In Curing Tank', color: 'blue' };
+    return { code: 'UPCOMING', label: 'In Curing Tank (क्युरिंग सुरू)', color: 'blue' };
   };
 
   // Quick statistics
@@ -343,12 +335,10 @@ export default function QcCubeTestingView() {
               <span>IS 516 / IS 456 Concrete Cube Strength Monitor</span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">
-              {language === 'mr' ? 'क्युब टेस्टिंग शेड्युल आणि ऑटो रिमाइंडर्स' : 'Cube Testing Schedule & Auto-Reminders'}
+              क्युब टेस्टिंग शेड्युल आणि ऑटो रिमाइंडर्स (7 & 28 Days Testing)
             </h2>
             <p className="text-xs text-blue-100/90 mt-0.5">
-              {language === 'mr' 
-                ? 'क्युरिंग टँक मधील क्युबचे वय तपासून चाचणीची तारीख आपोआप कळते आणि अधिकृत लॅब सर्टिफिकेट तयार होते.' 
-                : 'Track curing age in tanks to automatically schedule 7 & 28-day compression tests and generate certificates.'}
+              क्युरिंग टँक मधील क्युबचे वय तपासून चाचणीची तारीख आपोआप कळते आणि अधिकृत लॅब सर्टिफिकेट तयार होते.
             </p>
           </div>
 
@@ -358,7 +348,7 @@ export default function QcCubeTestingView() {
               className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('Cast New Cubes')}</span>
+              <span>+ Cast New Cubes</span>
             </button>
           </div>
         </div>
@@ -372,38 +362,38 @@ export default function QcCubeTestingView() {
             }`}
           >
             <div className="text-[10px] uppercase font-bold text-rose-300 flex items-center justify-between">
-              <span>{language === 'mr' ? 'आज चाचणी / मुदत संपली' : 'Due Today / Overdue'}</span>
+              <span>Due Today / Overdue</span>
               {stats.dueToday > 0 && <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />}
             </div>
             <div className="text-xl font-black text-white mt-0.5">{stats.dueToday + stats.overdue}</div>
-            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'आज चाचणी आवश्यक' : 'Testing Due Today'}</div>
+            <div className="text-[10px] text-slate-300">आज चाचणी आवश्यक</div>
           </div>
 
           <div 
             onClick={() => setStatusFilter(statusFilter === 'UPCOMING' ? 'ALL' : 'UPCOMING')}
             className="p-2 rounded-lg bg-blue-950/40 border border-blue-800/40 cursor-pointer hover:bg-blue-950/60 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-cyan-300">{language === 'mr' ? 'क्युरिंग चालू' : 'In Curing (Upcoming)'}</div>
+            <div className="text-[10px] uppercase font-bold text-cyan-300">In Curing (Upcoming)</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.upcoming}</div>
-            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'क्युरिंग चालू असलेले' : 'Currently in Curing'}</div>
+            <div className="text-[10px] text-slate-300">क्युरिंग चालू असलेले</div>
           </div>
 
           <div 
             onClick={() => setStatusFilter(statusFilter === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
             className="p-2 rounded-lg bg-blue-950/40 border border-blue-800/40 cursor-pointer hover:bg-blue-950/60 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-emerald-300">{language === 'mr' ? 'चाचणी पूर्ण व प्रमाणित' : 'Tested & Certified'}</div>
+            <div className="text-[10px] uppercase font-bold text-emerald-300">Tested & Certified</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.passed}</div>
-            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'यशस्वी चाचण्या' : 'Passed Tests'}</div>
+            <div className="text-[10px] text-slate-300">यशस्वी चाचण्या</div>
           </div>
 
           <div 
             onClick={() => setStatusFilter('ALL')}
             className="p-2 rounded-lg bg-blue-950/40 border border-blue-800/40 cursor-pointer hover:bg-blue-950/60 transition-all"
           >
-            <div className="text-[10px] uppercase font-bold text-slate-300">{language === 'mr' ? 'एकूण क्युब लॉट्स' : 'Total Cube Lots'}</div>
+            <div className="text-[10px] uppercase font-bold text-slate-300">Total Cube Lots</div>
             <div className="text-xl font-black text-white mt-0.5">{stats.total}</div>
-            <div className="text-[10px] text-slate-300">{language === 'mr' ? 'एकूण क्युब लॉट्स' : 'Total Cube Lots'}</div>
+            <div className="text-[10px] text-slate-300">एकूण क्युब लॉट्स</div>
           </div>
         </div>
       </div>
@@ -449,7 +439,7 @@ export default function QcCubeTestingView() {
           <div className="p-8 text-center text-slate-400">
             <Layers className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-[1.5]" />
             <p className="text-sm font-semibold text-slate-600">No cube testing records found.</p>
-            <p className="text-xs text-slate-400 mt-0.5">Click 'Cast New Cubes' to log a newly poured batch specimen.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Click '+ Cast New Cubes' to log a newly poured batch specimen.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -594,13 +584,9 @@ export default function QcCubeTestingView() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <Plus className="w-4 h-4 text-emerald-600" />
-                  <span>{language === 'mr' ? 'नवीन काँक्रीट क्युब लॉट कास्ट करा' : 'Cast New Concrete Cube Lot'}</span>
+                  <span>Cast New Concrete Cube Lot (नवीन क्युब कास्टिंग)</span>
                 </h3>
-                <p className="text-[11px] text-slate-500">
-                  {language === 'mr' 
-                    ? 'बॅच आणि मिक्स ग्रेड टाकल्यावर ७ व २८ दिवसांचे वेळापत्रक आपोआप तयार होईल.' 
-                    : 'Entering batch and mix grade automatically schedules 7-day and 28-day testing dates.'}
-                </p>
+                <p className="text-[11px] text-slate-500">बॅच आणि मिक्स ग्रेड टाकल्यावर ७ व २८ दिवसांचे वेळापत्रक आपोआप तयार होईल.</p>
               </div>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />
@@ -924,48 +910,48 @@ export default function QcCubeTestingView() {
               </div>
 
               {/* Certificate Meta Details */}
-              <div className="grid grid-cols-2 gap-4 text-xs mb-4 pb-3 border-b border-slate-200">
+              <div className="grid grid-cols-2 gap-4 text-xs mb-4 pb-3 border-b border-slate-300 text-black">
                 <div>
-                  <table className="w-full text-left">
+                  <table className="w-full text-left text-black">
                     <tbody>
                       <tr>
-                        <td className="text-slate-500 py-0.5 w-32 font-medium">Certificate No:</td>
-                        <td className="font-mono font-bold text-slate-900">CERT-{certModalCube.id}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 w-32 font-medium">Certificate No:</td>
+                        <td className="font-mono font-bold text-black print:text-black">CERT-{certModalCube.id}</td>
                       </tr>
                       <tr>
-                        <td className="text-slate-500 py-0.5 font-medium">Customer / Client:</td>
-                        <td className="font-bold text-slate-900">{certModalCube.clientName}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 font-medium">Customer / Client:</td>
+                        <td className="font-bold text-black print:text-black">{certModalCube.clientName}</td>
                       </tr>
                       <tr>
-                        <td className="text-slate-500 py-0.5 font-medium">Project / Site:</td>
-                        <td className="text-slate-800">{certModalCube.site}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 font-medium">Project / Site:</td>
+                        <td className="text-black print:text-black">{certModalCube.site}</td>
                       </tr>
                       <tr>
-                        <td className="text-slate-500 py-0.5 font-medium">Transit Mixer No:</td>
-                        <td className="font-mono text-slate-800">{certModalCube.vehicleNo}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 font-medium">Transit Mixer No:</td>
+                        <td className="font-mono text-black print:text-black font-bold">{certModalCube.vehicleNo}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
 
                 <div>
-                  <table className="w-full text-left">
+                  <table className="w-full text-left text-black">
                     <tbody>
                       <tr>
-                        <td className="text-slate-500 py-0.5 w-32 font-medium">Date of Issue:</td>
-                        <td className="font-mono font-semibold text-slate-900">{formatDate(today)}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 w-32 font-medium">Date of Issue:</td>
+                        <td className="font-mono font-semibold text-black print:text-black">{formatDate(today)}</td>
                       </tr>
                       <tr>
-                        <td className="text-slate-500 py-0.5 font-medium">Challan / Batch:</td>
-                        <td className="font-mono font-bold text-slate-900">{certModalCube.batchId}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 font-medium">Challan / Batch:</td>
+                        <td className="font-mono font-bold text-black print:text-black">{certModalCube.batchId}</td>
                       </tr>
                       <tr>
-                        <td className="text-slate-500 py-0.5 font-medium">Concrete Mix Grade:</td>
-                        <td className="font-bold text-blue-900 font-mono text-sm">{certModalCube.mixGrade}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 font-medium">Concrete Mix Grade:</td>
+                        <td className="font-bold text-black font-mono text-sm print:text-black">{certModalCube.mixGrade}</td>
                       </tr>
                       <tr>
-                        <td className="text-slate-500 py-0.5 font-medium">Date of Casting:</td>
-                        <td className="font-mono text-slate-800">{formatDate(certModalCube.castingDate)}</td>
+                        <td className="text-slate-600 print:text-black py-0.5 font-medium">Date of Casting:</td>
+                        <td className="font-mono text-black print:text-black">{formatDate(certModalCube.castingDate)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -973,77 +959,77 @@ export default function QcCubeTestingView() {
               </div>
 
               {/* Technical Specifications */}
-              <div className="text-[11px] text-slate-600 mb-3 bg-slate-50 p-2 border border-slate-200 rounded">
-                <span className="font-bold text-slate-800">Testing Standard: </span>
-                Cubes cured in fresh potable water tank at 27 Â± 2Â°C and tested under compression as per IS:516-1959. 
-                Standard Nominal Cube Size: 150 mm Ã— 150 mm Ã— 150 mm (Cross Section Area = 22,500 mmÂ²).
+              <div className="text-[11px] text-black mb-3 bg-slate-50 p-2 border border-slate-300 rounded print:bg-white print:border-black">
+                <span className="font-bold text-black">Testing Standard: </span>
+                Cubes cured in fresh potable water tank at 27 ± 2°C and tested under compression as per IS:516-1959. 
+                Standard Nominal Cube Size: 150 mm × 150 mm × 150 mm (Cross Section Area = 22,500 mm²).
               </div>
 
               {/* Results Table */}
-              <table className="w-full text-xs text-left border border-slate-300 mb-5">
-                <thead className="bg-slate-100 border-b border-slate-300 text-[10px] font-bold text-slate-700 uppercase">
+              <table className="w-full text-xs text-left border border-black mb-5 text-black">
+                <thead className="bg-slate-100 border-b border-black text-[10px] font-bold text-black uppercase print:bg-white print:text-black">
                   <tr>
-                    <th className="p-2 border-r border-slate-300">Age at Test</th>
-                    <th className="p-2 border-r border-slate-300">Date of Testing</th>
-                    <th className="p-2 border-r border-slate-300">Breaking Load (kN)</th>
-                    <th className="p-2 border-r border-slate-300">Achieved Strength (N/mmÂ²)</th>
-                    <th className="p-2 border-r border-slate-300">Target Strength (IS 456)</th>
-                    <th className="p-2 text-center">Result Status</th>
+                    <th className="p-2 border-r border-black text-black font-bold print:text-black">Age at Test</th>
+                    <th className="p-2 border-r border-black text-black font-bold print:text-black">Date of Testing</th>
+                    <th className="p-2 border-r border-black text-black font-bold print:text-black">Breaking Load (kN)</th>
+                    <th className="p-2 border-r border-black text-black font-bold print:text-black">Achieved Strength (N/mm²)</th>
+                    <th className="p-2 border-r border-black text-black font-bold print:text-black">Target Strength (IS 456)</th>
+                    <th className="p-2 text-center text-black font-bold print:text-black">Result Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-300 text-black">
                   {/* 7-Day Row */}
-                  <tr>
-                    <td className="p-2 font-bold text-slate-800 border-r border-slate-300">7 Days (67% Target)</td>
-                    <td className="p-2 font-mono text-slate-700 border-r border-slate-300">
+                  <tr className="text-black">
+                    <td className="p-2 font-bold text-black border-r border-black print:text-black">7 Days (67% Target)</td>
+                    <td className="p-2 font-mono text-black border-r border-black print:text-black">
                       {certModalCube.test7d ? formatDate(certModalCube.test7d.testDate) : formatDate(certModalCube.dueDate7d)}
                     </td>
-                    <td className="p-2 font-mono text-slate-800 border-r border-slate-300">
+                    <td className="p-2 font-mono text-black border-r border-black print:text-black">
                       {certModalCube.test7d ? certModalCube.test7d.loadsKn.join(', ') + ' kN' : 'Awaiting Test'}
                     </td>
-                    <td className="p-2 font-mono font-bold text-slate-900 border-r border-slate-300">
-                      {certModalCube.test7d ? `${certModalCube.test7d.avgStrength} N/mmÂ²` : '-'}
+                    <td className="p-2 font-mono font-bold text-black border-r border-black print:text-black">
+                      {certModalCube.test7d ? `${certModalCube.test7d.avgStrength} N/mm²` : '-'}
                     </td>
-                    <td className="p-2 font-mono text-slate-600 border-r border-slate-300">
-                      â‰¥ {certModalCube.target7d} N/mmÂ²
+                    <td className="p-2 font-mono text-black border-r border-black print:text-black">
+                      ≥ {certModalCube.target7d} N/mm²
                     </td>
-                    <td className="p-2 text-center font-bold">
+                    <td className="p-2 text-center font-bold text-black">
                       {certModalCube.test7d ? (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          certModalCube.test7d.isPass ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-black print:text-black ${
+                          certModalCube.test7d.isPass ? 'bg-emerald-100 print:bg-white' : 'bg-rose-100 print:bg-white'
                         }`}>
                           {certModalCube.test7d.isPass ? 'COMPLIANT (PASSED)' : 'NON-COMPLIANT'}
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">Pending</span>
+                        <span className="text-black text-[10px] print:text-black">Pending</span>
                       )}
                     </td>
                   </tr>
 
                   {/* 28-Day Row */}
-                  <tr>
-                    <td className="p-2 font-bold text-slate-800 border-r border-slate-300">28 Days (100% Target)</td>
-                    <td className="p-2 font-mono text-slate-700 border-r border-slate-300">
+                  <tr className="text-black">
+                    <td className="p-2 font-bold text-black border-r border-black print:text-black">28 Days (100% Target)</td>
+                    <td className="p-2 font-mono text-black border-r border-black print:text-black">
                       {certModalCube.test28d ? formatDate(certModalCube.test28d.testDate) : formatDate(certModalCube.dueDate28d)}
                     </td>
-                    <td className="p-2 font-mono text-slate-800 border-r border-slate-300">
+                    <td className="p-2 font-mono text-black border-r border-black print:text-black">
                       {certModalCube.test28d ? certModalCube.test28d.loadsKn.join(', ') + ' kN' : 'In Curing Tank'}
                     </td>
-                    <td className="p-2 font-mono font-bold text-slate-900 border-r border-slate-300">
-                      {certModalCube.test28d ? `${certModalCube.test28d.avgStrength} N/mmÂ²` : '-'}
+                    <td className="p-2 font-mono font-bold text-black border-r border-black print:text-black">
+                      {certModalCube.test28d ? `${certModalCube.test28d.avgStrength} N/mm²` : '-'}
                     </td>
-                    <td className="p-2 font-mono text-slate-600 border-r border-slate-300">
-                      â‰¥ {certModalCube.target28d} N/mmÂ²
+                    <td className="p-2 font-mono text-black border-r border-black print:text-black">
+                      ≥ {certModalCube.target28d} N/mm²
                     </td>
-                    <td className="p-2 text-center font-bold">
+                    <td className="p-2 text-center font-bold text-black">
                       {certModalCube.test28d ? (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          certModalCube.test28d.isPass ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-black print:text-black ${
+                          certModalCube.test28d.isPass ? 'bg-emerald-100 print:bg-white' : 'bg-rose-100 print:bg-white'
                         }`}>
                           {certModalCube.test28d.isPass ? 'COMPLIANT (PASSED)' : 'NON-COMPLIANT'}
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">In Curing (Due {formatDate(certModalCube.dueDate28d)})</span>
+                        <span className="text-black text-[10px] print:text-black">In Curing (Due {formatDate(certModalCube.dueDate28d)})</span>
                       )}
                     </td>
                   </tr>

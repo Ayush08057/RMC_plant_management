@@ -19,7 +19,7 @@ import {
   X,
   Trash2
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import RecordVehicleReturnWizard from './guided/RecordVehicleReturnWizard';
@@ -215,7 +215,6 @@ export default function DriverTripsView() {
 
   const handleDeleteTrip = (tripId) => {
     if (window.confirm(`Delete trip record ${tripId}?`)) {
-      if (tripId) markItemAsDeleted(STORAGE_KEY, tripId);
       const updated = trips.filter(t => t.id !== tripId);
       setTrips(updated);
       try {

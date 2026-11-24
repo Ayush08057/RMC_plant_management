@@ -15,7 +15,7 @@ export default function RolePersonalAttendanceView({
   defaultDepartment = 'Operations',
   canSwitchToTeamView = false,
   teamViewComponent = null,
-  onPunched: onPunchedProp = () => {},
+  onPunched = () => {},
 }) {
   const { user } = useAuth();
   const { employees } = useWorkforce();
@@ -105,9 +105,7 @@ export default function RolePersonalAttendanceView({
             roleLocked={true}
             onPunched={() => {
               setToastMessage(`Attendance for ${officialProfile.name} verified and recorded!`);
-              if (typeof onPunchedProp === 'function') {
-                try { onPunchedProp(); } catch (_) {}
-              }
+              onPunched();
               setTimeout(() => setToastMessage(null), 4000);
             }}
           />

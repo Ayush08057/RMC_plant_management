@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import AppLayout from '../../components/dashboard/AppLayout';
 import KPICard from '../../components/dashboard/KPICard';
 import DataTable from '../../components/dashboard/DataTable';
@@ -44,10 +43,8 @@ import {
   Calendar,
   History,
   Search,
-  Camera,
   X
 } from 'lucide-react';
-import { resolvePunchInPhoto, generateBiometricPhotoBadge } from '../../utils/attendancePhotoUtils';
 import { MOCK_ADMIN_DATA } from '../../data/mockDashboardData';
 import { ROLES, OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { useWorkforce, isDummyEmployee } from '../../context/WorkforceContext';
@@ -66,7 +63,6 @@ import AuditLogsView from '../../components/workforce/AuditLogsView';
 import HrSettingsView from '../../components/workforce/HrSettingsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
 import AdvanceManagementView from '../../components/workforce/AdvanceManagementView';
-import LoanManagementView from '../../components/workforce/LoanManagementView';
 import LiveEmployeeLocationRadar from '../../components/workforce/LiveEmployeeLocationRadar';
 import CleanEmployeeLiveTracking from '../../components/workforce/CleanEmployeeLiveTracking';
 
@@ -175,14 +171,9 @@ export default function AdminDashboardPage() {
     (attendance || []).forEach((a) => {
       const isSysAdmin = 
         (a.role || '').toLowerCase() === 'admin' ||
-        (a.role || '').toLowerCase().includes('owner') ||
-        (a.role || '').toLowerCase().includes('director') ||
         a.employeeId === 'ADM-001' ||
         a.employeeId === 'USR-ADMIN-001' ||
-        a.employeeId === 'OWN-001' ||
-        a.employeeId === 'USR-OD-001' ||
-        (a.employeeName || '').toLowerCase().includes('system admin') ||
-        (a.employeeName || '').toLowerCase().includes('owner');
+        (a.employeeName || '').toLowerCase().includes('system admin');
       if (isSysAdmin) return;
 
       let recDate = a.date;
@@ -249,27 +240,10 @@ export default function AdminDashboardPage() {
       }
     });
 
-    const todayList = Array.from(todayMap.values()).map((rec) => {
-      const realSelfie = (rec.selfieUrl && rec.selfieUrl.startsWith('data:image')) ? rec.selfieUrl : null;
-      const resolvedPhoto = realSelfie || resolvePunchInPhoto(rec, employees);
-      return {
-        ...rec,
-        selfieUrl: realSelfie || resolvedPhoto || rec.selfieUrl,
-        photoUrl: realSelfie || resolvedPhoto || rec.photoUrl,
-      };
-    });
-
+    const todayList = Array.from(todayMap.values());
     const finalPrevMap = {};
     Object.keys(prevMap).forEach((dKey) => {
-      finalPrevMap[dKey] = Array.from(prevMap[dKey].values()).map((rec) => {
-        const realSelfie = (rec.selfieUrl && rec.selfieUrl.startsWith('data:image')) ? rec.selfieUrl : null;
-        const resolvedPhoto = realSelfie || resolvePunchInPhoto(rec, employees);
-        return {
-          ...rec,
-          selfieUrl: realSelfie || resolvedPhoto || rec.selfieUrl,
-          photoUrl: realSelfie || resolvedPhoto || rec.photoUrl,
-        };
-      });
+      finalPrevMap[dKey] = Array.from(prevMap[dKey].values());
     });
     const datesList = Object.keys(finalPrevMap).sort((a, b) => b.localeCompare(a));
 
@@ -278,7 +252,7 @@ export default function AdminDashboardPage() {
       previousAttendanceByDate: finalPrevMap,
       previousDatesList: datesList,
     };
-  }, [attendance, employees, todayLocalDateStr]);
+  }, [attendance, todayLocalDateStr]);
 
   // Active historical date selected
   const activeHistoryDate = selectedHistoryDate && previousAttendanceByDate[selectedHistoryDate]
@@ -332,7 +306,7 @@ export default function AdminDashboardPage() {
     // 1. Official operational accounts (Plant Manager, Accountant, Dispatcher, Driver, QC Engineer, Site Supervisor)
     (OFFICIAL_ROLE_ACCOUNTS || []).forEach((acc) => {
       let id = (acc.employeeId || acc.id || '').toUpperCase();
-      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001' || id === 'OWN-001' || id === 'USR-OD-001') return;
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
       if (id === 'USR-SS-001') id = 'SS-001';
       if (id === 'USR-DIS-001') id = 'DIS-001';
       if (id === 'USR-PM-001') id = 'PM-001';
@@ -375,7 +349,7 @@ export default function AdminDashboardPage() {
     // 3. Fallback: Any staff present in today's attendance
     (todayAttendanceRecords || []).forEach((att) => {
       let id = (att.employeeId || att.id || '').toUpperCase();
-      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001' || id === 'OWN-001' || id === 'USR-OD-001') return;
+      if (!id || id === 'ADM-001' || id === 'USR-ADMIN-001') return;
       if (id === 'USR-SS-001') id = 'SS-001';
       if (id === 'USR-DIS-001') id = 'DIS-001';
       if (id === 'USR-PM-001') id = 'PM-001';
@@ -793,10 +767,6 @@ export default function AdminDashboardPage() {
       title: 'Salary Advance Management',
       badge: 'ADVANCES',
     },
-    loans: {
-      title: 'Employee Loan Portfolio',
-      badge: 'LOANS',
-    },
     reports: {
       title: 'HR & Operational Reports',
       badge: 'REPORTS',
@@ -840,7 +810,6 @@ export default function AdminDashboardPage() {
       {activeTab === 'approvals' && <ApprovalsView />}
       {activeTab === 'payroll' && <PayrollPreparationView />}
       {activeTab === 'advances' && <AdvanceManagementView />}
-      {activeTab === 'loans' && <LoanManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
       {activeTab === 'documents' && <EmployeeDocumentsView />}
       {activeTab === 'audit' && <AuditLogsView />}
@@ -848,7 +817,7 @@ export default function AdminDashboardPage() {
 
       {(![
         'employees', 'attendance', 'live-tracking', 'shifts', 'billing', 'approvals',
-        'payroll', 'advances', 'loans', 'reports', 'documents', 'audit', 'settings'
+        'payroll', 'advances', 'reports', 'documents', 'audit', 'settings'
       ].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-4 pb-6">
           {/* Quick Action Ribbon: Live Employee GPS Tracker - Compact & Space-Utilized */}
@@ -1139,7 +1108,7 @@ export default function AdminDashboardPage() {
                 onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })}
                 className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
-                {Object.values(ROLES).filter((r) => r !== ROLES.ADMIN && r !== ROLES.OWNER_DIRECTOR).map((role) => (
+                {Object.values(ROLES).map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>
@@ -1305,7 +1274,7 @@ export default function AdminDashboardPage() {
                 onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })}
                 className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 cursor-pointer"
               >
-                {Object.values(ROLES).filter((r) => r !== ROLES.ADMIN && r !== ROLES.OWNER_DIRECTOR).map((role) => (
+                {Object.values(ROLES).map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>
@@ -1857,44 +1826,32 @@ export default function AdminDashboardPage() {
                         return (
                           <div key={rec.id || idx} className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 text-xs flex-wrap sm:flex-nowrap">
                             <div className="flex items-center gap-3 min-w-0">
-                              {(() => {
-                                const realSelfie = (rec.selfieUrl && rec.selfieUrl.startsWith('data:image')) ? rec.selfieUrl : null;
-                                const photoUrl = realSelfie || resolvePunchInPhoto(rec, employees);
-                                if (photoUrl) {
-                                  return (
-                                    <div 
-                                      onClick={() => setPreviewAttendancePhoto({
-                                        url: photoUrl,
-                                        name: rec.employeeName || rec.name || 'Staff',
-                                        id: rec.employeeId || rec.id,
-                                        time: rec.punchIn || rec.checkIn || rec.inTime,
-                                        date: rec.date || todayLocalDateStr,
-                                        plant: rec.plant || 'Main Plant HQ',
-                                        gps: rec.gpsLocation,
-                                        role: rec.role || 'Staff Member',
-                                        isRealCapture: Boolean(realSelfie),
-                                      })}
-                                      className="relative shrink-0 cursor-pointer group"
-                                      title="Click to view full Punch-In Biometric Photo"
-                                    >
-                                      <img 
-                                        src={photoUrl} 
-                                        alt={rec.employeeName || rec.name} 
-                                        className="w-12 h-12 rounded-2xl object-cover border-2 border-emerald-400 shadow-md group-hover:scale-105 transition-transform bg-slate-900" 
-                                      />
-                                      <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-emerald-600 text-white text-[8.5px] font-black rounded-md shadow-2xs flex items-center gap-0.5 border border-white">
-                                        <Camera className="w-2.5 h-2.5" />
-                                        <span>IN</span>
-                                      </span>
-                                    </div>
-                                  );
-                                }
-                                return (
-                                  <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
-                                    {((rec.employeeName || rec.name || 'EM').substring(0, 2)).toUpperCase()}
-                                  </div>
-                                );
-                              })()}
+                              {(rec.selfieUrl || rec.photoUrl) ? (
+                                <div 
+                                  onClick={() => setPreviewAttendancePhoto({
+                                    url: rec.selfieUrl || rec.photoUrl,
+                                    name: rec.employeeName || rec.name || 'Staff',
+                                    id: rec.employeeId || rec.id,
+                                    time: rec.punchIn || rec.checkIn || rec.inTime,
+                                    date: rec.date || todayLocalDateStr
+                                  })}
+                                  className="relative shrink-0 cursor-pointer group"
+                                  title="Click to view Punch-In Biometric Selfie"
+                                >
+                                  <img 
+                                    src={rec.selfieUrl || rec.photoUrl} 
+                                    alt={rec.employeeName || rec.name} 
+                                    className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-400 shadow-2xs group-hover:scale-105 transition-transform" 
+                                  />
+                                  <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-emerald-600 text-white text-[8px] font-bold rounded shadow-2xs">
+                                    IN
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
+                                  {((rec.employeeName || rec.name || 'EM').substring(0, 2)).toUpperCase()}
+                                </div>
+                              )}
                               <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 shrink-0">
                                 {rec.employeeId || rec.id}
                               </span>
@@ -2094,44 +2051,32 @@ export default function AdminDashboardPage() {
                             return filtered.map((rec, idx) => (
                               <div key={rec.id || idx} className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 text-xs">
                                 <div className="flex items-center gap-3 min-w-0">
-                                  {(() => {
-                                    const realSelfie = (rec.selfieUrl && rec.selfieUrl.startsWith('data:image')) ? rec.selfieUrl : null;
-                                    const photoUrl = realSelfie || resolvePunchInPhoto(rec, employees);
-                                    if (photoUrl) {
-                                      return (
-                                        <div 
-                                          onClick={() => setPreviewAttendancePhoto({
-                                            url: photoUrl,
-                                            name: rec.employeeName || rec.name || 'Staff',
-                                            id: rec.employeeId || rec.id,
-                                            time: rec.punchIn || rec.checkIn || rec.inTime,
-                                            date: rec.date || activeHistoryDate,
-                                            plant: rec.plant || 'Main Plant HQ',
-                                            gps: rec.gpsLocation,
-                                            role: rec.role || 'Staff Member',
-                                            isRealCapture: Boolean(realSelfie),
-                                          })}
-                                          className="relative shrink-0 cursor-pointer group"
-                                          title="Click to view full Punch-In Biometric Photo"
-                                        >
-                                          <img 
-                                            src={photoUrl} 
-                                            alt={rec.employeeName || rec.name} 
-                                            className="w-12 h-12 rounded-2xl object-cover border-2 border-emerald-400 shadow-md group-hover:scale-105 transition-transform bg-slate-900" 
-                                          />
-                                          <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-emerald-600 text-white text-[8.5px] font-black rounded-md shadow-2xs flex items-center gap-0.5 border border-white">
-                                            <Camera className="w-2.5 h-2.5" />
-                                            <span>IN</span>
-                                          </span>
-                                        </div>
-                                      );
-                                    }
-                                    return (
-                                      <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
-                                        {((rec.employeeName || rec.name || 'EM').substring(0, 2)).toUpperCase()}
-                                      </div>
-                                    );
-                                  })()}
+                                  {(rec.selfieUrl || rec.photoUrl) ? (
+                                    <div 
+                                      onClick={() => setPreviewAttendancePhoto({
+                                        url: rec.selfieUrl || rec.photoUrl,
+                                        name: rec.employeeName || rec.name || 'Staff',
+                                        id: rec.employeeId || rec.id,
+                                        time: rec.punchIn || rec.checkIn || rec.inTime,
+                                        date: rec.date || activeHistoryDate
+                                      })}
+                                      className="relative shrink-0 cursor-pointer group"
+                                      title="Click to view Punch-In Biometric Selfie"
+                                    >
+                                      <img 
+                                        src={rec.selfieUrl || rec.photoUrl} 
+                                        alt={rec.employeeName || rec.name} 
+                                        className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-400 shadow-2xs group-hover:scale-105 transition-transform" 
+                                      />
+                                      <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-emerald-600 text-white text-[8px] font-bold rounded shadow-2xs">
+                                        IN
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
+                                      {((rec.employeeName || rec.name || 'EM').substring(0, 2)).toUpperCase()}
+                                    </div>
+                                  )}
                                   <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 shrink-0">
                                     {rec.employeeId || rec.id}
                                   </span>
@@ -2216,108 +2161,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </Modal>
-
-      {/* Punch-In Biometric Selfie Preview Modal (Rendered to body root via Portal with highest z-index) */}
-      {previewAttendancePhoto && typeof document !== 'undefined' && createPortal(
-        <div 
-          onClick={() => setPreviewAttendancePhoto(null)}
-          className="fixed inset-0 z-[999999] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200"
-          >
-            {/* Header */}
-            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white">Punch-In Biometric Photo</h3>
-                  <p className="text-[11px] text-emerald-400 font-bold">
-                    {previewAttendancePhoto.isRealCapture ? '✓ Verified Live Camera Capture' : '✓ Personnel Attendance Record'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setPreviewAttendancePhoto(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer text-sm font-bold"
-                title="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* High-Resolution Photo */}
-            <div className="p-4 bg-slate-50 flex flex-col items-center">
-              <div className="relative w-full aspect-square max-h-80 rounded-2xl overflow-hidden border-2 border-emerald-400 shadow-md bg-slate-900 flex items-center justify-center">
-                <img 
-                  src={previewAttendancePhoto.url} 
-                  alt={previewAttendancePhoto.name} 
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-2 left-2 right-2 bg-slate-900/85 backdrop-blur-xs text-white px-3 py-1.5 rounded-xl border border-white/10 flex items-center justify-between text-xs font-bold">
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-mono">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>In: {previewAttendancePhoto.time ? formatToIndian12Hr(previewAttendancePhoto.time) : '09:00 AM'}</span>
-                  </span>
-                  <span className="text-[11px] text-slate-300 truncate max-w-[150px]">
-                    📍 {previewAttendancePhoto.plant || 'Main Plant'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Employee Summary Card */}
-              <div className="mt-3.5 w-full bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-extrabold text-slate-900">{previewAttendancePhoto.name}</span>
-                  <span className="px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 font-mono font-bold text-blue-700 text-[11px]">
-                    {previewAttendancePhoto.id}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                  <span>Shift Date: <b className="text-slate-800">{previewAttendancePhoto.date}</b></span>
-                  <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                    previewAttendancePhoto.isRealCapture
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {previewAttendancePhoto.isRealCapture ? '✓ Real-time Selfie Capture' : '✓ Verified Biometric Record'}
-                  </span>
-                </div>
-                {previewAttendancePhoto.gps && previewAttendancePhoto.gps.lat && (
-                  <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-600">
-                    <span className="flex items-center gap-1 text-blue-700 font-semibold">
-                      <MapPin className="w-3 h-3 text-rose-500" />
-                      <span>{Number(previewAttendancePhoto.gps.lat).toFixed(4)}°N, {Number(previewAttendancePhoto.gps.lng).toFixed(4)}°E</span>
-                    </span>
-                    <a
-                      href={`https://www.google.com/maps?q=${previewAttendancePhoto.gps.lat},${previewAttendancePhoto.gps.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline font-bold"
-                    >
-                      View on Map →
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setPreviewAttendancePhoto(null)}
-                className="mt-3 w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* KPI Detail Modal: Pending Approvals */}
       <Modal

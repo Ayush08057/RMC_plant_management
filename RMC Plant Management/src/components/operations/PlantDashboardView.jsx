@@ -9,7 +9,6 @@ import {
   FileText
 } from 'lucide-react';
 import { sanitizeStoreItems } from '../../services/cloudSyncService';
-import { subscribeSiloStock, getLocalSiloStock } from '../../services/siloStockService';
 
 export default function PlantDashboardView({ onNavigateTab }) {
   // Live operational data from plant records (clean empty default)
@@ -40,14 +39,20 @@ export default function PlantDashboardView({ onNavigateTab }) {
     }
   });
 
-  const [siloInventory, setSiloInventory] = React.useState(() => getLocalSiloStock());
-
-  React.useEffect(() => {
-    const unsub = subscribeSiloStock('sm-concretech', (data) => {
-      if (data && typeof data === 'object') setSiloInventory(data);
-    });
-    return () => unsub();
-  }, []);
+  const [siloInventory] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('rmc_silo_inventory_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return [
+      { id: 'silo-1', name: 'Cement Silo 1 (OPC 53)', current: 65, capacity: 100, unit: 'MT' },
+      { id: 'silo-2', name: 'Fly Ash Silo 2 (Dirk Pozzocrete)', current: 42, capacity: 80, unit: 'MT' },
+      { id: 'bin-1', name: '20mm Aggregates (Bin A)', current: 140, capacity: 200, unit: 'MT' },
+      { id: 'bin-2', name: 'Crush Sand (Bin C)', current: 185, capacity: 250, unit: 'MT' }
+    ];
+  });
 
   // Safe normalization layer supporting both Keyed Object ({ cement: {...} }) and Array formats
   const normalizedSilo = React.useMemo(() => {
@@ -172,21 +177,21 @@ export default function PlantDashboardView({ onNavigateTab }) {
             className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
           >
             <Layers className="w-3 h-3" />
-            <span>Batching Sheet</span>
+            <span>+ Batching Sheet</span>
           </button>
           <button
             onClick={() => onNavigateTab && onNavigateTab('delivery-challans')}
             className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
           >
             <FileText className="w-3 h-3" />
-            <span>Challan</span>
+            <span>+ Challan</span>
           </button>
           <button
             onClick={() => onNavigateTab && onNavigateTab('material-inward')}
             className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] font-bold rounded-lg border border-amber-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
           >
             <PackageCheck className="w-3 h-3" />
-            <span>Inward</span>
+            <span>+ Inward</span>
           </button>
         </div>
       </div>
