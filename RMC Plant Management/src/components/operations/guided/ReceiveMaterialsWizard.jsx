@@ -17,6 +17,7 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { pushCloudStore } from '../../../services/cloudSyncService';
 import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../../services/plantOperationsService';
+import { syncMaterialInwardToLiveSheet } from '../../../services/liveSheetSyncService';
 import HelpModal from './HelpModal';
 
 const INWARD_STORAGE_KEY = STORAGE_KEYS?.INWARD || 'rmc_material_inward_v2';
@@ -124,6 +125,9 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       const updated = [inwardRecord, ...existing];
       localStorage.setItem(INWARD_STORAGE_KEY, JSON.stringify(updated));
       pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updated);
+
+      // Auto sync to Live Google Sheet / Excel Online
+      syncMaterialInwardToLiveSheet(inwardRecord).catch((err) => console.warn('Live sheet wizard inward sync notice:', err));
 
       // Create corresponding Weighbridge receipt with real measured weights
       const wbKey = STORAGE_KEYS?.WEIGHBRIDGE || 'rmc_weighbridge_v2';

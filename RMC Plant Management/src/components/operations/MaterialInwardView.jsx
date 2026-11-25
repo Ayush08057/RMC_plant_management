@@ -16,7 +16,13 @@ import {
   Database,
   ArrowDownToLine,
   ChevronRight,
-  Trash2
+  Trash2,
+  FileSpreadsheet,
+  ExternalLink,
+  Copy,
+  Check,
+  Settings,
+  Radio
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { useLanguage } from '../../context/LanguageContext';
@@ -26,6 +32,14 @@ import {
   STORAGE_KEYS, 
   INITIAL_SILO_STOCK 
 } from '../../services/plantOperationsService';
+import { 
+  syncMaterialInwardToLiveSheet, 
+  syncChemicalInwardToLiveSheet, 
+  downloadInwardMaterialsExcel, 
+  getLiveSheetConfig, 
+  saveLiveSheetConfig, 
+  GOOGLE_APPS_SCRIPT_TEMPLATE 
+} from '../../services/liveSheetSyncService';
 import HelpModal from './guided/HelpModal';
 import ReceiveMaterialsWizard from './guided/ReceiveMaterialsWizard';
 
@@ -74,6 +88,10 @@ export default function MaterialInwardView() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showInwardModal, setShowInwardModal] = useState(false);
   const [showChemicalModal, setShowChemicalModal] = useState(false);
+  const [liveSheetModalOpen, setLiveSheetModalOpen] = useState(false);
+  const [sheetConfig, setSheetConfig] = useState(getLiveSheetConfig);
+  const [scriptCopied, setScriptCopied] = useState(false);
+  const [testSyncStatus, setTestSyncStatus] = useState(null); // 'sending' | 'success' | 'error'
   const [toastMessage, setToastMessage] = useState('');
 
   // 1. Inward Records State
@@ -133,6 +151,63 @@ export default function MaterialInwardView() {
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 4000);
+  };
+
+  const handleCopyScript = () => {
+    try {
+      navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE);
+      setScriptCopied(true);
+      setTimeout(() => setScriptCopied(false), 2500);
+      showToast('✓ Google Apps Script copied to clipboard!');
+    } catch (e) {
+      showToast('Could not auto-copy. Please select and copy manually.');
+    }
+  };
+
+  const handleTestPing = async () => {
+    if (!sheetConfig.webhookUrl || !sheetConfig.webhookUrl.trim()) {
+      showToast('Please enter your Google Apps Script Webhook URL first.');
+      return;
+    }
+    setTestSyncStatus('sending');
+    const testPayload = {
+      slipNo: 'TEST-PING-' + Math.floor(100 + Math.random() * 900),
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      material: 'Test Aggregates (Live Ping)',
+      supplier: 'SM CONCRETE TECH (Live Webhook Test)',
+      vehicleNo: 'MH-10-TEST-01',
+      grossWeight: 35.5,
+      tareWeight: 12.0,
+      netTons: 23.5,
+      unit: 'Tons',
+      targetSilo: 'Test Bin',
+      challanNo: 'TEST-CH-01',
+      moisturePct: 1.5,
+      recordedBy: 'Administrator',
+      remarks: 'Live Sheet Webhook Test Connection',
+      status: 'Verified'
+    };
+    try {
+      const res = await syncMaterialInwardToLiveSheet(testPayload);
+      if (res && res.success) {
+        setTestSyncStatus('success');
+        showToast('✓ Test ping sent to Google Sheet successfully! Check your Sheet.');
+      } else {
+        setTestSyncStatus('error');
+        showToast('Notice: ' + (res?.reason || res?.error || 'Check Webhook URL'));
+      }
+    } catch (err) {
+      setTestSyncStatus('error');
+      showToast('Notice: Failed to connect to Webhook URL.');
+    }
+    setTimeout(() => setTestSyncStatus(null), 4000);
+  };
+
+  const handleSaveConfig = () => {
+    saveLiveSheetConfig(sheetConfig);
+    setLiveSheetModalOpen(false);
+    showToast('✓ Live Sheet Webhook settings saved!');
   };
 
   // New Inward Form State
@@ -231,6 +306,9 @@ export default function MaterialInwardView() {
     setRecords(updatedRecords);
     pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updatedRecords);
 
+    // Auto sync to Live Google Sheet / Excel Online
+    syncMaterialInwardToLiveSheet(newEntry).catch((err) => console.warn('Live sheet inward sync notice:', err));
+
     // Update Silo Inventory Stock (Safe increment)
     const matConfig = COMMON_RAW_MATERIALS.find(m => m.name === inwardForm.material);
     if (matConfig && matConfig.key && siloInventory[matConfig.key]) {
@@ -281,6 +359,9 @@ export default function MaterialInwardView() {
     const updatedChem = [newChemEntry, ...chemicalRecords];
     setChemicalRecords(updatedChem);
     pushCloudStore('cloud_chemical_barrels', CHEMICAL_STORAGE_KEY, updatedChem);
+
+    // Auto sync to Live Google Sheet / Excel Online
+    syncChemicalInwardToLiveSheet(newChemEntry).catch((err) => console.warn('Live sheet chemical sync notice:', err));
 
     // Update Chemical Inventory Stock
     const chemConfig = COMMON_CHEMICAL_PRODUCTS.find(c => c.name === chemicalForm.chemicalName);
@@ -509,8 +590,8 @@ export default function MaterialInwardView() {
         </div>
 
         {/* Action Buttons & Search */}
-        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
-          <div className="relative w-full sm:w-48">
+        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end flex-wrap">
+          <div className="relative w-full sm:w-44">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -521,6 +602,35 @@ export default function MaterialInwardView() {
             />
           </div>
 
+          {/* Direct Excel Download */}
+          <button
+            type="button"
+            onClick={() => downloadInwardMaterialsExcel(records, chemicalRecords)}
+            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0"
+            title="Download Inward Materials as Excel CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export Excel</span>
+          </button>
+
+          {/* Live Google Sheet / Excel Sync Button */}
+          <button
+            type="button"
+            onClick={() => setLiveSheetModalOpen(true)}
+            className={`px-2.5 py-1.5 rounded-lg border font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 ${
+              sheetConfig.enabled && sheetConfig.webhookUrl
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+            title="Configure Real-Time Live Google Sheet / Excel Webhook Sync"
+          >
+            <Radio className={`w-3.5 h-3.5 ${sheetConfig.enabled && sheetConfig.webhookUrl ? 'text-emerald-600 animate-pulse' : 'text-slate-400'}`} />
+            <span className="hidden sm:inline">Live Sheet Sync</span>
+            {sheetConfig.enabled && sheetConfig.webhookUrl && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            )}
+          </button>
+
           {activeSubTab === 'chemical_barrels' ? (
             <button
               type="button"
@@ -528,7 +638,7 @@ export default function MaterialInwardView() {
               className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Receive Chemical Barrels</span>
+              <span>Receive Barrels</span>
             </button>
           ) : (
             <button
@@ -1090,6 +1200,174 @@ export default function MaterialInwardView() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* LIVE GOOGLE SHEET / EXCEL ONLINE SYNC SETTINGS MODAL */}
+      {liveSheetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center backdrop-blur-xs">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-200" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm tracking-wide flex items-center gap-2">
+                    Live Google Sheets / Excel Online Sync
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-400/20 text-emerald-100 border border-emerald-400/30 font-mono">
+                      Real-Time
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-emerald-100/90 font-medium">
+                    Incoming material entries & chemical intakes push directly into your spreadsheet
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLiveSheetModalOpen(false)}
+                className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-700 flex-1">
+              {/* Enable / Disable Switch */}
+              <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <div>
+                  <div className="font-bold text-slate-800 text-xs">Enable Automatic Real-Time Sync</div>
+                  <div className="text-[11px] text-slate-500">
+                    When enabled, every incoming truck delivery & chemical barrel intake instantly appends a new row in your spreadsheet.
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sheetConfig.enabled}
+                    onChange={(e) => setSheetConfig({ ...sheetConfig, enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              {/* Webhook URL Input */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-800 text-xs block">
+                  Google Apps Script Webhook URL
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={sheetConfig.webhookUrl || ''}
+                    onChange={(e) => setSheetConfig({ ...sheetConfig, webhookUrl: e.target.value })}
+                    placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-xs font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestPing}
+                    disabled={testSyncStatus === 'sending'}
+                    className={`px-3 py-2 rounded-lg font-bold text-xs shrink-0 flex items-center gap-1.5 cursor-pointer border transition-all ${
+                      testSyncStatus === 'success'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                        : testSyncStatus === 'error'
+                        ? 'bg-rose-50 text-rose-700 border-rose-300'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    {testSyncStatus === 'sending' ? (
+                      <span>Sending Ping...</span>
+                    ) : testSyncStatus === 'success' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Ping OK!</span>
+                      </>
+                    ) : testSyncStatus === 'error' ? (
+                      <>
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Check URL</span>
+                      </>
+                    ) : (
+                      <>
+                        <Radio className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Test Ping</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Deploy your Google Apps Script as a <strong>Web App</strong> (access: <em>Anyone</em>) and paste its URL here.
+                </p>
+              </div>
+
+              {/* Step-by-Step Instructions */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                    How to setup your Google Sheet (4 Simple Steps)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyScript}
+                    className="px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    {scriptCopied ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy Script</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 leading-relaxed font-sans">
+                  <li>Open or create a <strong>Google Sheet</strong> (e.g., <em>"SM Material Inward Register"</em>).</li>
+                  <li>In Google Sheets top menu, click <strong>Extensions</strong> &rarr; <strong>Apps Script</strong>.</li>
+                  <li>Delete any existing template text, click <strong>"Copy Script"</strong> above, paste it into the editor, and click <strong>Save</strong>.</li>
+                  <li>Click <strong>Deploy</strong> &rarr; <strong>New deployment</strong> &rarr; Click gear icon & select <strong>Web app</strong>. Set <em>Execute as: Me</em>, <em>Who has access: Anyone</em>, click <strong>Deploy</strong>, and copy the Web app URL into the field above.</li>
+                </ol>
+
+                <div className="pt-2">
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1 uppercase tracking-wider">
+                    Google Apps Script Code Template (Ready to paste):
+                  </label>
+                  <pre className="p-2.5 bg-slate-900 text-emerald-300 rounded-lg text-[10px] font-mono overflow-x-auto max-h-36 leading-tight select-all">
+                    {GOOGLE_APPS_SCRIPT_TEMPLATE}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setLiveSheetModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-200/70 font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveConfig}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Save Settings</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
