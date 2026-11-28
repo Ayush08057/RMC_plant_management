@@ -21,7 +21,8 @@ import {
   Download,
   FileCode,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Truck
 } from 'lucide-react';
 import { MOCK_ACCOUNTANT_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
@@ -35,6 +36,7 @@ import LoanManagementView from '../../components/workforce/LoanManagementView';
 import HrReportsView from '../../components/workforce/HrReportsView';
 import BillingManagementView from '../../components/billing/BillingManagementView';
 import RolePersonalAttendanceView from '../../components/workforce/RolePersonalAttendanceView';
+import DeliveryChallansView from '../../components/operations/DeliveryChallansView';
 
 export default function AccountantDashboardPage() {
   const { user } = useAuth();
@@ -167,7 +169,7 @@ export default function AccountantDashboardPage() {
             <button
               type="button"
               onClick={() => setActiveTab('attendance')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
+              className={`hidden md:inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
                 isAccountantClockedIn && !isAccountantShiftEnded
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                   : 'bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7]'
@@ -189,7 +191,7 @@ export default function AccountantDashboardPage() {
             <button
               type="button"
               onClick={() => setActiveTab('billing')}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="hidden md:inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-[#EAF3FF] text-[#123B6D] border border-[#D4E4F7] shadow-2xs items-center gap-1.5 transition-colors cursor-pointer"
               title="Navigate to Cash Memo & Billing Desk"
             >
               <ReceiptText className="w-3.5 h-3.5 text-[#1D5FA7]" />
@@ -220,13 +222,14 @@ export default function AccountantDashboardPage() {
       {activeTab === 'purchases' && <BillingManagementView defaultSection="purchases" />}
       {activeTab === 'otp_audit' && <BillingManagementView defaultSection="otp_audit" />}
       {activeTab === 'tally_sync' && <BillingManagementView defaultSection="tally_sync" />}
+      {activeTab === 'delivery-challans' && <DeliveryChallansView />}
       {activeTab === 'payroll' && <PayrollPreparationView />}
       {activeTab === 'advances' && <AdvanceManagementView />}
       {activeTab === 'loans' && <LoanManagementView />}
       {activeTab === 'reports' && <HrReportsView />}
 
       {(![
-        'attendance', 'billing', 'purchases', 'otp_audit', 'tally_sync', 'payroll',
+        'attendance', 'billing', 'purchases', 'otp_audit', 'tally_sync', 'delivery-challans', 'payroll',
         'advances', 'loans', 'reports'
       ].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-4 pb-6 min-w-0">
@@ -465,13 +468,20 @@ export default function AccountantDashboardPage() {
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Finance Operations Quick Commands
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <QuickAction
                   icon={ReceiptText}
                   title="Create Invoice"
                   desc="Draft GST delivery challan"
                   color="emerald"
                   onClick={() => setShowInvoiceModal(true)}
+                />
+                <QuickAction
+                  icon={Truck}
+                  title="Delivery Challans"
+                  desc="Operator transit dispatches"
+                  color="indigo"
+                  onClick={() => setActiveTab('delivery-challans')}
                 />
                 <QuickAction
                   icon={CreditCard}

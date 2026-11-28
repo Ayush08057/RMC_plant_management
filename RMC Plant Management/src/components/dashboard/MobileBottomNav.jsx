@@ -31,13 +31,21 @@ function getRoleBottomNavItems(role) {
 
     case ROLES.PLANT_MANAGER:
     case ROLES.PLANT_INCHARGE:
-    case ROLES.OPERATOR:
       return [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'batching-sheets', label: 'Batching', icon: ClipboardList },
         { id: 'delivery-challans', label: 'Challans', icon: Truck },
         { id: 'attendance', label: 'Attendance', icon: Clock },
         { id: 'employees', label: 'Crew', icon: Users },
+      ];
+
+    case ROLES.OPERATOR:
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'delivery-challans', label: 'Challans', icon: Truck },
+        { id: 'batching-sheets', label: 'Batching', icon: ClipboardList },
+        { id: 'attendance', label: 'Attendance', icon: Clock },
+        { id: 'material-inward', label: 'Inward', icon: Layers },
       ];
 
     case ROLES.ACCOUNTANT:

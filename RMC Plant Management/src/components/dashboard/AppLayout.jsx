@@ -183,7 +183,7 @@ export default function AppLayout({
                 </div>
 
                 {actions && (
-                  <div className="flex flex-wrap items-center gap-1.5 shrink-0 max-w-full">
+                  <div className="hidden md:flex flex-wrap items-center gap-1.5 shrink-0 max-w-full">
                     {actions}
                   </div>
                 )}

@@ -195,7 +195,6 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
 
       case ROLES.PLANT_MANAGER:
       case ROLES.PLANT_INCHARGE:
-      case ROLES.OPERATOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           ...(plantOpsGroup ? [plantOpsGroup] : []),
@@ -212,6 +211,15 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
           { id: 'daily-work', label: 'Daily Work', icon: Gauge },
           { id: 'leaves', label: 'Leave Reviews', icon: FileCheck2 },
           { id: 'reports', label: 'Crew & HR Reports', icon: FileText },
+        ];
+
+      case ROLES.OPERATOR:
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'delivery-challans', label: 'Delivery Challans', icon: Truck },
+          { id: 'batching-sheets', label: 'Batching Sheets', icon: ClipboardList },
+          { id: 'attendance', label: 'Daily Attendance', icon: Clock },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
         ];
 
       case ROLES.ACCOUNTANT:

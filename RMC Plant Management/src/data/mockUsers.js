@@ -21,7 +21,7 @@ export const ROLE_ROUTES = {
   [ROLES.PLANT_MANAGER]: '/plant-manager',
   [ROLES.PLANT_INCHARGE]: '/plant-manager',
   [ROLES.ACCOUNTANT]: '/accountant',
-  [ROLES.OPERATOR]: '/plant-manager',
+  [ROLES.OPERATOR]: '/operator',
   [ROLES.DISPATCHER]: '/dispatcher',
   [ROLES.QC_ENGINEER]: '/qc',
   [ROLES.SITE_SUPERVISOR]: '/site-supervisor',
@@ -127,7 +127,8 @@ export function getRoleRoute(role) {
   if (ROLE_ROUTES[role]) return ROLE_ROUTES[role];
   const rLower = String(role).trim().toLowerCase();
   if (rLower.includes('admin')) return '/admin';
-  if (rLower.includes('manager') || rLower.includes('incharge') || rLower.includes('operator')) return '/plant-manager';
+  if (rLower.includes('operator')) return '/operator';
+  if (rLower.includes('manager') || rLower.includes('incharge')) return '/plant-manager';
   if (rLower.includes('account') || rLower.includes('finance')) return '/accountant';
   if (rLower.includes('dispatch') || rLower.includes('logistics')) return '/dispatcher';
   if (rLower.includes('qc') || rLower.includes('quality') || rLower.includes('lab')) return '/qc';
@@ -270,6 +271,20 @@ export const OFFICIAL_ROLE_ACCOUNTS = [
     avatar: 'DRV',
     portalRoute: '/driver',
     phone: '+91 9820000007',
+  }),
+  buildOfficialAccount({
+    id: 'USR-OP-001',
+    name: 'Plant Operator',
+    email: 'operator@sm.com',
+    secondaryEmail: 'operator@smconcretech.com',
+    employeeId: 'OP-001',
+    password: 'Operator@123',
+    role: ROLES.OPERATOR,
+    department: 'Plant Batching Operations',
+    badge: 'PLANT',
+    avatar: 'OP',
+    portalRoute: '/operator',
+    phone: '+91 9820000008',
   }),
 ];
 

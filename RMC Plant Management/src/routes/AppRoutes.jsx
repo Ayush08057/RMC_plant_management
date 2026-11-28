@@ -23,6 +23,7 @@ import QcDashboardPage from '../pages/qc/QcDashboardPage';
 import SiteSupervisorDashboardPage from '../pages/site-supervisor/SiteSupervisorDashboardPage';
 import DriverDashboardPage from '../pages/driver/DriverDashboardPage';
 import OwnerDashboardPage from '../pages/owner/OwnerDashboardPage';
+import PlantOperatorDashboardPage from '../pages/operator/PlantOperatorDashboardPage';
 
 /**
  * Root Redirector: determines where to land when hitting "/"
@@ -77,8 +78,17 @@ export default function AppRoutes() {
       <Route
         path="/plant-manager"
         element={
-          <ProtectedRoute allowedRoles={[ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE, ROLES.OPERATOR]}>
+          <ProtectedRoute allowedRoles={[ROLES.PLANT_MANAGER, ROLES.PLANT_INCHARGE]}>
             <PlantManagerDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/operator"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.OPERATOR]}>
+            <PlantOperatorDashboardPage />
           </ProtectedRoute>
         }
       />

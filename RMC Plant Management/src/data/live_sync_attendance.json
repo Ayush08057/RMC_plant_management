@@ -1,4 +1,15 @@
 {
   "attendance": [],
-  "liveLocations": {}
+  "liveLocations": {
+    "PM-001": {
+      "lat": 16.84644,
+      "lng": 74.598822,
+      "accuracy": 107,
+      "timestamp": "2026-11-28T11:15:29.636Z",
+      "address": "Sangli, Sangli, Maharashtra",
+      "landmarkName": "Sangli, Sangli",
+      "employeeId": "PM-001",
+      "updatedAt": "2026-11-28T11:15:29.696Z"
+    }
+  }
 }
