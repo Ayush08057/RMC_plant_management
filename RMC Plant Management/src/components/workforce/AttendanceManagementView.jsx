@@ -45,7 +45,7 @@ import {
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { OFFICIAL_ROLE_ACCOUNTS, isDummyEmployee, isAdminPerson } from '../../data/mockUsers';
-import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
+import { formatToIndian12Hr, formatShiftRange, parseTimeToMinutes, getNowIndian12Hr, getLocalIstDateStr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import { nativeTracking } from '../../services/nativeTrackingBridge';
@@ -206,7 +206,7 @@ export default function AttendanceManagementView({
     return list;
   }, [employees, effectiveFilter, isAdmin, isPlantManager, user, defaultPlant]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [selectedPlant, setSelectedPlant] = useState(defaultPlant);
   const [selectedStatus, setSelectedStatus] = useState('All');
@@ -661,7 +661,7 @@ export default function AttendanceManagementView({
       const record = (attendance || []).find((a) => {
         const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
         const aName = (a.employeeName || '').toString().trim().toLowerCase();
-        const aDate = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '');
+        const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
         const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
         const isADispatcher = aId === 'DIS-001' || aId === 'USR-DIS-001' || aId.includes('DIS') || (a.role || '').toLowerCase().includes('dispatch');
         const isEmpDispatcher = empId === 'DIS-001' || empEmpId === 'DIS-001' || empId === 'USR-DIS-001' || (emp.role || '').toLowerCase().includes('dispatch');

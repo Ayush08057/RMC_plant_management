@@ -217,10 +217,9 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
       case ROLES.ACCOUNTANT:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          ...(plantOpsGroup ? [plantOpsGroup] : []),
-          { id: 'attendance', label: 'Daily Attendance', icon: Clock },
           { id: 'billing', label: 'Cash Memo & Invoicing', icon: Receipt },
           { id: 'purchases', label: 'Plant Material Purchase', icon: Layers },
+          { id: 'attendance', label: 'Daily Attendance', icon: Clock },
           { 
             id: 'employees_group', 
             label: 'Employees & Payroll', 
@@ -232,6 +231,7 @@ export default function Sidebar({ isOpen, isCollapsed = false, onClose, onToggle
           },
           { id: 'otp_audit', label: 'Owner OTP Audit', icon: ShieldCheck },
           { id: 'reports', label: 'Payroll Reports', icon: FileCheck2 },
+          ...(plantOpsGroup ? [plantOpsGroup] : []),
         ];
 
       case ROLES.DISPATCHER:

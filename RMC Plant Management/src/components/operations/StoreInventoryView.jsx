@@ -20,7 +20,7 @@ import {
   User,
   Truck
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 
 export const STORE_INVENTORY_KEY = 'rmc_store_inventory_v1';
 export const STORE_LOGS_KEY = 'rmc_store_logs_v1';
@@ -260,6 +260,7 @@ export default function StoreInventoryView() {
   // Delete Item
   const handleDeleteItem = (id, name) => {
     if (window.confirm(`Are you sure you want to delete ${name} from inventory?`)) {
+      markItemAsDeleted(STORE_INVENTORY_KEY, id);
       const updated = inventory.filter(i => i.id !== id);
       saveInventory(updated);
       setToastMessage(`${name} removed from inventory.`);
@@ -269,6 +270,7 @@ export default function StoreInventoryView() {
   // Delete Log
   const handleDeleteLog = (id) => {
     if (window.confirm('Delete this transaction log?')) {
+      markItemAsDeleted(STORE_LOGS_KEY, id);
       const updated = logs.filter(l => l.id !== id);
       saveLogs(updated);
       setToastMessage('Transaction log deleted.');

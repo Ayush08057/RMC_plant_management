@@ -19,6 +19,7 @@ import {
   Filter
 } from 'lucide-react';
 import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { DEFAULT_MIX_DESIGNS, STORAGE_KEYS } from '../../services/plantOperationsService';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -83,7 +84,7 @@ export default function MixDesignView() {
     wcRatio: 0.42,
     targetStrength: '31.5 N/mm²',
     designRef: `SM-MIX-${new Date().getFullYear()}-M25-R1`,
-    effectiveDate: new Date().toISOString().split('T')[0],
+    effectiveDate: getLocalIstDateStr(),
     revision: 'v1.0',
     status: 'Active',
     approvalStatus: 'Approved',
@@ -107,7 +108,7 @@ export default function MixDesignView() {
       wcRatio: 0.42,
       targetStrength: '31.5 N/mm²',
       designRef: `SM-MIX-${new Date().getFullYear()}-R${Math.floor(1 + Math.random() * 5)}`,
-      effectiveDate: new Date().toISOString().split('T')[0],
+      effectiveDate: getLocalIstDateStr(),
       revision: 'v1.0',
       status: 'Active',
       approvalStatus: 'Approved',

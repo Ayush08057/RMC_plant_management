@@ -13,7 +13,29 @@ import {
   ArrowDownToLine,
   Truck
 } from 'lucide-react';
-import { sanitizeStoreItems } from '../../services/cloudSyncService';
+import { sanitizeStoreItems, getDeletedItemIds, isItemDeleted } from '../../services/cloudSyncService';
+import { parseToDateOnly } from '../../utils/billingPayments';
+
+function readCleanLocalStore(storageKey) {
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return [];
+    const deletedIds = getDeletedItemIds(storageKey);
+    return sanitizeStoreItems(JSON.parse(saved)).filter((it) => !isItemDeleted(it, deletedIds));
+  } catch {
+    return [];
+  }
+}
+
+function matchesAuditMaterial(rawMaterial, key) {
+  const lower = (rawMaterial || '').toLowerCase();
+  if (key === 'cement') return lower.includes('cement');
+  if (key === 'flyash') return lower.includes('flyash') || lower.includes('fly ash') || lower.includes('pozzocrete');
+  if (key === 'agg20') return lower.includes('20mm');
+  if (key === 'agg10') return lower.includes('10mm');
+  if (key === 'sand') return lower.includes('sand') && !lower.includes('river');
+  return lower.includes(key.toLowerCase());
+}
 
 export default function PlantReportsView() {
   const [reportType, setReportType] = useState('daily'); // 'daily', 'reconciliation', 'client_summary'
@@ -31,22 +53,7 @@ export default function PlantReportsView() {
   const matchesPeriod = React.useCallback((dateInput) => {
     if (!dateInput) return true;
     const now = new Date();
-    let d;
-    if (typeof dateInput === 'string') {
-      if (/^\d{4}-\d{2}-\d{2}/.test(dateInput)) {
-        d = new Date(dateInput);
-      } else {
-        const parts = dateInput.match(/(\d{1,2})[-/ ]([A-Za-z0-9]+)[-/ ](\d{4})/);
-        if (parts) {
-          d = new Date(`${parts[2]} ${parts[1]}, ${parts[3]}`);
-          if (isNaN(d.getTime())) d = new Date(dateInput);
-        } else {
-          d = new Date(dateInput);
-        }
-      }
-    } else {
-      d = new Date(dateInput);
-    }
+    const d = parseToDateOnly(dateInput);
 
     if (!d || isNaN(d.getTime())) return true;
 
@@ -63,41 +70,37 @@ export default function PlantReportsView() {
 
   // Live daily production records from batching sheets with aligned field properties
   const dailyBatches = React.useMemo(() => {
-    try {
-      const saved = localStorage.getItem('rmc_batching_sheets_v2');
-      if (saved) {
-        const parsed = sanitizeStoreItems(JSON.parse(saved));
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
-            .filter((b) => matchesPeriod(b.date || b.createdAt))
-            .map((b) => {
-              const cementItem = (b.materials || []).find(m => (m.name || '').toLowerCase().includes('cement'));
-              const flyashItem = (b.materials || []).find(m => (m.name || '').toLowerCase().includes('fly ash'));
-              return {
-                ticketNo: b.sheetNo || b.id || 'BT-REC',
-                time: b.time || b.batchTime || '10:00 AM',
-                client: b.customerName || b.clientName || b.customer || 'Direct Dispatch',
-                site: b.site || b.siteLocation || 'Site Yard',
-                grade: b.mixGrade || b.grade || 'M25',
-                qty: parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0,
-                cementKg: parseFloat(cementItem?.actual || cementItem?.target || b.actualBatched?.cementKg || b.cementKg || 0) || 0,
-                flyashKg: parseFloat(flyashItem?.actual || flyashItem?.target || b.actualBatched?.flyashKg || b.flyashKg || 0) || 0,
-                mixer: b.vehicleNo || b.vehicleReg || b.mixer || '--'
-              };
-            });
-        }
-      }
-    } catch {}
+    const parsed = readCleanLocalStore('rmc_batching_sheets_v2');
+    if (parsed.length > 0) {
+      return parsed
+        .filter((b) => matchesPeriod(b.date || b.createdAt))
+        .map((b) => {
+          const cementItem = (b.materials || []).find(m => (m.name || '').toLowerCase().includes('cement'));
+          const flyashItem = (b.materials || []).find(m => {
+            const mn = (m.name || '').toLowerCase();
+            return mn.includes('fly ash') || mn.includes('flyash');
+          });
+          return {
+            ticketNo: b.sheetNo || b.id || 'BT-REC',
+            time: b.time || b.batchTime || '10:00 AM',
+            client: b.customerName || b.clientName || b.customer || 'Direct Dispatch',
+            site: b.site || b.siteLocation || 'Site Yard',
+            grade: b.mixGrade || b.grade || 'M25',
+            qty: parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0,
+            cementKg: parseFloat(cementItem?.actual || cementItem?.target || b.actualBatched?.cementKg || b.cementKg || 0) || 0,
+            flyashKg: parseFloat(flyashItem?.actual || flyashItem?.target || b.actualBatched?.flyashKg || b.flyashKg || 0) || 0,
+            mixer: b.vehicleNo || b.vehicleReg || b.mixer || '--'
+          };
+        });
+    }
     return [];
   }, [dateRange, refreshCounter, matchesPeriod]);
 
   // Material reconciliation calculation using real Inward, Silo, and Batching Data
   const reconciliationData = React.useMemo(() => {
     try {
-      const rawInward = localStorage.getItem('rmc_material_inward_v2');
-      const inwardList = rawInward ? JSON.parse(rawInward) : [];
-      const rawBatches = localStorage.getItem('rmc_batching_sheets_v2');
-      const batchList = rawBatches ? JSON.parse(rawBatches) : [];
+      const inwardList = readCleanLocalStore('rmc_material_inward_v2');
+      const batchList = readCleanLocalStore('rmc_batching_sheets_v2');
       const rawSilo = localStorage.getItem('rmc_silo_inventory_v2');
       const siloStock = rawSilo ? JSON.parse(rawSilo) : {};
 
@@ -116,7 +119,7 @@ export default function PlantReportsView() {
       return materialsToAudit.map(mat => {
         // Calculate inward receipts during this specific period
         const inwardTons = periodInward
-          .filter(r => (r.material || '').toLowerCase().includes(mat.key) || (mat.key === 'agg20' && (r.material || '').includes('20mm')) || (mat.key === 'agg10' && (r.material || '').includes('10mm')))
+          .filter(r => matchesAuditMaterial(r.material, mat.key))
           .reduce((sum, r) => sum + (parseFloat(r.netTons || r.quantity || 0) || 0), 0);
 
         // Calculate actual consumed and theoretical target from batch sheets during this period
@@ -124,14 +127,7 @@ export default function PlantReportsView() {
         let targetKg = 0;
         periodBatches.forEach(b => {
           (b.materials || []).forEach(m => {
-            const mName = (m.name || '').toLowerCase();
-            const matches = 
-              (mat.key === 'cement' && mName.includes('cement')) ||
-              (mat.key === 'flyash' && mName.includes('fly ash')) ||
-              (mat.key === 'agg20' && mName.includes('20mm')) ||
-              (mat.key === 'agg10' && mName.includes('10mm')) ||
-              (mat.key === 'sand' && mName.includes('sand'));
-            if (matches) {
+            if (matchesAuditMaterial(m.name, mat.key)) {
               const act = m.actual !== null && m.actual !== undefined && m.actual !== '' ? parseFloat(m.actual) : parseFloat(m.target || 0);
               actualKg += act;
               targetKg += parseFloat(m.target || 0);
@@ -174,33 +170,28 @@ export default function PlantReportsView() {
 
   // Client summary data reading actual stored quantity & grade
   const clientSummary = React.useMemo(() => {
-    try {
-      const savedChallans = localStorage.getItem('rmc_delivery_challans_v2');
-      if (savedChallans) {
-        const parsed = sanitizeStoreItems(JSON.parse(savedChallans));
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const map = {};
-          parsed
-            .filter((c) => matchesPeriod(c.date || c.createdAt))
-            .forEach((c) => {
-              const key = `${c.customerName || 'General'}-${c.site || c.siteLocation || 'Site'}`;
-              if (!map[key]) {
-                map[key] = {
-                  client: c.customerName || 'Direct Client',
-                  site: c.site || c.siteLocation || 'Plant Site',
-                  trips: 0,
-                  totalM3: 0,
-                  mainGrade: c.grade || c.concreteGrade || 'M25',
-                  status: 'Active'
-                };
-              }
-              map[key].trips += 1;
-              map[key].totalM3 += parseFloat(c.quantity || c.concreteQuantityM3 || c.qty || 0) || 0;
-            });
-          return Object.values(map);
-        }
-      }
-    } catch {}
+    const parsed = readCleanLocalStore('rmc_delivery_challans_v2');
+    if (parsed.length > 0) {
+      const map = {};
+      parsed
+        .filter((c) => matchesPeriod(c.date || c.createdAt))
+        .forEach((c) => {
+          const key = `${c.customerName || 'General'}-${c.site || c.siteLocation || 'Site'}`;
+          if (!map[key]) {
+            map[key] = {
+              client: c.customerName || 'Direct Client',
+              site: c.site || c.siteLocation || 'Plant Site',
+              trips: 0,
+              totalM3: 0,
+              mainGrade: c.grade || c.concreteGrade || 'M25',
+              status: 'Active'
+            };
+          }
+          map[key].trips += 1;
+          map[key].totalM3 += parseFloat(c.quantity || c.concreteQuantityM3 || c.qty || 0) || 0;
+        });
+      return Object.values(map);
+    }
     return [];
   }, [dateRange, refreshCounter, matchesPeriod]);
 

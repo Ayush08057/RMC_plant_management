@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 import { pushCloudStore } from '../../../services/cloudSyncService';
+import { getNextSequenceSync, commitSequenceHighWaterMark } from '../../../services/sequenceCounterService';
 import HelpModal from './HelpModal';
 
 const BATCHING_STORAGE_KEY = 'rmc_batching_sheets_v2';
@@ -85,7 +86,13 @@ export default function MakeConcreteWizard({ isOpen, onClose, onComplete }) {
   const admixKg = Number((selectedMix.admixture * volumeM3).toFixed(1));
 
   const handleSave = () => {
-    const sheetNo = `25-26/${Math.floor(1000 + Math.random() * 9000)}`;
+    let existingSheets = [];
+    try {
+      const existingRaw = localStorage.getItem(BATCHING_STORAGE_KEY);
+      if (existingRaw) existingSheets = JSON.parse(existingRaw) || [];
+    } catch {}
+    const sheetNo = getNextSequenceSync({ records: existingSheets, field: 'sheetNo', type: 'batch_sheets', prefix: '', defaultStart: 1 });
+    commitSequenceHighWaterMark({ type: 'batch_sheets', value: sheetNo, prefix: '' });
     const batchRecord = {
       id: `BS-${Date.now()}`,
       sheetNo,
@@ -101,6 +108,9 @@ export default function MakeConcreteWizard({ isOpen, onClose, onComplete }) {
       batchesCount: Math.ceil(volumeM3 / 1.0),
       operatorName: operatorName || 'Plant Operator',
       qcStatus: 'Approved',
+      stockDeducted: true,
+      productionStatus: 'Completed',
+      finalizedAt: new Date().toISOString(),
       actualSlump: '130 mm',
       targetSlump: selectedMix.slump || '120 ± 25 mm',
       materials: [
@@ -132,6 +142,39 @@ export default function MakeConcreteWizard({ isOpen, onClose, onComplete }) {
       pushCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, updated);
     } catch (e) {
       console.warn('Error saving batching sheet:', e);
+    }
+
+    // Deduct batched materials from plant Silo Stock Ledger
+    try {
+      const siloKey = 'rmc_silo_inventory_v2';
+      const rawSilo = localStorage.getItem(siloKey);
+      if (rawSilo) {
+        const siloData = JSON.parse(rawSilo);
+        if (siloData) {
+          if (siloData.cement && cementKg > 0) {
+            siloData.cement.stockTons = Math.max(0, Number((Number(siloData.cement.stockTons || 0) - (cementKg / 1000)).toFixed(2)));
+          }
+          if (siloData.flyash && flyashKg > 0) {
+            siloData.flyash.stockTons = Math.max(0, Number((Number(siloData.flyash.stockTons || 0) - (flyashKg / 1000)).toFixed(2)));
+          }
+          if (siloData.agg20 && agg20Kg > 0) {
+            siloData.agg20.stockTons = Math.max(0, Number((Number(siloData.agg20.stockTons || 0) - (agg20Kg / 1000)).toFixed(2)));
+          }
+          if (siloData.agg10 && agg10Kg > 0) {
+            siloData.agg10.stockTons = Math.max(0, Number((Number(siloData.agg10.stockTons || 0) - (agg10Kg / 1000)).toFixed(2)));
+          }
+          if (siloData.sand && sandKg > 0) {
+            siloData.sand.stockTons = Math.max(0, Number((Number(siloData.sand.stockTons || 0) - (sandKg / 1000)).toFixed(2)));
+          }
+          if (siloData.admixturePce && admixKg > 0) {
+            siloData.admixturePce.stockLiters = Math.max(0, Number((Number(siloData.admixturePce.stockLiters || 0) - admixKg).toFixed(1)));
+          }
+          localStorage.setItem(siloKey, JSON.stringify(siloData));
+          pushCloudStore('cloud_silo_inventory', siloKey, siloData);
+        }
+      }
+    } catch (err) {
+      console.warn('Error deducting silo stocks in MakeConcreteWizard:', err);
     }
 
     setSavedSuccess(true);

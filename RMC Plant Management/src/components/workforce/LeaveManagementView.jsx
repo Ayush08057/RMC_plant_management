@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
@@ -32,8 +33,8 @@ export default function LeaveManagementView({ employeeFilter = null }) {
   const [form, setForm] = useState({
     employeeId: user?.employeeId || employees[0]?.id || '',
     leaveType: 'Casual Leave',
-    fromDate: new Date().toISOString().split('T')[0],
-    toDate: new Date().toISOString().split('T')[0],
+    fromDate: getLocalIstDateStr(),
+    toDate: getLocalIstDateStr(),
     days: 1,
     reason: '',
   });

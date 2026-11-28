@@ -18,21 +18,33 @@ import {
   generatePurchasesTallyXml,
   downloadXmlFile
 } from '../../utils/tallyXmlGenerator';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 
 export default function TallySyncView({ bills = [], purchases = [] }) {
-  const [companyName, setCompanyName] = useState('SHIVKRUPA READY MIX CONCRETE PLANT');
+  const [companyName, setCompanyName] = useState('SM CONCRETECH');
   const [downloadSuccess, setDownloadSuccess] = useState(null);
 
   // Calculate totals
-  const totalSalesAmount = bills.reduce((sum, b) => sum + (parseFloat(b.total) || 0), 0);
+  const totalSalesAmount = bills.reduce((sum, b) => {
+    const computed = (Number(b.totalAmount || 0) + Number(b.transportation || 0)) || 0;
+    const val = parseFloat(b.finalAmount ?? b.total ?? b.netTotal ?? computed) || 0;
+    return sum + val;
+  }, 0);
   
   let totalReceiptsCount = 0;
   let totalReceiptsAmount = 0;
   bills.forEach(b => {
-    if (Array.isArray(b.paymentHistory) && b.paymentHistory.length > 0) {
-      totalReceiptsCount += b.paymentHistory.length;
-      b.paymentHistory.forEach(p => {
-        totalReceiptsAmount += (parseFloat(p.amount) || 0);
+    const pmtList = (Array.isArray(b.payments) && b.payments.length > 0)
+      ? b.payments
+      : (Array.isArray(b.paymentHistory) && b.paymentHistory.length > 0 ? b.paymentHistory : []);
+
+    if (pmtList.length > 0) {
+      pmtList.forEach(p => {
+        const amt = parseFloat(p.amount) || 0;
+        if (amt > 0) {
+          totalReceiptsCount += 1;
+          totalReceiptsAmount += amt;
+        }
       });
     } else if (parseFloat(b.paidAmount || 0) > 0) {
       totalReceiptsCount += 1;
@@ -41,7 +53,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
   });
 
   const totalPurchasesAmount = purchases.reduce(
-    (sum, p) => sum + (parseFloat(p.netTotal || p.total || p.amount) || 0),
+    (sum, p) => sum + (parseFloat(p.finalAmount ?? p.netTotal ?? p.totalAmount ?? p.total ?? p.amount) || 0),
     0
   );
 
@@ -52,7 +64,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
       return;
     }
     const xml = generateSalesTallyXml(bills, companyName);
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalIstDateStr();
     downloadXmlFile(xml, `Tally_Sales_Vouchers_${dateStr}.xml`);
     setDownloadSuccess(`Sales XML for ${bills.length} bills downloaded successfully.`);
   };
@@ -63,7 +75,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
       return;
     }
     const xml = generateReceiptsTallyXml(bills, companyName);
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalIstDateStr();
     downloadXmlFile(xml, `Tally_Receipt_Vouchers_${dateStr}.xml`);
     setDownloadSuccess(`Receipts XML for ${totalReceiptsCount} payments downloaded.`);
   };
@@ -74,7 +86,7 @@ export default function TallySyncView({ bills = [], purchases = [] }) {
       return;
     }
     const xml = generatePurchasesTallyXml(purchases, companyName);
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalIstDateStr();
     downloadXmlFile(xml, `Tally_Purchase_Vouchers_${dateStr}.xml`);
     setDownloadSuccess(`Purchases XML for ${purchases.length} bills downloaded.`);
   };

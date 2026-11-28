@@ -4,7 +4,8 @@
  */
 
 import { calculateDistanceMeters, resolveSangliLandmark } from '../utils/sangliGeofence';
-import { filterGeographicOutliers } from '../utils/routeCleanUtils';
+import { filterGeographicOutliers, filterGpsSpikes } from '../utils/routeCleanUtils';
+import { getLocalIstDateStr } from '../utils/shiftUtils';
 import { subscribeCloudStore, pushCloudStore } from './cloudSyncService';
 
 export const ROUTE_HISTORY_STORAGE_KEY = 'rmc_employee_route_history_v2';
@@ -74,12 +75,18 @@ export function getAllRouteHistories() {
 }
 
 /**
- * Saves all route histories
+ * Saves all route histories (immediate local write + quota-safe debounced cloud sync)
  */
-export function saveAllRouteHistories(data) {
+export function saveAllRouteHistories(data, immediate = false) {
   try {
     localStorage.setItem(ROUTE_HISTORY_STORAGE_KEY, JSON.stringify(data));
-    pushCloudStore('cloud_employee_routes', ROUTE_HISTORY_STORAGE_KEY, data);
+    // Breadcrumbs coalesce to at most 1 Firestore write every 120s instead of every 100m
+    pushCloudStore(
+      'cloud_employee_routes',
+      ROUTE_HISTORY_STORAGE_KEY,
+      data,
+      immediate ? { immediate: true } : { debounceMs: 120000 }
+    );
   } catch (err) {
     console.warn('Failed writing route history:', err);
   }
@@ -94,7 +101,7 @@ export function deleteEmployeeRouteHistory(empId) {
   const allHistories = getAllRouteHistories();
   if (allHistories[key]) {
     delete allHistories[key];
-    saveAllRouteHistories(allHistories);
+    saveAllRouteHistories(allHistories, true);
   }
 }
 
@@ -118,10 +125,11 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
 
   // 1. If employee has recorded routeTrail in attendance record
   const attTrail = employee.routeTrail || employee.record?.routeTrail || [];
+  const shiftDate = employee.record?.date || employee.date || getLocalIstDateStr();
   if (Array.isArray(attTrail) && attTrail.length > 0) {
     stops = attTrail.map((s, idx) => ({ ...s, stopNo: idx + 1 }));
   } else if (allHistories[empId] && Array.isArray(allHistories[empId]) && allHistories[empId].length > 0) {
-    stops = [...allHistories[empId]];
+    stops = allHistories[empId].filter((s) => !s?.date || s.date === shiftDate);
   }
 
   // 2. Identify punch-in coordinates
@@ -276,9 +284,12 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
     };
   }
 
-  // 4. Filter any wild geographic outliers (e.g. accidental fallback coordinates > 40km away from real shift points)
+  // 4. Filter any wild geographic outliers & GPS teleport spikes (> 40km outlier or > 120 km/h spike)
   if (stops.length > 1) {
     stops = filterGeographicOutliers(stops, 40000);
+  }
+  if (stops.length > 2) {
+    stops = filterGpsSpikes(stops, 150);
   }
 
   // 5. Calculate accurate cumulative kilometer distances across all stops
@@ -300,9 +311,13 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
 
   const polylineCoords = stops.length >= 2 ? stops.map((s) => [Number(s.lat), Number(s.lng)]) : [];
   const recordedDistance = Number(employee.totalDistanceKm || employee.record?.totalDistanceKm);
-  const totalDistanceKm = (!isNaN(recordedDistance) && recordedDistance > 0)
-    ? Number(recordedDistance.toFixed(1))
-    : Number(cumulativeDist.toFixed(1));
+  const cleanCumulativeKm = Number(cumulativeDist.toFixed(1));
+  // Prefer geometrically cleaned route distance when stops >= 2; reject corrupt spikes (> 2.5x route + 20km or > 350km)
+  const isRecordedPlausible = !isNaN(recordedDistance) && recordedDistance > 0 && recordedDistance <= 350 &&
+    (cleanCumulativeKm <= 0 || recordedDistance <= cleanCumulativeKm * 2.5 + 20);
+  const totalDistanceKm = stops.length >= 2
+    ? cleanCumulativeKm
+    : (isRecordedPlausible ? Number(recordedDistance.toFixed(1)) : cleanCumulativeKm);
   const visitedStopsCount = stops.filter((s) => s.status !== 'Current Stop' && s.status !== 'Current Location').length;
 
   return {
@@ -326,25 +341,37 @@ export function getEmployeeRouteDetails(employee, liveGps = null) {
 export function recordEmployeeBreadcrumb(empId, lat, lng, optionalTitle = null) {
   if (!empId || !lat || !lng) return;
   const key = empId.toUpperCase();
+  const todayStr = getLocalIstDateStr();
   const allHistories = getAllRouteHistories();
-  const existing = allHistories[key] || [];
+  // Scope local history strictly to the active date so yesterday's stops never bleed into today
+  const existing = (allHistories[key] || []).filter((s) => !s?.date || s.date === todayStr);
 
+  const nowMs = Date.now();
   const last = existing[existing.length - 1];
   if (last) {
     const dist = calculateDistanceMeters(last.lat, last.lng, lat, lng);
-    if (dist < 100) {
+    if (dist < 150) {
       // Too close to last reading, ignore jitter
       return;
+    }
+    const lastTs = last.ts || (last.timestamp ? Date.parse(last.timestamp) : 0);
+    if (dist > 30000) return;
+    if (dist > 500 && lastTs > 0) {
+      const secs = Math.abs(nowMs - lastTs) / 1000;
+      if (secs > 0 && (dist / secs) * 3.6 > 140) return;
     }
   }
 
   const landmark = resolveSangliLandmark(lat, lng);
-  const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const timeNow = new Date(nowMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const prevKm = last ? last.distanceKm : 0;
   const addKm = last ? Number((calculateDistanceMeters(last.lat, last.lng, lat, lng) / 1000).toFixed(1)) : 0;
 
   const newStop = {
     stopNo: existing.length + 1,
+    date: todayStr,
+    ts: nowMs,
+    timestamp: new Date(nowMs).toISOString(),
     title: optionalTitle || landmark.landmarkName || 'Recorded Waypoint',
     category: existing.length === 0 ? 'Shift Start' : 'Transit Point',
     address: landmark.address || `${Number(lat).toFixed(4)}°N, ${Number(lng).toFixed(4)}°E`,
@@ -397,7 +424,7 @@ export function addEmployeeVisitedStop(empId, stopData) {
   };
 
   allHistories[key] = [...existing, newStop];
-  saveAllRouteHistories(allHistories);
+  saveAllRouteHistories(allHistories, true);
   return newStop;
 }
 
@@ -410,6 +437,6 @@ export function removeEmployeeVisitedStop(empId, stopNo) {
   const allHistories = getAllRouteHistories();
   if (allHistories[key]) {
     allHistories[key] = allHistories[key].filter((s) => s.stopNo !== stopNo);
-    saveAllRouteHistories(allHistories);
+    saveAllRouteHistories(allHistories, true);
   }
 }

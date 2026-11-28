@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Truck,
   MapPin,
@@ -19,7 +19,7 @@ import {
   X,
   Trash2
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import RecordVehicleReturnWizard from './guided/RecordVehicleReturnWizard';
@@ -79,18 +79,25 @@ export default function DriverTripsView() {
     remarks: ''
   });
 
+  const skipNextCloudPushRef = useRef(true);
+
   // Subscribe to real-time Cloud Sync for cross-device updates
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_driver_trips', STORAGE_KEY, INITIAL_TRIPS, (cloudTrips) => {
       if (Array.isArray(cloudTrips)) {
+        skipNextCloudPushRef.current = true;
         setTrips(cloudTrips);
       }
     });
     return () => unsub();
   }, []);
 
-  // Save changes to localStorage & Cloud Firestore
+  // Save changes to localStorage & Cloud Firestore (skip mount & incoming cloud echoes)
   useEffect(() => {
+    if (skipNextCloudPushRef.current) {
+      skipNextCloudPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_driver_trips', STORAGE_KEY, trips);
   }, [trips]);
 
@@ -215,6 +222,7 @@ export default function DriverTripsView() {
 
   const handleDeleteTrip = (tripId) => {
     if (window.confirm(`Delete trip record ${tripId}?`)) {
+      markItemAsDeleted(STORAGE_KEY, tripId);
       const updated = trips.filter(t => t.id !== tripId);
       setTrips(updated);
       try {

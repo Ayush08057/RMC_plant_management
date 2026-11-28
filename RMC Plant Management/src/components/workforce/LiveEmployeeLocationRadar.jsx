@@ -38,10 +38,10 @@ import {
   Plus,
   Building2
 } from 'lucide-react';
-import { useWorkforce } from '../../context/WorkforceContext';
+import { useWorkforce, resolveCanonicalEmployeeId, attendanceMatchesEmployee } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { OFFICIAL_ROLE_ACCOUNTS, isAdminPerson, isDummyEmployee } from '../../data/mockUsers';
-import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr } from '../../utils/shiftUtils';
+import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr, getLocalIstDateStr } from '../../utils/shiftUtils';
 import { subscribeCloudStore } from '../../services/cloudSyncService';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
@@ -187,7 +187,8 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
     };
   }, []);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
+  const yesterdayStr = getLocalIstDateStr(Date.now() - 86400000);
 
   // Master list of real workforce employees (strictly excluding Administrator accounts)
   const allEmployees = useMemo(() => {
@@ -293,17 +294,28 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
       const empName = (emp.name || '').toLowerCase().trim();
       const isEmpSupervisor = empId === 'SS-001' || empEmpId === 'SS-001' || empId === 'USR-SS-001' || (emp.role || '').toLowerCase().includes('supervisor');
 
-      // Strictly match TODAY's attendance record (day-to-day isolation)
-      const todayRecord = (attendance || []).find((a) => {
-        const aId = (a.employeeId || a.id || '').toString().trim().toUpperCase();
-        const aName = (a.employeeName || '').toLowerCase().trim();
-        const isASupervisor = aId === 'SS-001' || aId === 'USR-SS-001' || aId.includes('SS') || (a.role || '').toLowerCase().includes('supervisor');
-        const idMatches = (aId && (aId === empId || aId === empEmpId)) ||
-                          (aName && empName && aName === empName) ||
-                          (isEmpSupervisor && isASupervisor);
-        const dateMatches = a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr)) || (a.id && a.id.includes(todayStr.replace(/-/g, '')));
-        return idMatches && dateMatches;
-      }) || null;
+      const canonicalId = resolveCanonicalEmployeeId(empEmpId || empId);
+
+      // Strictly match TODAY's attendance record or an overnight shift started yesterday and still active/concluded today
+      const todayMatching = (attendance || []).filter((a) => {
+        const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
+        const idMatches = attendanceMatchesEmployee(a, canonicalId) ||
+          (a.employeeName && empName && a.employeeName.toLowerCase().trim() === empName);
+        if (!idMatches) return false;
+        if (aDate === todayStr || (a.createdAt && getLocalIstDateStr(a.createdAt) === todayStr) || (a.id && a.id.includes(todayStr.replace(/-/g, '')))) {
+          return true;
+        }
+        if (aDate === yesterdayStr && (!a.punchOut || (a.updatedAt && getLocalIstDateStr(a.updatedAt) === todayStr))) {
+          return true;
+        }
+        return false;
+      });
+      const todayRecord = todayMatching.sort((a, b) => {
+        const aDate = a.date || '';
+        const bDate = b.date || '';
+        if (aDate !== bDate) return bDate.localeCompare(aDate);
+        return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+      })[0] || null;
 
       const record = todayRecord;
       const isTodayRecord = Boolean(todayRecord);
@@ -439,11 +451,16 @@ export default function LiveEmployeeLocationRadar({ defaultPlant = 'All Plants' 
           : (gpsFixSource === 'LIVE_TRACKING' ? 'Mobile Foreground GPS' : (gpsFixSource === 'ATTENDANCE_PUNCH' ? 'Punch Fix' : 'No GPS Fix')),
         selfieUrl: record?.selfieUrl || emp?.selfieUrl || emp?.avatarUrl || emp?.photoUrl || null,
         remarks: record?.remarks || (hasGpsFix ? 'Verified GPS Fix' : 'Awaiting Punch-In GPS'),
+        gpsLocation: todayRecord?.gpsLocation || null,
+        exitGpsLocation: todayRecord?.exitGpsLocation || null,
+        routeTrail: Array.isArray(todayRecord?.routeTrail) ? todayRecord.routeTrail : [],
+        totalDistanceKm: todayRecord?.totalDistanceKm || 0,
+        record: todayRecord || null,
         activeTrip,
         isDriver,
       };
     }).filter((t) => !isAdminPerson(t));
-  }, [liveTrackedEmployees, attendance, todayStr, realDeviceGps, user, driverTrips]);
+  }, [liveTrackedEmployees, attendance, todayStr, yesterdayStr, realDeviceGps, user, driverTrips]);
 
   // Filtered telemetry list (strictly workforce only, excluding admin)
   const filteredList = useMemo(() => {

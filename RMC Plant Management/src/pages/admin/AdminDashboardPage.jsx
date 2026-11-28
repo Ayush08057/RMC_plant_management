@@ -972,7 +972,7 @@ export default function AdminDashboardPage() {
                 <KPICard
                   title="Payroll Status"
                   value={payrollRecords.length > 0 ? `${payrollRecords.length} Slips` : 'Draft'}
-                  subtext="October 2026 Ready"
+                  subtext={`${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Ready`}
                   trend="Audited"
                   trendType="up"
                   color="purple"
@@ -2260,7 +2260,7 @@ export default function AdminDashboardPage() {
         isOpen={activeKpiModal === 'payroll'}
         onClose={() => setActiveKpiModal(null)}
         title="Payroll Status & Wage Summary"
-        subtitle="October 2026 Monthly Wage Cycle and Payment Disbursements"
+        subtitle={`${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Monthly Wage Cycle and Payment Disbursements`}
         icon={KeyRound}
         maxWidth="max-w-4xl"
       >

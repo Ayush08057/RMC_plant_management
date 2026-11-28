@@ -5,6 +5,7 @@
 
 import { OFFICIAL_ROLE_ACCOUNTS } from '../data/mockUsers.js';
 import { EMPLOYEE_PHOTO_BASE64 } from '../data/officialEmployeePhotosBase64.js';
+import { getLocalIstDateStr } from './shiftUtils.js';
 
 /**
  * Authentic, high-resolution employee portrait photographs (Base64 JPEG Data URIs).
@@ -25,7 +26,7 @@ export const OFFICIAL_EMPLOYEE_PHOTOS = {
 export function cachePunchInSelfie(empId, photoUrl, dateStr = null) {
   if (!empId || !photoUrl) return;
   const cleanId = empId.toString().trim().toUpperCase();
-  const dStr = dateStr || new Date().toISOString().split('T')[0];
+  const dStr = dateStr || getLocalIstDateStr();
   try {
     localStorage.setItem(`rmc_punch_selfie_${dStr}_${cleanId}`, photoUrl);
     localStorage.setItem(`rmc_punch_selfie_${cleanId}`, photoUrl);
@@ -65,7 +66,7 @@ export function resolvePunchInPhoto(record, employees = []) {
   if (!record) return null;
 
   const empId = (record.employeeId || record.id || '').toString().trim().toUpperCase();
-  const dateStr = record.date || (record.createdAt ? record.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+  const dateStr = record.date || (record.createdAt ? getLocalIstDateStr(record.createdAt) : getLocalIstDateStr());
 
   // Priority 1: Check genuine camera-captured / uploaded real photo from record
   const candidateUrls = [

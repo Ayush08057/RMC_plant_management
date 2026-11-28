@@ -21,6 +21,7 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { useAuth } from '../../../context/AuthContext';
 import { subscribeCloudStore, sanitizeStoreItems } from '../../../services/cloudSyncService';
+import { parseToDateOnly } from '../../../utils/billingPayments';
 
 // Wizards
 import SendVehicleWizard from './SendVehicleWizard';
@@ -65,9 +66,21 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
     };
   }, []);
 
+  const now = new Date();
+  const isToday = (dateVal) => {
+    const d = parseToDateOnly(dateVal);
+    return Boolean(d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate());
+  };
+
   const activeMixersOnRoad = trips.filter(t => t.status === 'Departed' || t.status === 'In Transit' || t.status === 'En Route' || t.status === 'Pouring').length;
-  const totalConcreteM3 = trips.reduce((sum, t) => sum + (Number(t.quantityM3 || t.quantity) || 0), 0);
-  const totalInwardMT = inward.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+
+  const todayTrips = trips.filter(t => isToday(t.date || t.createdAt) || ['Departed', 'In Transit', 'En Route', 'Pouring', 'Returning'].includes(t.status));
+  const todayDispatchedTrips = trips.filter(t => isToday(t.date || t.createdAt));
+  const todayCompletedTrips = trips.filter(t => t.status === 'Completed' && isToday(t.date || t.createdAt || t.plantReturnTime));
+  const totalConcreteM3 = todayDispatchedTrips.reduce((sum, t) => sum + (Number(t.quantityM3 || t.quantity) || 0), 0);
+
+  const todayInward = inward.filter(i => isToday(i.date || i.createdAt));
+  const totalInwardMT = todayInward.reduce((sum, i) => sum + (Number(i.quantity || i.netTons) || 0), 0);
 
   // Time greeting
   const currentHour = new Date().getHours();
@@ -302,7 +315,7 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
             </div>
             <div className="min-w-0">
               <div className="text-[10px] text-slate-500 font-medium truncate">{language === 'mr' ? 'ट्रिप्स पूर्ण' : 'Trips Done'}</div>
-              <div className="text-xs font-black text-slate-900 font-mono">{trips.filter(t => t.status === 'Completed').length} / {trips.length}</div>
+              <div className="text-xs font-black text-slate-900 font-mono">{todayCompletedTrips.length} / {Math.max(todayDispatchedTrips.length, todayCompletedTrips.length)}</div>
             </div>
           </div>
         </div>
@@ -317,16 +330,16 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
                   <Truck className="w-3.5 h-3.5 text-blue-600" />
                   <span>{language === 'mr' ? 'गाड्यांची ताजी स्थिती (Dispatches)' : 'Live Mixer Dispatches'}</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-400 font-bold">{trips.length} {language === 'mr' ? 'ट्रिप्स' : 'trips'}</span>
+                <span className="text-[10px] font-mono text-slate-400 font-bold">{todayTrips.length} {language === 'mr' ? 'ट्रिप्स' : 'trips'}</span>
               </div>
 
-              {trips.length === 0 ? (
+              {todayTrips.length === 0 ? (
                 <div className="py-3 text-center text-slate-400 text-xs">
                   <p>{language === 'mr' ? 'आज अजून कोणतीही गाडी रवाना झालेली नाही.' : 'No vehicle trips recorded yet today.'}</p>
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
-                  {trips.slice(0, 3).map((t, idx) => (
+                  {todayTrips.slice(0, 3).map((t, idx) => (
                     <div key={idx} className="flex items-center justify-between p-1.5 px-2 rounded-lg bg-slate-50 border border-slate-100 text-xs">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-mono font-bold text-slate-900 text-[11px]">{t.vehicleNo}</span>
@@ -364,16 +377,16 @@ export default function SimplePlantManagerHome({ onNavigateTab, onSwitchToAdvanc
                   <PackageCheck className="w-3.5 h-3.5 text-amber-600" />
                   <span>{language === 'mr' ? 'आज आलेला कच्चा माल (Inward)' : 'Raw Materials Arrived Today'}</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-400 font-bold">{inward.length} {language === 'mr' ? 'नोंदी' : 'loads'}</span>
+                <span className="text-[10px] font-mono text-slate-400 font-bold">{todayInward.length} {language === 'mr' ? 'नोंदी' : 'loads'}</span>
               </div>
 
-              {inward.length === 0 ? (
+              {todayInward.length === 0 ? (
                 <div className="py-3 text-center text-slate-400 text-xs">
                   <p>{language === 'mr' ? 'आज नवीन कच्चा माल आलेला नाही.' : 'No raw materials inward recorded today yet.'}</p>
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
-                  {inward.slice(0, 3).map((item, idx) => (
+                  {todayInward.slice(0, 3).map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-1.5 px-2 rounded-lg bg-amber-50/60 border border-amber-100 text-xs">
                       <div className="min-w-0 flex-1">
                         <span className="font-bold text-slate-900 block truncate text-[11px]">{item.material}</span>

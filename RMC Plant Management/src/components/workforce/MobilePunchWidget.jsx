@@ -22,13 +22,13 @@ import {
   Radio,
   ChevronRight
 } from 'lucide-react';
-import { useWorkforce } from '../../context/WorkforceContext';
+import { useWorkforce, resolveCanonicalEmployeeId } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatToIndian12Hr, getNowIndian12Hr, parseTimeToMinutes, getLocalIstDateStr } from '../../utils/shiftUtils';
 import { OFFICIAL_ROLE_ACCOUNTS } from '../../data/mockUsers';
 import { resolveSangliLandmark } from '../../utils/sangliGeofence';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
-import { recordEmployeeBreadcrumb, deleteEmployeeRouteHistory } from '../../services/routeTrackingService';
+import { recordEmployeeBreadcrumb } from '../../services/routeTrackingService';
 import { nativeTracking } from '../../services/nativeTrackingBridge';
 import { auth } from '../../config/firebase';
 
@@ -270,24 +270,26 @@ export default function MobilePunchWidget({
 
   const isDriver = (activeEmployee?.role || '').toLowerCase().includes('driver') || user?.role === 'Driver';
 
-  // Today's attendance record (Strictly scoped to the selected employee ID in IST)
+  // Today's attendance record (Strictly scoped to the selected employee ID in IST, with night-shift rollover)
   const todayStr = getLocalIstDateStr();
+  const yesterdayStr = getLocalIstDateStr(Date.now() - 86400000);
   const userTodayRecord = useMemo(() => {
     const targetEmpId = (activeEmployee?.employeeId || activeEmployee?.id || selectedEmpId || '').toString().trim().toUpperCase();
     if (!targetEmpId) return null;
-    return (attendance || []).find(
-      (a) => a.date === todayStr &&
-        a.employeeId && (
-          a.employeeId.toString().trim().toUpperCase() === targetEmpId ||
-          (targetEmpId === 'SS-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-SS-001') ||
-          (targetEmpId === 'DIS-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-DIS-001') ||
-          (targetEmpId === 'PM-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-PM-001') ||
-          (targetEmpId === 'ACC-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-ACC-001') ||
-          (targetEmpId === 'QC-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-QC-001') ||
-          (targetEmpId === 'DRV-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-DV-001')
-        )
+    const matchesEmp = (a) => a.employeeId && (
+      a.employeeId.toString().trim().toUpperCase() === targetEmpId ||
+      (targetEmpId === 'SS-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-SS-001') ||
+      (targetEmpId === 'DIS-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-DIS-001') ||
+      (targetEmpId === 'PM-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-PM-001') ||
+      (targetEmpId === 'ACC-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-ACC-001') ||
+      (targetEmpId === 'QC-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-QC-001') ||
+      (targetEmpId === 'DRV-001' && a.employeeId.toString().trim().toUpperCase() === 'USR-DV-001')
     );
-  }, [attendance, todayStr, activeEmployee, selectedEmpId]);
+    const todayRec = (attendance || []).find((a) => a.date === todayStr && matchesEmp(a));
+    if (todayRec) return todayRec;
+    // Fallback for active night shift started yesterday and still open after midnight
+    return (attendance || []).find((a) => a.date === yesterdayStr && matchesEmp(a) && Boolean(a.punchIn) && !a.punchOut) || null;
+  }, [attendance, todayStr, yesterdayStr, activeEmployee, selectedEmpId]);
 
   const hasPunchedIn = Boolean(userTodayRecord?.punchIn);
   const hasPunchedOut = Boolean(userTodayRecord?.punchOut);
@@ -516,7 +518,7 @@ export default function MobilePunchWidget({
       }
       return;
     }
-    const targetId = activeEmployee.employeeId || activeEmployee.id;
+    const targetId = resolveCanonicalEmployeeId(activeEmployee.employeeId || activeEmployee.id);
     const empName = activeEmployee.name || 'Employee';
     const docId = userTodayRecord.id;
     const companyId = user?.companyId || 'sm-concretech';
@@ -696,11 +698,16 @@ export default function MobilePunchWidget({
         } catch (_) {}
       }
 
-      // Priority 4: Browser geolocation if available
+      // Priority 4: Browser geolocation if available (bounded timeout so slow GPS never hangs UI)
       if (!currentGps || !currentGps.lat) {
         try {
-          currentGps = await acquireGpsLocation(true);
-        } catch (_) {}
+          currentGps = await Promise.race([
+            acquireGpsLocation(true),
+            new Promise((res) => setTimeout(() => res(gpsCoords || nativeTracking.getLatestNativeFix()), 4500))
+          ]);
+        } catch (_) {
+          currentGps = gpsCoords || nativeTracking.getLatestNativeFix();
+        }
       }
 
       // Strict enforcement: if GPS could not be resolved, reject fake coordinates
@@ -726,26 +733,29 @@ export default function MobilePunchWidget({
         notes: 'Verified biometric punch-in',
       };
 
-      // ── Step 3: Call checkIn (local state + async Firestore) ──
-      const rec = await checkIn(targetId, {
-        allowOverride: true,
-        selfieUrl: photoUrl,
-        gpsLocation: {
-          lat: Number(currentGps.lat),
-          lng: Number(currentGps.lng),
-          accuracy: currentGps.accuracy || 20,
-          timestamp: currentGps.timestamp || new Date().toISOString(),
-          address,
-          landmarkName,
-        },
-        routeTrail: [punchInWaypoint],
-        geofenceStatus,
-        remarks: `Clocked in via biometric scan at ${geofenceStatus}`,
-      });
+      // ── Step 3: Call checkIn (local-first + bounded Firestore sync) ──
+      const rec = await Promise.race([
+        checkIn(targetId, {
+          allowOverride: true,
+          selfieUrl: photoUrl,
+          gpsLocation: {
+            lat: Number(currentGps.lat),
+            lng: Number(currentGps.lng),
+            accuracy: currentGps.accuracy || 20,
+            timestamp: currentGps.timestamp || new Date().toISOString(),
+            address,
+            landmarkName,
+          },
+          routeTrail: [punchInWaypoint],
+          geofenceStatus,
+          remarks: `Clocked in via biometric scan at ${geofenceStatus}`,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Punch-in timed out. Please try again.')), 5000))
+      ]);
 
       _finished = true;
 
-      // ── Step 4: Live-location writes & background tracking ONLY after Firebase confirms attendance doc ──
+      // ── Step 4: Live-location broadcast & background tracking ──
       if (rec && rec.id) {
         // Broadcast live initial GPS position immediately to admin dashboard radar
         try {
@@ -759,10 +769,9 @@ export default function MobilePunchWidget({
           });
         } catch (_) {}
 
-        // Record breadcrumb for route trail (start fresh from punch-in)
-        try { 
-          deleteEmployeeRouteHistory(targetId);
-          recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`); 
+        // Record initial breadcrumb for route trail (local-first, debounced cloud sync)
+        try {
+          recordEmployeeBreadcrumb(targetId, Number(currentGps.lat), Number(currentGps.lng), `Punch-In: ${landmarkName}`);
         } catch (_) {}
 
         // Start foreground GPS tracking service atomically clearing previous shift trail
@@ -772,7 +781,10 @@ export default function MobilePunchWidget({
           const resolvedUserId = auth?.currentUser?.uid || user?.uid || '';
           if (auth?.currentUser) {
             try {
-              freshToken = await auth.currentUser.getIdToken();
+              freshToken = await Promise.race([
+                auth.currentUser.getIdToken(),
+                new Promise((res) => setTimeout(() => res(''), 1500))
+              ]);
               refreshToken = auth.currentUser.refreshToken || '';
             } catch (_) {}
           }
@@ -843,7 +855,7 @@ export default function MobilePunchWidget({
 
     setLoading(true);
     try {
-      const targetId = activeEmployee.employeeId || activeEmployee.id;
+      const targetId = resolveCanonicalEmployeeId(activeEmployee.employeeId || activeEmployee.id);
 
       // 1. Submit Daily Work Report (Safe 1.5s timeout race)
       if (submitDailyWork) {
@@ -903,13 +915,22 @@ export default function MobilePunchWidget({
         recordEmployeeBreadcrumb(targetId, Number(exitGps.lat), Number(exitGps.lng), `Punch-Out: ${exitLandmark}`);
       }
 
-      // Fetch all high-resolution route points collected locally on the mobile phone during the shift (max 1s)
+      const rawTargetId = activeEmployee.employeeId || activeEmployee.id;
+      const canonicalId = resolveCanonicalEmployeeId(rawTargetId);
+
+      // Fetch all high-resolution route points collected locally on the mobile phone during the shift (max 3.5s)
       let localPoints = [];
       try {
         localPoints = await Promise.race([
-          nativeTracking.requestLocalTrail(targetId, 1000),
-          new Promise((res) => setTimeout(() => res([]), 1200))
+          nativeTracking.requestLocalTrail(canonicalId, 3500),
+          new Promise((res) => setTimeout(() => res([]), 3800))
         ]);
+        if ((!Array.isArray(localPoints) || localPoints.length === 0) && rawTargetId && rawTargetId !== canonicalId) {
+          localPoints = await Promise.race([
+            nativeTracking.requestLocalTrail(rawTargetId, 2000),
+            new Promise((res) => setTimeout(() => res([]), 2200))
+          ]);
+        }
       } catch {
         localPoints = [];
       }
@@ -922,11 +943,15 @@ export default function MobilePunchWidget({
             ? `Mixer ${dailyReportData.vehicleNo} | ${dailyReportData.tripsCount} Trips (${dailyReportData.deliveredM3} m³)`
             : dailyReportData.workDescription,
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Checkout operation timed out')), 4000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Checkout operation timed out')), 6000))
       ]);
 
-      // Stop Android Foreground Tracking Service after checkout has committed the full route trail
+      // Clear consumed native route buffer after checkout has committed the full route trail, then stop service
       try {
+        nativeTracking.clearLocalTrail(canonicalId);
+        if (rawTargetId && rawTargetId !== canonicalId) {
+          nativeTracking.clearLocalTrail(rawTargetId);
+        }
         nativeTracking.stopForegroundTracking();
       } catch (_) {}
 

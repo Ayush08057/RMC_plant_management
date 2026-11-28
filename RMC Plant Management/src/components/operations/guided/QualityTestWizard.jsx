@@ -32,11 +32,14 @@ export default function QualityTestWizard({ isOpen, onClose, onComplete }) {
   const isPass = Math.abs(Number(slumpValue) - targetSlump) <= 25;
 
   const handleSave = () => {
+    const todayDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const todayTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
     const testRecord = {
       id: `QC-${Date.now()}`,
       sampleId,
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      date: todayDate,
+      time: todayTime,
       grade,
       slumpValue: Number(slumpValue),
       result: isPass ? 'PASS' : 'OUT_OF_SPEC',
@@ -53,6 +56,71 @@ export default function QualityTestWizard({ isOpen, onClose, onComplete }) {
       pushCloudStore('cloud_qc_tests', QC_STORAGE_KEY, updated);
     } catch (e) {
       console.warn('QC save error:', e);
+    }
+
+    // Unify with Central IS:456 QC Cube Testing Registry
+    try {
+      const qcKey = 'rmc_qc_cube_tests_v1';
+      const existingCubesRaw = localStorage.getItem(qcKey);
+      const existingCubes = existingCubesRaw ? JSON.parse(existingCubesRaw) : [];
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const castingIso = `${year}-${month}-${day}`;
+
+      const addDaysToIso = (isoStr, days) => {
+        try {
+          const d = new Date(isoStr);
+          d.setDate(d.getDate() + days);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        } catch {
+          return isoStr;
+        }
+      };
+
+      const standards = {
+        'M10': { target7d: 7.0, target28d: 10.0 },
+        'M15': { target7d: 10.0, target28d: 15.0 },
+        'M20': { target7d: 13.5, target28d: 20.0 },
+        'M25': { target7d: 17.0, target28d: 25.0 },
+        'M30': { target7d: 20.0, target28d: 30.0 },
+        'M35': { target7d: 23.5, target28d: 35.0 },
+        'M40': { target7d: 27.0, target28d: 40.0 },
+        'M45': { target7d: 30.0, target28d: 45.0 },
+        'M50': { target7d: 33.5, target28d: 50.0 },
+      };
+
+      const target7d = standards[grade]?.target7d || 17.0;
+      const target28d = standards[grade]?.target28d || 25.0;
+
+      const newCube = {
+        id: sampleId || `CB-${Date.now().toString().slice(-6)}`,
+        batchId: `BATCH-${Date.now().toString().slice(-4)}`,
+        clientName: 'Standard Plant Pouring',
+        site: 'Plant Pouring Yard',
+        vehicleNo: 'TM-01',
+        mixGrade: grade,
+        castingDate: castingIso,
+        specimenCount: 3,
+        castBy: 'QC Technician (Quick Wizard)',
+        dueDate7d: addDaysToIso(castingIso, 7),
+        dueDate28d: addDaysToIso(castingIso, 28),
+        target7d,
+        target28d,
+        slumpValue: Number(slumpValue),
+        test7d: null,
+        test28d: null,
+        remarks: `${remarks} | Slump: ${slumpValue}mm (${isPass ? 'PASS' : 'OUT_OF_SPEC'})`,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedCubes = [newCube, ...existingCubes.filter(c => c.id !== newCube.id)];
+      localStorage.setItem(qcKey, JSON.stringify(updatedCubes));
+      pushCloudStore(qcKey, updatedCubes);
+    } catch (e) {
+      console.warn('Error syncing to QC cubes registry:', e);
     }
 
     setSavedSuccess(true);

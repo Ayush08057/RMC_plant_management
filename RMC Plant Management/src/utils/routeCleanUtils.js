@@ -77,22 +77,45 @@ export function filterGeographicOutliers(points, maxDistanceMeters = 50000) {
   return valid.length > 0 ? valid : points;
 }
 
+function getPointTimestampMs(pt) {
+  if (!pt) return 0;
+  if (typeof pt.ts === 'number' && Number.isFinite(pt.ts) && pt.ts > 0) return pt.ts;
+  if (pt.timestamp) {
+    const parsed = Date.parse(pt.timestamp);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
+function isProtectedShiftEndpoint(pt) {
+  return Boolean(
+    pt &&
+    (pt.category === 'Punch-In Location' ||
+      pt.category === 'Punch In' ||
+      pt.status === 'Punch-In Station' ||
+      pt.category === 'Punch-Out Location' ||
+      pt.status === 'Punch-Out Station' ||
+      pt.category === 'Site Visit' ||
+      pt.status === 'Visited Site')
+  );
+}
+
 /**
- * 1. Filter out GPS teleportation spikes / satellite acquisition jumps (> 130 km/h impossible jumps)
+ * 1. Filter out GPS teleportation spikes / satellite acquisition jumps (> 130 km/h or sharp mid-route bounce)
  */
 export function filterGpsSpikes(points, maxDistMeters = 120) {
   if (!Array.isArray(points) || points.length < 3) return points || [];
-  const pts = [...points];
+  let pts = [...points];
 
   // Clean initial spike/jump (never strip verified Punch-In anchor)
   while (pts.length >= 3) {
-    if (pts[0]?.category === 'Punch-In Location' || pts[0]?.category === 'Punch In' || pts[0]?.status === 'Punch-In Station') {
+    if (isProtectedShiftEndpoint(pts[0])) {
       break;
     }
     const d01 = getHaversineDistanceMeters(pts[0], pts[1]);
     const d12 = getHaversineDistanceMeters(pts[1], pts[2]);
-    const t0 = pts[0].ts || (pts[0].timestamp ? new Date(pts[0].timestamp).getTime() : 0);
-    const t1 = pts[1].ts || (pts[1].timestamp ? new Date(pts[1].timestamp).getTime() : 0);
+    const t0 = getPointTimestampMs(pts[0]);
+    const t1 = getPointTimestampMs(pts[1]);
     const timeDelta01 = t0 && t1 ? Math.abs(t1 - t0) / 1000 : 0;
     const speed01 = timeDelta01 > 0 ? (d01 / timeDelta01) * 3.6 : 0;
 
@@ -106,12 +129,12 @@ export function filterGpsSpikes(points, maxDistMeters = 120) {
   // Clean trailing spike (never strip verified Punch-Out endpoint)
   while (pts.length >= 3) {
     const n = pts.length;
-    if (pts[n - 1]?.category === 'Punch-Out Location' || pts[n - 1]?.status === 'Punch-Out Station') {
+    if (isProtectedShiftEndpoint(pts[n - 1])) {
       break;
     }
     const dLast = getHaversineDistanceMeters(pts[n - 2], pts[n - 1]);
-    const tPrev = pts[n - 2].ts || (pts[n - 2].timestamp ? new Date(pts[n - 2].timestamp).getTime() : 0);
-    const tLast = pts[n - 1].ts || (pts[n - 1].timestamp ? new Date(pts[n - 1].timestamp).getTime() : 0);
+    const tPrev = getPointTimestampMs(pts[n - 2]);
+    const tLast = getPointTimestampMs(pts[n - 1]);
     const timeDelta = tPrev && tLast ? Math.abs(tLast - tPrev) / 1000 : 0;
     const speed = timeDelta > 0 ? (dLast / timeDelta) * 3.6 : 0;
 
@@ -120,6 +143,78 @@ export function filterGpsSpikes(points, maxDistMeters = 120) {
     } else {
       break;
     }
+  }
+
+  // Pass 1: Remove impossible instantaneous GPS teleports (> 140 km/h over > 500m)
+  let removedAny = true;
+  let guard = 0;
+  while (removedAny && pts.length >= 3 && guard < 25) {
+    removedAny = false;
+    guard++;
+    const nextPts = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const prev = nextPts[nextPts.length - 1];
+      const curr = pts[i];
+      if (isProtectedShiftEndpoint(curr)) {
+        nextPts.push(curr);
+        continue;
+      }
+      const dPrevCurr = getHaversineDistanceMeters(prev, curr);
+      const tPrev = getPointTimestampMs(prev);
+      const tCurr = getPointTimestampMs(curr);
+      const dtSec = tPrev && tCurr ? Math.abs(tCurr - tPrev) / 1000 : 0;
+      const speedKmh = dtSec > 0 ? (dPrevCurr / dtSec) * 3.6 : 0;
+
+      if (dPrevCurr > 500 && speedKmh > 140) {
+        removedAny = true;
+        continue;
+      }
+      nextPts.push(curr);
+    }
+    nextPts.push(pts[pts.length - 1]);
+    pts = nextPts;
+  }
+
+  // Pass 2: Remove brief (< 3 min) single-point out-and-back GPS bounces (never collapses genuine multi-minute turnarounds)
+  removedAny = true;
+  guard = 0;
+  while (removedAny && pts.length >= 3 && guard < 20) {
+    removedAny = false;
+    guard++;
+    const nextPts = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const prev = nextPts[nextPts.length - 1];
+      const curr = pts[i];
+      const next = pts[i + 1];
+
+      if (isProtectedShiftEndpoint(curr)) {
+        nextPts.push(curr);
+        continue;
+      }
+
+      const dPrevCurr = getHaversineDistanceMeters(prev, curr);
+      const dCurrNext = getHaversineDistanceMeters(curr, next);
+      const dPrevNext = getHaversineDistanceMeters(prev, next);
+
+      const tPrev = getPointTimestampMs(prev);
+      const tNext = getPointTimestampMs(next);
+      const dtWindowSec = tPrev && tNext ? Math.abs(tNext - tPrev) / 1000 : 0;
+
+      const isBriefBounce =
+        dtWindowSec > 0 &&
+        dtWindowSec <= 180 &&
+        dPrevCurr > 1500 &&
+        dCurrNext > 1500 &&
+        dPrevNext < (dPrevCurr + dCurrNext) * 0.35;
+
+      if (isBriefBounce) {
+        removedAny = true;
+        continue;
+      }
+      nextPts.push(curr);
+    }
+    nextPts.push(pts[pts.length - 1]);
+    pts = nextPts;
   }
 
   return pts;

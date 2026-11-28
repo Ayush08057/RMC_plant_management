@@ -578,7 +578,7 @@ export default function CleanEmployeeLiveTracking() {
             <div className="pt-2 border-t border-slate-100">
               <span className="text-slate-400 font-medium block text-[11px]">Distance Travelled</span>
               <span className="text-lg font-black font-mono text-blue-900 mt-0.5 block">
-                {routeDetails?.totalDistanceKm || dayRecord?.totalDistanceKm || 0.0} KM
+                {routeDetails ? routeDetails.totalDistanceKm : (dayRecord?.totalDistanceKm ?? 0.0)} KM
               </span>
             </div>
 

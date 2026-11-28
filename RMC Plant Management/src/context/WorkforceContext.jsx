@@ -37,7 +37,7 @@ import { formatToIndian12Hr, parseTimeToMinutes, getNowIndian12Hr, getLocalIstDa
 import { deleteEmployeeDocumentFile } from '../services/storageService.js';
 import { calculateDistanceMeters } from '../utils/sangliGeofence.js';
 import { resolveAccurateAddress } from '../services/gpsLocationService.js';
-import { recordEmployeeBreadcrumb, addEmployeeVisitedStop, deleteEmployeeRouteHistory } from '../services/routeTrackingService.js';
+import { recordEmployeeBreadcrumb, addEmployeeVisitedStop, deleteEmployeeRouteHistory, getAllRouteHistories } from '../services/routeTrackingService.js';
 import { nativeTracking } from '../services/nativeTrackingBridge.js';
 import { cleanRawRoutePipeline, calculateAccurateRouteDistanceKm } from '../utils/routeCleanUtils.js';
 import { realtimeSync } from '../services/realtimeTelemetrySync.js';
@@ -49,11 +49,13 @@ const STORAGE_COMPANIES_KEY = 'rmc_companies_v1';
 const STORAGE_ACTIVE_COMPANY_KEY = 'rmc_active_company_v1';
 const DEFAULT_COMPANY_ID = DEFAULT_COMPANIES[0].id;
 
-// Firebase write throttling map: tracks last cloud write timestamp per employee
+// Firebase write throttling map: tracks last cloud write timestamp & coordinates per employee
 const locationFirestoreThrottleMap = new Map();
 const locationRouteTrailThrottleMap = new Map();
-const MIN_FIRESTORE_WRITE_INTERVAL_MS = 10000; // write to Firebase at most once every 10 seconds per employee
-const MIN_ROUTETRAIL_WRITE_INTERVAL_MS = 30000; // sync full routeTrail array to attendance doc every 30s or on waypoint change
+const lastFirestoreCoordsMap = new Map();
+const MIN_FIRESTORE_WRITE_INTERVAL_MS = 60000; // moving: write to Firebase liveLocations at most once per 60s
+const MIN_STATIONARY_HEARTBEAT_MS = 300000; // stationary (<50m moved): heartbeat at most once per 5 min (MQTT stays instant)
+const MIN_ROUTETRAIL_WRITE_INTERVAL_MS = 180000; // sync full routeTrail to attendance doc at most once per 3 min on movement
 
 export const normalizeCompanyId = (id) => {
   if (!id) return DEFAULT_COMPANY_ID;
@@ -112,6 +114,30 @@ export function attendanceMatchesEmployee(record, targetEmpId) {
   return recId === canonicalTarget || recId.endsWith(`-${canonicalTarget}`);
 }
 
+function resolveStopTimestampMs(stop, fallbackDateStr = '', punchInMins = null) {
+  if (!stop) return 0;
+  if (typeof stop.ts === 'number' && Number.isFinite(stop.ts) && stop.ts > 0) {
+    return stop.ts;
+  }
+  if (stop.timestamp) {
+    const parsed = Date.parse(stop.timestamp);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  if (stop.time && fallbackDateStr) {
+    const mins = parseTimeToMinutes(stop.time);
+    if (Number.isFinite(mins)) {
+      let baseMs = Date.parse(`${fallbackDateStr}T00:00:00+05:30`);
+      if (Number.isFinite(baseMs)) {
+        if (punchInMins !== null && mins + 60 < punchInMins) {
+          baseMs += 86400000;
+        }
+        return baseMs + mins * 60000;
+      }
+    }
+  }
+  return 0;
+}
+
 export function mergeShiftRouteTrail({
   existingTrail = [],
   rawTrailPoints = [],
@@ -120,6 +146,9 @@ export function mergeShiftRouteTrail({
 }) {
   const existing = Array.isArray(existingTrail) ? [...existingTrail] : [];
   const raw = Array.isArray(rawTrailPoints) ? rawTrailPoints : [];
+  const shiftDate = punchInRecord?.date || getLocalIstDateStr();
+  const shiftDocId = punchInRecord?.id || '';
+  const punchInMins = punchInRecord?.punchIn ? parseTimeToMinutes(punchInRecord.punchIn) : null;
 
   const isPunchInStop = (s) =>
     s && (s.category === 'Punch-In Location' || s.category === 'Punch In' || s.status === 'Punch-In Station');
@@ -131,12 +160,16 @@ export function mergeShiftRouteTrail({
     const pLat = Number(punchInRecord.gpsLocation.lat);
     const pLng = Number(punchInRecord.gpsLocation.lng);
     if (Number.isFinite(pLat) && Number.isFinite(pLng)) {
+      const pTs = resolveStopTimestampMs(punchInRecord.gpsLocation, shiftDate, punchInMins) ||
+        (punchInRecord.createdAt ? Date.parse(punchInRecord.createdAt) : 0);
       punchInStop = {
         stopNo: 1,
         title: `Punch-In: ${punchInRecord.geofenceStatus || punchInRecord.gpsLocation.landmarkName || 'Punch-In Station'}`,
         category: 'Punch-In Location',
         address: punchInRecord.gpsLocation.address || `${pLat.toFixed(5)}°N, ${pLng.toFixed(5)}°E`,
         time: punchInRecord.punchIn || fallbackTime,
+        ts: Number.isFinite(pTs) && pTs > 0 ? pTs : undefined,
+        timestamp: punchInRecord.gpsLocation.timestamp || punchInRecord.createdAt || undefined,
         lat: pLat,
         lng: pLng,
         status: 'Punch-In Station',
@@ -146,56 +179,117 @@ export function mergeShiftRouteTrail({
     }
   }
 
-  const preservedVisits = existing.filter((s) => isSiteVisitStop(s) && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)));
+  const shiftStartMs =
+    resolveStopTimestampMs(punchInStop, shiftDate, punchInMins) ||
+    resolveStopTimestampMs(punchInRecord?.gpsLocation, shiftDate, punchInMins) ||
+    (punchInRecord?.createdAt ? Date.parse(punchInRecord.createdAt) : 0) ||
+    (punchInRecord?.punchIn ? resolveStopTimestampMs({ time: punchInRecord.punchIn }, shiftDate, punchInMins) : 0);
 
-  let middleStops = [];
-  // If the existing recorded route has more waypoints than incoming raw buffer, NEVER truncate it!
-  // Always prioritize the largest, richest route trail accumulated during duty.
-  const existingNonPunchIn = existing.filter((s) => !isPunchInStop(s));
-  
-  if (raw.length > 0 && raw.length >= existingNonPunchIn.length) {
-    const convertedRaw = raw
-      .filter((pt) => pt && Number.isFinite(Number(pt.lat)) && Number.isFinite(Number(pt.lng)))
-      .map((pt, idx) => {
-        const pLat = Number(pt.lat);
-        const pLng = Number(pt.lng);
-        const tsMs = pt.timestamp ? new Date(pt.timestamp).getTime() : NaN;
-        const formattedTime = Number.isFinite(tsMs)
-          ? new Date(tsMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : fallbackTime;
-        return {
-          title: (!punchInStop && idx === 0) ? 'Punch-In Station' : `Waypoint #${idx + 1}`,
-          category: (!punchInStop && idx === 0) ? 'Punch-In Location' : 'En Route',
-          address: `${pLat.toFixed(5)}°N, ${pLng.toFixed(5)}°E`,
-          time: formattedTime,
-          timestamp: pt.timestamp || undefined,
-          ts: Number.isFinite(tsMs) ? tsMs : undefined,
-          lat: pLat,
-          lng: pLng,
-          status: 'Recorded',
-          notes: 'High-precision mobile GPS fix',
-        };
-      })
-      .filter((pt) => {
-        if (punchInStop && calculateDistanceMeters(punchInStop.lat, punchInStop.lng, pt.lat, pt.lng) < 25) {
+  const normalizeWithTs = (s) => {
+    const resolvedTs = resolveStopTimestampMs(s, s.date || shiftDate, punchInMins);
+    return Number.isFinite(resolvedTs) && resolvedTs > 0 && !s.ts ? { ...s, ts: resolvedTs } : s;
+  };
+
+  const preservedVisits = existing
+    .filter((s) => isSiteVisitStop(s) && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)))
+    .map(normalizeWithTs);
+
+  const existingNonPunchIn = existing
+    .filter((s) => !isPunchInStop(s) && !isSiteVisitStop(s))
+    .map(normalizeWithTs);
+
+  // Union-merge BOTH existing accumulated stops and incoming raw native/local breadcrumbs
+  // while rejecting stale points from prior shifts or different attendance docs.
+  const convertedRaw = raw
+    .filter((pt) => {
+      if (!pt) return false;
+      if (pt.docId && shiftDocId && pt.docId !== shiftDocId) return false;
+      if (pt.date && shiftDate && pt.date !== shiftDate) return false;
+      const pLat = Number(pt.lat);
+      const pLng = Number(pt.lng);
+      if (!Number.isFinite(pLat) || !Number.isFinite(pLng) || pLat === 0 || pLng === 0 || Math.abs(pLat) > 90 || Math.abs(pLng) > 180) {
+        return false;
+      }
+      if (Number.isFinite(Number(pt.accuracy)) && Number(pt.accuracy) > 250) return false;
+      const ptTs = resolveStopTimestampMs(pt, pt.date || shiftDate, punchInMins);
+      if (shiftStartMs > 0 && ptTs > 0 && ptTs < shiftStartMs - 120000) {
+        return false;
+      }
+      return true;
+    })
+    .map((pt, idx) => {
+      const pLat = Number(pt.lat);
+      const pLng = Number(pt.lng);
+      const tsMs = resolveStopTimestampMs(pt, pt.date || shiftDate, punchInMins);
+      const formattedTime = tsMs > 0
+        ? new Date(tsMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : (pt.time || fallbackTime);
+      return {
+        ...pt,
+        title: pt.title || ((!punchInStop && idx === 0) ? 'Punch-In Station' : `Waypoint #${idx + 1}`),
+        category: pt.category || ((!punchInStop && idx === 0) ? 'Punch-In Location' : 'En Route'),
+        address: pt.address || `${pLat.toFixed(5)}°N, ${pLng.toFixed(5)}°E`,
+        time: formattedTime,
+        timestamp: pt.timestamp || (tsMs > 0 ? new Date(tsMs).toISOString() : undefined),
+        ts: tsMs > 0 ? tsMs : undefined,
+        lat: pLat,
+        lng: pLng,
+        status: pt.status || 'Recorded',
+        notes: pt.notes || 'High-precision mobile GPS fix',
+      };
+    })
+    .filter((pt) => {
+      if (punchInStop && calculateDistanceMeters(punchInStop.lat, punchInStop.lng, pt.lat, pt.lng) < 20) {
+        const ptTs = pt.ts || 0;
+        if (!shiftStartMs || !ptTs || Math.abs(ptTs - shiftStartMs) < 300000) {
           return false;
         }
-        if (preservedVisits.some((v) => calculateDistanceMeters(Number(v.lat), Number(v.lng), pt.lat, pt.lng) < 25)) {
-          return false;
-        }
-        return true;
-      });
-
-    middleStops = [...preservedVisits, ...convertedRaw];
-    middleStops.sort((a, b) => {
-      const ta = a.ts || (a.timestamp ? new Date(a.timestamp).getTime() : 0);
-      const tb = b.ts || (b.timestamp ? new Date(b.timestamp).getTime() : 0);
-      if (ta && tb) return ta - tb;
-      return 0;
+      }
+      if (preservedVisits.some((v) => calculateDistanceMeters(Number(v.lat), Number(v.lng), pt.lat, pt.lng) < 20)) {
+        return false;
+      }
+      return true;
     });
-  } else {
-    // Preserve the rich accumulated shift route (e.g. all 800+ waypoints traveled during the shift)
-    middleStops = existingNonPunchIn;
+
+  const mergedMiddle = [...preservedVisits, ...existingNonPunchIn, ...convertedRaw].map((stop, idx) => ({
+    ...stop,
+    _origIdx: idx,
+    _resolvedTs: resolveStopTimestampMs(stop, stop.date || shiftDate, punchInMins),
+  }));
+  mergedMiddle.sort((a, b) => {
+    if (a._resolvedTs && b._resolvedTs && a._resolvedTs !== b._resolvedTs) {
+      return a._resolvedTs - b._resolvedTs;
+    }
+    if (a._resolvedTs && !b._resolvedTs) return -1;
+    if (!a._resolvedTs && b._resolvedTs) return 1;
+    return a._origIdx - b._origIdx;
+  });
+
+  // Deduplicate consecutive near-identical or overlapping cross-source points while keeping real return trips
+  let middleStops = [];
+  for (const item of mergedMiddle) {
+    const { _origIdx, _resolvedTs, ...stop } = item;
+    const sLat = Number(stop.lat);
+    const sLng = Number(stop.lng);
+    if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) continue;
+    const prevStop = middleStops[middleStops.length - 1];
+    if (prevStop && !isSiteVisitStop(stop)) {
+      const distMeters = calculateDistanceMeters(Number(prevStop.lat), Number(prevStop.lng), sLat, sLng);
+      if (distMeters < 15) {
+        continue;
+      }
+      const prevTs = resolveStopTimestampMs(prevStop, prevStop.date || shiftDate, punchInMins);
+      if (prevTs > 0 && _resolvedTs > 0) {
+        const dtSec = Math.abs(_resolvedTs - prevTs) / 1000;
+        if (dtSec <= 90 && distMeters < 150) {
+          continue;
+        }
+        if (dtSec > 0 && distMeters > 500 && (distMeters / dtSec) * 3.6 > 140) {
+          continue;
+        }
+      }
+    }
+    middleStops.push(stop);
   }
 
   const combined = punchInStop ? [punchInStop, ...middleStops] : [...middleStops];
@@ -677,18 +771,6 @@ export const WorkforceProvider = ({ children }) => {
   }, [activeCompanyId]);
 
   useEffect(() => {
-    fetchCollection(COLLECTIONS.COMPANIES)
-      .then((cloudCompanies) => {
-        if (cloudCompanies.length > 0) {
-          setCompanies((current) => {
-            const merged = new Map(current.map((company) => [company.id, company]));
-            cloudCompanies.forEach((company) => merged.set(company.id, { ...merged.get(company.id), ...company }));
-            return Array.from(merged.values());
-          });
-        }
-      })
-      .catch((error) => console.warn('Company directory sync unavailable:', error.message));
-
     const unsubscribe = subscribeToCollection(COLLECTIONS.COMPANIES, (cloudCompanies) => {
       if (cloudCompanies.length > 0) {
         setCompanies((current) => {
@@ -858,7 +940,7 @@ export const WorkforceProvider = ({ children }) => {
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 }
     );
 
-    const pollInterval = setInterval(pollOnce, 6000);
+    const pollInterval = setInterval(pollOnce, 20000);
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
@@ -1093,7 +1175,7 @@ export const WorkforceProvider = ({ children }) => {
       password: assignedPassword,
       status: assignedStatus,
       salary: Number(empData.salary) || 30000,
-      joiningDate: empData.joiningDate || new Date().toISOString().split('T')[0],
+      joiningDate: empData.joiningDate || getLocalIstDateStr(),
       shiftId: empData.shiftId || 'SFT-GEN',
     };
 
@@ -1934,12 +2016,15 @@ export const WorkforceProvider = ({ children }) => {
 
     // Ensure the verified punch-in location is always recorded as Waypoint #1 of the shift route
     if (effectiveGps && effectiveGps.lat && effectiveGps.lng && effectiveRouteTrail.length === 0) {
+      const punchTs = Date.now();
       effectiveRouteTrail = [{
         stopNo: 1,
         title: `Punch-In: ${effectiveGeofence || 'Punch-In Station'}`,
         category: 'Punch-In Location',
         address: effectiveGps.address || `${Number(effectiveGps.lat).toFixed(5)}°N, ${Number(effectiveGps.lng).toFixed(5)}°E`,
         time: actualPunchIn,
+        ts: punchTs,
+        timestamp: effectiveGps.timestamp || new Date(punchTs).toISOString(),
         lat: Number(effectiveGps.lat),
         lng: Number(effectiveGps.lng),
         status: 'Punch-In Station',
@@ -1980,50 +2065,7 @@ export const WorkforceProvider = ({ children }) => {
     // Instant Broadcast to Admin Dashboard via real-time telemetry (<50ms)
     realtimeSync.publishAttendance(newRecord);
 
-    // ── Create/save the employee's attendance document successfully at punch-in first ──
-    // Live-location writes and native background tracking must wait until this document exists.
-    const cleanRecord = sanitizeForFirestore(newRecord);
-    try {
-      await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, cleanRecord);
-      console.log(`[ATTENDANCE_PUNCH_IN] Successfully confirmed document ${newRecord.id} in Firebase`);
-    } catch (fsErr) {
-      console.error(`[ATTENDANCE_PUNCH_IN_ERR] Error saving attendance document ${newRecord.id}:`, fsErr);
-      // Fallback: direct setDoc with merge: true to ensure document is created
-      try {
-        const scopedCol = scopeCollection(COLLECTIONS.ATTENDANCE);
-        const docRef = doc(db, scopedCol, String(newRecord.id));
-        await setDoc(docRef, cleanRecord, { merge: true });
-        console.log(`[ATTENDANCE_PUNCH_IN] Fallback setDoc confirmed document ${newRecord.id} in Firebase`);
-      } catch (retryErr) {
-        console.error(`[ATTENDANCE_PUNCH_IN_FATAL] Failed creating attendance doc in Firestore:`, retryErr);
-        throw new Error(`Unable to save attendance document to Firebase: ${retryErr.message || fsErr.message}`);
-      }
-    }
-
-    // Seed lightweight live tracking doc cleanly (liveLocations_<companyId>/<canonicalEmpId>)
-    if (effectiveGps && effectiveGps.lat !== undefined && effectiveGps.lng !== undefined) {
-      const liveSeed = sanitizeForFirestore({
-        id: canonicalEmpId,
-        employeeId: canonicalEmpId,
-        userId: auth.currentUser?.uid || userRef.current?.uid || null,
-        employeeName: emp.name || canonicalEmpId,
-        role: emp.role || 'Staff',
-        companyId: activeCompanyId,
-        date: today,
-        attendanceId: newRecord.id,
-        isOnDuty: true,
-        lat: Number(effectiveGps.lat),
-        lng: Number(effectiveGps.lng),
-        accuracy: Number(effectiveGps.accuracy || 20),
-        address: effectiveGps.address || effectiveGeofence || 'Punch-In Station',
-        landmarkName: effectiveGps.landmarkName || effectiveGeofence || 'Punch-In',
-        timestamp: effectiveGps.timestamp || new Date().toISOString(),
-        updatedAt: newRecord.updatedAt,
-      });
-      saveDocumentWithId(COLLECTIONS.LIVE_LOCATIONS, canonicalEmpId, liveSeed).catch(() => {});
-    }
-
-    // Keep attendanceRef immediately up-to-date for follow-up location writes on the same tick
+    // Keep attendanceRef & UI state immediately up-to-date (Local-First: never hangs on Firestore quota 429 or offline)
     const seedPrevList = attendanceRef.current || [];
     const seedIdx = seedPrevList.findIndex((a) => {
       const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
@@ -2052,6 +2094,43 @@ export const WorkforceProvider = ({ children }) => {
       }
       return { ...prev, attendance: sanitizeAttendance(updatedAttendance) };
     });
+
+    // Authoritative Cloud Firestore persistence (bounded non-blocking race so quota-exceeded/offline never freezes Punch-In)
+    const cleanRecord = sanitizeForFirestore(newRecord);
+    const attWritePromise = saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, cleanRecord)
+      .then(() => {
+        console.log(`[ATTENDANCE_PUNCH_IN] Successfully confirmed document ${newRecord.id} in Firebase`);
+      })
+      .catch((fsErr) => {
+        console.warn(`[ATTENDANCE_PUNCH_IN_NOTICE] Firestore sync deferred for ${newRecord.id} (saved locally & via MQTT):`, fsErr?.message || fsErr);
+      });
+    await Promise.race([
+      attWritePromise,
+      new Promise((res) => setTimeout(res, 1200))
+    ]);
+
+    // Seed lightweight live tracking doc cleanly (liveLocations_<companyId>/<canonicalEmpId>)
+    if (effectiveGps && effectiveGps.lat !== undefined && effectiveGps.lng !== undefined) {
+      const liveSeed = sanitizeForFirestore({
+        id: canonicalEmpId,
+        employeeId: canonicalEmpId,
+        userId: auth.currentUser?.uid || userRef.current?.uid || null,
+        employeeName: emp.name || canonicalEmpId,
+        role: emp.role || 'Staff',
+        companyId: activeCompanyId,
+        date: today,
+        attendanceId: newRecord.id,
+        isOnDuty: true,
+        lat: Number(effectiveGps.lat),
+        lng: Number(effectiveGps.lng),
+        accuracy: Number(effectiveGps.accuracy || 20),
+        address: effectiveGps.address || effectiveGeofence || 'Punch-In Station',
+        landmarkName: effectiveGps.landmarkName || effectiveGeofence || 'Punch-In',
+        timestamp: effectiveGps.timestamp || new Date().toISOString(),
+        updatedAt: newRecord.updatedAt,
+      });
+      saveDocumentWithId(COLLECTIONS.LIVE_LOCATIONS, canonicalEmpId, liveSeed).catch(() => {});
+    }
 
     addAuditLog("Punch In (" + emp.name + ")", 'Attendance', "In: " + actualPunchIn + " (" + newRecord.geofenceStatus + ")");
     addNotification({
@@ -2157,13 +2236,23 @@ export const WorkforceProvider = ({ children }) => {
     }
 
     const cleanTargetId = resolveCanonicalEmployeeId(emp.employeeId || emp.id || targetId);
+    const yesterday = getLocalIstDateStr(Date.now() - 86400000);
 
-    const recordIndex = data.attendance.findIndex(
+    let recordIndex = data.attendance.findIndex(
       (a) => {
         const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
         return aDate === today && attendanceMatchesEmployee(a, cleanTargetId);
       }
     );
+    // Support night-shift rollover: if no record for today, check yesterday's open un-punched-out shift
+    if (recordIndex < 0) {
+      recordIndex = data.attendance.findIndex(
+        (a) => {
+          const aDate = a.date || (a.createdAt ? getLocalIstDateStr(a.createdAt) : '');
+          return aDate === yesterday && attendanceMatchesEmployee(a, cleanTargetId) && Boolean(a.punchIn) && !a.punchOut;
+        }
+      );
+    }
     if (recordIndex < 0 || !data.attendance[recordIndex].punchIn) {
       throw new Error("No punch-in recorded for " + (emp.name || targetId) + " today (" + today + "). Please punch in first.");
     }
@@ -2197,15 +2286,27 @@ export const WorkforceProvider = ({ children }) => {
     const otThreshold = shift?.otThresholdHours || 8.5;
     const overtimeHours = eligibleHours > otThreshold ? Number((eligibleHours - otThreshold).toFixed(1)) : 0;
 
-    // Finalize route trail by merging native device breadcrumbs without losing verified Punch-In landmark or manual site visits
+    // Finalize route trail by merging native device breadcrumbs + local route histories without losing any waypoints
     const exitGps = options.exitGpsLocation || options.gpsLocation || null;
     let cleanExitGps = exitGps;
     const baseTrail = Array.isArray(options.routeTrail)
       ? [...options.routeTrail]
       : (Array.isArray(currentRecord.routeTrail) ? [...currentRecord.routeTrail] : []);
+    let localRoutePts = [];
+    const shiftDateStr = currentRecord.date || today;
+    try {
+      const allHist = getAllRouteHistories();
+      if (allHist[cleanTargetId] && Array.isArray(allHist[cleanTargetId])) {
+        localRoutePts = allHist[cleanTargetId].filter((pt) => !pt?.date || pt.date === shiftDateStr);
+      }
+    } catch {}
+    const combinedRawPts = [
+      ...localRoutePts,
+      ...(Array.isArray(options.rawTrailPoints) ? options.rawTrailPoints : []),
+    ];
     let finalRouteTrail = mergeShiftRouteTrail({
       existingTrail: baseTrail,
-      rawTrailPoints: options.rawTrailPoints,
+      rawTrailPoints: combinedRawPts,
       punchInRecord: currentRecord,
       fallbackTime: nowTime,
     });
@@ -2242,12 +2343,15 @@ export const WorkforceProvider = ({ children }) => {
       if (distToLast > 20 || finalRouteTrail.length === 0) {
         const prevKm = lastStop?.distanceKm || 0;
         const addKm = lastStop ? Number((distToLast / 1000).toFixed(2)) : 0;
+        const exitTs = Date.now();
         finalRouteTrail.push({
           stopNo: finalRouteTrail.length + 1,
           title: "Punch-Out: " + (cleanExitGps.landmarkName || cleanExitGps.shortName || 'Shift End Station'),
           category: 'Punch-Out Location',
           address: cleanExitGps.address || (exitLat.toFixed(4) + "°N, " + exitLng.toFixed(4) + "°E"),
           time: nowTime,
+          ts: exitTs,
+          timestamp: cleanExitGps.timestamp || new Date(exitTs).toISOString(),
           lat: exitLat,
           lng: exitLng,
           status: 'Punch-Out Station',
@@ -2259,11 +2363,16 @@ export const WorkforceProvider = ({ children }) => {
 
     // Clean route trail through anti-spider & stationary halt collapse filter
     finalRouteTrail = cleanRawRoutePipeline(finalRouteTrail);
+    deleteEmployeeRouteHistory(cleanTargetId);
 
-    // Exact, sharp cumulative kilometers calculation (Never drop below already-accumulated distance)
+    // Exact, sharp cumulative kilometers calculation (prefer cleaned route over corrupted raw cloud distance)
     const computedDistanceKm = calculateAccurateRouteDistanceKm(finalRouteTrail);
     const existingDistanceKm = Number(currentRecord.totalDistanceKm || 0);
-    const totalDistanceKm = Number(Math.max(computedDistanceKm, existingDistanceKm).toFixed(2));
+    const isExistingPlausible = existingDistanceKm > 0 && existingDistanceKm <= 350 &&
+      (computedDistanceKm <= 0 || existingDistanceKm <= computedDistanceKm * 2.5 + 20);
+    const totalDistanceKm = finalRouteTrail.length >= 2
+      ? Number(computedDistanceKm.toFixed(2))
+      : Number((isExistingPlausible ? existingDistanceKm : computedDistanceKm).toFixed(2));
 
     const authUid = auth.currentUser?.uid || currentRecord.userId || user?.uid || user?.id || null;
 
@@ -2303,7 +2412,7 @@ export const WorkforceProvider = ({ children }) => {
       employeeName: emp.name || cleanTargetId,
       role: emp.role || currentRecord.role || 'Staff',
       companyId: activeCompanyId,
-      date: today,
+      date: updatedRecord.date || today,
       attendanceId: updatedRecord.id,
       isOnDuty: false,
       ...(checkoutLiveLoc && checkoutLiveLoc.lat !== undefined && checkoutLiveLoc.lng !== undefined ? {
@@ -2319,7 +2428,8 @@ export const WorkforceProvider = ({ children }) => {
 
     setData((prev) => {
       const prevList = prev.attendance || [];
-      const pIdx = prevList.findIndex((a) => a.id === updatedRecord.id || (a.date === today && attendanceMatchesEmployee(a, cleanTargetId)));
+      const recDate = updatedRecord.date || today;
+      const pIdx = prevList.findIndex((a) => a.id === updatedRecord.id || (a.date === recDate && attendanceMatchesEmployee(a, cleanTargetId)));
       let copy;
       if (pIdx >= 0) {
         copy = [...prevList];
@@ -2385,8 +2495,6 @@ export const WorkforceProvider = ({ children }) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord);
-
     setData((prev) => {
       const prevList = prev.attendance || [];
       const pIdx = prevList.findIndex((a) => {
@@ -2404,6 +2512,14 @@ export const WorkforceProvider = ({ children }) => {
       }
       return { ...prev, attendance: sanitizeAttendance(updated) };
     });
+
+    await Promise.race([
+      saveDocumentWithId(COLLECTIONS.ATTENDANCE, newRecord.id, newRecord).catch((err) => {
+        console.warn(`Manual attendance Firestore sync notice for ${newRecord.id}:`, err?.message || err);
+      }),
+      new Promise((res) => setTimeout(res, 1500))
+    ]);
+
     addAuditLog(`Attendance Saved (${newRecord.employeeName})`, 'Attendance', `${newRecord.date} | In: ${newRecord.punchIn || '--'} | Out: ${newRecord.punchOut || '--'}`);
     return newRecord;
   };
@@ -2412,12 +2528,19 @@ export const WorkforceProvider = ({ children }) => {
     const sanitizedFields = { ...fields, updatedAt: new Date().toISOString() };
     if (sanitizedFields.punchIn) sanitizedFields.punchIn = formatToIndian12Hr(sanitizedFields.punchIn);
     if (sanitizedFields.punchOut) sanitizedFields.punchOut = formatToIndian12Hr(sanitizedFields.punchOut);
-    await updateDocument(COLLECTIONS.ATTENDANCE, id, sanitizedFields);
 
     setData((prev) => ({
       ...prev,
       attendance: prev.attendance.map((a) => (a.id === id ? { ...a, ...sanitizedFields } : a)),
     }));
+
+    await Promise.race([
+      updateDocument(COLLECTIONS.ATTENDANCE, id, sanitizedFields).catch((err) => {
+        console.warn(`Attendance update Firestore sync notice for ${id}:`, err?.message || err);
+      }),
+      new Promise((res) => setTimeout(res, 1500))
+    ]);
+
     addAuditLog(`Updated Attendance (${id})`, 'Attendance', `Record parameters updated`);
   };
 
@@ -2474,11 +2597,17 @@ export const WorkforceProvider = ({ children }) => {
     const existingTrail = Array.isArray(target.routeTrail) ? [...target.routeTrail] : [];
     const lastStop = existingTrail[existingTrail.length - 1];
     const dist = lastStop ? calculateDistanceMeters(lastStop.lat, lastStop.lng, locationData.lat, locationData.lng) : 999;
+    const nowMs = locationData.timestamp ? (Date.parse(locationData.timestamp) || Date.now()) : Date.now();
+    const accMeters = Number(locationData.accuracy);
+    const isCoarseFix = Number.isFinite(accMeters) && accMeters > 250;
+    const lastTs = lastStop ? resolveStopTimestampMs(lastStop, target.date || today) : 0;
+    const secsSinceLast = lastTs > 0 ? Math.abs(nowMs - lastTs) / 1000 : 0;
+    const isImpossibleJump = lastStop && (dist > 30000 || (dist > 500 && secsSinceLast > 0 && (dist / secsSinceLast) * 3.6 > 140));
 
     let newTrail = existingTrail;
     let trailChanged = false;
-    // Only append a new movement stop when moved >= 25m to capture short 200m-400m movements while filtering GPS drift
-    if (dist >= 25 || existingTrail.length === 0) {
+    // Only append a new movement stop when moved >= 25m, accuracy <= 250m, and speed/jump is physically plausible
+    if (!isCoarseFix && !isImpossibleJump && (dist >= 25 || existingTrail.length === 0)) {
       const timeNow = getNowIndian12Hr(false);
       const prevKm = lastStop?.distanceKm || 0;
       const addKm = lastStop ? Number((dist / 1000).toFixed(2)) : 0;
@@ -2488,6 +2617,8 @@ export const WorkforceProvider = ({ children }) => {
         category: existingTrail.length === 0 ? 'Punch In' : 'En Route',
         address: locationData.address || `${Number(locationData.lat).toFixed(5)}°N, ${Number(locationData.lng).toFixed(5)}°E`,
         time: timeNow,
+        ts: nowMs,
+        timestamp: locationData.timestamp || new Date(nowMs).toISOString(),
         lat: Number(locationData.lat),
         lng: Number(locationData.lng),
         status: 'Live',
@@ -2534,9 +2665,20 @@ export const WorkforceProvider = ({ children }) => {
 
     const now = Date.now();
     const lastWriteTime = locationFirestoreThrottleMap.get(canonicalEmpId) || 0;
+    const prevCloudCoords = lastFirestoreCoordsMap.get(canonicalEmpId);
+    const movedMetersFromCloud = prevCloudCoords
+      ? calculateDistanceMeters(prevCloudCoords.lat, prevCloudCoords.lng, Number(locationData.lat), Number(locationData.lng))
+      : 999;
+    const requiredIntervalMs = movedMetersFromCloud >= 50
+      ? MIN_FIRESTORE_WRITE_INTERVAL_MS
+      : MIN_STATIONARY_HEARTBEAT_MS;
 
-    if ((now - lastWriteTime) >= MIN_FIRESTORE_WRITE_INTERVAL_MS) {
+    if ((now - lastWriteTime) >= requiredIntervalMs) {
       locationFirestoreThrottleMap.set(canonicalEmpId, now);
+      lastFirestoreCoordsMap.set(canonicalEmpId, {
+        lat: Number(locationData.lat),
+        lng: Number(locationData.lng),
+      });
       const resolvedUid = auth.currentUser?.uid || userRef.current?.uid || target.userId || null;
 
       // 1. Write lightweight compact doc to dedicated liveLocations_<companyId>/<canonicalEmpId>
@@ -2560,30 +2702,30 @@ export const WorkforceProvider = ({ children }) => {
       });
       updateDocument(COLLECTIONS.LIVE_LOCATIONS, canonicalEmpId, livePayload).catch(() => {});
 
-      // 2. Sync attendance_<companyId>/<target.id> (include routeTrail only when changed or >= 30s elapsed)
+      // 2. Sync attendance_<companyId>/<target.id> ONLY when a new route waypoint was recorded & >= 3 min elapsed
       const lastTrailTime = locationRouteTrailThrottleMap.get(canonicalEmpId) || 0;
-      const shouldSyncTrail = trailChanged || (now - lastTrailTime) >= MIN_ROUTETRAIL_WRITE_INTERVAL_MS;
+      const shouldSyncTrail = trailChanged && (now - lastTrailTime) >= MIN_ROUTETRAIL_WRITE_INTERVAL_MS;
       if (shouldSyncTrail) {
         locationRouteTrailThrottleMap.set(canonicalEmpId, now);
+        const attendancePayload = {
+          id: target.id,
+          employeeId: canonicalEmpId,
+          userId: resolvedUid,
+          employeeName: target.employeeName || canonicalEmpId,
+          companyId: activeCompanyId,
+          role: target.role || 'Staff',
+          date: target.date || today,
+          status: target.status || 'Present',
+          punchIn: target.punchIn || null,
+          geofenceStatus: nextGeofenceStatus,
+          lastKnownLocation: nextLastKnown,
+          routeTrail: newTrail,
+          updatedAt: nowIso,
+        };
+        updateDocument(COLLECTIONS.ATTENDANCE, target.id, attendancePayload).catch((err) => {
+          console.warn(`[ATTENDANCE_LIVE_LOCATION_ERR] Failed updating location for ${target.id}:`, err?.message || err);
+        });
       }
-      const attendancePayload = {
-        id: target.id,
-        employeeId: canonicalEmpId,
-        userId: resolvedUid,
-        employeeName: target.employeeName || canonicalEmpId,
-        companyId: activeCompanyId,
-        role: target.role || 'Staff',
-        date: target.date || today,
-        status: target.status || 'Present',
-        punchIn: target.punchIn || null,
-        geofenceStatus: nextGeofenceStatus,
-        lastKnownLocation: nextLastKnown,
-        ...(shouldSyncTrail ? { routeTrail: newTrail } : {}),
-        updatedAt: nowIso,
-      };
-      updateDocument(COLLECTIONS.ATTENDANCE, target.id, attendancePayload).catch((err) => {
-        console.warn(`[ATTENDANCE_LIVE_LOCATION_ERR] Failed updating location for ${target.id}:`, err?.message || err);
-      });
     }
   };
   updateLiveLocationRef.current = updateLiveEmployeeLocation;
@@ -2618,12 +2760,15 @@ export const WorkforceProvider = ({ children }) => {
 
       const prevKm = lastStop?.distanceKm || 0;
       const addKm = Number((dist / 1000).toFixed(1));
+      const visitTs = Date.now();
       const newStop = {
         stopNo: existingTrail.length + 1,
         title: stopData.title || 'Visited Site',
         category: stopData.category || 'Site Visit',
         address: stopData.address || `${Number(stopData.lat).toFixed(4)}°N, ${Number(stopData.lng).toFixed(4)}°E`,
         time: stopData.time || getNowIndian12Hr(false),
+        ts: visitTs,
+        timestamp: new Date(visitTs).toISOString(),
         stayMinutes: stopData.stayMinutes ? Number(stopData.stayMinutes) : 30,
         lat: Number(stopData.lat),
         lng: Number(stopData.lng),
@@ -2718,7 +2863,7 @@ export const WorkforceProvider = ({ children }) => {
              e.employeeId === workData.employeeId || 
              e.id?.toLowerCase() === workData.employeeId?.toLowerCase()
     );
-    const targetDate = workData.date || new Date().toISOString().split('T')[0];
+    const targetDate = workData.date || getLocalIstDateStr();
     const targetEmpId = (workData.employeeId || emp?.id || '').toString().trim().toUpperCase();
     const canonicalEmpId = (emp?.employeeId || emp?.id || targetEmpId).toString().trim().toUpperCase();
     const docId = `WRK-${targetDate.replace(/-/g, '')}-${canonicalEmpId.replace(/[^A-Z0-9_-]/g, '')}`;
@@ -2851,7 +2996,7 @@ export const WorkforceProvider = ({ children }) => {
       days: Number(leaveData.days) || 1,
       reason: leaveData.reason,
       status: 'Pending',
-      appliedDate: new Date().toISOString().split('T')[0],
+      appliedDate: getLocalIstDateStr(),
       reviewedBy: null,
       reviewerRemarks: null,
     };
@@ -2980,7 +3125,7 @@ export const WorkforceProvider = ({ children }) => {
     if (!amount || amount <= 0) throw new Error('Please enter a valid advance amount (greater than 0).');
     if (!advData.employeeId) throw new Error('Please select an employee.');
 
-    const advDate = advData.date || advData.requestDate || new Date().toISOString().split('T')[0];
+    const advDate = advData.date || advData.requestDate || getLocalIstDateStr();
     const initialStatus = advData.status || 'Approved';
     const approvedAmt = initialStatus === 'Approved' ? amount : (advData.approvedAmount ? Number(advData.approvedAmount) : 0);
     const initialBalance = approvedAmt > 0 ? approvedAmt : amount;
@@ -3163,7 +3308,7 @@ export const WorkforceProvider = ({ children }) => {
     // EMI must not exceed total loan amount
     emiAmount = Math.min(loanAmount, emiAmount);
 
-    const startDate = loanData.startDate || loanData.loanDate || new Date().toISOString().split('T')[0];
+    const startDate = loanData.startDate || loanData.loanDate || getLocalIstDateStr();
     const initialStatus = loanData.status || 'Active';
 
     const newLoan = {
@@ -3319,7 +3464,7 @@ export const WorkforceProvider = ({ children }) => {
    * 8. PAYROLL PREPARATION ENGINE
    * Pure operational computation without mock seeds.
    * ------------------------------------------------------------- */
-  const generatePayroll = (monthYear = 'October 2026') => {
+  const generatePayroll = (monthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })) => {
     const workingDaysStandard = data.hrSettings.monthlyWorkingDays || 26;
     const standardHours = data.hrSettings.standardWorkingHours || 8;
     const otMultiplier = data.hrSettings.otMultiplier || 1.5;
@@ -3493,7 +3638,7 @@ export const WorkforceProvider = ({ children }) => {
 
     const newRecord = {
       id: recordData.id || `PAY-${(recordData.monthYear || 'Current').replace(/\s+/g, '')}-${recordData.employeeId}`,
-      monthYear: recordData.monthYear || 'October 2026',
+      monthYear: recordData.monthYear || new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       employeeId: recordData.employeeId,
       employeeName: emp?.name || recordData.employeeName || recordData.employeeId,
       role: emp?.role || recordData.role || 'Staff',
@@ -3726,7 +3871,7 @@ export const WorkforceProvider = ({ children }) => {
               const newBalance = Math.max(0, (Number(adv.balance) || 0) - deductThis);
               const historyEntry = {
                 id: `REPAY-ADV-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-                date: new Date().toISOString().split('T')[0],
+                date: getLocalIstDateStr(),
                 payrollId: p.id,
                 monthYear,
                 amount: deductThis,
@@ -3761,7 +3906,7 @@ export const WorkforceProvider = ({ children }) => {
               const newBalance = Math.max(0, (Number(l.outstandingBalance) || 0) - deductThis);
               const historyEntry = {
                 id: `REPAY-LON-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-                date: new Date().toISOString().split('T')[0],
+                date: getLocalIstDateStr(),
                 payrollId: p.id,
                 monthYear,
                 amount: deductThis,
@@ -4027,7 +4172,7 @@ export const WorkforceProvider = ({ children }) => {
           type: 'Employee Verification',
           requester: e.name,
           employeeId: e.id,
-          date: e.registeredAt ? e.registeredAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          date: e.registeredAt ? getLocalIstDateStr(e.registeredAt) : getLocalIstDateStr(),
           details: `Role: ${e.role} | Plant: ${e.plant || 'Unassigned'} | Mobile: ${e.mobile || e.registeredMobile} | Email: ${e.email || e.registeredEmail}`,
           status: 'Pending Approval',
           category: 'registration',
@@ -4067,7 +4212,7 @@ export const WorkforceProvider = ({ children }) => {
       employeeName: emp?.name || docData.employeeName || 'Staff Member',
       documentType: docData.documentType,
       documentNumber: docData.documentNumber || 'N/A',
-      uploadDate: new Date().toISOString().split('T')[0],
+      uploadDate: getLocalIstDateStr(),
       expiryDate: docData.expiryDate || null,
       status: docData.status || 'Available',
       fileSize: docData.fileSize || 'Unknown Size',

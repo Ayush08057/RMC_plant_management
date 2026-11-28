@@ -31,7 +31,7 @@ import { useWorkforce } from '../../context/WorkforceContext';
 import { formatToIndian12Hr } from '../../utils/shiftUtils';
 import { getAccurateDeviceLocation } from '../../services/gpsLocationService';
 import { useAuth } from '../../context/AuthContext';
-import { pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
 import { calculateTripDistance, STORAGE_KEYS } from '../../services/plantOperationsService';
 import { uploadTripPhoto, validateTripPhotoFile } from '../../services/storageService';
 
@@ -111,6 +111,15 @@ export default function DriverDashboardPage() {
       return [];
     }
   });
+
+  useEffect(() => {
+    const unsub = subscribeCloudStore('cloud_driver_trips', STORAGE_KEYS.TRIPS, [], (cloudTrips) => {
+      if (Array.isArray(cloudTrips)) {
+        setPersistedTrips(cloudTrips);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const effectiveActiveTrip = React.useMemo(() => {
     const fromStorage = (persistedTrips || []).find(
@@ -381,6 +390,32 @@ export default function DriverDashboardPage() {
             pushCloudStore('cloud_delivery_challans', STORAGE_KEYS.CHALLANS, chList);
           }
         } catch {}
+      }
+
+      // If Step 4 is completed, release vehicle in fleet to Available & update odometer
+      if (modalStep === 4 && updatedTrip.vehicleNo) {
+        try {
+          const vehKey = 'rmc_plant_vehicles_v2';
+          const vehRaw = localStorage.getItem(vehKey);
+          if (vehRaw) {
+            const finalOdoNum = Number(updatedTrip.finalOdometer) || 0;
+            const vehList = JSON.parse(vehRaw).map(v => {
+              if (v.vehicleNo === updatedTrip.vehicleNo) {
+                return {
+                  ...v,
+                  status: 'Available / Plant',
+                  currentOdometer: finalOdoNum > 0 ? finalOdoNum : v.currentOdometer,
+                  lastTripCompletedAt: new Date().toISOString()
+                };
+              }
+              return v;
+            });
+            localStorage.setItem(vehKey, JSON.stringify(vehList));
+            pushCloudStore('cloud_plant_vehicles', vehKey, vehList);
+          }
+        } catch (vehErr) {
+          console.warn('Vehicle fleet release error in driver dashboard:', vehErr);
+        }
       }
     } catch (e) {
       console.warn('Storage sync error:', e);

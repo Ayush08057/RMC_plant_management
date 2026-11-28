@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ClipboardList, 
@@ -23,7 +23,8 @@ import {
   Building2,
   Calendar
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { getNextSequenceSync, commitSequenceHighWaterMark } from '../../services/sequenceCounterService';
 import HelpModal from './guided/HelpModal';
 import MakeConcreteWizard from './guided/MakeConcreteWizard';
 import { useLanguage } from '../../context/LanguageContext';
@@ -69,10 +70,13 @@ export default function BatchingSheetsView() {
     return [];
   });
 
+  const skipNextCloudPushRef = useRef(true);
+
   // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, INITIAL_BATCH_SHEETS, (cloudSheets) => {
       if (Array.isArray(cloudSheets)) {
+        skipNextCloudPushRef.current = true;
         setSheets(cloudSheets);
       }
     });
@@ -87,8 +91,12 @@ export default function BatchingSheetsView() {
     };
   }, []);
 
-  // Save changes to localStorage & Cloud Firestore
+  // Save changes to localStorage & Cloud Firestore (skip mount & incoming cloud echo)
   useEffect(() => {
+    if (skipNextCloudPushRef.current) {
+      skipNextCloudPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_batching_sheets', BATCHING_STORAGE_KEY, sheets);
   }, [sheets]);
 
@@ -105,7 +113,7 @@ export default function BatchingSheetsView() {
 
   // Form State for creating a new Batch Sheet
   const [form, setForm] = useState({
-    sheetNo: `25-26/${sheets.length + 1043}`,
+    sheetNo: getNextSequenceSync({ records: sheets, field: 'sheetNo', type: 'batch_sheets', prefix: '', defaultStart: 1 }),
     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
     mixGrade: 'M25',
@@ -164,7 +172,7 @@ export default function BatchingSheetsView() {
     const defaultVol = 6.0;
     const defaultCap = 0.5;
     setForm({
-      sheetNo: `25-26/${sheets.length + 1043}`,
+      sheetNo: getNextSequenceSync({ records: sheets, field: 'sheetNo', type: 'batch_sheets', prefix: '', defaultStart: 1 }),
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       mixGrade: defaultGrade,
@@ -422,6 +430,7 @@ export default function BatchingSheetsView() {
 
     const updated = [newSheet, ...sheets];
     setSheets(updated);
+    commitSequenceHighWaterMark({ type: 'batch_sheets', value: newSheet.sheetNo, prefix: '' });
     showToast(`✓ Batching Sheet #${newSheet.sheetNo} generated (${count} batches of ${perBatchVol} m³)!`);
     setShowCreateModal(false);
     setSelectedSheet(newSheet);
@@ -429,6 +438,7 @@ export default function BatchingSheetsView() {
 
   const handleDeleteSheet = (id, sheetNo) => {
     if (confirm(`Are you sure you want to delete Batching Sheet #${sheetNo}?`)) {
+      markItemAsDeleted(BATCHING_STORAGE_KEY, id);
       const updated = sheets.filter((s) => s.id !== id);
       setSheets(updated);
       showToast(`Batching Sheet #${sheetNo} removed.`);

@@ -280,3 +280,76 @@ export async function recordVoidedSequenceNumber({
     console.warn('[SequenceCounter] Failed to record voided sequence:', e);
   }
 }
+
+/**
+ * Synchronous, monotonic sequence generator safe against deletions & FY rollovers.
+ * Scans existing records in the active Financial Year AND checks localStorage high-water mark
+ * so deleting a bill/challan/sheet never produces duplicate document numbers.
+ */
+export function getNextSequenceSync({
+  records = [],
+  field = 'billNo',
+  type = 'cash_memos',
+  prefix = '',
+  defaultStart = 1,
+}) {
+  const fy = getActiveFinancialYear();
+  const pref = prefix ? `${prefix}-` : '';
+  const patternPrefix = `${pref}${fy}/`;
+  let maxVal = 0;
+
+  if (Array.isArray(records)) {
+    for (const r of records) {
+      const val = String(r?.[field] || '').trim();
+      if (!val) continue;
+      if (val.startsWith(patternPrefix)) {
+        const suffix = val.slice(patternPrefix.length);
+        const parsed = parseInt(suffix, 10);
+        if (!isNaN(parsed) && parsed > maxVal) {
+          maxVal = parsed;
+        }
+      }
+    }
+  }
+
+  const hwmKey = `rmc_seq_hwm_${type}_${fy}`;
+  let hwm = 0;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = parseInt(localStorage.getItem(hwmKey) || '0', 10);
+      if (!isNaN(saved) && saved > hwm) hwm = saved;
+    }
+  } catch {}
+
+  const nextVal = Math.max(maxVal + 1, hwm + 1, defaultStart);
+  return `${patternPrefix}${nextVal}`;
+}
+
+/**
+ * Persists a committed document number to the monotonic high-water mark so future
+ * sequence numbers never collide even if this document is later deleted.
+ */
+export function commitSequenceHighWaterMark({
+  type = 'cash_memos',
+  value = '',
+  prefix = '',
+}) {
+  if (!value) return;
+  const fy = getActiveFinancialYear();
+  const pref = prefix ? `${prefix}-` : '';
+  const patternPrefix = `${pref}${fy}/`;
+  const str = String(value).trim();
+  if (!str.startsWith(patternPrefix)) return;
+  const num = parseInt(str.slice(patternPrefix.length), 10);
+  if (isNaN(num) || num <= 0) return;
+
+  const hwmKey = `rmc_seq_hwm_${type}_${fy}`;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const prev = parseInt(localStorage.getItem(hwmKey) || '0', 10);
+      if (isNaN(prev) || num > prev) {
+        localStorage.setItem(hwmKey, String(num));
+      }
+    }
+  } catch {}
+}

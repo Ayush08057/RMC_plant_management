@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
@@ -32,7 +33,7 @@ export default function AdvanceManagementView({ employeeFilter = null }) {
   const [selectedAdvance, setSelectedAdvance] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
 
   const [form, setForm] = useState({
     employeeId: employees[0]?.id || '',
@@ -61,7 +62,7 @@ export default function AdvanceManagementView({ employeeFilter = null }) {
     setForm({
       employeeId: employeeFilter || employees[0]?.id || '',
       advanceAmount: 10000,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalIstDateStr(),
       reason: '',
       monthlyDeduction: '',
     });

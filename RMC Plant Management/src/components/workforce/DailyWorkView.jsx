@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
@@ -47,7 +48,7 @@ export default function DailyWorkView({ employeeFilter = null }) {
   // Form State
   const [form, setForm] = useState({
     employeeId: user?.employeeId || employees[0]?.id || '',
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalIstDateStr(),
     workType: 'Concrete Batching & Dispatch Haul',
     hoursWorked: 8,
     workDescription: '',
@@ -87,7 +88,7 @@ export default function DailyWorkView({ employeeFilter = null }) {
   const handleOpenSubmit = () => {
     setForm({
       employeeId: user?.employeeId || employees[0]?.id || '',
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalIstDateStr(),
       workType: 'Concrete Mixer Delivery Trip',
       hoursWorked: 8,
       workDescription: '',
@@ -129,6 +130,13 @@ export default function DailyWorkView({ employeeFilter = null }) {
     reviewDailyWork(selectedWork.id, status, reviewRemarks, user);
     setShowReviewModal(false);
     setToastMessage(`Daily work entry ${status.toLowerCase()} by ${user?.name || 'Supervisor'}.`);
+  };
+
+  const handleDeleteWork = (id) => {
+    if (window.confirm('Are you sure you want to delete this daily work log?')) {
+      deleteDailyWork(id);
+      setToastMessage('Daily operational work log deleted successfully.');
+    }
   };
 
   // Helper to resolve employee name when blank or missing
@@ -685,7 +693,8 @@ export default function DailyWorkView({ employeeFilter = null }) {
         icon={FileText}
         columns={columns}
         data={filteredWork}
-        tableMinWidth="min-w-[1050px]"
+        tableMinWidth="min-w-[1080px]"
+        noScroll={false}
         onRowClick={(row) => {
           setSelectedDetails(row);
           setShowDetailsModal(true);

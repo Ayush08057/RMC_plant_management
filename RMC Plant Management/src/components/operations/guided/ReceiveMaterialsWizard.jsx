@@ -17,7 +17,7 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { pushCloudStore } from '../../../services/cloudSyncService';
 import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../../services/plantOperationsService';
-import { syncMaterialInwardToLiveSheet } from '../../../services/liveSheetSyncService';
+import { syncMaterialInwardToLiveSheet, syncChemicalInwardToLiveSheet } from '../../../services/liveSheetSyncService';
 import HelpModal from './HelpModal';
 
 const INWARD_STORAGE_KEY = STORAGE_KEYS?.INWARD || 'rmc_material_inward_v2';
@@ -67,7 +67,7 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       return false;
     }
     if (step === 3 && (!quantity || Number(quantity) <= 0)) {
-      setValidationError(language === 'mr' ? 'कृपया वजन (टन) टाका.' : 'Please enter valid quantity in MT.');
+      setValidationError(language === 'mr' ? `कृपया वैध प्रमाण (${selectedMaterial?.unit || 'MT'}) टाका.` : `Please enter valid quantity in ${selectedMaterial?.unit || 'MT'}.`);
       return false;
     }
     return true;
@@ -127,7 +127,44 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
       pushCloudStore('cloud_material_inward', INWARD_STORAGE_KEY, updated);
 
       // Auto sync to Live Google Sheet / Excel Online
-      syncMaterialInwardToLiveSheet(inwardRecord).catch((err) => console.warn('Live sheet wizard inward sync notice:', err));
+      const matLower = (selectedMaterial.name || '').toLowerCase();
+      const isRetarder = matLower.includes('retarder');
+      const isAdmixture = matLower.includes('admixture') || matLower.includes('chemical') || matLower.includes('pce');
+
+      if (isAdmixture || isRetarder) {
+        const addedLiters = (selectedMaterial.unit === 'MT' || selectedMaterial.unit === 'Tons')
+          ? Number((finalNet * 1000).toFixed(2))
+          : finalNet;
+
+        // Also record under chemical barrels registry for full visibility
+        const chemKey = STORAGE_KEYS?.CHEMICAL_BARRELS || 'rmc_chemical_barrels_v2';
+        const existingChemRaw = localStorage.getItem(chemKey);
+        const existingChem = existingChemRaw ? JSON.parse(existingChemRaw) : [];
+        const newChemEntry = {
+          id: `CHEM-${Date.now()}`,
+          entryNo: slipNumber,
+          date: todayDate,
+          time: todayTime,
+          chemicalName: selectedMaterial.name,
+          barrelCapacity: 200,
+          fullBarrels: Math.floor(addedLiters / 200),
+          partialLiters: Number((addedLiters % 200).toFixed(2)),
+          totalVolumeLiters: addedLiters,
+          supplier: supplierName,
+          invoiceNo: challanNumber,
+          vehicleNo: inwardRecord.vehicleNo,
+          recordedBy: 'Plant In-Charge (Quick Wizard)',
+          remarks: 'Received via Quick Receive Materials Wizard',
+          createdAt: new Date().toISOString()
+        };
+        const updatedChem = [newChemEntry, ...existingChem];
+        localStorage.setItem(chemKey, JSON.stringify(updatedChem));
+        pushCloudStore('cloud_chemical_barrels', chemKey, updatedChem);
+
+        syncChemicalInwardToLiveSheet(newChemEntry).catch((err) => console.warn('Live sheet chemical wizard sync notice:', err));
+      } else {
+        syncMaterialInwardToLiveSheet(inwardRecord).catch((err) => console.warn('Live sheet wizard inward sync notice:', err));
+      }
 
       // Create corresponding Weighbridge receipt with real measured weights
       const wbKey = STORAGE_KEYS?.WEIGHBRIDGE || 'rmc_weighbridge_v2';
@@ -144,7 +181,7 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
         gross: finalGross,
         tare: finalTare,
         net: finalNet,
-        unit: 'Tons',
+        unit: selectedMaterial.unit === 'KG' ? 'KG' : 'Tons',
         status: 'Completed',
         inventoryUpdated: true,
         createdAt: new Date().toISOString()
@@ -155,20 +192,29 @@ export default function ReceiveMaterialsWizard({ isOpen, onClose, onComplete }) 
 
       // Update Silo stock ledger with net intake
       let targetKey = 'agg20';
-      const matLower = (selectedMaterial.name || '').toLowerCase();
       if (matLower.includes('cement')) targetKey = 'cement';
       else if (matLower.includes('fly ash') || matLower.includes('pozzocrete')) targetKey = 'flyash';
       else if (matLower.includes('10mm')) targetKey = 'agg10';
       else if (matLower.includes('20mm')) targetKey = 'agg20';
       else if (matLower.includes('m-sand') || matLower.includes('fine sand')) targetKey = 'sand';
       else if (matLower.includes('river sand')) targetKey = 'riverSand';
+      else if (isRetarder) targetKey = 'retarder';
+      else if (isAdmixture) targetKey = 'admixturePce';
 
       const siloKey = STORAGE_KEYS?.SILO_INVENTORY || 'rmc_silo_inventory_v2';
       const rawSilo = localStorage.getItem(siloKey);
       const siloData = rawSilo ? JSON.parse(rawSilo) : { ...INITIAL_SILO_STOCK };
       if (siloData[targetKey]) {
-        const cur = Number(siloData[targetKey].stockTons) || 0;
-        siloData[targetKey].stockTons = Math.max(0, Number((cur + finalNet).toFixed(2)));
+        if (targetKey === 'admixturePce' || targetKey === 'retarder') {
+          const addedLiters = (selectedMaterial.unit === 'MT' || selectedMaterial.unit === 'Tons')
+            ? Number((finalNet * 1000).toFixed(2))
+            : finalNet;
+          const cur = Number(siloData[targetKey].stockLiters) || 0;
+          siloData[targetKey].stockLiters = Math.max(0, Number((cur + addedLiters).toFixed(2)));
+        } else {
+          const cur = Number(siloData[targetKey].stockTons) || 0;
+          siloData[targetKey].stockTons = Math.max(0, Number((cur + finalNet).toFixed(2)));
+        }
         localStorage.setItem(siloKey, JSON.stringify(siloData));
         pushCloudStore('cloud_silo_inventory', siloKey, siloData);
       }

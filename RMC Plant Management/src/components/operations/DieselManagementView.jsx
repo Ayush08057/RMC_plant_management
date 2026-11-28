@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Fuel,
   Droplet,
@@ -21,7 +21,8 @@ import {
   Building2,
   Trash2
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { calculateDieselMileage, calculateEquipmentHourlyConsumption } from '../../services/plantOperationsService';
 
 const STORAGE_KEY = 'rmc_diesel_management_v2';
@@ -56,7 +57,14 @@ export default function DieselManagementView() {
   const [currentTankStock, setCurrentTankStock] = useState(() => {
     try {
       const saved = localStorage.getItem(TANK_STOCK_STORAGE_KEY);
-      return saved !== null ? Number(saved) : 6450;
+      if (saved === null || saved === '') return 6450;
+      const parsed = JSON.parse(saved);
+      if (typeof parsed === 'number' && !isNaN(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object' && parsed.stock !== undefined && !isNaN(Number(parsed.stock))) {
+        return Number(parsed.stock);
+      }
+      const num = Number(saved);
+      return !isNaN(num) ? num : 6450;
     } catch {
       return 6450;
     }
@@ -70,7 +78,7 @@ export default function DieselManagementView() {
 
   // Dispense Form State
   const [newEntry, setNewEntry] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalIstDateStr(),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     equipmentType: 'Transit Mixer',
     vehicleNo: 'MH-10-CR-1212',
@@ -84,7 +92,7 @@ export default function DieselManagementView() {
 
   // Inward Tanker Form State
   const [newInward, setNewInward] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalIstDateStr(),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     supplierName: 'Bharat Petroleum (Miraj Depot)',
     invoiceNo: `BPCL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -95,18 +103,31 @@ export default function DieselManagementView() {
     remarks: 'Standard commercial HSD replenishment'
   });
 
+  const skipLogsPushRef = useRef(true);
+  const skipInwardPushRef = useRef(true);
+  const skipTankPushRef = useRef(true);
+
   // Subscribe to real-time Cloud Sync for cross-device updates
   useEffect(() => {
     const unsubDispense = subscribeCloudStore('cloud_diesel_management', STORAGE_KEY, INITIAL_LOGS, (cloudLogs) => {
-      if (Array.isArray(cloudLogs)) setLogs(cloudLogs);
+      if (Array.isArray(cloudLogs)) {
+        skipLogsPushRef.current = true;
+        setLogs(cloudLogs);
+      }
     });
     const unsubInward = subscribeCloudStore('cloud_diesel_inward', INWARD_STORAGE_KEY, INITIAL_INWARD_LOGS, (cloudInward) => {
-      if (Array.isArray(cloudInward)) setInwardLogs(cloudInward);
+      if (Array.isArray(cloudInward)) {
+        skipInwardPushRef.current = true;
+        setInwardLogs(cloudInward);
+      }
     });
     const unsubTank = subscribeCloudStore('cloud_diesel_tank_stock', TANK_STOCK_STORAGE_KEY, { stock: 6450 }, (cloudTank) => {
       if (cloudTank && typeof cloudTank === 'object' && cloudTank.stock !== undefined) {
         const val = Number(cloudTank.stock);
-        if (!isNaN(val)) setCurrentTankStock(val);
+        if (!isNaN(val)) {
+          skipTankPushRef.current = true;
+          setCurrentTankStock(val);
+        }
       }
     });
     return () => {
@@ -116,19 +137,31 @@ export default function DieselManagementView() {
     };
   }, []);
 
-  // Save changes to localStorage & Cloud Firestore
+  // Save changes to localStorage & Cloud Firestore (skip mount & incoming cloud echoes)
   useEffect(() => {
+    if (skipLogsPushRef.current) {
+      skipLogsPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_diesel_management', STORAGE_KEY, logs);
   }, [logs]);
 
   useEffect(() => {
+    if (skipInwardPushRef.current) {
+      skipInwardPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_diesel_inward', INWARD_STORAGE_KEY, inwardLogs);
   }, [inwardLogs]);
 
   useEffect(() => {
+    if (skipTankPushRef.current) {
+      skipTankPushRef.current = false;
+      return;
+    }
+    if (isNaN(Number(currentTankStock))) return;
     try {
-      localStorage.setItem(TANK_STOCK_STORAGE_KEY, currentTankStock.toString());
-      pushCloudStore('cloud_diesel_tank_stock', TANK_STOCK_STORAGE_KEY, { stock: currentTankStock });
+      pushCloudStore('cloud_diesel_tank_stock', TANK_STOCK_STORAGE_KEY, { stock: Number(currentTankStock) });
     } catch {}
   }, [currentTankStock]);
 
@@ -237,6 +270,7 @@ export default function DieselManagementView() {
 
   const handleDeleteLog = (id) => {
     if (window.confirm(`Delete diesel issue record ${id}?`)) {
+      markItemAsDeleted(STORAGE_KEY, id);
       const target = logs.find(l => l.id === id);
       const updated = logs.filter(l => l.id !== id);
       setLogs(updated);
@@ -252,6 +286,7 @@ export default function DieselManagementView() {
 
   const handleDeleteInwardLog = (id) => {
     if (window.confirm(`Delete diesel inward record ${id}?`)) {
+      markItemAsDeleted(INWARD_STORAGE_KEY, id);
       const target = inwardLogs.find(l => l.id === id);
       const updated = inwardLogs.filter(l => l.id !== id);
       setInwardLogs(updated);

@@ -8,51 +8,55 @@ import {
   PackageCheck,
   FileText
 } from 'lucide-react';
-import { sanitizeStoreItems } from '../../services/cloudSyncService';
+import { sanitizeStoreItems, subscribeCloudStore, getDeletedItemIds, isItemDeleted } from '../../services/cloudSyncService';
+import { INITIAL_SILO_STOCK, STORAGE_KEYS } from '../../services/plantOperationsService';
+import { parseToDateOnly } from '../../utils/billingPayments';
+import { splitTimeTo12Hr } from '../../utils/shiftUtils';
+
+function readCleanLocal(storageKey) {
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return [];
+    const deletedIds = getDeletedItemIds(storageKey);
+    return sanitizeStoreItems(JSON.parse(saved)).filter((it) => !isItemDeleted(it, deletedIds));
+  } catch {
+    return [];
+  }
+}
 
 export default function PlantDashboardView({ onNavigateTab }) {
-  // Live operational data from plant records (clean empty default)
-  const [batches] = React.useState(() => {
+  // Live operational data from plant records (subscribed to real-time cloud updates)
+  const [batches, setBatches] = React.useState(() => readCleanLocal(STORAGE_KEYS.BATCHING));
+  const [trips, setTrips] = React.useState(() => readCleanLocal(STORAGE_KEYS.TRIPS));
+  const [inwardRecords, setInwardRecords] = React.useState(() => readCleanLocal(STORAGE_KEYS.INWARD));
+  const [siloInventory, setSiloInventory] = React.useState(() => {
     try {
-      const saved = localStorage.getItem('rmc_batching_sheets_v2');
-      return saved ? sanitizeStoreItems(JSON.parse(saved)) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [trips] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem('rmc_driver_trips_v2');
-      return saved ? sanitizeStoreItems(JSON.parse(saved)) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [inwardRecords] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem('rmc_material_inward_v2');
-      return saved ? sanitizeStoreItems(JSON.parse(saved)) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [siloInventory] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem('rmc_silo_inventory_v2');
+      const saved = localStorage.getItem(STORAGE_KEYS.SILO_INVENTORY);
       if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return [
-      { id: 'silo-1', name: 'Cement Silo 1 (OPC 53)', current: 65, capacity: 100, unit: 'MT' },
-      { id: 'silo-2', name: 'Fly Ash Silo 2 (Dirk Pozzocrete)', current: 42, capacity: 80, unit: 'MT' },
-      { id: 'bin-1', name: '20mm Aggregates (Bin A)', current: 140, capacity: 200, unit: 'MT' },
-      { id: 'bin-2', name: 'Crush Sand (Bin C)', current: 185, capacity: 250, unit: 'MT' }
-    ];
+    } catch {}
+    return INITIAL_SILO_STOCK;
   });
+
+  React.useEffect(() => {
+    const unsubBatches = subscribeCloudStore('cloud_batching_sheets', STORAGE_KEYS.BATCHING, [], (data) => {
+      if (Array.isArray(data)) setBatches(data);
+    });
+    const unsubTrips = subscribeCloudStore('cloud_driver_trips', STORAGE_KEYS.TRIPS, [], (data) => {
+      if (Array.isArray(data)) setTrips(data);
+    });
+    const unsubInward = subscribeCloudStore('cloud_material_inward', STORAGE_KEYS.INWARD, [], (data) => {
+      if (Array.isArray(data)) setInwardRecords(data);
+    });
+    const unsubSilo = subscribeCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, INITIAL_SILO_STOCK, (data) => {
+      if (data && typeof data === 'object') setSiloInventory(data);
+    });
+    return () => {
+      unsubBatches();
+      unsubTrips();
+      unsubInward();
+      unsubSilo();
+    };
+  }, []);
 
   // Safe normalization layer supporting both Keyed Object ({ cement: {...} }) and Array formats
   const normalizedSilo = React.useMemo(() => {
@@ -106,12 +110,20 @@ export default function PlantDashboardView({ onNavigateTab }) {
   const aggTons = normalizedSilo.agg20.current;
   const sandTons = normalizedSilo.sand.current;
 
-  const todayProductionM3 = batches.reduce((acc, b) => acc + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0);
-  const monthProductionM3 = todayProductionM3;
-  const activeTripsCount = trips.filter(t => t.status === 'Active' || t.status === 'En Route' || t.status === 'Pouring').length;
-  const idleMixersCount = trips.filter(t => t.status === 'Available' || t.status === 'In Yard').length;
+  const now = new Date();
+  const isSameDay = (d) => d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  const isSameMonth = (d) => d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+
+  const todayBatches = batches.filter((b) => isSameDay(parseToDateOnly(b.date || b.createdAt)));
+  const monthBatches = batches.filter((b) => isSameMonth(parseToDateOnly(b.date || b.createdAt)));
+
+  const todayProductionM3 = Number(todayBatches.reduce((acc, b) => acc + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0).toFixed(1));
+  const monthProductionM3 = Number(monthBatches.reduce((acc, b) => acc + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0), 0).toFixed(1));
+  const monthlyTargetPct = Math.min(100, (monthProductionM3 / 5000) * 100).toFixed(1);
+  const activeTripsCount = trips.filter(t => ['Active', 'En Route', 'Pouring', 'Departed', 'Returning'].includes(t.status)).length;
+  const idleMixersCount = trips.filter(t => t.status === 'Available' || t.status === 'In Yard' || t.status === 'Completed').length;
   const totalMixers = trips.length;
-  const totalBatchesToday = batches.length;
+  const totalBatchesToday = todayBatches.length;
 
   const fleetStatus = trips.map(t => ({
     id: t.tripId || t.id,
@@ -119,34 +131,35 @@ export default function PlantDashboardView({ onNavigateTab }) {
     driver: t.driverName || t.driver || '--',
     status: t.status || 'Active',
     grade: t.concreteGrade || t.grade || '--',
-    dest: t.destinationSite || t.site || t.customerName || '--'
+    dest: t.destinationSite || t.siteName || t.site || t.customerName || '--'
   }));
 
   const hourlyBatches = React.useMemo(() => {
-    if (!batches || batches.length === 0) return [];
+    if (!todayBatches || todayBatches.length === 0) return [];
     const hourMap = {};
-    batches.forEach((b) => {
-      let timeStr = b.time || b.createdAt || b.timestamp;
+    todayBatches.forEach((b) => {
+      const timeStr = b.time || b.createdAt || b.timestamp;
       let hour = '09:00 AM';
       if (timeStr) {
-        try {
+        if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}/.test(timeStr.trim())) {
+          const { hour: h12, ampm } = splitTimeTo12Hr(timeStr);
+          hour = `${h12}:00 ${ampm}`;
+        } else {
           const d = new Date(timeStr);
           if (!isNaN(d.getTime())) {
             const h = d.getHours();
             const ampm = h >= 12 ? 'PM' : 'AM';
             const h12 = h % 12 || 12;
             hour = `${String(h12).padStart(2, '0')}:00 ${ampm}`;
-          } else if (typeof timeStr === 'string' && timeStr.includes(':')) {
-            hour = timeStr.slice(0, 5);
           }
-        } catch {}
+        }
       }
       if (!hourMap[hour]) hourMap[hour] = { time: hour, m3: 0, batches: 0 };
-      hourMap[hour].m3 += parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0;
+      hourMap[hour].m3 = Number((hourMap[hour].m3 + (parseFloat(b.volume || b.totalBatchVolumeM3 || b.m3 || b.qty || 0) || 0)).toFixed(1));
       hourMap[hour].batches += 1;
     });
     return Object.values(hourMap);
-  }, [batches]);
+  }, [todayBatches]);
 
   return (
     <div className="w-full space-y-2.5 sm:space-y-3 text-xs text-slate-800 pb-8">
@@ -222,7 +235,7 @@ export default function PlantDashboardView({ onNavigateTab }) {
             <p className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
               {monthProductionM3.toLocaleString()} <span className="text-xs font-semibold text-slate-500">m³</span>
             </p>
-            <p className="text-[10px] text-slate-500 font-semibold mt-0.5 truncate">Target: 5,000 m³ (85.6%)</p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-0.5 truncate">Target: 5,000 m³ ({monthlyTargetPct}%)</p>
           </div>
           <div className="p-2 bg-emerald-100/90 text-emerald-600 border border-emerald-200 rounded-lg shrink-0 ml-2 shadow-2xs">
             <TrendingUp className="w-4 h-4" />
@@ -414,7 +427,7 @@ export default function PlantDashboardView({ onNavigateTab }) {
               ) : (
                 fleetStatus.map((mixer) => {
                   let badgeClass = 'bg-slate-100 text-slate-700';
-                  if (mixer.status === 'En Route') badgeClass = 'bg-blue-100 text-blue-800 border border-blue-200';
+                  if (mixer.status === 'En Route' || mixer.status === 'Departed') badgeClass = 'bg-blue-100 text-blue-800 border border-blue-200';
                   if (mixer.status === 'Pouring') badgeClass = 'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse';
                   if (mixer.status === 'Returning') badgeClass = 'bg-purple-100 text-purple-800 border border-purple-200';
                   if (mixer.status === 'Available') badgeClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200';

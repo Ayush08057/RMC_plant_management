@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useWorkforce } from '../../../context/WorkforceContext';
+import { getLocalIstDateStr } from '../../../utils/shiftUtils';
 import HelpModal from './HelpModal';
 
 export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) {
@@ -52,7 +53,7 @@ export default function DriverAttendanceWizard({ isOpen, onClose, onComplete }) 
   const handleSave = () => {
     // Record attendance into localStorage & central workforce ledger
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalIstDateStr();
       const records = staffList.map(s => ({
         employeeId: s.id,
         name: s.name,

@@ -21,6 +21,7 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { useWorkforce } from '../../../context/WorkforceContext';
 import { subscribeCloudStore, pushCloudStore } from '../../../services/cloudSyncService';
+import { getNextSequenceSync, commitSequenceHighWaterMark } from '../../../services/sequenceCounterService';
 import HelpModal from './HelpModal';
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
@@ -228,7 +229,13 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
   };
 
   const handleConfirmAndSave = (shouldPrint = false) => {
-    const challanNumber = `DC-25-26/${Date.now().toString().slice(-4)}`;
+    let existingChallans = [];
+    try {
+      const existingRaw = localStorage.getItem(CHALLAN_STORAGE_KEY);
+      if (existingRaw) existingChallans = JSON.parse(existingRaw) || [];
+    } catch {}
+    const challanNumber = getNextSequenceSync({ records: existingChallans, field: 'challanNo', type: 'delivery_challans', prefix: 'DC', defaultStart: 1 });
+    commitSequenceHighWaterMark({ type: 'delivery_challans', value: challanNumber, prefix: 'DC' });
     const departureTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const todayDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -281,6 +288,33 @@ export default function SendVehicleWizard({ isOpen, onClose, onComplete }) {
       pushCloudStore('cloud_driver_trips', TRIPS_STORAGE_KEY, updatedTrips);
     } catch (e) {
       console.warn('Error saving trip:', e);
+    }
+
+    // Update vehicle in fleet to 'On Trip'
+    try {
+      const vehKey = VEHICLE_STORAGE_KEY;
+      const vehRaw = localStorage.getItem(vehKey);
+      if (vehRaw) {
+        const vehList = JSON.parse(vehRaw);
+        if (Array.isArray(vehList)) {
+          const updatedVehs = vehList.map(v => {
+            if (v.vehicleNo === selectedVehicle) {
+              return {
+                ...v,
+                status: 'On Trip',
+                currentTripChallan: challanNumber,
+                currentDriver: selectedDriver,
+                lastDispatchedAt: new Date().toISOString()
+              };
+            }
+            return v;
+          });
+          localStorage.setItem(vehKey, JSON.stringify(updatedVehs));
+          pushCloudStore('cloud_plant_vehicles', vehKey, updatedVehs);
+        }
+      }
+    } catch (err) {
+      console.warn('Error updating vehicle status in SendVehicleWizard:', err);
     }
 
     setCreatedChallan(newChallan);

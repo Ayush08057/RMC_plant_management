@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
 import { subscribeCloudStore, sanitizeStoreItems } from '../../../services/cloudSyncService';
+import { parseToDateOnly } from '../../../utils/billingPayments';
 
 const TRIPS_KEY = 'rmc_driver_trips_v2';
 const CHALLANS_KEY = 'rmc_delivery_challans_v2';
@@ -67,21 +68,37 @@ export default function TodaysWorkView({ onOpenWizard, onNavigateModule }) {
     };
   }, []);
 
+  const now = new Date();
+  const isToday = (dateVal) => {
+    const d = parseToDateOnly(dateVal);
+    return Boolean(d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate());
+  };
+
   // 1. Vehicles currently away from plant
   const awayTrips = trips.filter(t => t.status === 'Departed' || t.status === 'En Route' || t.status === 'Pouring');
   // 2. Vehicles that have reached sites
   const atSiteTrips = trips.filter(t => t.status === 'Pouring' || t.status === 'At Site');
   // 3. Vehicles returning
   const returningTrips = trips.filter(t => t.status === 'Returning');
-  // 4. Trips completed today
-  const completedTrips = trips.filter(t => t.status === 'Completed');
+
+  // 4. Trips completed today (strictly today's date, avoiding double counting trips with challans)
+  const completedTripsToday = trips.filter(t => t.status === 'Completed' && isToday(t.date || t.createdAt || t.plantReturnTime));
+  const deliveredChallansToday = challans.filter(c => c.status === 'Delivered' && isToday(c.date || c.createdAt));
+  const completedTripsCount = Math.max(completedTripsToday.length, deliveredChallansToday.length);
 
   // 5. Materials received today
-  const totalInwardMT = inward.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const todayInward = inward.filter(item => isToday(item.date || item.createdAt));
+  const totalInwardMT = todayInward.reduce((sum, item) => sum + (Number(item.quantity || item.netTons) || 0), 0);
 
-  // 6. Concrete produced today (m³)
-  const totalConcreteM3 = batches.reduce((sum, b) => sum + (Number(b.volume) || 0), 0) + 
-    challans.reduce((sum, c) => sum + (Number(c.quantity) || 0), 0);
+  // 6. Concrete produced today (m³) - use batched volume if batches recorded, or dispatched challans, avoiding double-count
+  const todayBatches = batches.filter(b => isToday(b.date || b.createdAt));
+  const todayChallans = challans.filter(c => isToday(c.date || c.createdAt));
+  const batchedVolume = todayBatches.reduce((sum, b) => sum + (Number(b.volume || b.totalBatchVolumeM3) || 0), 0);
+  const challanVolume = todayChallans.reduce((sum, c) => sum + (Number(c.quantity) || 0), 0);
+  const totalConcreteM3 = batchedVolume > 0 ? batchedVolume : challanVolume;
+
+  // 7. Active or today's vehicle trips list
+  const activeOrTodayTrips = trips.filter(t => isToday(t.date || t.createdAt) || ['Departed', 'En Route', 'Pouring', 'At Site', 'Returning'].includes(t.status));
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto pb-10 text-slate-800">
@@ -166,7 +183,7 @@ export default function TodaysWorkView({ onOpenWizard, onNavigateModule }) {
           </div>
           <div className="my-1">
             <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono tracking-tight block">
-              {completedTrips.length + challans.filter(c => c.status === 'Delivered').length}
+              {completedTripsCount}
               <span className="text-xs font-normal text-slate-500 ml-1">{language === 'mr' ? 'फेऱ्या' : 'trips'}</span>
             </span>
           </div>
@@ -208,11 +225,11 @@ export default function TodaysWorkView({ onOpenWizard, onNavigateModule }) {
             <span>{language === 'mr' ? 'गाड्यांची सद्यस्थिती' : 'Live Vehicle Dispatch Status'}</span>
           </h3>
           <span className="text-[11px] text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
-            {trips.length} {language === 'mr' ? 'गाड्यांची नोंद' : 'total vehicle trips today'}
+            {activeOrTodayTrips.length} {language === 'mr' ? 'गाड्यांची नोंद' : 'vehicle trips today'}
           </span>
         </div>
 
-        {trips.length === 0 ? (
+        {activeOrTodayTrips.length === 0 ? (
           <div className="text-center py-7 text-slate-400 text-xs flex flex-col items-center justify-center">
             <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 mb-2">
               <Truck className="w-5 h-5 stroke-[1.8]" />
@@ -222,7 +239,7 @@ export default function TodaysWorkView({ onOpenWizard, onNavigateModule }) {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {trips.map((t, idx) => (
+            {activeOrTodayTrips.map((t, idx) => (
               <div key={idx} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/80 rounded-xl px-2 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-blue-100/80 border border-blue-200 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">

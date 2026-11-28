@@ -57,6 +57,7 @@ import {
 import CashMemoPrintView from './CashMemoPrintView';
 import CustomerStatementModal from './CustomerStatementModal';
 import TallySyncView from './TallySyncView';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { useExclusiveModal } from '../dashboard/Modal';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { useAuth } from '../../context/AuthContext';
@@ -70,6 +71,7 @@ import {
   getBillDescription,
 } from '../../utils/billingPayments';
 import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { getNextSequenceSync, commitSequenceHighWaterMark } from '../../services/sequenceCounterService';
 
 export { normalizeBill };
 
@@ -176,7 +178,7 @@ export const convertDdMmYyyyToIso = (dateStr) => {
   }
   const d = new Date(dateStr);
   if (!isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0];
+    return getLocalIstDateStr(d);
   }
   return '';
 };
@@ -255,20 +257,27 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     }
   }, []);
 
+  const skipBillsPushRef = useRef(true);
+  const skipPurchasesPushRef = useRef(true);
+  const skipOtpPushRef = useRef(true);
+
   // Subscribe to real-time Cloud Sync for cross-device synchronization
   useEffect(() => {
     const unsubBills = subscribeCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, INITIAL_BILLS, (cloudBills) => {
       if (Array.isArray(cloudBills)) {
+        skipBillsPushRef.current = true;
         setBills(cloudBills.map(normalizeBill));
       }
     });
     const unsubPurchases = subscribeCloudStore('cloud_plant_purchases', PURCHASES_STORAGE_KEY, INITIAL_PURCHASES, (cloudPurchases) => {
       if (Array.isArray(cloudPurchases)) {
+        skipPurchasesPushRef.current = true;
         setPurchases(cloudPurchases);
       }
     });
     const unsubOtp = subscribeCloudStore('cloud_billing_otp', OTP_LOGS_STORAGE_KEY, INITIAL_OTP_LOGS, (cloudOtp) => {
       if (Array.isArray(cloudOtp)) {
+        skipOtpPushRef.current = true;
         setOtpLogs(cloudOtp);
       }
     });
@@ -280,16 +289,28 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     };
   }, []);
 
-  // Save changes to localStorage & Cloud Firestore
+  // Save changes to localStorage & Cloud Firestore (skip mount & incoming cloud echo)
   useEffect(() => {
+    if (skipBillsPushRef.current) {
+      skipBillsPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_billing_bills', BILLING_STORAGE_KEY, bills);
   }, [bills]);
 
   useEffect(() => {
+    if (skipPurchasesPushRef.current) {
+      skipPurchasesPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_plant_purchases', PURCHASES_STORAGE_KEY, purchases);
   }, [purchases]);
 
   useEffect(() => {
+    if (skipOtpPushRef.current) {
+      skipOtpPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_billing_otp', OTP_LOGS_STORAGE_KEY, otpLogs);
   }, [otpLogs]);
 
@@ -407,7 +428,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
   // Bill Form State
   const [billForm, setBillForm] = useState({
-    billNo: `25-26/${bills.length + 115}`,
+    billNo: getNextSequenceSync({ records: bills, field: 'billNo', type: 'cash_memos', prefix: '', defaultStart: 1 }),
     date: getTodayFormatted(),
     constructionDate: getTodayFormatted(),
     vehicle: 'MH-10-CR-1212',
@@ -470,7 +491,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
   // Purchase Form State
   const [purchaseForm, setPurchaseForm] = useState({
-    voucherNo: `PUR-25-26/0${purchases.length + 91}`,
+    voucherNo: getNextSequenceSync({ records: purchases, field: 'voucherNo', type: 'purchases', prefix: 'PUR', defaultStart: 1 }),
     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     supplierName: '',
     supplierMobile: '',
@@ -492,7 +513,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     setBillMobileError(null);
     setBillFormErrors({});
     setBillForm({
-      billNo: `25-26/${bills.length + 115}`,
+      billNo: getNextSequenceSync({ records: bills, field: 'billNo', type: 'cash_memos', prefix: '', defaultStart: 1 }),
       date: getTodayFormatted(),
       constructionDate: getTodayFormatted(),
       vehicle: '',
@@ -523,7 +544,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
   const handleOpenCreatePurchase = () => {
     setEditingPurchase(null);
     setPurchaseForm({
-      voucherNo: `PUR-25-26/0${purchases.length + 91}`,
+      voucherNo: getNextSequenceSync({ records: purchases, field: 'voucherNo', type: 'purchases', prefix: 'PUR', defaultStart: 1 }),
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       supplierName: '',
       supplierMobile: '',
@@ -847,7 +868,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
     const finalAmount = totalAmount + trans;
     const amountInWords = numberToIndianWords(finalAmount);
 
-    const billNumber = (billForm.billNo || '').trim() || `25-26/${bills.length + 115}`;
+    const billNumber = (billForm.billNo || '').trim() || getNextSequenceSync({ records: bills, field: 'billNo', type: 'cash_memos', prefix: '', defaultStart: 1 });
     const billDate = (billForm.date || '').trim() || getTodayFormatted();
     const billConstructionDate = (billForm.constructionDate || '').trim() || billDate;
     const billVehicle = formatVehicleNumber((billForm.vehicle || '').trim()) || 'MH-10-CR-1212';
@@ -973,6 +994,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
 
       const updatedList = [newBill, ...bills];
       setBills(updatedList);
+      commitSequenceHighWaterMark({ type: 'cash_memos', value: newBill.billNo, prefix: '' });
       try {
         localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(updatedList));
       } catch (err) {
@@ -1040,6 +1062,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
         createdAt: new Date().toISOString(),
       };
       setPurchases([newPurchase, ...purchases]);
+      commitSequenceHighWaterMark({ type: 'purchases', value: newPurchase.voucherNo, prefix: 'PUR' });
       showToast(`✓ Plant Purchase Voucher #${newPurchase.voucherNo} created! (10-Minute grace active)`);
     }
 
@@ -1555,7 +1578,7 @@ export default function BillingManagementView({ defaultSection = 'cash_memos' })
               const encodedUri = encodeURI(csvContent);
               const link = document.createElement('a');
               link.setAttribute('href', encodedUri);
-              const dateStr = new Date().toISOString().slice(0, 10);
+              const dateStr = getLocalIstDateStr();
               link.setAttribute('download', `RMC_Cash_Memos_Register_${dateStr}.csv`);
               document.body.appendChild(link);
               link.click();

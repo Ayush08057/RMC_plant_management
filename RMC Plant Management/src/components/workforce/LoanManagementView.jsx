@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import DataTable from '../dashboard/DataTable';
 import StatusBadge from '../dashboard/StatusBadge';
 import Modal from '../dashboard/Modal';
@@ -31,7 +32,7 @@ export default function LoanManagementView({ employeeFilter = null }) {
   const [editingLoan, setEditingLoan] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
 
   const [form, setForm] = useState({
     employeeId: employees[0]?.id || '',
@@ -63,7 +64,7 @@ export default function LoanManagementView({ employeeFilter = null }) {
       employeeId: employeeFilter || employees[0]?.id || '',
       loanAmount: 60000,
       monthlyEmi: 5000,
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: getLocalIstDateStr(),
       reason: '',
     });
     setShowAddModal(true);

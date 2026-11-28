@@ -25,9 +25,11 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { useLanguage } from '../../context/LanguageContext';
 import { STORAGE_KEYS, INITIAL_SILO_STOCK } from '../../services/plantOperationsService';
+import { syncMaterialInwardToLiveSheet, syncChemicalInwardToLiveSheet } from '../../services/liveSheetSyncService';
 
 const WEIGHBRIDGE_STORAGE_KEY = 'rmc_weighbridge_v2';
 const INITIAL_WEIGHBRIDGE = [];
@@ -248,7 +250,11 @@ export default function WeighbridgeView() {
       // Handle Chemical Admixtures (in Litres)
       if (matLower.includes('chemical') || matLower.includes('admixture') || matLower.includes('pce') || matLower.includes('retarder')) {
         const liters = Number(netKg) || 0;
-        const curL = Number(siloData.admixturePce?.stockLiters) || 3200;
+        if (!siloData.admixturePce) {
+          siloData.admixturePce = { ...INITIAL_SILO_STOCK.admixturePce };
+        }
+        const rawL = siloData.admixturePce.stockLiters;
+        const curL = (rawL !== undefined && rawL !== null && !isNaN(Number(rawL))) ? Number(rawL) : 3200;
         siloData.admixturePce.stockLiters = Math.max(0, curL + factor * liters);
         localStorage.setItem(STORAGE_KEYS.SILO_INVENTORY, JSON.stringify(siloData));
         pushCloudStore('cloud_silo_inventory', STORAGE_KEYS.SILO_INVENTORY, siloData);
@@ -257,25 +263,29 @@ export default function WeighbridgeView() {
         const rawChem = localStorage.getItem(STORAGE_KEYS.CHEMICAL_BARRELS);
         let chemData = rawChem ? JSON.parse(rawChem) : [];
         if (isReversal) {
+          chemData.forEach((c) => {
+            if (c.entryNo === `#${slipNo}` || c.entryNo === slipNo) {
+              markItemAsDeleted(STORAGE_KEYS.CHEMICAL_BARRELS, c.id);
+            }
+          });
           chemData = chemData.filter((c) => c.entryNo !== `#${slipNo}` && c.entryNo !== slipNo);
         } else {
-          chemData = [
-            {
-              id: `CHEM-WB-${Date.now()}`,
-              entryNo: `#${slipNo}`,
-              date: new Date().toISOString().split('T')[0],
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              chemicalName: materialName,
-              supplier: party,
-              barrelCapacity: 220,
-              fullBarrels: Math.floor(liters / 220) || 1,
-              partialLiters: liters % 220,
-              totalVolumeLiters: liters,
-              recordedBy: 'Weighbridge Operator',
-              remarks: 'Recorded via Weighbridge Terminal',
-            },
-            ...chemData,
-          ];
+          const newChemEntry = {
+            id: `CHEM-WB-${Date.now()}`,
+            entryNo: `#${slipNo}`,
+            date: getLocalIstDateStr(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            chemicalName: materialName,
+            supplier: party,
+            barrelCapacity: 220,
+            fullBarrels: Math.floor(liters / 220) || 1,
+            partialLiters: liters % 220,
+            totalVolumeLiters: liters,
+            recordedBy: 'Weighbridge Operator',
+            remarks: 'Recorded via Weighbridge Terminal',
+          };
+          chemData = [newChemEntry, ...chemData];
+          syncChemicalInwardToLiveSheet(newChemEntry).catch(() => {});
         }
         localStorage.setItem(STORAGE_KEYS.CHEMICAL_BARRELS, JSON.stringify(chemData));
         pushCloudStore('cloud_chemical_barrels', STORAGE_KEYS.CHEMICAL_BARRELS, chemData);
@@ -306,23 +316,33 @@ export default function WeighbridgeView() {
       const rawInward = localStorage.getItem(STORAGE_KEYS.INWARD);
       let inwardData = rawInward ? JSON.parse(rawInward) : [];
       if (isReversal) {
+        inwardData.forEach((r) => {
+          if (r.slipNo === `#${slipNo}` || r.slipNo === slipNo) {
+            markItemAsDeleted(STORAGE_KEYS.INWARD, r.id);
+          }
+        });
         inwardData = inwardData.filter((r) => r.slipNo !== `#${slipNo}` && r.slipNo !== slipNo);
       } else {
         const newInward = {
           id: `INW-WB-${Date.now()}`,
           slipNo: `#${slipNo}`,
-          date: new Date().toISOString().split('T')[0],
+          date: getLocalIstDateStr(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           material: materialName,
           supplier: party,
           vehicleNo: vehNo,
+          grossWeight: Number(((netKg || 0) / 1000).toFixed(2)),
+          tareWeight: 0,
           netTons,
           unit: 'Tons',
           status: 'Finalized',
           targetSilo: siloData[targetKey]?.siloName || 'Storage Silo',
+          recordedBy: 'Weighbridge Terminal',
+          remarks: 'Auto-synced from Weighbridge Terminal',
           createdAt: new Date().toISOString(),
         };
         inwardData = [newInward, ...inwardData];
+        syncMaterialInwardToLiveSheet(newInward).catch(() => {});
       }
       localStorage.setItem(STORAGE_KEYS.INWARD, JSON.stringify(inwardData));
       pushCloudStore('cloud_material_inward', STORAGE_KEYS.INWARD, inwardData);
@@ -339,7 +359,7 @@ export default function WeighbridgeView() {
     }
 
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    const dateStr = getLocalIstDateStr(now);
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const slipNumber = String(Math.floor(1000 + Math.random() * 9000));
 
@@ -352,18 +372,39 @@ export default function WeighbridgeView() {
 
     if (weightMode === 'chemical_barrels') {
       finalNet = calculatedChemVolume;
+      if (finalNet <= 0) {
+        showToast('Please enter valid chemical barrels or litres.');
+        return;
+      }
       finalGross = finalNet;
       finalTare = 0;
       slipUnit = 'Litres';
       barrelDetails = `${chemicalBarrels} Barrels × ${barrelCapacity}L` + (partialLiters > 0 ? ` (+${partialLiters}L)` : '');
     } else if (weightMode === 'direct_net') {
       finalNet = Number(directNetKg) || 0;
+      if (finalNet <= 0) {
+        showToast('Please enter a valid Net weight in kg.');
+        return;
+      }
       finalGross = finalNet;
       finalTare = 0;
     } else if (isPendingTare) {
+      if (finalGross <= 0) {
+        showToast('Please enter a valid Gross weight in kg.');
+        return;
+      }
       slipStatus = 'Pending Tare';
       finalTare = 0;
       finalNet = 0;
+    } else {
+      if (finalGross <= 0) {
+        showToast('Please enter a valid Gross weight in kg.');
+        return;
+      }
+      if (finalTare >= finalGross) {
+        showToast(`Tare weight (${finalTare} kg) cannot be greater than or equal to Gross weight (${finalGross} kg).`);
+        return;
+      }
     }
 
     const isCompletedInward = formType === 'Inward' && slipStatus === 'Completed';
@@ -417,12 +458,17 @@ export default function WeighbridgeView() {
     e.preventDefault();
     if (!selectedSlipForSecondWeight) return;
     const tKg = Number(secondTareKg) || 0;
+    const gKg = Number(selectedSlipForSecondWeight.grossKg) || 0;
     if (tKg <= 0) {
       showToast('Please enter a valid tare weight in kg.');
       return;
     }
+    if (tKg >= gKg) {
+      showToast(`Tare weight (${tKg} kg) cannot be greater than or equal to Gross weight (${gKg} kg).`);
+      return;
+    }
 
-    const net = Math.max(0, (selectedSlipForSecondWeight.grossKg || 0) - tKg);
+    const net = Math.max(0, gKg - tKg);
 
     const updated = slips.map((s) => {
       if (s.id === selectedSlipForSecondWeight.id) {
@@ -459,6 +505,7 @@ export default function WeighbridgeView() {
   const handleDeleteSlip = (id, slipNo) => {
     const targetSlip = slips.find((s) => s.id === id);
     if (window.confirm(`Are you sure you want to void weighbridge slip #${slipNo}?`)) {
+      markItemAsDeleted(WEIGHBRIDGE_STORAGE_KEY, id);
       if (targetSlip?.type === 'Inward' && targetSlip?.inventoryUpdated) {
         updateSiloInventoryForWeighment(
           targetSlip.material,

@@ -44,7 +44,7 @@ function getRoleBottomNavItems(role) {
       return [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'billing', label: 'Billing', icon: Receipt },
-        { id: 'material-inward', label: 'Purchases', icon: Layers },
+        { id: 'purchases', label: 'Purchases', icon: Layers },
         { id: 'attendance', label: 'Attendance', icon: Clock },
         { id: 'payroll', label: 'Payroll', icon: Users },
       ];
@@ -111,7 +111,7 @@ export default function MobileBottomNav({
   return (
     <nav 
       aria-label="Mobile Navigation"
-      className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 pt-1 pb-safe safe-area-pb"
+      className="no-print print:hidden fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 pt-1 pb-safe safe-area-pb"
     >
       <div className="flex items-center justify-around h-14 max-w-md mx-auto">
         {primaryItems.map((item) => {

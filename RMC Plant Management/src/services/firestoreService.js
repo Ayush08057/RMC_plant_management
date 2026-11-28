@@ -164,7 +164,11 @@ export async function createDocument(collectionName, data) {
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    const docRef = await addDoc(colRef, cleanData);
+    const addPromise = addDoc(colRef, cleanData);
+    const docRef = await Promise.race([
+      addPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore create timeout in ${collectionName}`)), 3500))
+    ]);
     return { id: docRef.id, ...cleanData };
   } catch (error) {
     console.error(`Error creating document in ${collectionName}:`, error);
@@ -183,7 +187,11 @@ export async function updateDocument(collectionName, docId, fields) {
       ...fields,
       updatedAt: new Date().toISOString(),
     });
-    await setDoc(docRef, cleanFields, { merge: true });
+    const setPromise = setDoc(docRef, cleanFields, { merge: true });
+    await Promise.race([
+      setPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore update timeout for ${collectionName}/${docId}`)), 3500))
+    ]);
     return { id: String(docId), ...cleanFields };
   } catch (error) {
     console.error(`Error updating document ${docId} in ${collectionName}:`, error);
@@ -198,7 +206,10 @@ export async function removeDocument(collectionName, docId) {
   if (!collectionName || !docId) return null;
   try {
     const docRef = doc(db, collectionName, String(docId));
-    await deleteDoc(docRef);
+    await Promise.race([
+      deleteDoc(docRef),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore delete timeout for ${collectionName}/${docId}`)), 3500))
+    ]);
     return docId;
   } catch (error) {
     console.error(`Error deleting document ${docId} in ${collectionName}:`, error);

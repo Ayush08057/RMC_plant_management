@@ -20,7 +20,7 @@ import {
   Award,
   Download
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 
 export const QC_CUBES_STORAGE_KEY = 'rmc_qc_cube_tests_v1';
 
@@ -171,6 +171,7 @@ export default function QcCubeTestingView() {
   // Delete Cube
   const handleDeleteCube = (id) => {
     if (window.confirm(`Are you sure you want to delete cube test record ${id}?`)) {
+      markItemAsDeleted(QC_CUBES_STORAGE_KEY, id);
       const updated = cubes.filter(c => c.id !== id);
       saveCubes(updated);
       setToastMessage(`Cube record ${id} removed.`);
@@ -896,7 +897,7 @@ export default function QcCubeTestingView() {
               <div className="text-center border-b-2 border-slate-900 pb-3 mb-4">
                 <div className="text-[11px] font-bold tracking-widest text-blue-800 uppercase">Quality Assurance Laboratory</div>
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
-                  SHIVKRUPA READY MIX CONCRETE PLANT
+                  SM CONCRETECH
                 </h1>
                 <p className="text-[11px] text-slate-600">
                   Plot No. 42, Tanang Industrial Estate, Miraj - Sangli Road, Sangli - 416410, Maharashtra
@@ -1063,7 +1064,7 @@ export default function QcCubeTestingView() {
                   <div className="border-t border-slate-400 pt-1 font-bold text-slate-800">
                     Authorised Signatory
                   </div>
-                  <div className="text-[10px] text-slate-500">For SHIVKRUPA RMC PLANT</div>
+                  <div className="text-[10px] text-slate-500">For SM CONCRETECH</div>
                 </div>
               </div>
 

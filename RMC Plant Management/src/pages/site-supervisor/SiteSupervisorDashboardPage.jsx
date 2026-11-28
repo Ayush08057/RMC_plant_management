@@ -22,6 +22,7 @@ import {
 import { MOCK_SITE_SUPERVISOR_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
 import AttendanceManagementView from '../../components/workforce/AttendanceManagementView';
@@ -74,7 +75,7 @@ export default function SiteSupervisorDashboardPage() {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
 
   const { attendance, dailyWork, leaves, employees } = useWorkforce();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
   const teamAttendance = attendance.filter((a) => a.date === todayStr);
   const presentCount = teamAttendance.filter((a) => a.status === 'Present').length;
   const lateCount = teamAttendance.filter((a) => a.lateStatus).length;

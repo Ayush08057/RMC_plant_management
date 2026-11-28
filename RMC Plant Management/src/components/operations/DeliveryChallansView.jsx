@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Truck, 
@@ -20,7 +20,8 @@ import {
   Layers,
   ArrowRight
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { getNextSequenceSync, commitSequenceHighWaterMark } from '../../services/sequenceCounterService';
 import { useWorkforce } from '../../context/WorkforceContext';
 import HelpModal from './guided/HelpModal';
 import SendVehicleWizard from './guided/SendVehicleWizard';
@@ -97,17 +98,24 @@ export default function DeliveryChallansView() {
   });
 
   // Subscribe to real-time Cloud Sync for cross-device updates
+  const skipNextCloudPushRef = useRef(true);
+
   useEffect(() => {
     const unsub = subscribeCloudStore('cloud_delivery_challans', CHALLAN_STORAGE_KEY, INITIAL_CHALLANS, (cloudChallans) => {
       if (Array.isArray(cloudChallans)) {
+        skipNextCloudPushRef.current = true;
         setChallans(cloudChallans);
       }
     });
     return () => unsub();
   }, []);
 
-  // Save changes to localStorage & Cloud Firestore
+  // Save changes to localStorage & Cloud Firestore (skip mount & incoming cloud echo)
   useEffect(() => {
+    if (skipNextCloudPushRef.current) {
+      skipNextCloudPushRef.current = false;
+      return;
+    }
     pushCloudStore('cloud_delivery_challans', CHALLAN_STORAGE_KEY, challans);
   }, [challans]);
 
@@ -153,7 +161,7 @@ export default function DeliveryChallansView() {
   const [form, setForm] = useState(() => {
     const initialFleet = getFleetVehicles();
     return {
-      challanNo: 'DC-25-26/1421',
+      challanNo: getNextSequenceSync({ records: challans, field: 'challanNo', type: 'delivery_challans', prefix: 'DC', defaultStart: 1 }),
       date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       departureTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       customerName: '',
@@ -180,12 +188,13 @@ export default function DeliveryChallansView() {
       if (rawPrefill) {
         const p = JSON.parse(rawPrefill);
         if (p && (Date.now() - (p.timestamp || 0) < 60000)) {
-          const nextNumber = challans.length + 1421;
           const isNb = p.billingType === 'Non-Bill';
           const prefix = isNb ? 'NBC' : 'DC';
+          const seqType = isNb ? 'nonbill_challans' : 'delivery_challans';
+          const nextChallanNo = getNextSequenceSync({ records: challans, field: 'challanNo', type: seqType, prefix, defaultStart: 1 });
           setForm(prev => ({
             ...prev,
-            challanNo: `${prefix}-25-26/${nextNumber}`,
+            challanNo: nextChallanNo,
             customerName: p.customerName || prev.customerName,
             site: p.site || prev.site,
             vehicleNo: p.vehicleNo || prev.vehicleNo,
@@ -206,22 +215,22 @@ export default function DeliveryChallansView() {
 
   const handleBillingTypeChange = (newType) => {
     const isNb = newType === 'Non-Bill';
-    const nextNumber = challans.length + 1421;
     const prefix = isNb ? 'NBC' : 'DC';
+    const seqType = isNb ? 'nonbill_challans' : 'delivery_challans';
+    const nextChallanNo = getNextSequenceSync({ records: challans, field: 'challanNo', type: seqType, prefix, defaultStart: 1 });
     setForm(prev => ({
       ...prev,
       billingType: newType,
       isNonBill: isNb,
-      challanNo: `${prefix}-25-26/${nextNumber}`
+      challanNo: nextChallanNo
     }));
   };
 
   const openNewChallanModal = () => {
-    const nextNumber = challans.length + 1421;
     const now = new Date();
     const currentFleet = getFleetVehicles();
     setForm({
-      challanNo: `DC-25-26/${nextNumber}`,
+      challanNo: getNextSequenceSync({ records: challans, field: 'challanNo', type: 'delivery_challans', prefix: 'DC', defaultStart: 1 }),
       date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       departureTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       customerName: '',
@@ -287,6 +296,11 @@ export default function DeliveryChallansView() {
 
     const updated = [newChallan, ...challans];
     setChallans(updated);
+    commitSequenceHighWaterMark({
+      type: isNonBill ? 'nonbill_challans' : 'delivery_challans',
+      value: newChallan.challanNo,
+      prefix: isNonBill ? 'NBC' : 'DC',
+    });
     setShowCreateModal(false);
 
     // Sync corresponding driver trip record so fleet and driver tracking are immediately updated
@@ -318,6 +332,32 @@ export default function DeliveryChallansView() {
       console.warn('Trip sync from challan notice:', err);
     }
 
+    // Update vehicle in fleet to 'On Trip'
+    try {
+      const vehRaw = localStorage.getItem(VEHICLE_STORAGE_KEY);
+      if (vehRaw) {
+        const vehList = JSON.parse(vehRaw);
+        if (Array.isArray(vehList)) {
+          const updatedVehs = vehList.map(v => {
+            if (v.vehicleNo === newChallan.vehicleNo) {
+              return {
+                ...v,
+                status: 'On Trip',
+                currentTripChallan: newChallan.challanNo,
+                currentDriver: newChallan.driverName,
+                lastDispatchedAt: new Date().toISOString()
+              };
+            }
+            return v;
+          });
+          localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(updatedVehs));
+          pushCloudStore('cloud_plant_vehicles', VEHICLE_STORAGE_KEY, updatedVehs);
+        }
+      }
+    } catch (err) {
+      console.warn('Vehicle fleet sync from challan notice:', err);
+    }
+
     if (autoPrint) {
       setPrintingChallan(newChallan);
     }
@@ -334,6 +374,7 @@ export default function DeliveryChallansView() {
 
   const handleDelete = (id) => {
     if (window.confirm('Are you sure you want to delete this delivery challan?')) {
+      markItemAsDeleted(CHALLAN_STORAGE_KEY, id);
       setChallans(prev => prev.filter(c => c.id !== id));
     }
   };

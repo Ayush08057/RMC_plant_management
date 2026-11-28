@@ -32,7 +32,19 @@ import Toast from '../dashboard/Toast';
 import AdvanceManagementView from './AdvanceManagementView';
 import LoanManagementView from './LoanManagementView';
 
-export default function PayrollPreparationView({ defaultMonth = 'October 2026' }) {
+function getRecentPayrollMonths(count = 6) {
+  const list = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    list.push(d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+  }
+  return list;
+}
+
+export default function PayrollPreparationView({ defaultMonth = null }) {
+  const currentMonthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const resolvedDefaultMonth = defaultMonth || currentMonthLabel;
   const { user } = useAuth();
   const { 
     payrollRecords, 
@@ -50,7 +62,7 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
 
   // Navigation subtabs: 'sheet' | 'advances' | 'loans' | 'summary'
   const [activeSubTab, setActiveSubTab] = useState('sheet');
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const [selectedMonth, setSelectedMonth] = useState(resolvedDefaultMonth);
   const [selectedSummaryEmpId, setSelectedSummaryEmpId] = useState('');
   const [showSlipModal, setShowSlipModal] = useState(false);
   const [activeSlip, setActiveSlip] = useState(null);
@@ -519,9 +531,15 @@ export default function PayrollPreparationView({ defaultMonth = 'October 2026' }
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="px-2.5 py-1 rounded-xl text-xs bg-white border border-slate-200 text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 cursor-pointer shadow-2xs"
             >
-              <option value="October 2026">October 2026 (Active)</option>
-              <option value="September 2026">September 2026</option>
-              <option value="August 2026">August 2026</option>
+              {Array.from(new Set([
+                ...getRecentPayrollMonths(6),
+                resolvedDefaultMonth,
+                ...payrollRecords.map((p) => p.monthYear).filter(Boolean),
+              ])).map((m, idx) => (
+                <option key={m} value={m}>
+                  {idx === 0 ? `${m} (Active)` : m}
+                </option>
+              ))}
             </select>
           </div>
         )}

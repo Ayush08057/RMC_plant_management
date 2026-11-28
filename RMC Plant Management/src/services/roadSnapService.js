@@ -71,10 +71,11 @@ async function fetchOsrmChunk(chunkStops) {
           const route = data.routes[0];
           const osrmDist = Number(route.distance || 0);
 
-          // For 2-point direct routes, always accept the road path.
-          // For multi-stop paths, allow realistic road winding (up to 3.5x + 3000m)
-          const isDirectTwoPoint = chunkStops.length === 2;
-          const isReasonableDetour = isDirectTwoPoint || osrmDist <= (rawPathMeters * 3.5 + 3000);
+          // Reject artificial highway loops when OSRM detours excessively from direct GPS geometry
+          const maxAllowedDetourMeters = chunkStops.length === 2 && rawPathMeters < 800
+            ? rawPathMeters * 3.0 + 1000
+            : Math.max(rawPathMeters * 2.1 + 1500, 1200);
+          const isReasonableDetour = osrmDist <= maxAllowedDetourMeters;
 
           if (isReasonableDetour && route.geometry?.coordinates?.length > 1) {
             return route.geometry.coordinates.map((c) => [c[1], c[0]]);

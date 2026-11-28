@@ -19,6 +19,24 @@ import { sanitizeForFirestore } from './firestoreService.js';
 // Default company scope
 const DEFAULT_COMPANY_SCOPE = 'sm-concretech';
 
+// Quota-saving registries:
+// 1. Payload fingerprint cache prevents redundant Firestore writes/callbacks when data is unchanged.
+// 2. Active listener registry multiplexes multiple subscribeCloudStore calls for the same doc onto 1 onSnapshot.
+// 3. Trailing debounce queue coalesces rapid consecutive pushCloudStore bursts.
+const lastSyncedFingerprintMap = new Map();
+const lastCloudSnapshotDataMap = new Map();
+const activeCloudChannels = new Map();
+const pendingPushTimers = new Map();
+const pendingPushPayloads = new Map();
+
+function computeSyncFingerprint(items, deletedArr = []) {
+  try {
+    return JSON.stringify({ items: items ?? null, deleted: deletedArr || [] });
+  } catch {
+    return String(Date.now());
+  }
+}
+
 function resolveSyncScope() {
   try {
     const activeCompanyId = localStorage.getItem('rmc_active_company_v1');
@@ -64,10 +82,31 @@ export function markItemAsDeleted(localKey, itemId) {
   try {
     const delKey = `${localKey}_deleted_ids`;
     const raw = localStorage.getItem(delKey);
-    const set = new Set(raw ? JSON.parse(raw) : []);
+    const arr = raw ? JSON.parse(raw) : [];
+    const set = new Set(Array.isArray(arr) ? arr : []);
     set.add(String(itemId).trim().toLowerCase());
-    localStorage.setItem(delKey, JSON.stringify(Array.from(set)));
+    const trimmed = Array.from(set).slice(-500);
+    localStorage.setItem(delKey, JSON.stringify(trimmed));
   } catch {}
+}
+
+/**
+ * Merges cloud tombstone IDs with local tombstone IDs and persists locally
+ */
+function mergeDeletedIds(localKey, cloudDeletedIds = []) {
+  const set = getDeletedItemIds(localKey);
+  if (Array.isArray(cloudDeletedIds) && cloudDeletedIds.length > 0) {
+    cloudDeletedIds.forEach((id) => {
+      if (id) set.add(String(id).trim().toLowerCase());
+    });
+    if (typeof window !== 'undefined' && window.localStorage && localKey) {
+      try {
+        const trimmed = Array.from(set).slice(-500);
+        localStorage.setItem(`${localKey}_deleted_ids`, JSON.stringify(trimmed));
+      } catch {}
+    }
+  }
+  return set;
 }
 
 /**
@@ -92,7 +131,13 @@ export function isItemDeleted(item, deletedIds) {
   const id = item.id ? String(item.id).trim().toLowerCase() : '';
   const billNo = item.billNo ? String(item.billNo).trim().toLowerCase() : '';
   const voucherNo = item.voucherNo ? String(item.voucherNo).trim().toLowerCase() : '';
-  return (id && deletedIds.has(id)) || (billNo && deletedIds.has(billNo)) || (voucherNo && deletedIds.has(voucherNo));
+  const vehicleNo = item.vehicleNo && !item.id ? String(item.vehicleNo).trim().toLowerCase() : '';
+  return (
+    (id && deletedIds.has(id)) ||
+    (billNo && deletedIds.has(billNo)) ||
+    (voucherNo && deletedIds.has(voucherNo)) ||
+    (vehicleNo && deletedIds.has(vehicleNo))
+  );
 }
 
 /**
@@ -119,6 +164,7 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
 
   const primaryCollection = getSyncCollectionName();
   const legacyCollection = getLegacySyncCollectionName();
+  const scopeKey = `${primaryCollection}::${docKey}`;
   const primaryRef = doc(db, primaryCollection, docKey);
   const legacyRef = doc(db, legacyCollection, docKey);
 
@@ -146,9 +192,14 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
 
   const applyCloudPayload = (cloudPayload) => {
     if (!cloudPayload || cloudPayload.items === undefined) return null;
-    const cleanItems = (Array.isArray(cloudPayload.items)
-      ? sanitizeStoreItems(cloudPayload.items)
-      : cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
+    const activeDeletedIds = mergeDeletedIds(localKey, cloudPayload.deletedIds);
+    const deletedArr = Array.from(activeDeletedIds).slice(-500);
+    const isArrayPayload = Array.isArray(cloudPayload.items);
+    const cleanItems = isArrayPayload
+      ? sanitizeStoreItems(cloudPayload.items).filter((it) => !isItemDeleted(it, activeDeletedIds))
+      : cloudPayload.items;
+
+    lastCloudSnapshotDataMap.set(scopeKey, { items: cleanItems, deletedIds: deletedArr });
 
     let currentLocal = localData;
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -157,8 +208,16 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
         if (raw) currentLocal = JSON.parse(raw);
       } catch {}
     }
-    const merged = mergeCollectionItems(currentLocal, cleanItems).filter((it) => !isItemDeleted(it, deletedIds));
-    if (typeof window !== 'undefined' && window.localStorage) {
+    const rawMerged = mergeCollectionItems(currentLocal, cleanItems);
+    const merged = Array.isArray(rawMerged)
+      ? rawMerged.filter((it) => !isItemDeleted(it, activeDeletedIds))
+      : rawMerged;
+
+    const mergedFp = computeSyncFingerprint(merged, deletedArr);
+    const prevFp = lastSyncedFingerprintMap.get(scopeKey);
+    lastSyncedFingerprintMap.set(scopeKey, mergedFp);
+
+    if (mergedFp !== prevFp && typeof window !== 'undefined' && window.localStorage) {
       try {
         localStorage.setItem(localKey, JSON.stringify(merged));
       } catch {}
@@ -167,99 +226,118 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
     return merged;
   };
 
-  // 2. Fetch from plantSync_* first; auto-migrate / fallback cleanly to legacy hrSettings_* if needed
-  getDoc(primaryRef)
-    .then(async (snap) => {
-      if (!isMounted) return;
-      if (snap.exists() && applyCloudPayload(snap.data()) !== null) {
-        return;
-      }
+  // 2. Shared multiplexed real-time subscription (eliminates duplicate getDoc + redundant listeners per doc)
+  let channel = activeCloudChannels.get(scopeKey);
+  if (!channel) {
+    channel = {
+      listeners: new Set(),
+      latestPayload: null,
+      legacyChecked: false,
+      unsubPrimary: () => {},
+      unsubLegacy: () => {},
+    };
+    activeCloudChannels.set(scopeKey, channel);
 
-      // Check legacy hrSettings_* collection for prior operational records and auto-migrate cleanly
-      try {
-        const legacySnap = await getDoc(legacyRef);
-        if (!isMounted) return;
-        if (legacySnap.exists()) {
-          const migrated = applyCloudPayload(legacySnap.data());
-          if (migrated !== null) {
+    const notifyChannel = (payload) => {
+      channel.latestPayload = payload;
+      channel.listeners.forEach((fn) => {
+        try { fn(payload); } catch {}
+      });
+    };
+
+    const handleMissingPrimaryDoc = async () => {
+      if (channel.legacyChecked) return;
+      channel.legacyChecked = true;
+      const migratedFlagKey = `rmc_migrated_${primaryCollection}_${docKey}`;
+      const alreadyMigrated = typeof window !== 'undefined' && window.localStorage && localStorage.getItem(migratedFlagKey) === '1';
+
+      if (!alreadyMigrated) {
+        try {
+          const legacySnap = await getDoc(legacyRef);
+          if (legacySnap.exists() && legacySnap.data()?.items !== undefined) {
+            const migratedData = legacySnap.data();
+            notifyChannel(migratedData);
             setDoc(primaryRef, {
-              items: migrated,
+              items: migratedData.items,
+              deletedIds: migratedData.deletedIds || [],
               updatedAt: Date.now(),
               source: 'auto_migrated_from_hrSettings'
             }, { merge: true }).catch(() => {});
+            try { localStorage.setItem(migratedFlagKey, '1'); } catch {}
             return;
           }
-        }
-      } catch {}
+          try { localStorage.setItem(migratedFlagKey, '1'); } catch {}
+        } catch {}
+      }
 
       if (Array.isArray(localData) && localData.length > 0) {
         const cleanLocal = sanitizeStoreItems(localData).filter((it) => !isItemDeleted(it, deletedIds));
         if (cleanLocal.length > 0) {
-          try {
-            await setDoc(primaryRef, {
-              items: cleanLocal,
-              updatedAt: Date.now(),
-              source: 'initial_device_seed'
-            }, { merge: true });
-          } catch {
-            // Fall back to legacy collection if rules for plantSync_* have not been published yet
-            setDoc(legacyRef, {
-              items: cleanLocal,
-              updatedAt: Date.now(),
-              source: 'initial_device_seed_fallback'
-            }, { merge: true }).catch(() => {});
+          const cleanFp = computeSyncFingerprint(cleanLocal, Array.from(deletedIds).slice(-500));
+          lastSyncedFingerprintMap.set(scopeKey, cleanFp);
+          setDoc(primaryRef, {
+            items: cleanLocal,
+            updatedAt: Date.now(),
+            source: 'initial_device_seed'
+          }, { merge: true }).catch(() => {});
+        }
+      }
+    };
+
+    try {
+      channel.unsubPrimary = onSnapshot(
+        primaryRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data && data.items !== undefined) {
+              notifyChannel(data);
+              return;
+            }
+          }
+          handleMissingPrimaryDoc();
+        },
+        (err) => {
+          console.warn(`[CloudSync] Primary listener notice for ${docKey}:`, err.message);
+          if (err?.code === 'permission-denied' || String(err?.message || '').toLowerCase().includes('permission')) {
+            try {
+              channel.unsubLegacy = onSnapshot(
+                legacyRef,
+                (legacySnap) => {
+                  if (legacySnap.exists()) {
+                    notifyChannel(legacySnap.data());
+                  }
+                },
+                () => {}
+              );
+            } catch {}
           }
         }
-      }
-    })
-    .catch(async () => {
-      // Fallback read when plantSync_* is not yet permitted by deployed rules
-      try {
-        const legacySnap = await getDoc(legacyRef);
-        if (isMounted && legacySnap.exists()) {
-          applyCloudPayload(legacySnap.data());
-        }
-      } catch (err) {
-        console.warn(`[CloudSync] Initial fetch error for ${docKey}:`, err.message);
-      }
-    });
+      );
+    } catch (subErr) {
+      console.warn(`[CloudSync] Subscription setup error for ${docKey}:`, subErr);
+    }
+  }
 
-  // 3. Real-time subscription with seamless fallback to legacy collection on permission-denied
-  let unsubPrimary = () => {};
-  let unsubLegacy = () => {};
-  try {
-    unsubPrimary = onSnapshot(
-      primaryRef,
-      (docSnap) => {
-        if (isMounted && docSnap.exists()) {
-          applyCloudPayload(docSnap.data());
-        }
-      },
-      (err) => {
-        console.warn(`[CloudSync] Primary listener notice for ${docKey}:`, err.message);
-        if (err?.code === 'permission-denied' || String(err?.message || '').toLowerCase().includes('permission')) {
-          try {
-            unsubLegacy = onSnapshot(
-              legacyRef,
-              (legacySnap) => {
-                if (isMounted && legacySnap.exists()) {
-                  applyCloudPayload(legacySnap.data());
-                }
-              },
-              () => {}
-            );
-          } catch {}
-        }
-      }
-    );
-  } catch (subErr) {
-    console.warn(`[CloudSync] Subscription setup error for ${docKey}:`, subErr);
+  const listener = (cloudData) => {
+    if (isMounted) applyCloudPayload(cloudData);
+  };
+  channel.listeners.add(listener);
+  if (channel.latestPayload) {
+    applyCloudPayload(channel.latestPayload);
   }
 
   return () => {
     isMounted = false;
-    if (typeof unsubPrimary === 'function') unsubPrimary();
-    if (typeof unsubLegacy === 'function') unsubLegacy();
+    const ch = activeCloudChannels.get(scopeKey);
+    if (ch) {
+      ch.listeners.delete(listener);
+      if (ch.listeners.size === 0) {
+        if (typeof ch.unsubPrimary === 'function') ch.unsubPrimary();
+        if (typeof ch.unsubLegacy === 'function') ch.unsubLegacy();
+        activeCloudChannels.delete(scopeKey);
+      }
+    }
   };
 }
 
@@ -274,9 +352,9 @@ export function subscribeCloudStore(docKey, localKeyOrCb, initialDefault = [], o
 export function mergeCollectionItems(localItems, cloudItems) {
   if (!Array.isArray(localItems) && !Array.isArray(cloudItems)) {
     if (typeof localItems === 'object' && typeof cloudItems === 'object') {
-      return { ...(cloudItems || {}), ...(localItems || {}) };
+      return { ...(localItems || {}), ...(cloudItems || {}) };
     }
-    return localItems !== undefined ? localItems : cloudItems;
+    return cloudItems !== undefined ? cloudItems : localItems;
   }
 
   const lList = Array.isArray(localItems) ? localItems : [];
@@ -349,12 +427,14 @@ export function mergeCollectionItems(localItems, cloudItems) {
  * @param {string} localKey - localStorage key
  * @param {any} data - array or object to save
  */
-export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
+export async function pushCloudStore(docKey, localKeyOrData, dataArg, options = {}) {
   // Support both 3-arg pushCloudStore(docKey, localKey, data) and 2-arg pushCloudStore(storageKey, data)
   const localKey = dataArg === undefined ? docKey : localKeyOrData;
   const rawData = dataArg === undefined ? localKeyOrData : dataArg;
+  const { debounceMs = 450, immediate = false } = options || {};
 
   const deletedIds = getDeletedItemIds(localKey);
+  const deletedArr = Array.from(deletedIds).slice(-500);
   const cleanData = Array.isArray(rawData)
     ? sanitizeStoreItems(rawData).filter((it) => !isItemDeleted(it, deletedIds))
     : rawData;
@@ -368,58 +448,120 @@ export async function pushCloudStore(docKey, localKeyOrData, dataArg) {
     }
   }
 
-  const mergeWithDocRef = async (ref, dataToMerge) => {
-    if (!Array.isArray(dataToMerge)) return dataToMerge;
-    try {
-      const cloudSnap = await getDoc(ref);
-      if (cloudSnap.exists()) {
-        const cloudPayload = cloudSnap.data();
-        if (cloudPayload && Array.isArray(cloudPayload.items)) {
-          const cleanCloud = sanitizeStoreItems(cloudPayload.items).filter((it) => !isItemDeleted(it, deletedIds));
-          return mergeCollectionItems(dataToMerge, cleanCloud).filter((it) => !isItemDeleted(it, deletedIds));
+  const primaryCollection = getSyncCollectionName();
+  const scopeKey = `${primaryCollection}::${docKey}`;
+  const localFp = computeSyncFingerprint(cleanData, deletedArr);
+
+  // Skip redundant cloud read+write if payload is identical to the last synced state
+  if (!immediate && lastSyncedFingerprintMap.get(scopeKey) === localFp && !pendingPushTimers.has(scopeKey)) {
+    return;
+  }
+
+  const flushToCloud = async (payloadToPush) => {
+    const activeDeleted = getDeletedItemIds(localKey);
+    const activeDeletedArr = Array.from(activeDeleted).slice(-500);
+    const flushFp = computeSyncFingerprint(payloadToPush, activeDeletedArr);
+    if (!immediate && lastSyncedFingerprintMap.get(scopeKey) === flushFp) {
+      return;
+    }
+
+    const mergeWithDocRef = async (ref, dataToMerge, useCachedSnapshot = false) => {
+      let mergedDeleted = getDeletedItemIds(localKey);
+      let cloudPayload = useCachedSnapshot ? lastCloudSnapshotDataMap.get(scopeKey) : null;
+      if (!cloudPayload) {
+        try {
+          const cloudSnap = await getDoc(ref);
+          if (cloudSnap.exists()) cloudPayload = cloudSnap.data();
+        } catch {}
+      }
+      if (cloudPayload) {
+        mergedDeleted = mergeDeletedIds(localKey, cloudPayload.deletedIds);
+        if (Array.isArray(dataToMerge) && Array.isArray(cloudPayload.items)) {
+          const cleanCloud = sanitizeStoreItems(cloudPayload.items).filter((it) => !isItemDeleted(it, mergedDeleted));
+          const cleanLocal = dataToMerge.filter((it) => !isItemDeleted(it, mergedDeleted));
+          const merged = mergeCollectionItems(cleanLocal, cleanCloud).filter((it) => !isItemDeleted(it, mergedDeleted));
+          return { payload: merged, deletedArr: Array.from(mergedDeleted).slice(-500) };
         }
       }
-    } catch {}
-    return dataToMerge;
-  };
+      const filteredLocal = Array.isArray(dataToMerge)
+        ? dataToMerge.filter((it) => !isItemDeleted(it, mergedDeleted))
+        : dataToMerge;
+      return { payload: filteredLocal, deletedArr: Array.from(mergedDeleted).slice(-500) };
+    };
 
-  // 2. Persist to partitioned plantSync_* first; fall back seamlessly to hrSettings_* if rules aren't updated yet
-  const primaryRef = doc(db, getSyncCollectionName(), docKey);
-  const legacyRef = doc(db, getLegacySyncCollectionName(), docKey);
-  const companyScope = resolveSyncScope();
-  try {
-    let finalPayload = await mergeWithDocRef(primaryRef, cleanData);
-    const cleanPayload = sanitizeForFirestore(finalPayload);
-    await setDoc(primaryRef, {
-      id: docKey,
-      nodeKey: docKey,
-      companyId: companyScope,
-      items: cleanPayload,
-      updatedAt: Date.now(),
-      updatedAtIso: new Date().toISOString(),
-      source: 'web_client_sync'
-    }, { merge: true });
+    // 2. Persist to partitioned plantSync_* first; fall back seamlessly to hrSettings_* if rules aren't updated yet
+    const primaryRef = doc(db, primaryCollection, docKey);
+    const legacyRef = doc(db, getLegacySyncCollectionName(), docKey);
+    const companyScope = resolveSyncScope();
+    const hasLiveChannel = activeCloudChannels.has(scopeKey) && lastCloudSnapshotDataMap.has(scopeKey);
 
-    if (Array.isArray(finalPayload) && typeof window !== 'undefined' && window.localStorage) {
-      try {
-        localStorage.setItem(localKey, JSON.stringify(finalPayload));
-      } catch {}
-    }
-  } catch (err) {
     try {
-      const legacyPayload = await mergeWithDocRef(legacyRef, cleanData);
-      const cleanLegacyPayload = sanitizeForFirestore(legacyPayload);
-      await setDoc(legacyRef, {
+      const { payload: finalPayload, deletedArr: finalDeleted } = await mergeWithDocRef(primaryRef, payloadToPush, hasLiveChannel);
+      const cleanPayload = sanitizeForFirestore(finalPayload);
+      const finalFp = computeSyncFingerprint(cleanPayload, finalDeleted);
+      if (!immediate && lastSyncedFingerprintMap.get(scopeKey) === finalFp) {
+        return;
+      }
+      lastSyncedFingerprintMap.set(scopeKey, finalFp);
+      lastCloudSnapshotDataMap.set(scopeKey, { items: cleanPayload, deletedIds: finalDeleted });
+
+      await setDoc(primaryRef, {
         id: docKey,
         nodeKey: docKey,
         companyId: companyScope,
-        items: cleanLegacyPayload,
+        items: cleanPayload,
+        deletedIds: finalDeleted,
         updatedAt: Date.now(),
         updatedAtIso: new Date().toISOString(),
-        source: 'web_client_sync_fallback'
+        source: 'web_client_sync'
       }, { merge: true });
-    } catch (fallbackErr) {
-      console.warn(`[CloudSync] Cloud push error for ${docKey}:`, err?.message || fallbackErr?.message);
+
+      if (Array.isArray(finalPayload) && typeof window !== 'undefined' && window.localStorage) {
+        try {
+          localStorage.setItem(localKey, JSON.stringify(finalPayload));
+        } catch {}
+      }
+    } catch (err) {
+      try {
+        const { payload: legacyPayload, deletedArr: legacyDeleted } = await mergeWithDocRef(legacyRef, payloadToPush, false);
+        const cleanLegacyPayload = sanitizeForFirestore(legacyPayload);
+        await setDoc(legacyRef, {
+          id: docKey,
+          nodeKey: docKey,
+          companyId: companyScope,
+          items: cleanLegacyPayload,
+          deletedIds: legacyDeleted,
+          updatedAt: Date.now(),
+          updatedAtIso: new Date().toISOString(),
+          source: 'web_client_sync_fallback'
+        }, { merge: true });
+      } catch (fallbackErr) {
+        console.warn(`[CloudSync] Cloud push error for ${docKey}:`, err?.message || fallbackErr?.message);
+      }
     }
+  };
+
+  if (immediate || debounceMs <= 0) {
+    if (pendingPushTimers.has(scopeKey)) {
+      clearTimeout(pendingPushTimers.get(scopeKey));
+      pendingPushTimers.delete(scopeKey);
+      pendingPushPayloads.delete(scopeKey);
+    }
+    return flushToCloud(cleanData);
   }
+
+  pendingPushPayloads.set(scopeKey, cleanData);
+  if (pendingPushTimers.has(scopeKey)) {
+    clearTimeout(pendingPushTimers.get(scopeKey));
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(async () => {
+      pendingPushTimers.delete(scopeKey);
+      const latest = pendingPushPayloads.get(scopeKey);
+      pendingPushPayloads.delete(scopeKey);
+      await flushToCloud(latest);
+      resolve();
+    }, debounceMs);
+    pendingPushTimers.set(scopeKey, timer);
+  });
 }

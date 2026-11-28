@@ -12,7 +12,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useLanguage } from '../../../context/LanguageContext';
-import { pushCloudStore } from '../../../services/cloudSyncService';
+import { pushCloudStore, getDeletedItemIds, isItemDeleted } from '../../../services/cloudSyncService';
 import HelpModal from './HelpModal';
 
 const TRIPS_STORAGE_KEY = 'rmc_driver_trips_v2';
@@ -36,7 +36,8 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          const ongoing = parsed.filter(t => t.status !== 'Completed');
+          const deletedIds = getDeletedItemIds(TRIPS_STORAGE_KEY);
+          const ongoing = parsed.filter(t => !isItemDeleted(t, deletedIds) && t.status !== 'Completed');
           setActiveTrips(ongoing);
           if (ongoing.length > 0) {
             setSelectedTrip(ongoing[0]);
@@ -95,21 +96,24 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
       const raw = localStorage.getItem(TRIPS_STORAGE_KEY);
       if (raw) {
         const trips = JSON.parse(raw);
-        const updated = trips.map(t => {
-          if (t.id === selectedTrip.id || t.challanNo === selectedTrip.challanNo) {
-            return {
-              ...t,
-              status: 'Completed',
-              plantReturnTime: returnTime,
-              finalOdometer: endOdo,
-              distanceKm: diffKm,
-              tripDistanceKm: diffKm,
-              turnaroundMins: actualTurnaround,
-              returnedM3: Number(returnedM3) || 0
-            };
-          }
-          return t;
-        });
+        const deletedIds = getDeletedItemIds(TRIPS_STORAGE_KEY);
+        const updated = trips
+          .filter(t => !isItemDeleted(t, deletedIds))
+          .map(t => {
+            if (t.id === selectedTrip.id || (selectedTrip.challanNo && t.challanNo === selectedTrip.challanNo)) {
+              return {
+                ...t,
+                status: 'Completed',
+                plantReturnTime: returnTime,
+                finalOdometer: endOdo,
+                distanceKm: diffKm,
+                tripDistanceKm: diffKm,
+                turnaroundMins: actualTurnaround,
+                returnedM3: Number(returnedM3) || 0
+              };
+            }
+            return t;
+          });
         localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(updated));
         pushCloudStore('cloud_driver_trips', TRIPS_STORAGE_KEY, updated);
       }
@@ -138,13 +142,15 @@ export default function RecordVehicleReturnWizard({ isOpen, onClose, onComplete 
       }
     } catch {}
 
-    // Also update delivery challans to Delivered
+    // Also update delivery challans to Delivered (strictly scoping to active/open challan)
     try {
       const challanRaw = localStorage.getItem(CHALLAN_STORAGE_KEY);
       if (challanRaw) {
         const challans = JSON.parse(challanRaw);
         const updatedChallans = challans.map(c => {
-          if (c.challanNo === selectedTrip.challanNo || c.vehicleNo === selectedTrip.vehicleNo) {
+          const isMatch = (selectedTrip.challanNo && c.challanNo === selectedTrip.challanNo) ||
+                          (c.vehicleNo === selectedTrip.vehicleNo && c.status !== 'Delivered');
+          if (isMatch) {
             return { ...c, status: 'Delivered' };
           }
           return c;

@@ -676,4 +676,15 @@ button, input, select, textarea {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
   }
+
+  /* Ensure dark gradient table headers print cleanly with light background & black text */
+  thead.table-header-main,
+  thead.table-header-main tr,
+  thead.table-header-main th {
+    background: #f1f5f9 !important;
+    background-image: none !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border-color: #000000 !important;
+  }
 }

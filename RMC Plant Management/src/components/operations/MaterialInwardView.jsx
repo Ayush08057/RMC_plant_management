@@ -24,7 +24,8 @@ import {
   Settings,
   Radio
 } from 'lucide-react';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
+import { getLocalIstDateStr } from '../../utils/shiftUtils';
 import { useLanguage } from '../../context/LanguageContext';
 import { 
   calculateNetWeight, 
@@ -213,7 +214,7 @@ export default function MaterialInwardView() {
   // New Inward Form State
   const [inwardForm, setInwardForm] = useState({
     entryNo: `INW-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalIstDateStr(),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     material: COMMON_RAW_MATERIALS[0].name,
     targetSilo: COMMON_RAW_MATERIALS[0].defaultSilo,
@@ -232,7 +233,7 @@ export default function MaterialInwardView() {
   // New Chemical Barrel Form State
   const [chemicalForm, setChemicalForm] = useState({
     entryNo: `CHEM-INW-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalIstDateStr(),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     chemicalName: COMMON_CHEMICAL_PRODUCTS[0].name,
     barrelCapacity: 220, // default 220 Litres
@@ -384,6 +385,7 @@ export default function MaterialInwardView() {
 
   const handleDeleteInward = (id) => {
     if (window.confirm('Delete this material inward slip?')) {
+      markItemAsDeleted(INWARD_STORAGE_KEY, id);
       const target = records.find(r => r.id === id);
       const updated = records.filter(r => r.id !== id);
       setRecords(updated);
@@ -415,6 +417,7 @@ export default function MaterialInwardView() {
 
   const handleDeleteChemical = (id) => {
     if (window.confirm('Delete this chemical barrel delivery record?')) {
+      markItemAsDeleted(CHEMICAL_STORAGE_KEY, id);
       const target = chemicalRecords.find(c => c.id === id);
       const updated = chemicalRecords.filter(c => c.id !== id);
       setChemicalRecords(updated);

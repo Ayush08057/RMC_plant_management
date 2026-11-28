@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useWorkforce } from '../../context/WorkforceContext';
-import { subscribeCloudStore, pushCloudStore } from '../../services/cloudSyncService';
+import { subscribeCloudStore, pushCloudStore, markItemAsDeleted } from '../../services/cloudSyncService';
 import HelpModal from './guided/HelpModal';
 
 const VEHICLE_STORAGE_KEY = 'rmc_plant_vehicles_v2';
@@ -136,6 +136,8 @@ export default function VehicleManagementView() {
       ? `तुम्हाला ${vehNo} ही गाडी कायमची काढून टाकायची आहे का?`
       : `Are you sure you want to permanently delete vehicle ${vehNo}?`;
     if (window.confirm(confirmMsg)) {
+      const targetVeh = vehicles.find(v => v.vehicleNo === vehNo);
+      markItemAsDeleted(VEHICLE_STORAGE_KEY, targetVeh?.id || vehNo);
       const updated = vehicles.filter(v => v.vehicleNo !== vehNo);
       setVehicles(updated);
       try {
@@ -150,6 +152,17 @@ export default function VehicleManagementView() {
     (v.type || '').toLowerCase().includes(search.toLowerCase()) ||
     (v.driver || v.defaultDriver || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const getStatusBadgeStyle = (status) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('trip') || s.includes('transit') || s.includes('departed')) {
+      return 'bg-amber-100 text-amber-900 border border-amber-300';
+    }
+    if (s.includes('maint') || s.includes('repair') || s.includes('breakdown')) {
+      return 'bg-rose-100 text-rose-900 border border-rose-300';
+    }
+    return 'bg-emerald-100 text-emerald-900 border border-emerald-300';
+  };
 
   return (
     <div className="w-full space-y-3 text-xs text-slate-800">
@@ -234,8 +247,8 @@ export default function VehicleManagementView() {
                   <span className="text-xs font-bold text-blue-700 block mt-0.5">{v.type || 'Transit Mixer'}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                    {v.status || 'Available'}
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusBadgeStyle(v.status)}`}>
+                    {v.status || 'Available / Plant'}
                   </span>
                   <button
                     type="button"
@@ -257,6 +270,12 @@ export default function VehicleManagementView() {
                   <span>{language === 'mr' ? 'नेमलेला चालक:' : 'Assigned Driver:'}</span>
                   <strong className="text-slate-900">{v.driver || v.defaultDriver || (language === 'mr' ? 'असाइन नाही' : 'Unassigned')}</strong>
                 </div>
+                {v.status === 'On Trip' && v.currentTripChallan && (
+                  <div className="flex justify-between items-center text-[10px] text-amber-800 font-bold bg-amber-50 p-1 rounded-lg border border-amber-200">
+                    <span>{language === 'mr' ? 'चालू चलन:' : 'Active Challan:'}</span>
+                    <span className="font-mono">{v.currentTripChallan}</span>
+                  </div>
+                )}
                 {v.model && (
                   <div className="flex justify-between items-center text-[10px] text-slate-500">
                     <span>{language === 'mr' ? 'मॉडेल:' : 'Make/Model:'}</span>

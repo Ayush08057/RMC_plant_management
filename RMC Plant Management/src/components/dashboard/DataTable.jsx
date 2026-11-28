@@ -291,7 +291,7 @@ export default function DataTable({
                         <td
                           key={cIdx}
                           style={Object.keys(colStyle).length > 0 ? colStyle : undefined}
-                          className={`${isDense ? 'py-2 px-2.5 sm:px-3 text-xs' : 'py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm'} align-middle min-w-0 ${isFirst ? (isDense ? 'pl-2.5 sm:pl-3' : 'pl-4 sm:pl-4.5') : ''
+                          className={`${isDense ? 'py-2 px-2.5 sm:px-3 text-xs' : 'py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm'} align-middle min-w-0 ${(tableFixed || noScroll) ? 'overflow-hidden' : ''} ${isFirst ? (isDense ? 'pl-2.5 sm:pl-3' : 'pl-4 sm:pl-4.5') : ''
                             } ${isLast ? (isDense ? 'pr-2.5 sm:pr-3' : 'pr-4 sm:pr-4.5') : ''
                             } ${col.className || ''}`}
                         >

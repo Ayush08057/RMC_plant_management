@@ -5,7 +5,66 @@
  * to a live Google Sheet or Excel Online spreadsheet via webhook in real time.
  */
 
+import { getLocalIstDateStr } from '../utils/shiftUtils.js';
+
 export const LIVE_SHEET_CONFIG_KEY = 'rmc_live_sheet_webhook_config_v1';
+export const LIVE_SHEET_QUEUE_KEY = 'rmc_live_sheet_pending_queue_v1';
+
+function enqueuePendingSheetSync(payload) {
+  try {
+    const raw = localStorage.getItem(LIVE_SHEET_QUEUE_KEY);
+    const queue = raw ? JSON.parse(raw) : [];
+    queue.push(payload);
+    // Keep safe ceiling
+    if (queue.length > 200) queue.shift();
+    localStorage.setItem(LIVE_SHEET_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {
+    console.warn('[LiveSheetSync] Queue write failed:', e);
+  }
+}
+
+export async function flushLiveSheetQueue() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  const config = getLiveSheetConfig();
+  if (!config.enabled || !config.webhookUrl || !config.webhookUrl.trim()) return;
+
+  try {
+    const raw = localStorage.getItem(LIVE_SHEET_QUEUE_KEY);
+    if (!raw) return;
+    const queue = JSON.parse(raw);
+    if (!Array.isArray(queue) || queue.length === 0) return;
+
+    const remaining = [];
+    for (const payload of queue) {
+      try {
+        await fetch(config.webhookUrl.trim(), {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        remaining.push(payload);
+      }
+    }
+
+    if (remaining.length > 0) {
+      localStorage.setItem(LIVE_SHEET_QUEUE_KEY, JSON.stringify(remaining));
+    } else {
+      localStorage.removeItem(LIVE_SHEET_QUEUE_KEY);
+      config.lastSyncedAt = new Date().toISOString();
+      saveLiveSheetConfig(config);
+    }
+  } catch (e) {
+    console.warn('[LiveSheetSync] Queue flush failed:', e);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    flushLiveSheetQueue();
+  });
+}
 
 // Default configuration with helper instructions
 export function getLiveSheetConfig() {
@@ -46,7 +105,7 @@ export async function syncMaterialInwardToLiveSheet(entry) {
     eventType: 'MATERIAL_INWARD',
     timestamp: new Date().toISOString(),
     slipNo: entry.slipNo || entry.entryNo || '',
-    date: entry.date || new Date().toISOString().split('T')[0],
+    date: entry.date || getLocalIstDateStr(),
     time: entry.time || new Date().toLocaleTimeString(),
     material: entry.material || '',
     supplier: entry.supplier || '',
@@ -64,6 +123,11 @@ export async function syncMaterialInwardToLiveSheet(entry) {
     status: entry.status || 'Finalized'
   };
 
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueuePendingSheetSync(payload);
+    return { success: true, queued: true };
+  }
+
   try {
     // Mode 'no-cors' is essential for Google Apps Script redirects across google domains
     await fetch(config.webhookUrl.trim(), {
@@ -75,10 +139,12 @@ export async function syncMaterialInwardToLiveSheet(entry) {
 
     config.lastSyncedAt = new Date().toISOString();
     saveLiveSheetConfig(config);
+    flushLiveSheetQueue();
     return { success: true };
   } catch (err) {
-    console.warn('[LiveSheetSync] Webhook push notice:', err);
-    return { success: false, error: err.message };
+    enqueuePendingSheetSync(payload);
+    console.warn('[LiveSheetSync] Queued for offline retry:', err);
+    return { success: false, queued: true, error: err.message };
   }
 }
 
@@ -114,6 +180,11 @@ export async function syncChemicalInwardToLiveSheet(chemEntry) {
     status: chemEntry.status || 'Approved'
   };
 
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueuePendingSheetSync(payload);
+    return { success: true, queued: true };
+  }
+
   try {
     await fetch(config.webhookUrl.trim(), {
       method: 'POST',
@@ -123,10 +194,12 @@ export async function syncChemicalInwardToLiveSheet(chemEntry) {
     });
     config.lastSyncedAt = new Date().toISOString();
     saveLiveSheetConfig(config);
+    flushLiveSheetQueue();
     return { success: true };
   } catch (err) {
-    console.warn('[LiveSheetSync] Webhook push error:', err);
-    return { success: false };
+    enqueuePendingSheetSync(payload);
+    console.warn('[LiveSheetSync] Chemical queued for offline retry:', err);
+    return { success: false, queued: true };
   }
 }
 

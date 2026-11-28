@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWorkforce } from '../../context/WorkforceContext';
-import { getNowIndian12Hr } from '../../utils/shiftUtils';
+import { getNowIndian12Hr, getLocalIstDateStr } from '../../utils/shiftUtils';
 
 export default function FieldWorkerLiveLocationCard({
   workerId,
@@ -43,7 +43,7 @@ export default function FieldWorkerLiveLocationCard({
   const effectiveName = workerName || user?.name || 'Field Specialist';
   const effectiveRole = workerRole || user?.role || 'Field Worker';
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
   const todayRecord = (attendance || []).find((a) => {
     const aId = (a.employeeId || '').toUpperCase();
     const effId = (effectiveId || '').toUpperCase();

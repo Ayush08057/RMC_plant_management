@@ -26,7 +26,7 @@ import {
 import { MOCK_ACCOUNTANT_DATA } from '../../data/mockDashboardData';
 import { useWorkforce } from '../../context/WorkforceContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatToIndian12Hr } from '../../utils/shiftUtils';
+import { formatToIndian12Hr, getLocalIstDateStr } from '../../utils/shiftUtils';
 
 // Phase 1 Workforce Views
 import PayrollPreparationView from '../../components/workforce/PayrollPreparationView';
@@ -88,7 +88,7 @@ export default function AccountantDashboardPage() {
     attendance
   } = useWorkforce();
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalIstDateStr();
   const accountantTodayAttendance = (attendance || []).find(
     (a) => a.date === todayStr &&
       ((a.employeeId && a.employeeId.toUpperCase() === 'ACC-001') ||
@@ -163,7 +163,7 @@ export default function AccountantDashboardPage() {
       onSelectTab={setActiveTab}
       actions={
         activeTab === 'dashboard' ? (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setActiveTab('attendance')}
@@ -226,7 +226,7 @@ export default function AccountantDashboardPage() {
       {activeTab === 'reports' && <HrReportsView />}
 
       {(![
-        'attendance', 'billing', 'purchases', 'otp_audit', 'payroll',
+        'attendance', 'billing', 'purchases', 'otp_audit', 'tally_sync', 'payroll',
         'advances', 'loans', 'reports'
       ].includes(activeTab) || activeTab === 'dashboard') && (
         <div className="w-full flex-1 flex flex-col space-y-4 pb-6 min-w-0">
