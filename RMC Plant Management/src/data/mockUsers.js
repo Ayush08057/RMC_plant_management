@@ -134,7 +134,7 @@ export function getRoleRoute(role) {
   if (rLower.includes('qc') || rLower.includes('quality') || rLower.includes('lab')) return '/qc';
   if (rLower.includes('supervisor') || rLower.includes('site')) return '/site-supervisor';
   if (rLower.includes('driver') || rLower.includes('mixer')) return '/driver';
-  if (rLower.includes('owner') || rLower.includes('director')) return '/owner';
+  if (rLower.includes('owner') || rLower.includes('director')) return '/admin';
   return '/plant-manager';
 }
 
