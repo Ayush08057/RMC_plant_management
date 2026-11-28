@@ -126,6 +126,7 @@ const getPlantOperationsForRole = (role) => {
 const PORTAL_LINKS = [
   { role: ROLES.ADMIN, label: 'System Admin', path: '/admin', icon: Monitor, colorClass: 'bg-[#136dec]' },
   { role: ROLES.PLANT_MANAGER, label: 'Plant Manager', path: '/plant-manager', icon: Building2, colorClass: 'bg-[#059669]' },
+  { role: ROLES.OPERATOR, label: 'Plant Operator', path: '/operator', icon: Gauge, colorClass: 'bg-[#0284c7]' },
   { role: ROLES.ACCOUNTANT, label: 'Accounts & Billing', path: '/accountant', icon: Store, colorClass: 'bg-[#f97316]' },
   { role: ROLES.DISPATCHER, label: 'Dispatch Operations', path: '/dispatcher', icon: Truck, colorClass: 'bg-[#6366f1]' },
   { role: ROLES.QC_ENGINEER, label: 'Quality Control', path: '/qc', icon: FlaskConical, colorClass: 'bg-[#eab308]' },
